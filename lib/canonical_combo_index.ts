@@ -173,12 +173,15 @@ export function projectPolymarketCombo(
   };
 }
 
+/** Which wire family a payload came from; not a VenueId (f402/gslive use the desk wire). */
+export type ComboWireSide = "desk" | "polymarket";
+
 export function canonicalComboFromWire(
-  side: "internal" | "polymarket",
+  side: ComboWireSide,
   wire: InternalComboWire | PolymarketComboWire,
 ): { canonicalComboId: string; input: CanonicalComboInput } | null {
   const input =
-    side === "internal"
+    side === "desk"
       ? projectInternalCombo(wire as InternalComboWire)
       : projectPolymarketCombo(wire as PolymarketComboWire);
   if (!input) return null;

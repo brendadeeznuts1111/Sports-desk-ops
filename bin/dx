@@ -191,7 +191,7 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta assets bun provenance deps blob-formdata xml-parse sql fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags bet-flags layoff-risk queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price nsh worktrees workspaces"
+DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta assets bun provenance deps blob-formdata xml-parse sql fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags bet-flags layoff-risk queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price nsh worktrees workspaces dashboard"
 
 # dx_bun_run <script_or_file> [args...]: fast `bun run` when DX_BUN_FLAGS is unset; otherwise
 # delegates through `dx_run_control.ts` so every flag in DX_BUN_FLAGS is validated against live
@@ -350,6 +350,7 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx backtest               4-week CFB + NBA parlay/combo backtest
 
   Utilities
+    ./bin/dx dashboard [flags]      Render dashboard.md via Bun.markdown.ansi (--exec, --theme, --columns, --light, --no-color)
     ./bin/dx docs [gslive|--json]   Deployed API docs (Scalar, R2, local artifacts)
     ./bin/dx stale -i <export>      Stale-line / post-move bet cohort
     ./bin/dx profile <0x|user>      Polymarket PnL, win rate, positions, categories
@@ -801,6 +802,10 @@ VERSION_HELP
   workspaces)
     cd "$REPO_ROOT"
     exec bun "$REPO_ROOT/scripts/dx_workspaces.ts" "$@"
+    ;;
+  dashboard)
+    cd "$REPO_ROOT"
+    dx_bun_run cli/sportsdesk_cli.ts dashboard "$@"
     ;;
   *)
     # A real program on PATH still runs (`dx wrangler ...`, `dx git ...`). A typo no longer dies

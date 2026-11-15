@@ -1,0 +1,20 @@
+# packages/ui/src/config/slab.frontend.toml
+# ==============================================================================
+# Frontend slab capability — the browser bundle must never allocate unsafe slabs
+# Format:       TOML 1.0 (inlined at bundle time by Bun)
+# Schema:       sportsdesk-slab-frontend/v1
+# Consumed by:  packages/ui/src/config/slab.ts
+#
+# This file is deliberately tiny. Its job is to make the capability explicit at
+# build time: the server slab policy may set `unsafe.allowed = true`, and the
+# browser bundle must not inherit it. The adapter throws at module load if this
+# file ever says otherwise.
+# ==============================================================================
+
+[meta]
+schema = "sportsdesk-slab-frontend/v1"
+version = "1.0.0"
+generated_at = "2026-11-14T00:00:00Z" # quoted: unquoted TOML dates are Temporal.*
+
+[unsafe]
+allowed = false

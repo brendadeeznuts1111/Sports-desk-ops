@@ -11,3 +11,4 @@ export { PANEL_TITLES, provenanceTone } from "./provenance";
 export { SCOREBOARD_COLUMNS, ScoreboardPanel } from "./ScoreboardPanel";
 export { SIGNAL_COLUMNS, SignalsPanel } from "./SignalsPanel";
 export { SurveillanceWorkspace } from "./SurveillanceWorkspace";
+export { TradingTerminalWorkspace } from "./TradingTerminalWorkspace";

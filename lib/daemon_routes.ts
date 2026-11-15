@@ -506,6 +506,13 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     surface: null,
   }),
   defineRoute({
+    path: "/mcp",
+    method: "ANY",
+    guard: "admin",
+    dataClass: "operational",
+    surface: null,
+  }),
+  defineRoute({
     path: "/miniapp",
     method: "ANY",
     guard: "none",

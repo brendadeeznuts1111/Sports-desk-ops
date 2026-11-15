@@ -4,9 +4,11 @@
  * bun.sh serves the same paths, but its pages declare the bun.com URL as `rel="canonical"`, and
  * www.bun.com / www.bun.sh / a trailing slash redirect to the bare form (all checked 2026-11-02).
  * Reference symbols live under `/reference/<module>/<symbol>`, e.g.
- * `/reference/globals/bun/ImportKind`; `/reference/bun/ImportKind` is a 404.
+ * `/reference/bun/ImportKind`. The older `/reference/globals/bun/ImportKind`
+ * shape now returns 404 (checked 2026-11-14); legacy paths are still accepted as
+ * input and canonicalized.
  *
- * @see https://bun.com/reference/globals/bun/ImportKind
+ * @see https://bun.com/reference/bun/ImportKind
  */
 
 export const BUN_ORIGIN = "https://bun.com" as const;
@@ -40,7 +42,7 @@ export function bunUrl<const P extends BunPath>(path: P): BunUrl<P> {
   return `${BUN_ORIGIN}${path}`;
 }
 
-/** `bunReferenceUrl("globals/bun/ImportKind")` → `https://bun.com/reference/globals/bun/ImportKind`. */
+/** `bunReferenceUrl("bun/ImportKind")` → `https://bun.com/reference/bun/ImportKind`. */
 export function bunReferenceUrl<const S extends string>(
   symbolPath: S,
 ): BunUrl<`/reference/${S}`> {
@@ -49,10 +51,10 @@ export function bunReferenceUrl<const S extends string>(
 
 /**
  * Canonical reference URL for Bun's AnsiTheme documentation.
- * @see https://bun.com/reference/globals/bun/markdown/AnsiTheme
+ * @see https://bun.com/reference/bun/markdown/AnsiTheme
  */
 export const BUN_ANSI_THEME_REFERENCE_URL = bunReferenceUrl(
-  "globals/bun/markdown/AnsiTheme",
+  "bun/markdown/AnsiTheme",
 );
 
 export interface BunReferenceSymbol {
@@ -63,9 +65,10 @@ export interface BunReferenceSymbol {
 }
 
 /**
- * Parses a Bun reference URL (e.g. `https://bun.sh/reference/globals/bun/markdown/AnsiTheme`
- * or `/reference/globals/bun/ImportKind`) into its constituent module path and symbol name.
- * Returns `null` if the input is not a valid Bun reference URL.
+ * Parses a Bun reference URL (e.g. `https://bun.com/reference/bun/markdown/AnsiTheme`)
+ * into its constituent module path and symbol name. The legacy
+ * `/reference/globals/bun/...` shape still parses. Returns `null` when the input
+ * is not a valid Bun reference URL.
  */
 export function parseBunReferenceUrl(raw: string): BunReferenceSymbol | null {
   const canonical = canonicalBunUrl(raw);
@@ -102,7 +105,7 @@ export function parseBunReferenceUrl(raw: string): BunReferenceSymbol | null {
  * Checks whether a given URL points to a Bun reference documentation page for a specific symbol name.
  * Case-insensitive by default.
  *
- * E.g. `matchBunReferenceSymbol("https://bun.sh/reference/globals/bun/markdown/AnsiTheme", "AnsiTheme")` → `true`.
+ * E.g. `matchBunReferenceSymbol("https://bun.sh/reference/bun/markdown/AnsiTheme", "AnsiTheme")` → `true`.
  */
 export function matchBunReferenceSymbol(
   raw: string,
@@ -125,26 +128,32 @@ export function matchBunReferenceSymbol(
  * Known Bun reference symbols and their canonical symbol paths under `/reference/`.
  */
 export const BUN_KNOWN_REFERENCE_SYMBOLS: Readonly<Record<string, string>> = {
-  AnsiTheme: "globals/bun/markdown/AnsiTheme",
-  "Bun.markdown.ansi": "globals/bun/markdown/ansi",
-  "Bun.markdown": "globals/bun/markdown",
-  "Bun.inspect.custom": "globals/bun/inspect",
-  "Bun.inspect": "globals/bun/inspect",
-  "Bun.serve": "globals/bun/serve",
-  "Bun.Terminal": "globals/bun/Terminal",
-  "Bun.file": "globals/bun/file",
-  "Bun.write": "globals/bun/write",
-  "Bun.spawn": "globals/bun/spawn",
-  "Bun.Transpiler": "globals/bun/Transpiler",
-  "Bun.dns": "globals/bun/dns",
-  "dns.lookup": "globals/bun/dns/lookup",
-  "dns.prefetch": "globals/bun/dns/prefetch",
-  "dns.getCacheStats": "globals/bun/dns/getCacheStats",
-  ImportKind: "globals/bun/ImportKind",
+  AnsiTheme: "bun/markdown/AnsiTheme",
+  "Bun.markdown.AnsiTheme": "bun/markdown/AnsiTheme",
+  "Bun.markdown.ansi": "bun/markdown/ansi",
+  "Bun.markdown": "bun/markdown",
+  "Bun.inspect.custom": "bun/inspect",
+  "Bun.inspect": "bun/inspect",
+  "Bun.serve": "bun/serve",
+  "Bun.Terminal": "bun/Terminal",
+  "Bun.file": "bun/file",
+  "Bun.write": "bun/write",
+  "Bun.spawn": "bun/spawn",
+  "Bun.indexOfLine": "bun/indexOfLine",
+  "Bun.TOML": "bun/TOML",
+  "Bun.TOML.parse": "bun/TOML/parse",
+  "Bun.TOML.stringify": "bun/TOML/stringify",
+  "Bun.Transpiler": "bun/Transpiler",
+  "Bun.dns": "bun/dns",
+  "dns.lookup": "bun/dns/lookup",
+  "dns.prefetch": "bun/dns/prefetch",
+  "dns.getCacheStats": "bun/dns/getCacheStats",
+  ImportKind: "bun/ImportKind",
 };
 
 /**
- * Resolves a Bun symbol name (e.g. `"AnsiTheme"`, `"Bun.markdown.ansi"`, `"globals/bun/markdown/AnsiTheme"`)
+ * Resolves a Bun symbol name (e.g. `"AnsiTheme"`, `"Bun.markdown.ansi"`, `"bun/markdown/AnsiTheme"`,
+ * `"globals/bun/markdown/AnsiTheme"` (legacy), or `"https://bun.com/reference/bun/markdown/AnsiTheme"`)
  * to its canonical Bun reference URL.
  */
 export function resolveBunSymbolReferenceUrl(symbol: string): BunUrl | null {
@@ -165,10 +174,28 @@ export function resolveBunSymbolReferenceUrl(symbol: string): BunUrl | null {
     }
   }
 
-  // If path format provided directly (e.g. globals/bun/markdown/AnsiTheme)
-  if (trimmed.startsWith("globals/bun/")) {
+  // Full Bun reference URL (e.g. https://bun.com/reference/bun/markdown/AnsiTheme)
+  const parsedRef = parseBunReferenceUrl(trimmed);
+  if (parsedRef) {
+    // Accept the legacy `globals/bun/...` shape; always emit the current one.
+    const normalizedPath = parsedRef.symbolPath.startsWith("globals/")
+      ? parsedRef.symbolPath.slice("globals/".length)
+      : parsedRef.symbolPath;
     try {
-      return bunReferenceUrl(trimmed);
+      return bunReferenceUrl(normalizedPath);
+    } catch {
+      return parsedRef.canonicalUrl;
+    }
+  }
+
+  // If path format provided directly (bun/markdown/AnsiTheme, or the legacy
+  // globals/bun/markdown/AnsiTheme which canonicalizes to the same page).
+  const directPath = trimmed.startsWith("globals/")
+    ? trimmed.slice("globals/".length)
+    : trimmed;
+  if (directPath.startsWith("bun/")) {
+    try {
+      return bunReferenceUrl(directPath);
     } catch {
       return null;
     }

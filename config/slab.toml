@@ -1,0 +1,38 @@
+# config/slab.toml
+# ==============================================================================
+# Server slab policy — fixed-capacity read windows and wire sentinels (SSOT)
+# Format:       TOML 1.0 (inlined at bundle time by Bun)
+# Schema:       sportsdesk-slab/v1
+# Consumed by:  lib/slab_config.ts (validated adapter) ->
+#               lib/f402_bet_ticker_jsonl.ts, lib/wagers_wire_contract.ts
+#
+# Only safe integers belong here. A TOML integer outside ±(2^53 - 1) is not
+# representable, so BigInt64 column sentinels must stay as strings parsed
+# outside TOML. `assertSafeInt` enforces the bound at load time.
+# ==============================================================================
+
+[meta]
+schema = "sportsdesk-slab/v1"
+version = "1.0.0"
+generated_at = "2026-11-14T00:00:00Z" # quoted: unquoted TOML dates are Temporal.*
+
+# Server-side slabs may use Bun.allocUnsafe. The frontend file must not.
+[unsafe]
+allowed = true
+
+# Paths are root-relative. `assertRelativePath` rejects an absolute path before
+# it can reach the filesystem or the wire-contract payload.
+[paths]
+wire_contract = "schema/wagers_field_contract.json"
+
+[capacity]
+# Byte window for one getBetTicker JSONL read (lib/f402_bet_ticker_jsonl.ts).
+ticker_window_bytes = 2000000
+
+# Sentinel values mirrored from lib/bridge_and_channel_router.ts. They are
+# asserted against the code constants in tests/slab_config.test.ts, so drift
+# fails instead of silently changing a pack/unpack boundary.
+[sentinels]
+null_clv = -2147483648
+null_customer_handle32 = 4294967295
+null_bridge_channel_word32 = 4294967295

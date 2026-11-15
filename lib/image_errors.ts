@@ -1,5 +1,5 @@
 /**
- * `Bun.Image` rejection codes, per https://bun.com/reference/globals/bun/Image/ErrorCode.
+ * `Bun.Image` rejection codes, per https://bun.com/reference/bun/Image/ErrorCode.
  *
  * `Bun.Image.ErrorCode` plus `ERR_OUT_OF_MEMORY`: the reference lists seven codes, the bun-types
  * 1.4.4 declarations six (tests/bun_capabilities.test.ts trips when they catch up).

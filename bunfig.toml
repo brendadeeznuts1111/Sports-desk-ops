@@ -33,7 +33,17 @@ ignorePatterns = [
 ]
 
 # Install keys (linker, globalStore, cache.dir, frozenLockfile, minimumReleaseAge) are owned by the
-# machine config at ~/.bunfig.toml. Setting them here would override that SSOT, so they stay out.
+# machine config at ~/.bunfig.toml. Setting them here would override that SSOT, so they stay out:
+# `pm:doctor` fails the "project bunfig" check when one is present (`lib/pm_policy.ts`
+# MACHINE_OWNED_INSTALL_KEYS). Non-machine keys are safe and are pinned here.
+#
+# `exact` makes `bun add` write the resolved version instead of a caret range, matching the
+# exact-pin policy the root manifest already follows. `ignoreScripts` is a no-op today — the root
+# `trustedDependencies` is `[]` and the root has no install lifecycle — and keeps it that way if a
+# dependency or a `prepare` script is ever added. Both are project keys, not machine overrides.
+[install]
+exact = true
+ignoreScripts = true
 
 # Native Bun lint (Bun 1.5+). Bun 1.4.4 accepts but ignores this section; the enforced
 # gate is `bun run lint:check` (oxlint 1.90 + oxlint-tsgolint). Keep this block aligned
@@ -65,6 +75,11 @@ correctness = "warn"
 # Re-probe when bumping Bun: a dialect change is invisible to config hashing.
 
 [lint.rules]
+# Off by default upstream: `with {}` is a leftover shell or a placeholder for a
+# missing `type`. Bun 1.4.4 has no native `bun lint` command (it resolves to the
+# package script and `--no-script` does not bypass it), and oxlint does not ship
+# this rule, so CI enforces the same intent in tests/module_attributes.test.ts.
+"unicorn/require-module-attributes" = "error" # https://bun.com/docs/lint/rules/unicorn/require-module-attributes
 "eqeqeq" = ["error", "smart"] # same policy as .oxlintrc.json; "smart" keeps the `x == null` guards
 "@typescript-eslint/no-explicit-any" = "error"
 "@typescript-eslint/no-require-imports" = "error"
@@ -106,7 +121,9 @@ noOrphans = true
 [console]
 # How many levels `console.log` expands before printing `[Object ...]` (Bun's default is 2). 8 keeps
 # nested report objects (a secrets row with its mention counts and aliases is 7 deep) readable.
-# `bun --console-depth=N` overrides it. Plain `Bun.inspect` is not affected by this setting.
+# MEASURED 2026-11-14 on 1.4.4: `bun --console-depth=N` does NOT override it --
+# this bunfig value wins, and the flag only applies when no [console].depth is in
+# scope. Plain `Bun.inspect` is not affected by this setting either.
 depth = 8
 
 [test]
@@ -118,6 +135,8 @@ pathIgnorePatterns = [
   "verification/**",
   "tests/fixtures/**",
   "packages/nsh-desk/**",
+  # One-off OpenAPI authoring script (`*_spec.mjs` otherwise matches Bun's test glob):
+  "scripts/author_openapi_spec.mjs",
 ]
 
 # Dual coverage reporting: preserves console text table while producing lcov.info for CI

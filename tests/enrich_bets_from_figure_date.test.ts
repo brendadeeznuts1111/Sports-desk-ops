@@ -225,5 +225,51 @@ describe("Streaming Enrichment CLI Pipeline", () => {
     expect(Number(result.inspection.stats.totalRiskCents)).toBe(230000);
     expect(result.inspection.samples.length).toBe(1);
     expect(result.inspection.samples[0]!.ticketNumber).toBe("1075710577");
+    expect(result.customerLeaderboard).toHaveLength(1);
+    expect<string>(result.customerLeaderboard[0]!.customerId).toBe("DAN245");
+    expect(result.lineWindows.get("1075710577")?.boardLineAtBet).toBe(1);
+  });
+
+  it("truncates outputPath before writing so shorter runs never leave trailing bytes from an older file", async () => {
+    mkdirSync(TMP_DIR, { recursive: true });
+    onTestFinished(() => {
+      rmSync(TMP_DIR, { recursive: true, force: true });
+    });
+
+    const outPath = join(TMP_DIR, "overwrite_check.jsonl");
+    writeFileSync(outPath, "X".repeat(4096) + "\n", "utf-8");
+
+    const figureFile = new File(
+      [JSON.stringify({ LIST: { INFO: [] } })],
+      "f.json",
+    );
+    const tickerFile = new File(
+      [
+        JSON.stringify({
+          WagerNumber: 767671999,
+          CustomerID: "SHORT1",
+          AmountWagered: 5000,
+          ToWinAmount: 4545,
+          VolumeAmount: 5000,
+          InsertDateTime: "2026-11-06 21:00:00.000",
+          TicketWriter: "Internet",
+          ShortDesc: "S.Football #101 Patriots -3 -110 - For Game",
+        }),
+      ],
+      "t.jsonl",
+    );
+
+    await runEnrichment({
+      figurePath: figureFile,
+      tickerPath: tickerFile,
+      outputPath: outPath,
+      stats: false,
+    });
+
+    const written = readFileSync(outPath, "utf-8");
+    expect(written).not.toContain("XXXX");
+    const lines = written.trim().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]!).customerId).toBe("SHORT1");
   });
 });

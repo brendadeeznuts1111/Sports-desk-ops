@@ -5,8 +5,10 @@
 
 import { describe, expect, it } from "bun:test";
 import {
+  buildActiveFigureDateDrilldownPayloads,
   buildCanonicalEventId,
   buildCompositeMatchKey,
+  computeWagerLineWindows,
   hashCompositeMatchKey,
   canonicalTeamToken,
   computeExecutionLatency,
@@ -14,7 +16,12 @@ import {
   inferMarketType,
   inferTotalPicks,
   isLiveSubSport,
+  matchesWagerSlice,
   parseBuyPointsFromDesc,
+  parsePerformancePlayerDateLabel,
+  rankCustomersBySlice,
+  reconcilePerformanceWithCarryOver,
+  summarizePerformancePlayer,
   FigureDateEnrichmentInspection,
   formatEnrichedWagerInspect,
   createEnrichedWagersDirectStream,
@@ -722,5 +729,420 @@ describe("Figure Date Enrichment Engine", () => {
     expect(report).toContain(
       "Throughput             : 238,095 rows/sec (4.2ms total)",
     );
+  });
+
+  it("reconstructs pre/post-bet board line windows and ranks customers beating the desk in NCAAB 1H and GSLive NCAAB", () => {
+    // 1. Sharp originator BRT106 bets Duke 1H -3.5 (-110) before the board steams to -4.5
+    const brt1hTicker: LiveTickerWager = {
+      WagerNumber: 800001,
+      AgentID: "BILLY666",
+      AgentLogin: "BILLY666",
+      CustomerID: "BRT106",
+      WagerType: "S",
+      AmountWagered: 110000,
+      ToWinAmount: 100000,
+      InsertDateTime: "2026-11-12 18:10:00.000",
+      TicketWriter: "Internet",
+      ShortDesc: "S.Basketball #701 Duke -3½ -110 - For 1st Half",
+    };
+    const brt1hFigure: FigureDateWager = {
+      TicketNumber: 900001,
+      WagerNumber: 1,
+      AmountWagered: 110000,
+      ToWinAmount: 100000,
+      WagerType: "S",
+      AmountWon: 100000,
+      AmountLost: 0,
+      WagerStatus: "W",
+      Outcome: "W",
+      Description: "Basketball #701 Duke -3½ -110 - For 1st Half",
+      AcceptedDateTime: "2026-11-12 18:10:00.000",
+      CustomerID: "BRT106",
+      TicketWriter: "Internet",
+      GameDateTime: "2026-11-12 19:00:00.000",
+      DailyFigureDate: "2026-11-12",
+      SportType: "Basketball",
+      SportSubType: "NCAAB",
+      OrigSpread: -3.5,
+      AdjSpread: -3.5,
+      FinalMoney: -110,
+      ChosenTeamID: "Duke",
+      PeriodDescription: "1st Half",
+      PeriodNumber: 1,
+      Team1ID: "Duke",
+      Team2ID: "North Carolina",
+    };
+
+    // 2. Recreational chaser SQ202 bets Duke 1H at -4.0 (buying 0.5 off board -4.5) 5 minutes later and loses
+    const sq1hTicker: LiveTickerWager = {
+      WagerNumber: 800002,
+      AgentID: "BILLY666",
+      AgentLogin: "BILLY666",
+      CustomerID: "SQ202",
+      WagerType: "S",
+      AmountWagered: 55000,
+      ToWinAmount: 50000,
+      InsertDateTime: "2026-11-12 18:15:00.000",
+      TicketWriter: "Internet",
+      ShortDesc: "S.Basketball #701 Duke -4 -120 - buying ½ For 1st Half",
+    };
+    const sq1hFigure: FigureDateWager = {
+      TicketNumber: 900002,
+      WagerNumber: 1,
+      AmountWagered: 55000,
+      ToWinAmount: 50000,
+      WagerType: "S",
+      AmountWon: 0,
+      AmountLost: 55000,
+      WagerStatus: "L",
+      Outcome: "L",
+      Description: "Basketball #701 Duke -4 -120 - buying ½ For 1st Half",
+      AcceptedDateTime: "2026-11-12 18:15:00.000",
+      CustomerID: "SQ202",
+      TicketWriter: "Internet",
+      GameDateTime: "2026-11-12 19:00:00.000",
+      DailyFigureDate: "2026-11-12",
+      SportType: "Basketball",
+      SportSubType: "NCAAB",
+      OrigSpread: -4.5,
+      AdjSpread: -4.0,
+      BuyPoints: 0.5,
+      FinalMoney: -120,
+      ChosenTeamID: "Duke",
+      PeriodDescription: "1st Half",
+      PeriodNumber: 1,
+      Team1ID: "Duke",
+      Team2ID: "North Carolina",
+    };
+
+    // 3. BRT106 also hits GSLive Live NCAAB (EZL - INTERNET) and wins
+    const brtLiveTicker: LiveTickerWager = {
+      WagerNumber: 800003,
+      AgentID: "BILLY666",
+      AgentLogin: "BILLY666",
+      CustomerID: "BRT106",
+      WagerType: "L",
+      AmountWagered: 220000,
+      ToWinAmount: 200000,
+      InsertDateTime: "2026-11-12 19:42:00.000",
+      TicketWriter: "EZL - INTERNET",
+      ShortDesc: "L.LIVE #9701 Duke (Live) -5½ -110 - For Game",
+    };
+    const brtLiveFigure: FigureDateWager = {
+      TicketNumber: 900003,
+      WagerNumber: 1,
+      AmountWagered: 220000,
+      ToWinAmount: 200000,
+      WagerType: "L",
+      AmountWon: 200000,
+      AmountLost: 0,
+      WagerStatus: "W",
+      Outcome: "W",
+      Description: "LIVE #9701 Duke (Live) -5½ -110 - For Game",
+      AcceptedDateTime: "2026-11-12 19:42:00.000",
+      CustomerID: "BRT106",
+      TicketWriter: "EZL - INTERNET",
+      GameDateTime: "2026-11-12 19:00:00.000",
+      DailyFigureDate: "2026-11-12",
+      SportType: "LIVE",
+      SportSubType: "NCAAB Live",
+      OrigSpread: -5.5,
+      AdjSpread: -5.5,
+      FinalMoney: -110,
+      ChosenTeamID: "Duke (Live)",
+      PeriodDescription: "Game",
+      PeriodNumber: 0,
+      Team1ID: "Duke (Live)",
+      Team2ID: "North Carolina (Live)",
+    };
+
+    const w1 = enrichWagerRecord(brt1hTicker, brt1hFigure);
+    const w2 = enrichWagerRecord(sq1hTicker, sq1hFigure);
+    const w3 = enrichWagerRecord(brtLiveTicker, brtLiveFigure);
+    const corpus = [w1, w2, w3];
+
+    const windows = computeWagerLineWindows(corpus);
+    const win1 = windows.get("900001")!;
+    const win2 = windows.get("900002")!;
+    expect(win1).toBeDefined();
+    expect(win1.boardLineBefore).toBeNull();
+    expect(win1.boardLineAtBet).toBe(-3.5);
+    expect(win1.boardLineAfter).toBe(-4.5);
+    expect(win1.closingBoardLine).toBe(-4.5);
+    expect(win1.immediateLineMoveDelta).toBe(1);
+    expect(win1.closingLineMoveDelta).toBe(1);
+    expect(win1.beatLineMove).toBe(true);
+
+    // SQ202 bought 0.5 pts (-4.5 -> -4.0), so boardLineAtBet is -4.5 while ticketLineAtBet is -4.0
+    expect(win2.boardLineBefore).toBe(-3.5);
+    expect(win2.boardLineAtBet).toBe(-4.5);
+    expect(win2.ticketLineAtBet).toBe(-4.0);
+    expect(win2.buyPoints).toBe(0.5);
+    expect(win2.beatLineMove).toBe(false);
+
+    // Slice 1: College Basketball 1st Halves
+    expect(
+      matchesWagerSlice(w1, { subSport: "NCAAB", portalPeriod: "1H" }),
+    ).toBe(true);
+    expect(
+      matchesWagerSlice(w3, { subSport: "NCAAB", portalPeriod: "1H" }),
+    ).toBe(false);
+
+    const ncaab1hLeaders = rankCustomersBySlice(corpus, {
+      subSport: "NCAAB",
+      portalPeriod: "1H",
+    });
+    expect(ncaab1hLeaders).toHaveLength(2);
+    expect<string>(ncaab1hLeaders[0]!.customerId).toBe("BRT106");
+    expect<number>(ncaab1hLeaders[0]!.customerNetPnlCents).toBe(100000);
+    expect(ncaab1hLeaders[0]!.beatLineMoveCount).toBe(1);
+    expect(ncaab1hLeaders[0]!.avgClosingLineDelta).toBe(1);
+    expect(ncaab1hLeaders[0]!.bookHoldPct).toBeCloseTo(-90.91, 2);
+    expect<string>(ncaab1hLeaders[1]!.customerId).toBe("SQ202");
+    expect<number>(ncaab1hLeaders[1]!.customerNetPnlCents).toBe(-55000);
+
+    // Slice 2: Live NCAA Basketball from GSLive
+    const gsLiveNcaabLeaders = rankCustomersBySlice(corpus, {
+      subSport: "NCAAB",
+      isLive: true,
+      gsLiveOnly: true,
+    });
+    expect(gsLiveNcaabLeaders).toHaveLength(1);
+    expect<string>(gsLiveNcaabLeaders[0]!.customerId).toBe("BRT106");
+    expect<number>(gsLiveNcaabLeaders[0]!.customerNetPnlCents).toBe(200000);
+    expect(gsLiveNcaabLeaders[0]!.winRatePct).toBe(100);
+  });
+
+  it("summarizes the observed BRT106 getPerformancePlayer 31-day wire payload and extracts active figureDates", () => {
+    expect(parsePerformancePlayerDateLabel("11/12/2026 Thursday")).toEqual({
+      figureDate: "2026-11-12",
+      dayOfWeek: "Thursday",
+    });
+
+    const brt106WireRows = [
+      { Date: "11/13/2026 Friday", Won: 0, Lost: 0 },
+      { Date: "11/12/2026 Thursday", Won: 1500000, Lost: 1150000 },
+      { Date: "11/11/2026 Wednesday", Won: 0, Lost: 0 },
+      { Date: "11/10/2026 Tuesday", Won: 1500000, Lost: 2087500 },
+      { Date: "11/09/2026 Monday", Won: 250000, Lost: 0 },
+      { Date: "11/08/2026 Sunday", Won: 4800000, Lost: 1455000 },
+      { Date: "11/07/2026 Saturday", Won: 0, Lost: 587500 },
+      { Date: "11/06/2026 Friday", Won: 3000000, Lost: 2465000 },
+      { Date: "11/05/2026 Thursday", Won: 2300000, Lost: 550000 },
+      { Date: "11/04/2026 Wednesday", Won: 0, Lost: 0 },
+      { Date: "11/03/2026 Tuesday", Won: 1700000, Lost: 1235000 },
+      { Date: "11/02/2026 Monday", Won: 1700000, Lost: 525000 },
+      { Date: "11/01/2026 Sunday", Won: 1000000, Lost: 0 },
+      { Date: "10/31/2026 Saturday", Won: 0, Lost: 0 },
+      { Date: "10/30/2026 Friday", Won: 0, Lost: 0 },
+      { Date: "10/29/2026 Thursday", Won: 0, Lost: 0 },
+      { Date: "10/28/2026 Wednesday", Won: 0, Lost: 0 },
+      { Date: "10/27/2026 Tuesday", Won: 0, Lost: 0 },
+      { Date: "10/26/2026 Monday", Won: 0, Lost: 0 },
+      { Date: "10/25/2026 Sunday", Won: 0, Lost: 0 },
+      { Date: "10/24/2026 Saturday", Won: 0, Lost: 0 },
+      { Date: "10/23/2026 Friday", Won: 0, Lost: 0 },
+      { Date: "10/22/2026 Thursday", Won: 0, Lost: 0 },
+      { Date: "10/21/2026 Wednesday", Won: 0, Lost: 0 },
+      { Date: "10/20/2026 Tuesday", Won: 0, Lost: 0 },
+      { Date: "10/19/2026 Monday", Won: 0, Lost: 0 },
+      { Date: "10/18/2026 Sunday", Won: 0, Lost: 0 },
+      { Date: "10/17/2026 Saturday", Won: 0, Lost: 0 },
+      { Date: "10/16/2026 Friday", Won: 0, Lost: 0 },
+      { Date: "10/15/2026 Thursday", Won: 0, Lost: 0 },
+      { Date: "10/14/2026 Wednesday", Won: 0, Lost: 0 },
+    ];
+
+    const summary = summarizePerformancePlayer(brt106WireRows);
+    expect(summary.totalDays).toBe(31);
+    expect(summary.activeDays).toBe(10);
+    expect(summary.winningDays).toBe(8);
+    expect(summary.losingDays).toBe(2);
+    expect(summary.dailyWinRatePct).toBe(80);
+    expect<number>(summary.totalWonCents).toBe(17750000);
+    expect<number>(summary.totalLostCents).toBe(10055000);
+    expect<number>(summary.customerNetCents).toBe(7695000);
+    expect(summary.totalWonUsd).toBe(177500);
+    expect(summary.totalLostUsd).toBe(100550);
+    expect(summary.customerNetUsd).toBe(76950);
+    expect(summary.activeFigureDates).toEqual([
+      "2026-11-12",
+      "2026-11-10",
+      "2026-11-09",
+      "2026-11-08",
+      "2026-11-07",
+      "2026-11-06",
+      "2026-11-05",
+      "2026-11-03",
+      "2026-11-02",
+      "2026-11-01",
+    ]);
+
+    // 1. Active figureDate drill-down payloads match the observed getWagersByFigureDate JSON body
+    const drilldownPayloads = buildActiveFigureDateDrilldownPayloads(
+      brt106WireRows,
+      {
+        agentID: "BILLY666",
+        agentOwner: "BILLY666",
+        customerID: "BRT106",
+      },
+    );
+    expect(drilldownPayloads).toHaveLength(10);
+    expect(drilldownPayloads[0]).toEqual({
+      RRO: 1,
+      agentID: "BILLY666",
+      agentOwner: "BILLY666",
+      customerID: "BRT106",
+      date: "2026-11-13",
+      figureDate: "2026-11-12",
+      graded: 0,
+      path: "/cloud/api/Report/getWagersByFigureDate",
+      sort: 1,
+      typeSort: 2,
+      week: 0,
+    });
+    expect(drilldownPayloads[9]?.figureDate).toBe("2026-11-01");
+
+    // 2. Explicit per-day table of all 10 active figureDates (chronological) and partition sum check
+    const activeChronologicalTable = summary.days
+      .filter((d) => d.isActive)
+      .sort((a, b) => a.figureDate.localeCompare(b.figureDate))
+      .map((d) => ({
+        figureDate: d.figureDate,
+        dayOfWeek: d.dayOfWeek,
+        wonCents: Number(d.wonCents),
+        lostCents: Number(d.lostCents),
+        customerNetCents: Number(d.customerNetCents),
+      }));
+
+    expect(activeChronologicalTable).toEqual([
+      // Carryover prefix (Nov 1 – Nov 9, 8 active days; Nov 4 inactive): sum = +7,932,500 cents (+$79,325.00)
+      {
+        figureDate: "2026-11-01",
+        dayOfWeek: "Sunday",
+        wonCents: 1000000,
+        lostCents: 0,
+        customerNetCents: 1000000,
+      },
+      {
+        figureDate: "2026-11-02",
+        dayOfWeek: "Monday",
+        wonCents: 1700000,
+        lostCents: 525000,
+        customerNetCents: 1175000,
+      },
+      {
+        figureDate: "2026-11-03",
+        dayOfWeek: "Tuesday",
+        wonCents: 1700000,
+        lostCents: 1235000,
+        customerNetCents: 465000,
+      },
+      {
+        figureDate: "2026-11-05",
+        dayOfWeek: "Thursday",
+        wonCents: 2300000,
+        lostCents: 550000,
+        customerNetCents: 1750000,
+      },
+      {
+        figureDate: "2026-11-06",
+        dayOfWeek: "Friday",
+        wonCents: 3000000,
+        lostCents: 2465000,
+        customerNetCents: 535000,
+      },
+      {
+        figureDate: "2026-11-07",
+        dayOfWeek: "Saturday",
+        wonCents: 0,
+        lostCents: 587500,
+        customerNetCents: -587500,
+      },
+      {
+        figureDate: "2026-11-08",
+        dayOfWeek: "Sunday",
+        wonCents: 4800000,
+        lostCents: 1455000,
+        customerNetCents: 3345000,
+      },
+      {
+        figureDate: "2026-11-09",
+        dayOfWeek: "Monday",
+        wonCents: 250000,
+        lostCents: 0,
+        customerNetCents: 250000,
+      },
+      // Post-carryover figure week (Nov 10 & Nov 12, 2 active days; Nov 11 & Nov 13 inactive): sum = -237,500 cents (-$2,375.00)
+      {
+        figureDate: "2026-11-10",
+        dayOfWeek: "Tuesday",
+        wonCents: 1500000,
+        lostCents: 2087500,
+        customerNetCents: -587500,
+      },
+      {
+        figureDate: "2026-11-12",
+        dayOfWeek: "Thursday",
+        wonCents: 1500000,
+        lostCents: 1150000,
+        customerNetCents: 350000,
+      },
+    ]);
+
+    const prefixSumCents = activeChronologicalTable
+      .slice(0, 8)
+      .reduce((acc, row) => acc + row.customerNetCents, 0);
+    const postSumCents = activeChronologicalTable
+      .slice(8)
+      .reduce((acc, row) => acc + row.customerNetCents, 0);
+    expect(prefixSumCents).toBe(7932500);
+    expect(postSumCents).toBe(-237500);
+    expect(prefixSumCents + postSumCents).toBe(7695000);
+
+    // 3. Reconcile cumulative daily P&L against BOTH getInfoPlayer CarryOverAmount (7,932,500 cents) AND thisWeek.PreviousBalance ($79,325)
+    const carryOverRec = reconcilePerformanceWithCarryOver(
+      brt106WireRows,
+      7932500,
+      79325,
+    );
+    expect(carryOverRec.previousBalanceParityMatched).toBe(true);
+    expect(carryOverRec.previousBalanceParityDeltaCents).toBe(0);
+    expect(carryOverRec.prefixSumMatched).toBe(true);
+    expect(carryOverRec.matched).toBe(true);
+    expect<number>(carryOverRec.targetCarryOverCents).toBe(7932500);
+    expect(carryOverRec.targetCarryOverUsd).toBe(79325);
+    expect(carryOverRec.windowStartFigureDate).toBe("2026-11-01");
+    expect(carryOverRec.windowEndFigureDate).toBe("2026-11-09");
+    expect(carryOverRec.carryOverFigureDates).toEqual([
+      "2026-11-01",
+      "2026-11-02",
+      "2026-11-03",
+      "2026-11-05",
+      "2026-11-06",
+      "2026-11-07",
+      "2026-11-08",
+      "2026-11-09",
+    ]);
+    expect(carryOverRec.postCarryOverFigureDates).toEqual([
+      "2026-11-10",
+      "2026-11-12",
+    ]);
+    expect<number>(carryOverRec.postCarryOverNetCents).toBe(-237500);
+    expect(carryOverRec.postCarryOverNetUsd).toBe(-2375);
+    expect<number>(
+      carryOverRec.targetCarryOverCents + carryOverRec.postCarryOverNetCents,
+    ).toBe(summary.customerNetCents);
+
+    // If PreviousBalance disagrees with CarryOverAmount, matched is false even when prefixSumMatched is true
+    const disagreedRec = reconcilePerformanceWithCarryOver(
+      brt106WireRows,
+      7932500,
+      79000,
+    );
+    expect(disagreedRec.prefixSumMatched).toBe(true);
+    expect(disagreedRec.previousBalanceParityMatched).toBe(false);
+    expect(disagreedRec.previousBalanceParityDeltaCents).toBe(32500);
+    expect(disagreedRec.matched).toBe(false);
   });
 });

@@ -942,3 +942,258 @@ test("navigates Board, Surveillance, Forensics, and System & Ops planes across a
     app.texts().some((t) => t.includes('"min_risk_usd": 10000')),
   );
 });
+
+test("renders unified read-only Trading Desk plane across all 6 mockup panels, filters blotter & unhedged exposure, and omits approval/hedge execution actions", async () => {
+  const app = await open("./App.tsx", {
+    platform: "macos",
+    width: 1440,
+    height: 920,
+    colorScheme: "dark",
+    reducedMotion: true,
+    network: {
+      ...defaultStubNetwork(),
+      "GET http://127.0.0.1:4020/api/live-bets/summary": {
+        status: 200,
+        body: { totalWagers: 100, totalRiskUsd: 42500, mode: "live" },
+      },
+      "GET http://127.0.0.1:4020/api/game-admin/board*": {
+        status: 200,
+        body: {
+          source: "live-board",
+          window: 24,
+          summary: { games: 2, totalWageredUsd: 68400 },
+          games: [
+            {
+              gameNum: 601,
+              league: "EPL",
+              status: "live",
+              clock: "64'",
+              teams: ["Arsenal", "Chelsea"],
+              score: [2, 1],
+              openers: { spread: "-0.5" },
+              spread: ["-0.5 (-110)"],
+              money: ["1.95 / 3.35 / 3.80"],
+              total: ["2.5"],
+            },
+            {
+              gameNum: 602,
+              league: "NBA",
+              status: "live",
+              clock: "Q2 04:12",
+              teams: ["Lakers", "Celtics"],
+              score: [54, 59],
+              openers: { spread: "-2.5" },
+              spread: ["-3.5 (-110)"],
+              money: ["+145 / -165"],
+              total: ["224.5"],
+            },
+          ],
+        },
+      },
+      "GET http://127.0.0.1:4020/api/game-admin": {
+        status: 200,
+        body: {
+          source: "captured",
+          games: [
+            {
+              matchup: "Arsenal vs Chelsea",
+              league: "EPL",
+              total: { wagers: 58, wagered: 41000, toWin: 36500 },
+              positions: {},
+            },
+            {
+              matchup: "Pacers vs Knicks",
+              league: "NBA",
+              total: { wagers: 6, wagered: 3200, toWin: 2900 },
+              positions: {},
+            },
+          ],
+        },
+      },
+      "GET http://127.0.0.1:4020/api/logo/*": {
+        status: 200,
+        body: { name: "lakers", source: "local", format: "png" },
+      },
+      "GET http://127.0.0.1:4020/api/sports": {
+        status: 200,
+        body: { liveFilter: ["EPL", "NBA"], all: ["EPL", "NBA", "NFL"] },
+      },
+      "GET http://127.0.0.1:4020/api/sports/catalog": {
+        status: 200,
+        body: { summary: { sports: 9, subSports: 31, periodEntries: 88 } },
+      },
+      "GET http://127.0.0.1:4020/api/contests*": {
+        status: 200,
+        body: { source: "contests.json", summary: { total: 0 }, entries: [] },
+      },
+      "GET http://127.0.0.1:4020/api/v1/live-bets*": {
+        status: 200,
+        body: { apiVersion: "1", dataSource: "file", games: [] },
+      },
+      "GET http://127.0.0.1:4020/api/v2/live-bets*": {
+        status: 200,
+        body: { apiVersion: "2", dataSource: "file", games: [] },
+      },
+      "GET http://127.0.0.1:4020/api/live-wagers*": {
+        status: 200,
+        body: {
+          summary: { wageredCents: 1450000 },
+          wagers: [
+            {
+              ticketNumber: "7001",
+              customerId: "VIP_Whale_99",
+              writer: "tg-otc",
+              wagerType: "Straight",
+              riskCents: 500000,
+              toWinCents: 550000,
+              description: "Arsenal ML",
+            },
+            {
+              ticketNumber: "7002",
+              customerId: "HEDGED_ACCT",
+              writer: "gslive",
+              wagerType: "Straight",
+              riskCents: 350000,
+              toWinCents: 318000,
+              description: "Chelsea +0.5",
+            },
+            {
+              ticketNumber: "7003",
+              customerId: "NOISE_PING",
+              writer: "steam-alert",
+              wagerType: "Straight",
+              riskCents: 2000000,
+              toWinCents: 1800000,
+              description: "Syndicate steam alert",
+            },
+          ],
+        },
+      },
+      "GET http://127.0.0.1:4020/api/f402/get-pending": {
+        status: 410,
+        body: { error: "retired endpoint", code: "gone" },
+      },
+      "GET http://127.0.0.1:4020/api/graph/summary": {
+        status: 200,
+        body: {
+          feed: { dataMode: "LIVE", totalOpenExposureUsd: 52000 },
+          bridges: ["3a", "3b", "3c"],
+          automation: { enabled: true },
+        },
+      },
+      "GET http://127.0.0.1:4020/api/graph-feed": {
+        status: 200,
+        body: {
+          schemaVersion: 3,
+          dataMode: "LIVE",
+          provenance: { basis: "live", source: "graph", stale: false },
+          pendingBets: [
+            {
+              id: "leg-otc-1",
+              login: "SHARP_DESK_7",
+              league: "NBA",
+              selection: "Celtics -3.5",
+              riskUsd: 9200,
+              sharpScore: 94,
+              placedAt: "2026-11-13T16:12:04Z",
+            },
+          ],
+          backtest4Wk: {
+            weeks: [
+              {
+                week: "2026-W45",
+                estimatedSavingsUsd: 18400,
+                holdImprovementBps: 110,
+              },
+            ],
+          },
+        },
+      },
+      "GET http://127.0.0.1:4020/api/gslive/weblogs": {
+        status: 200,
+        body: { status: "measured", source: "r2", accounts: ["A1"] },
+      },
+      "GET http://127.0.0.1:4020/api/gslive/session-health*": {
+        status: 200,
+        body: { authModel: "cookie-jar", session: { status: "ready" } },
+      },
+      "GET http://127.0.0.1:4020/api/bridge3c/status": {
+        status: 200,
+        body: {
+          boundary: "CLASS_D",
+          readOnly: true,
+          rollup: { status: "fresh" },
+        },
+      },
+    },
+  });
+
+  await app.waitUntil(() => app.texts().some((t) => t.includes("2,276 nodes")));
+
+  // Switch to Trading Desk plane via top SegmentedTabs
+  await app.press("Trading Desk");
+  await app.waitFor("id:trading-terminal-workspace");
+  await app.waitUntil(
+    () =>
+      app.texts().some((t) => t.includes("Arsenal vs Chelsea")) &&
+      app.texts().some((t) => t.includes("User: @VIP_Whale_99")),
+  );
+
+  const fullText = app.texts().join("\n");
+  // Verify all 6 mockup panels & KPIs
+  expect(fullText).toContain("Margin");
+  expect(fullText).toContain("GGR");
+  expect(fullText).toContain("Held %");
+  expect(fullText).toContain("Active Bets");
+  expect(fullText).toContain("Polymarket Liq.");
+  expect(fullText).toContain("Sport View");
+  expect(fullText).toContain("Line-Trading Dashboard");
+  expect(fullText).toContain("Point Chart");
+  expect(fullText).toContain("Historic Odds");
+  expect(fullText).toContain("Live Trading Dashboard");
+  expect(fullText).toContain("Telegram OTC Quote Feed");
+  expect(fullText).toContain("Book Liability vs Polymarket Liquidity");
+  expect(fullText).toContain("Liability Monitor");
+  expect(fullText).toContain("Active Bet Logs & Risk Triggers");
+  expect(fullText).toContain("GATEWAY · tg-otc");
+  expect(fullText).toContain("GSLIVE · gslive");
+  expect(fullText).toContain("ALERT · steam-alert");
+  expect(fullText).toContain("Noise Excluded");
+
+  // Strictly read-only contract (Q3): zero approval/decline/hedge-execution buttons!
+  expect(fullText).not.toContain("Approve & Send to Book");
+  expect(fullText).not.toContain("Decline");
+  expect(fullText).not.toContain("Execute Hedge");
+
+  // Verify semantic provenance token colors across dark and light appearances + >=12pt typography
+  const darkProvStyle = app.spanStyle("text:GSLIVE · gslive");
+  expect(darkProvStyle.color.toLowerCase()).toBe("#28a745ff");
+  expect(darkProvStyle.fontSize).toBeGreaterThanOrEqual(12);
+
+  await app.setColorScheme("light");
+  const lightProvStyle = app.spanStyle("text:GSLIVE · gslive");
+  expect(lightProvStyle.color.toLowerCase()).toBe("#15803dff");
+  await app.setColorScheme("dark");
+
+  // Select second live match card ("Lakers vs Celtics") into Line-Trading Dashboard
+  await app.press("id:live-match-card-board-602");
+  await app.waitUntil(() => app.texts().some((t) => t.includes("KEY #3/#7")));
+
+  // Switch inspector tabs: Telegram OTC -> Bet Slip -> Hedge Monitor
+  await app.press("Bet Slip");
+  await app.waitFor("id:terminal-betslip-panel");
+  expect(app.texts().join("\n")).toContain("Selected Market Pricing");
+
+  await app.press("Hedge Monitor");
+  await app.waitFor("id:terminal-hedge-panel");
+  expect(app.texts().join("\n")).toContain("SOR-1 Slippage Advisory");
+
+  // Toggle Show Unhedged Only -> drops HEDGED_ACCT, NOISE_PING, and Pacers vs Knicks
+  await app.press("id:terminal-unhedged-switch");
+  await app.waitUntil(
+    () =>
+      !app.texts().some((t) => t === "HEDGED_ACCT") &&
+      !app.texts().some((t) => t === "Pacers vs Knicks"),
+  );
+  expect(app.texts().join("\n")).toContain("SHARP_DESK_7");
+});

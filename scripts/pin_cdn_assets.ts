@@ -24,7 +24,7 @@ import {
   missingModuleSinkAnchors,
 } from "../lib/f402_client_seams.ts";
 import {
-  appModuleCoverage,
+  appGraphCoverage,
   appModuleUrl,
   APP_BOOT_MODULES,
   DYNAMIC_APP_MODULES,
@@ -33,6 +33,7 @@ import {
   checkDocumentCoverage,
   cssReferenceDrift,
   describeOutcome,
+  discoverAppModuleGraph,
   EXPLICIT_CDN_ASSETS,
   fetchAssetOutcome,
   extractAmdModuleIds,
@@ -175,18 +176,34 @@ async function update(): Promise<void> {
     process.exit(2);
   }
 
-  const appUrls = [
-    ...new Set(
-      [
-        ...APP_BOOT_MODULES,
-        ...DYNAMIC_APP_MODULES,
-        ...extractAmdModuleIds(managerJs),
-      ]
-        .map((id) => appModuleUrl(host, id))
-        .filter((url): url is string => url !== null),
-    ),
-  ].sort();
+  const seeds = [
+    ...APP_BOOT_MODULES,
+    ...DYNAMIC_APP_MODULES,
+    ...extractAmdModuleIds(managerJs),
+  ];
+  const graph = await discoverAppModuleGraph({
+    host,
+    seeds,
+    load: async (url) => {
+      const outcome = await fetchAssetOutcome(
+        `${url}?bust=${encodeURIComponent(vendorVersion)}`,
+      );
+      return outcome.kind === "ok"
+        ? new TextDecoder().decode(outcome.bytes)
+        : null;
+    },
+  });
+  for (const failed of graph.failedUrls) {
+    console.error(
+      `pin:cdn:update cannot pin ${failed}: required by the AMD graph but it does not load`,
+    );
+  }
+
+  const appUrls = [...graph.urls].sort();
   const appUrlSet = new Set(appUrls);
+  if (appUrls.length === 0) {
+    throw new Error("no app modules discovered from manager/manager");
+  }
 
   // Phase 2: pin everything. Each asset records whether it came from the document, the explicit
   // list, or the same-origin AMD graph.
@@ -360,10 +377,35 @@ async function check(): Promise<void> {
 
   if (managerUrl !== null && managerRow?.outcome.kind === "ok") {
     const managerJs = new TextDecoder().decode(managerRow.outcome.bytes);
-    for (const missing of appModuleCoverage(managerJs, manifest)) {
+    // Reuse the bytes this pass already fetched, so the walk only pays for what is unpinned.
+    const fetchedBytes = new Map<string, string>();
+    for (const row of rows) {
+      if (row.outcome.kind === "ok") {
+        fetchedBytes.set(row.url, new TextDecoder().decode(row.outcome.bytes));
+      }
+    }
+    const coverage = await appGraphCoverage({
+      manifest,
+      managerJs,
+      load: async (url) => {
+        const cached = fetchedBytes.get(url);
+        if (cached !== undefined) return cached;
+        const outcome = await fetchAssetOutcome(url);
+        return outcome.kind === "ok"
+          ? new TextDecoder().decode(outcome.bytes)
+          : null;
+      },
+    });
+    for (const url of coverage.unpinned) {
       driftCount += 1;
       details.push(
-        `app_module_unpinned ${missing}: required by the controller but not pinned`,
+        `app_module_unpinned ${url}: reachable from the AMD graph but not pinned`,
+      );
+    }
+    for (const failed of coverage.unreachable) {
+      driftCount += 1;
+      details.push(
+        `app_module_unreachable ${failed}: required by the AMD graph but does not load`,
       );
     }
     for (const anchor of missingExternalViewGuardAnchors(managerJs)) {

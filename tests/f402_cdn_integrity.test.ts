@@ -6,12 +6,16 @@ import {
   normalizeAssetUrl,
 } from "../lib/f402_cdn_assets.ts";
 import {
+  appGraphCoverage,
   appModuleCoverage,
   appModuleUrl,
+  discoverAppModuleGraph,
   extractAmdModuleIds,
+  extractRequirePaths,
   loadCdnManifest,
   parseCdnManifest,
   pinnedAssetFetchUrl,
+  requireAliasUrl,
   sriFor,
 } from "../lib/f402_cdn_pin.ts";
 import type { CdnAssetPin, CdnManifest } from "../lib/f402_cdn_pin.ts";
@@ -249,6 +253,107 @@ describe("app module graph", () => {
         (url) => url === pinnedManager || url.endsWith("bet-ticker.js"),
       ),
     ).toEqual([]);
+  });
+
+  test("walks past the controller: a module required by a non-controller module is found", async () => {
+    const host = "www.fantasy402.com";
+    const targets = appModuleUrl(host, "manager/module/player-info") ?? "";
+    const performance =
+      appModuleUrl(host, "manager/module/customer-admin/performance") ?? "";
+    // manager -> player-info -> customer-admin/performance. Reading manager.js alone sees one hop.
+    const bytes = new Map<string, string>([
+      [
+        appModuleUrl(host, "manager/manager") ?? "",
+        'require(["manager/module/player-info"]);',
+      ],
+      [targets, 'require(["manager/module/customer-admin/performance"]);'],
+      [performance, "define([],(function(){return 1}));"],
+    ]);
+    const graph = await discoverAppModuleGraph({
+      host,
+      seeds: ["manager/manager"],
+      load: async (url) => bytes.get(url) ?? null,
+    });
+    expect(graph.urls).toContain(performance);
+    expect(graph.failedUrls).toEqual([]);
+  });
+
+  test("resolves RequireJS paths aliases instead of inventing a /app/<id>.js 404", async () => {
+    const host = "www.fantasy402.com";
+    const security = appModuleUrl(host, "system/security") ?? "";
+    const bytes = new Map<string, string>([
+      [
+        security,
+        'require.config({paths:{swal2:"../assets/js/scripts/swal2/sweetalert2.min"}});define(["swal2"],(function(){}));',
+      ],
+    ]);
+    expect(extractRequirePaths(bytes.get(security) ?? "")).toEqual(
+      new Map([["swal2", "../assets/js/scripts/swal2/sweetalert2.min"]]),
+    );
+    expect(
+      requireAliasUrl(host, "../assets/js/scripts/swal2/sweetalert2.min"),
+    ).toBe(
+      "https://www.fantasy402.com/assets/js/scripts/swal2/sweetalert2.min.js",
+    );
+    const aliased =
+      "https://www.fantasy402.com/assets/js/scripts/swal2/sweetalert2.min.js";
+    const graph = await discoverAppModuleGraph({
+      host,
+      seeds: ["system/security"],
+      load: async (url) => bytes.get(url) ?? null,
+    });
+    // The walk fetched the alias target (and only that), so it is a failed load, not a resolved one.
+    expect(graph.failedUrls).toContain(aliased);
+    // The naive /app/swal2.js resolution must not be attempted at all.
+    expect(graph.failedUrls).not.toContain(
+      "https://www.fantasy402.com/app/swal2.js",
+    );
+    expect(graph.urls).not.toContain("https://www.fantasy402.com/app/swal2.js");
+  });
+
+  test("terminates on a require cycle and on a fetch failure", async () => {
+    const host = "www.fantasy402.com";
+    const a = appModuleUrl(host, "manager/module/a") ?? "";
+    const b = appModuleUrl(host, "manager/module/b") ?? "";
+    const bytes = new Map<string, string>([
+      [a, 'require(["manager/module/b"]);'],
+      [b, 'require(["manager/module/a","manager/module/missing"]);'],
+    ]);
+    const graph = await discoverAppModuleGraph({
+      host,
+      seeds: ["manager/module/a"],
+      load: async (url) => bytes.get(url) ?? null,
+    });
+    expect([...graph.urls].sort()).toEqual([a, b].sort());
+    expect(graph.failedUrls).toEqual([
+      appModuleUrl(host, "manager/module/missing") ?? "",
+    ]);
+  });
+
+  test("graph coverage reports reachable-but-unpinned modules, not just one hop", async () => {
+    const host = "www.fantasy402.com";
+    const manager = appModuleUrl(host, "manager/manager") ?? "";
+    const playerInfo = appModuleUrl(host, "manager/module/player-info") ?? "";
+    const performance =
+      appModuleUrl(host, "manager/module/customer-admin/performance") ?? "";
+    const bytes = new Map<string, string>([
+      [manager, 'require(["manager/module/player-info"]);'],
+      [playerInfo, 'require(["manager/module/customer-admin/performance"]);'],
+      [performance, "define([],(function(){return 1}));"],
+    ]);
+    const pinned = manifest({
+      [manager]: pin({ source: "app", sameOrigin: true }),
+      [playerInfo]: pin({ source: "app", sameOrigin: true }),
+    });
+    const coverage = await appGraphCoverage({
+      manifest: pinned,
+      managerJs: bytes.get(manager) ?? "",
+      // Unknown URLs answer with an empty script: the point here is coverage, not reachability.
+      load: async (url) => bytes.get(url) ?? "",
+    });
+    expect(coverage.unpinned).toContain(performance);
+    expect(coverage.unpinned).not.toContain(playerInfo);
+    expect(coverage.unreachable).toEqual([]);
   });
 
   test("covers variable-selected dynamic modules the AMD literal scan cannot see", () => {

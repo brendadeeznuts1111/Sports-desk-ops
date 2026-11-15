@@ -11,6 +11,8 @@ import {
   formatBunSymbolOsc8Markdown,
   formatOsc8Hyperlink,
   renderAnsiMarkdown,
+  parseAnsiMarkdownCliOptions,
+  describeAnsiTheme,
   DARK_ANSI_THEME,
   LIGHT_ANSI_THEME,
   MONOCHROME_ANSI_THEME,
@@ -59,18 +61,18 @@ describe("Canonical OSC 8 Links & Terminal Hyperlinks Engine", () => {
   it("formats canonical AnsiTheme reference link", () => {
     assert.equal(
       formatAnsiThemeOsc8Markdown(),
-      "[AnsiTheme](https://bun.com/reference/globals/bun/markdown/AnsiTheme)",
+      "[AnsiTheme](https://bun.com/reference/bun/markdown/AnsiTheme)",
     );
   });
 
   it("formats canonical symbol markdown reference links", () => {
     assert.equal(
       formatBunSymbolOsc8Markdown("AnsiTheme"),
-      "[`AnsiTheme`](https://bun.com/reference/globals/bun/markdown/AnsiTheme)",
+      "[`AnsiTheme`](https://bun.com/reference/bun/markdown/AnsiTheme)",
     );
     assert.equal(
       formatBunSymbolOsc8Markdown("Bun.inspect.custom"),
-      "[`Bun.inspect.custom`](https://bun.com/reference/globals/bun/inspect)",
+      "[`Bun.inspect.custom`](https://bun.com/reference/bun/inspect)",
     );
     assert.equal(formatBunSymbolOsc8Markdown("nonexistent_symbol"), null);
   });
@@ -121,5 +123,38 @@ describe("Canonical OSC 8 Links & Terminal Hyperlinks Engine", () => {
       linkifySymbols: true,
     });
     assert.ok(rendered.includes("AnsiTheme"), "Must render AnsiTheme symbol");
+  });
+
+  it("parses Bun.markdown.AnsiTheme CLI flags and presets", () => {
+    const lightOpts = parseAnsiMarkdownCliOptions([
+      "--theme",
+      "light",
+      "--columns=100",
+      "--kitty-graphics",
+      "--linkify-symbols",
+    ]);
+    assert.equal(lightOpts.colors, true);
+    assert.equal(lightOpts.hyperlinks, true);
+    assert.equal(lightOpts.light, true);
+    assert.equal(lightOpts.columns, 100);
+    assert.equal(lightOpts.kittyGraphics, true);
+    assert.equal(lightOpts.linkifySymbols, true);
+    assert.equal(
+      describeAnsiTheme(lightOpts),
+      "colors=true, hyperlinks=true, columns=100, light=true, kittyGraphics=true, linkifySymbols=true",
+    );
+
+    const monoOpts = parseAnsiMarkdownCliOptions([
+      "--theme=mono",
+      "--columns",
+      "0",
+    ]);
+    assert.equal(monoOpts.colors, false);
+    assert.equal(monoOpts.hyperlinks, false);
+    assert.equal(monoOpts.columns, 0);
+    assert.equal(
+      describeAnsiTheme(monoOpts),
+      "colors=false, hyperlinks=false, columns=0",
+    );
   });
 });

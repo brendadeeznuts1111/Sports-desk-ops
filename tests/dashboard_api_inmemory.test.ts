@@ -5,6 +5,7 @@ import {
   type WsLike,
 } from "@sportsdesk-ops/api";
 import { parseDashboardWsSignal } from "@sportsdesk-ops/contracts";
+import { WAGERS_TABLE } from "../packages/ui/src/config/wagers.ts";
 import { startDashboardServer } from "../scripts/dev_dashboard.ts";
 
 function buildMockDeps(
@@ -75,6 +76,117 @@ function buildMockDeps(
     },
     getLiveWagersPayload: async () => ({
       wagers: [{ ticketId: "W-1", autoExecute: false }],
+      autoExecute: false,
+    }),
+    getBetTickerPayload: async (filters) => ({
+      schemaVersion: 1,
+      observedAt: "2026-11-12T00:00:00.000Z",
+      autoExecute: false,
+      provenance: {
+        kind: "fixture",
+        label: "mock",
+        sourcePath: null,
+        observedAt: "2026-11-12T00:00:00.000Z",
+      },
+      localFeed: {
+        rawRowCount: 1,
+        actionableTicketCount: 1,
+        sentinelNoiseCount: 0,
+        totalWageredCents: 10000,
+        totalVolumeCents: 10000,
+        totalToWinCents: 9091,
+        volumeDiffersCount: 0,
+        vipCount: 0,
+        liveCount: 0,
+        flagCount: 0,
+        byRule: {},
+        byWriter: [
+          {
+            writer: filters?.writer ?? "Internet",
+            count: 1,
+            wageredCents: 10000,
+            volumeCents: 10000,
+            toWinCents: 9091,
+            isSentinelNoise: false,
+          },
+        ],
+        byWagerType: [],
+        tickets: [],
+      },
+      bridge3aR2: {
+        available: false,
+        publicUrl: "",
+        state: "error",
+        lastModified: null,
+        ageSeconds: null,
+        generatedAt: null,
+        deskDate: null,
+        deskHour: null,
+        watermark: null,
+        rowCount: 0,
+        ticketCount: 0,
+        legCount: 0,
+        alertTwinCount: 0,
+        orphanCount: 0,
+        byChannel: {},
+        byWagerType: {},
+      },
+      pendingGames: {
+        available: false,
+        gameCount: 0,
+        pendingCount: 0,
+        totalWageredCents: 0,
+        totalToWinCents: 0,
+        capturedAt: null,
+        dataSource: null,
+        sourcePath: null,
+      },
+      captureHealth: {
+        available: false,
+        status: null,
+        capturedAt: null,
+        ageSeconds: null,
+        rowCount: null,
+        sourcePath: null,
+      },
+    }),
+    getR2PipelinePayload: async (opts) => ({
+      schemaVersion: 1,
+      bucketPublicBase: "https://pub-mock.r2.dev",
+      observedAt: "2026-11-12T00:00:00.000Z",
+      overallStatus: opts?.refresh ? "fresh" : "stale",
+      freshCount: 4,
+      totalCount: 4,
+      staleKeys: [],
+      dataStaleKeys: [],
+      sinks: [],
+      daemon4020: {
+        online: true,
+        url: "http://127.0.0.1:4020/health",
+        status: 200,
+        latencyMs: 2,
+        checkedAt: "2026-11-12T00:00:00.000Z",
+      },
+    }),
+    getDaemonStatusPayload: async () => ({
+      online: true,
+      url: "http://127.0.0.1:4020/health",
+      status: 200,
+      latencyMs: 2,
+      checkedAt: "2026-11-12T00:00:00.000Z",
+    }),
+    getAgentDetailPayload: async (agentId) => ({
+      schemaVersion: 1,
+      agentId: agentId.trim().toUpperCase(),
+      found: agentId.trim().toUpperCase() === "FAKEMONEY",
+      masterAgent: "NOLAWOLF",
+      level: 3,
+      agentType: "Agent",
+      childAgents: [],
+      conduit30d: null,
+      customers: [],
+      recentWagers: [],
+      observedAt: "2026-11-12T00:00:00.000Z",
       autoExecute: false,
     }),
     getTiersConfig: async () => ({ tiers: { CRITICAL: { fg: "#fff" } } }),
@@ -209,6 +321,31 @@ describe("@sportsdesk-ops/api in-memory router (zero port bind)", () => {
 
     expect((await call("/api/build-matrix")).status).toBe(200);
     expect((await call("/api/ws/status")).status).toBe(200);
+
+    const tickerRes = await call("/api/bet-ticker?writer=GSLIVE");
+    expect(tickerRes.status).toBe(200);
+    expect(
+      (
+        (await tickerRes.json()) as {
+          localFeed: { byWriter: Array<{ writer: string }> };
+        }
+      ).localFeed.byWriter[0]?.writer,
+    ).toBe("GSLIVE");
+
+    const r2Res = await call("/api/r2/pipeline?refresh=1");
+    expect(r2Res.status).toBe(200);
+    expect(
+      ((await r2Res.json()) as { overallStatus: string }).overallStatus,
+    ).toBe("fresh");
+
+    const daemonRes = await call("/api/daemon/status");
+    expect(daemonRes.status).toBe(200);
+    expect(((await daemonRes.json()) as { online: boolean }).online).toBe(true);
+
+    const agentRes = await call("/api/agent/FAKEMONEY");
+    expect(agentRes.status).toBe(200);
+    expect(((await agentRes.json()) as { found: boolean }).found).toBe(true);
+
     expect((await call("/api/not-a-route")).status).toBe(404);
     expect((await call("/unknown")).status).toBe(404);
   });
@@ -362,6 +499,46 @@ describe("@sportsdesk-ops/api in-memory router (zero port bind)", () => {
     });
   });
 
+  test("stamps the wagers-tab policy version on the live-wagers payload (rebuild-independent probe)", async () => {
+    const api = createDashboardApi(
+      buildMockDeps({
+        getWagersTabPolicy: async () => ({
+          policy_version: "wagers-policy/v1",
+          policy_schema: "sportsdesk-wagers-tab/v1",
+        }),
+      }),
+    );
+    const call = (path: string) =>
+      api.fetch(new Request(`http://dashboard.local${path}`));
+
+    for (const path of ["/api/wagers", "/api/live-wagers"]) {
+      const body = (await (await call(path)).json()) as {
+        readonly policy_version?: string;
+        readonly policy_schema?: string;
+        readonly wagers?: unknown;
+      };
+      expect(body.policy_version).toBe("wagers-policy/v1");
+      expect(body.policy_schema).toBe("sportsdesk-wagers-tab/v1");
+      expect(Array.isArray(body.wagers)).toBe(true);
+    }
+  });
+
+  test("keeps the feed serving when the policy stamp read fails", async () => {
+    const api = createDashboardApi(
+      buildMockDeps({
+        getWagersTabPolicy: async () => {
+          throw new Error("policy file unreadable");
+        },
+      }),
+    );
+    const res = await api.fetch(
+      new Request("http://dashboard.local/api/wagers"),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { readonly policy_version?: string };
+    expect(body.policy_version).toBeUndefined();
+  });
+
   test("startDashboardServer({ apiOnly: true }) exposes /health & /api/* without serving UI HTML", async () => {
     const handle = startDashboardServer({
       port: 0,
@@ -377,6 +554,12 @@ describe("@sportsdesk-ops/api in-memory router (zero port bind)", () => {
       expect(taxRes.status).toBe(200);
       const rootRes = await fetch(new URL("/", handle.url));
       expect(rootRes.status).toBe(404);
+
+      // The host wires the real loader, so the committed TOML is the source.
+      const wagersBody = (await (
+        await fetch(new URL("/api/wagers", handle.url))
+      ).json()) as { readonly policy_version?: string };
+      expect(wagersBody.policy_version).toBe(WAGERS_TABLE.policy_tag);
     } finally {
       handle.stop(true);
     }

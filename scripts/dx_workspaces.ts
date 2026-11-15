@@ -7,10 +7,15 @@
  * the repository's frozen-lockfile + isolated-linker policy (`lib/pm_policy.ts`):
  *   - `list` (`ls`)       — inspect root + `packages/*` workspaces, topological waves & isolated links
  *   - `graph`             — visualize `"workspace:*"` dependency edges (`--mermaid` | `--dot` | `--json` | `--yaml`)
- *   - `audit` (`check`)   — run 7 monorepo gates (`"private": true`, globs/dirs, lock sync, `"workspace:*"` graph,
- *                           `Bun.Transpiler` self-contained imports, isolated `node_modules` links, `--strict-root`)
+ *   - `audit` (`check`)   — run the monorepo gates (`"private": true`, globs/dirs, lock sync, catalog <-> lock sync,
+ *                           `"workspace:*"` graph, `Bun.Transpiler` self-contained imports, isolated `node_modules`
+ *                           links, `--strict-root`)
  *   - `run <script>`      — controlled multi-workspace runner (`--filter`, `--workspaces-only`, `--topological`,
  *                           `--parallel` | `--sequential`, `--if-present`, `--elide-lines`, `--dry-run`)
+ *
+ * `run` does not schedule workspaces itself: `buildWorkspaceRunPlan` emits one `bun run` invocation
+ * (or one per topological wave) and the CLI spawns it. Extend that argv mapping instead of adding a
+ * scheduler — `tests/dx_workspaces.test.ts` pins the emitted argv and the Bun flags it relies on.
  *   - `add <ws> <pkg...>` — workspace-scoped dependency add (auto-normalizes sibling workspaces to `"workspace:*"`
  *                           and runs unfrozen `bun-deps` in that workspace's `cwd` + lock drift verification)
  *   - `remove <ws> <pkg>` — workspace-scoped dependency removal + lock drift verification
@@ -26,15 +31,19 @@ import {
   analyzeWorkspaceGraph,
   auditRootWorkspaceHygiene,
   auditWorkspaceSelfContainment,
+  DEFAULT_BUNX_MINIMUM_RELEASE_AGE_SECONDS,
+  DEFAULT_PM_ENV_FILE_FLAG,
   FOREIGN_LOCKFILES,
   formatWorkspaceLinkSpecifier,
   globalBunfigPath,
   inspectWorkspaceInstallLayout,
   inspectWorkspaces,
+  lockCatalogSync,
   lockWorkspaceDependencies,
   lockWorkspaceNames,
   lockWorkspaceVersions,
   resolveWorkspaceSelector,
+  translatePackageManagerFlag,
   type WorkspaceDependencyGroup,
   type WorkspaceEdge,
   type WorkspacePackageInfo,
@@ -126,8 +135,45 @@ export interface WorkspaceMutationPlan {
   readonly workspaceName: string;
   readonly cwd: string;
   readonly groupFlag: string | null;
+  readonly catalogFlag: boolean;
+  readonly envFileFlag: string;
   readonly specs: readonly ResolvedDepSpec[];
   readonly installerKind: "bun-deps" | "bun-unfrozen-config" | "bun-direct";
+  readonly argv: readonly string[];
+}
+
+export interface WorkspacePublishPlan {
+  readonly cwd: string;
+  readonly recursive: boolean;
+  readonly quiet: boolean;
+  readonly dryRun: boolean;
+  readonly tolerateRepublish: boolean;
+  readonly gzipLevel: number | null;
+  readonly filters: readonly string[];
+  readonly envFileFlag: string;
+  readonly argv: readonly string[];
+}
+
+export interface WorkspaceBunxPlan {
+  readonly workspaceDir: string;
+  readonly workspaceName: string;
+  readonly cwd: string;
+  readonly packageSpec: string;
+  readonly toolArgs: readonly string[];
+  readonly minimumReleaseAgeSeconds: number;
+  readonly trust: boolean;
+  readonly forceBun: boolean;
+  readonly noInstall: boolean;
+  readonly packageOverride: string | null;
+  readonly envFile: string | null;
+  readonly argv: readonly string[];
+}
+
+export interface WorkspaceTypecheckPlan {
+  readonly cwd: string;
+  readonly project: string;
+  readonly buildMode: boolean;
+  readonly timing: boolean;
   readonly argv: readonly string[];
 }
 
@@ -462,6 +508,20 @@ export async function runWorkspaceAudit(
     });
   }
 
+  const catalogSync = await lockCatalogSync(root);
+  checks.push({
+    name: "catalog <-> lock sync",
+    status:
+      !catalogSync.lockPresent || catalogSync.drift.length === 0
+        ? "ok"
+        : "fail",
+    detail: !catalogSync.lockPresent
+      ? "no bun.lock to compare (see the single bun.lock gate)"
+      : catalogSync.drift.length === 0
+        ? `${catalogSync.rootEntries} catalog entr(ies), ${catalogSync.namedCatalogs} named catalog(s) match bun.lock`
+        : catalogSync.drift.join("; "),
+  });
+
   const graph = analyzeWorkspaceGraph(inspection);
   checks.push({
     name: "workspace:* protocol & graph",
@@ -742,6 +802,8 @@ export async function buildWorkspaceMutationPlan(
     readonly optional?: boolean;
     readonly peer?: boolean;
     readonly exact?: boolean;
+    readonly catalog?: boolean;
+    readonly envFile?: string | null;
     readonly env?: Readonly<Record<string, string | undefined>>;
   } = {},
 ): Promise<WorkspaceMutationPlan> {
@@ -768,6 +830,11 @@ export async function buildWorkspaceMutationPlan(
     else if (options.optional) groupFlag = "--optional";
     else if (options.peer) groupFlag = "--peer";
   }
+  const catalogFlag = action === "add" && Boolean(options.catalog);
+  const envFileFlag =
+    options.envFile && options.envFile.trim() !== ""
+      ? `--env-file=${options.envFile.trim()}`
+      : DEFAULT_PM_ENV_FILE_FLAG;
 
   const specs: ResolvedDepSpec[] = rawSpecs.map((raw) => {
     const { namePart, versionPart } = parseRequestedPkgSpec(raw);
@@ -819,9 +886,10 @@ export async function buildWorkspaceMutationPlan(
     };
   });
 
-  const argv: string[] = [...installer.prefix, action];
+  const argv: string[] = [...installer.prefix, action, envFileFlag];
   if (groupFlag) argv.push(groupFlag);
   if (action === "add" && options.exact) argv.push("--exact");
+  if (catalogFlag) argv.push("--catalog");
   for (const s of specs) argv.push(s.normalizedArg);
 
   return {
@@ -830,8 +898,151 @@ export async function buildWorkspaceMutationPlan(
     workspaceName: targetWs.name,
     cwd,
     groupFlag,
+    catalogFlag,
+    envFileFlag,
     specs,
     installerKind: installer.kind,
+    argv,
+  };
+}
+
+export function buildWorkspacePublishPlan(
+  root: string,
+  options: {
+    readonly recursive?: boolean;
+    readonly quiet?: boolean;
+    readonly dryRun?: boolean;
+    readonly tolerateRepublish?: boolean;
+    readonly gzipLevel?: number | null;
+    readonly filters?: readonly string[];
+    readonly envFile?: string | null;
+    readonly bunPath?: string;
+  } = {},
+): WorkspacePublishPlan {
+  const bunPath = options.bunPath ?? process.execPath;
+  const recursive = options.recursive ?? true;
+  const quiet = options.quiet ?? true;
+  const dryRun = options.dryRun ?? false;
+  const tolerateRepublish = options.tolerateRepublish ?? false;
+  const gzipLevel = options.gzipLevel ?? null;
+  const filters = options.filters ?? [];
+  const envFileFlag =
+    options.envFile && options.envFile.trim() !== ""
+      ? `--env-file=${options.envFile.trim()}`
+      : DEFAULT_PM_ENV_FILE_FLAG;
+
+  const argv: string[] = [bunPath, "publish", envFileFlag];
+  if (recursive && filters.length === 0) argv.push("--recursive");
+  for (const f of filters) {
+    argv.push(`--filter=${f}`);
+  }
+  if (quiet) argv.push("--quiet");
+  if (dryRun) argv.push("--dry-run");
+  if (tolerateRepublish) argv.push("--tolerate-republish");
+  if (gzipLevel !== null) argv.push(`--gzip-level=${gzipLevel}`);
+
+  return {
+    cwd: root,
+    recursive: recursive && filters.length === 0,
+    quiet,
+    dryRun,
+    tolerateRepublish,
+    gzipLevel,
+    filters,
+    envFileFlag,
+    argv,
+  };
+}
+
+export async function buildWorkspaceBunxPlan(
+  root: string,
+  workspaceSelector: string,
+  packageSpec: string,
+  toolArgs: readonly string[] = [],
+  options: {
+    readonly minimumReleaseAgeSeconds?: number;
+    readonly trust?: boolean;
+    readonly forceBun?: boolean;
+    readonly noInstall?: boolean;
+    readonly packageOverride?: string | null;
+    readonly envFile?: string | null;
+    readonly bunxPath?: string;
+  } = {},
+): Promise<WorkspaceBunxPlan> {
+  const cleanSpec = packageSpec.trim();
+  if (cleanSpec === "") {
+    throw new Error("dx workspaces x: missing <package> executable");
+  }
+  const inspection = await inspectWorkspaces(root);
+  const targetWs = resolveWorkspaceSelector(inspection, workspaceSelector);
+  if (!targetWs) {
+    const known = inspection.packages
+      .map((p) => `${p.dir || "."} (${p.name})`)
+      .join(", ");
+    throw new Error(
+      `dx workspaces x: unknown workspace "${workspaceSelector}". Known: ${known}`,
+    );
+  }
+
+  const cwd = targetWs.dir === "" ? root : path.join(root, targetWs.dir);
+  const minimumReleaseAgeSeconds =
+    options.minimumReleaseAgeSeconds ??
+    DEFAULT_BUNX_MINIMUM_RELEASE_AGE_SECONDS;
+  const trust = options.trust ?? false;
+  const forceBun = options.forceBun ?? true;
+  const noInstall = options.noInstall ?? false;
+  const packageOverride = options.packageOverride ?? null;
+  const envFile = options.envFile ?? null;
+  const bunxBin = options.bunxPath ?? [process.execPath, "x"];
+
+  const argv: string[] = Array.isArray(bunxBin) ? [...bunxBin] : [bunxBin];
+  argv.push("--cwd", cwd);
+  argv.push(`--minimum-release-age=${minimumReleaseAgeSeconds}`);
+  if (forceBun) argv.push("--bun");
+  if (trust) argv.push("--trust");
+  if (noInstall) argv.push("--no-install");
+  if (envFile && envFile.trim() !== "") {
+    argv.push("--env-file", envFile.trim());
+  }
+  if (packageOverride && packageOverride.trim() !== "") {
+    argv.push("--package", packageOverride.trim());
+  }
+  argv.push(cleanSpec, ...toolArgs);
+
+  return {
+    workspaceDir: targetWs.dir || ".",
+    workspaceName: targetWs.name,
+    cwd,
+    packageSpec: cleanSpec,
+    toolArgs,
+    minimumReleaseAgeSeconds,
+    trust,
+    forceBun,
+    noInstall,
+    packageOverride,
+    envFile,
+    argv,
+  };
+}
+
+export function buildWorkspaceTypecheckPlan(
+  root: string,
+  options: {
+    readonly project?: string;
+    readonly timing?: boolean;
+    readonly bunPath?: string;
+  } = {},
+): WorkspaceTypecheckPlan {
+  const bunPath = options.bunPath ?? process.execPath;
+  const project = options.project ?? "tsconfig.workspaces.json";
+  const timing = options.timing ?? false;
+  const argv: string[] = [bunPath, "check", "--no-script", "-b", "-p", project];
+  if (timing) argv.push("--timing");
+  return {
+    cwd: root,
+    project,
+    buildMode: true,
+    timing,
     argv,
   };
 }
@@ -896,7 +1107,11 @@ export async function linkWorkspaces(
   }
 
   const installer = detectUnfrozenInstaller(options.env ?? Bun.env);
-  const installArgv = [...installer.prefix, "install"];
+  const installArgv = [
+    ...installer.prefix,
+    "install",
+    DEFAULT_PM_ENV_FILE_FLAG,
+  ];
   const dryRun = options.dryRun ?? false;
 
   if (!dryRun) {
@@ -1000,10 +1215,13 @@ Usage:
   ./bin/dx workspaces graph [--mermaid | --dot | --json | --yaml]
   ./bin/dx workspaces audit [--strict-root] [--json | --yaml]
   ./bin/dx workspaces run [options] <script> [-- <script-args...>]
-  ./bin/dx workspaces add <workspace> <pkg...> [-d|--dev] [-E|--exact] [--dry-run] [--json | --yaml]
+  ./bin/dx workspaces add <workspace> <pkg...> [-d|--dev|--optional|--peer|--catalog] [-E|--exact] [--dry-run] [--json | --yaml]
   ./bin/dx workspaces remove <workspace> <pkg...> [--dry-run] [--json | --yaml]
   ./bin/dx workspaces link <from-workspace> <to-workspace> [-d|--dev] [--dry-run] [--json | --yaml]
   ./bin/dx workspaces init <name> [--dir packages/<slug>] [--scoped] [--with-tsconfig] [--dry-run]
+  ./bin/dx workspaces publish [-F|--filter=<pattern>] [--dry-run] [--tolerate-republish] [--json | --yaml]
+  ./bin/dx workspaces x <workspace> <pkg> [args...] [--minimum-release-age=<sec>] [--trust] [--dry-run]
+  ./bin/dx workspaces typecheck [--timing] [-p|--project=<tsconfig>] [--dry-run] [--json | --yaml]
 
 Run Options:
   -F, --filter=<pattern>   Filter workspaces by package name or path glob (repeatable; !negates)
@@ -1025,6 +1243,8 @@ Examples:
   ./bin/dx workspaces run --topological test
   ./bin/dx workspaces run --filter '@sportsdesk-ops/*' --dry-run verify
   ./bin/dx workspaces add ba-example zod --dry-run
+  ./bin/dx workspaces publish --dry-run
+  ./bin/dx workspaces x ui oxlint --dry-run
   ./bin/dx workspaces link ba-example @sportsdesk-ops/nsh-desk --dry-run
 `;
 
@@ -1061,6 +1281,11 @@ export async function runWorkspacesCli(
     "rm",
     "link",
     "init",
+    "publish",
+    "x",
+    "bunx",
+    "typecheck",
+    "tc",
   ]);
   const sub =
     first !== undefined && !first.startsWith("-") && knownSubs.has(first)
@@ -1328,21 +1553,33 @@ export async function runWorkspacesCli(
     let optional = false;
     let peer = false;
     let exact = false;
+    let catalog = false;
+    let envFile: string | null = null;
     let dryRun = false;
     let json = false;
     let yaml = false;
     const positional: string[] = [];
 
-    for (const token of args) {
+    for (let i = 0; i < args.length; i += 1) {
+      const rawToken = args[i]!;
+      const token = rawToken.startsWith("-")
+        ? translatePackageManagerFlag(rawToken)
+        : rawToken;
       if (token === "-d" || token === "--dev") dev = true;
       else if (token === "--optional") optional = true;
       else if (token === "--peer") peer = true;
       else if (token === "-E" || token === "--exact") exact = true;
-      else if (token === "--dry-run") dryRun = true;
+      else if (token === "--catalog") catalog = true;
+      else if (token === "--no-env-file") envFile = null;
+      else if (token === "--env-file") {
+        envFile = args[++i] ?? null;
+      } else if (token.startsWith("--env-file=")) {
+        envFile = token.slice("--env-file=".length);
+      } else if (token === "--dry-run") dryRun = true;
       else if (token === "--json") json = true;
       else if (token === "--yaml") yaml = true;
       else if (token.startsWith("-")) {
-        console.error(`dx workspaces ${action}: unknown flag "${token}"`);
+        console.error(`dx workspaces ${action}: unknown flag "${rawToken}"`);
         return 2;
       } else {
         positional.push(token);
@@ -1362,7 +1599,7 @@ export async function runWorkspacesCli(
       action,
       wsSelector,
       specs,
-      { dev, optional, peer, exact },
+      { dev, optional, peer, exact, catalog, envFile },
     );
 
     if (dryRun) {
@@ -1408,13 +1645,16 @@ export async function runWorkspacesCli(
     let yaml = false;
     const positional: string[] = [];
 
-    for (const token of args) {
+    for (const rawToken of args) {
+      const token = rawToken.startsWith("-")
+        ? translatePackageManagerFlag(rawToken)
+        : rawToken;
       if (token === "-d" || token === "--dev") dev = true;
       else if (token === "--dry-run") dryRun = true;
       else if (token === "--json") json = true;
       else if (token === "--yaml") yaml = true;
       else if (token.startsWith("-")) {
-        console.error(`dx workspaces link: unknown flag "${token}"`);
+        console.error(`dx workspaces link: unknown flag "${rawToken}"`);
         return 2;
       } else {
         positional.push(token);
@@ -1529,11 +1769,14 @@ export async function runWorkspacesCli(
       }
       if (!noInstall) {
         const installer = detectUnfrozenInstaller(Bun.env);
-        const proc = Bun.spawnSync([...installer.prefix, "install"], {
-          cwd: root,
-          stdout: "inherit",
-          stderr: "inherit",
-        });
+        const proc = Bun.spawnSync(
+          [...installer.prefix, "install", DEFAULT_PM_ENV_FILE_FLAG],
+          {
+            cwd: root,
+            stdout: "inherit",
+            stderr: "inherit",
+          },
+        );
         if (proc.exitCode !== 0) return proc.exitCode;
       }
     }
@@ -1546,6 +1789,246 @@ export async function runWorkspacesCli(
       );
     }
     return 0;
+  }
+
+  if (sub === "publish") {
+    let recursive = true;
+    let quiet = true;
+    let dryRun = false;
+    let tolerateRepublish = false;
+    let gzipLevel: number | null = null;
+    let envFile: string | null = null;
+    let json = false;
+    let yaml = false;
+    const filters: string[] = [];
+
+    for (let i = 0; i < args.length; i += 1) {
+      const token = args[i]!;
+      if (token === "-r" || token === "--recursive") recursive = true;
+      else if (token === "--quiet") quiet = true;
+      else if (token === "--verbose") quiet = false;
+      else if (token === "--dry-run") dryRun = true;
+      else if (token === "--tolerate-republish") tolerateRepublish = true;
+      else if (token === "--no-env-file") envFile = null;
+      else if (token === "--env-file") {
+        envFile = args[++i] ?? null;
+      } else if (token.startsWith("--env-file=")) {
+        envFile = token.slice("--env-file=".length);
+      } else if (token.startsWith("--gzip-level=")) {
+        const level = Number(token.slice("--gzip-level=".length));
+        if (!Number.isInteger(level) || level < 1 || level > 9) {
+          console.error("dx workspaces publish: --gzip-level must be 1..9");
+          return 2;
+        }
+        gzipLevel = level;
+      } else if (token === "-F" || token === "--filter") {
+        const val = args[++i];
+        if (!val) {
+          console.error(`dx workspaces publish: ${token} requires a pattern`);
+          return 2;
+        }
+        filters.push(val);
+      } else if (token.startsWith("--filter=")) {
+        filters.push(token.slice("--filter=".length));
+      } else if (token === "--json") json = true;
+      else if (token === "--yaml") yaml = true;
+      else {
+        console.error(`dx workspaces publish: unknown flag "${token}"`);
+        return 2;
+      }
+    }
+
+    const plan = buildWorkspacePublishPlan(root, {
+      recursive,
+      quiet,
+      dryRun,
+      tolerateRepublish,
+      gzipLevel,
+      filters,
+      envFile,
+    });
+
+    if (dryRun && (json || yaml)) {
+      emitStructured(plan, parseFormat({ json, yaml }));
+      return 0;
+    }
+
+    const secretCheck = checkVerboseFetchSecretSafety(Bun.env);
+    if (secretCheck.blocked) {
+      console.error(`dx workspaces publish: BLOCKED — ${secretCheck.reason}`);
+      return 2;
+    }
+
+    const proc = Bun.spawnSync(plan.argv as string[], {
+      cwd: plan.cwd,
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    return proc.exitCode;
+  }
+
+  if (sub === "x" || sub === "bunx") {
+    let minimumReleaseAgeSeconds: number =
+      DEFAULT_BUNX_MINIMUM_RELEASE_AGE_SECONDS;
+    let trust = false;
+    let forceBun = true;
+    let noInstall = false;
+    let packageOverride: string | null = null;
+    let envFile: string | null = null;
+    let dryRun = false;
+    let json = false;
+    let yaml = false;
+    let wsSelector: string | null = null;
+    let packageSpec: string | null = null;
+    const toolArgs: string[] = [];
+
+    for (let i = 0; i < args.length; i += 1) {
+      const token = args[i]!;
+      if (packageSpec !== null) {
+        if (token === "--") {
+          toolArgs.push(...args.slice(i + 1));
+          break;
+        }
+        toolArgs.push(token);
+        continue;
+      }
+      if (token === "--trust") trust = true;
+      else if (token === "--bun") forceBun = true;
+      else if (token === "--no-bun") forceBun = false;
+      else if (token === "--no-install") noInstall = true;
+      else if (token === "--dry-run") dryRun = true;
+      else if (token === "--json") json = true;
+      else if (token === "--yaml") yaml = true;
+      else if (token === "-p" || token === "--package") {
+        packageOverride = args[++i] ?? null;
+      } else if (token.startsWith("--package=")) {
+        packageOverride = token.slice("--package=".length);
+      } else if (token === "--env-file") {
+        envFile = args[++i] ?? null;
+      } else if (token.startsWith("--env-file=")) {
+        envFile = token.slice("--env-file=".length);
+      } else if (token === "--minimum-release-age") {
+        const sec = Number(args[++i]);
+        if (!Number.isInteger(sec) || sec < 0) {
+          console.error(
+            "dx workspaces x: --minimum-release-age must be an integer >= 0",
+          );
+          return 2;
+        }
+        minimumReleaseAgeSeconds = sec;
+      } else if (token.startsWith("--minimum-release-age=")) {
+        const sec = Number(token.slice("--minimum-release-age=".length));
+        if (!Number.isInteger(sec) || sec < 0) {
+          console.error(
+            "dx workspaces x: --minimum-release-age must be an integer >= 0",
+          );
+          return 2;
+        }
+        minimumReleaseAgeSeconds = sec;
+      } else if (token.startsWith("-")) {
+        console.error(`dx workspaces x: unknown flag "${token}"`);
+        return 2;
+      } else if (wsSelector === null) {
+        wsSelector = token;
+      } else {
+        packageSpec = token;
+      }
+    }
+
+    if (!wsSelector || !packageSpec) {
+      console.error(
+        "usage: ./bin/dx workspaces x <workspace> <pkg> [args...] [--minimum-release-age=<sec>] [--trust] [--dry-run]",
+      );
+      return 2;
+    }
+
+    const plan = await buildWorkspaceBunxPlan(
+      root,
+      wsSelector,
+      packageSpec,
+      toolArgs,
+      {
+        minimumReleaseAgeSeconds,
+        trust,
+        forceBun,
+        noInstall,
+        packageOverride,
+        envFile,
+      },
+    );
+
+    if (dryRun) {
+      if (json || yaml) {
+        emitStructured(plan, parseFormat({ json, yaml }));
+      } else {
+        console.log(
+          `[dry-run] workspace=${plan.workspaceDir} (${plan.workspaceName}) age=${plan.minimumReleaseAgeSeconds}s trust=${plan.trust}`,
+        );
+        console.log(`  cwd : ${plan.cwd}`);
+        console.log(`  cmd : ${plan.argv.join(" ")}`);
+      }
+      return 0;
+    }
+
+    const secretCheck = checkVerboseFetchSecretSafety(Bun.env);
+    if (secretCheck.blocked) {
+      console.error(`dx workspaces x: BLOCKED — ${secretCheck.reason}`);
+      return 2;
+    }
+
+    const proc = Bun.spawnSync(plan.argv as string[], {
+      cwd: root,
+      stdout: "inherit",
+      stderr: "inherit",
+      stdin: "inherit",
+    });
+    return proc.exitCode;
+  }
+
+  if (sub === "typecheck" || sub === "tc") {
+    let project = "tsconfig.workspaces.json";
+    let timing = false;
+    let dryRun = false;
+    let json = false;
+    let yaml = false;
+
+    for (let i = 0; i < args.length; i += 1) {
+      const token = args[i]!;
+      if (token === "--timing") timing = true;
+      else if (token === "--dry-run") dryRun = true;
+      else if (token === "--json") json = true;
+      else if (token === "--yaml") yaml = true;
+      else if (token === "-p" || token === "--project") {
+        project = args[++i] ?? project;
+      } else if (token.startsWith("--project=")) {
+        project = token.slice("--project=".length);
+      } else {
+        console.error(`dx workspaces typecheck: unknown flag "${token}"`);
+        return 2;
+      }
+    }
+
+    const plan = buildWorkspaceTypecheckPlan(root, { project, timing });
+
+    if (dryRun) {
+      if (json || yaml) {
+        emitStructured(plan, parseFormat({ json, yaml }));
+      } else {
+        console.log(
+          `[dry-run] project=${plan.project} buildMode=${plan.buildMode} timing=${plan.timing}`,
+        );
+        console.log(`  cwd : ${plan.cwd}`);
+        console.log(`  cmd : ${plan.argv.join(" ")}`);
+      }
+      return 0;
+    }
+
+    const proc = Bun.spawnSync(plan.argv as string[], {
+      cwd: plan.cwd,
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    return proc.exitCode;
   }
 
   console.error(`dx workspaces: unknown subcommand "${sub}"`);

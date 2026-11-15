@@ -2,9 +2,22 @@
   "schemaVersion": 1,
   "host": "www.fantasy402.com",
   "documentUrl": "https://www.fantasy402.com/manager.html",
-  "pinnedAt": "2026-11-04T06:53:31.832Z",
-  "vendorVersion": "1.0.281",
+  "pinnedAt": "2026-11-14T03:28:43.264Z",
+  "vendorVersion": "1.0.287",
   "assets": {
+    "https://cdn.fastassets.io/app/manager/manager-init.js": {
+      "sha256": "5a6a8aa02cc26c686874bb2f9de40974ef2a8769efabc576e906997ecc2f56f2",
+      "sri": "sha384-zOzv/XSLumBjN2GJSCQpx6WAQ7SoiiWPikEipA+RiQj1pMjXol36kTEsyCq9NcXu",
+      "sriEnforceable": true,
+      "bytes": 1824,
+      "role": "portal-js",
+      "source": "document",
+      "sameOrigin": false,
+      "externalReferences": [],
+      "etag": "W/\"6af5284c-720\"",
+      "lastModified": "Thu, 12 Nov 2026 02:45:32 GMT",
+      "fetchedAt": "2026-11-14T03:28:40.646Z"
+    },
     "https://cdn.fastassets.io/assets/css/app.css": {
       "sha256": "6d3398e84dc117021b5b2a596bfbe5f889d9129c44375934fb427445e017d13c",
       "sri": "sha384-y2Pa4gFlmezfUNWSieuJhVjzMPGwa0iVswTn2X0ER4A7FgX8Xn/Tf34Fp25wWqak",
@@ -29,7 +42,7 @@
       ],
       "etag": "\"69b0f3c1-1e422\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:57 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.777Z"
+      "fetchedAt": "2026-11-14T03:28:40.556Z"
     },
     "https://cdn.fastassets.io/assets/css/bootstrap-extended.css": {
       "sha256": "dab60a7d31e53fefb7437c388d5ba4e71c273dcd3a6449deb39bd6a6db4dc5ef",
@@ -42,7 +55,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3c2-e9e0\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:58 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.768Z"
+      "fetchedAt": "2026-11-14T03:28:40.810Z"
     },
     "https://cdn.fastassets.io/assets/css/bootstrap.css": {
       "sha256": "5e2e71336fd98518b40564aa6178d0466e70d9d17f80ec10aed9a98f5eb4624b",
@@ -55,7 +68,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3c1-1f6f4\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:57 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.777Z"
+      "fetchedAt": "2026-11-14T03:28:40.555Z"
     },
     "https://cdn.fastassets.io/assets/css/colors.css": {
       "sha256": "468c25ffecf8beb03820bf8bab996e37b74f89888ee2501e472ee0459b4c47fd",
@@ -68,7 +81,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3c2-857ee\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:58 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.783Z"
+      "fetchedAt": "2026-11-14T03:28:40.574Z"
     },
     "https://cdn.fastassets.io/assets/css/core/colors/palette-tooltip.css": {
       "sha256": "e0d943261ba5ca3c89cbe837954ae974e71a30fd4a2cb9d7e0d347cc98f27ebc",
@@ -81,7 +94,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c1-15f8\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:57 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.756Z"
+      "fetchedAt": "2026-11-14T03:28:40.810Z"
     },
     "https://cdn.fastassets.io/assets/css/core/menu/menu-types/vertical-menu.css": {
       "sha256": "dc64ce44b4526ec927293505e041ac1c94a38bf1d9d62b3dcca5aa673a6c2e4d",
@@ -94,7 +107,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3c1-28b3\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:57 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.765Z"
+      "fetchedAt": "2026-11-14T03:28:40.542Z"
     },
     "https://cdn.fastassets.io/assets/css/core/menu/menu-types/vertical-overlay-menu.css": {
       "sha256": "197cbb5113f220230d8c89bbe55b8901bf5fab1ea5f66f6c0ae222413d2e3791",
@@ -107,7 +120,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3c1-b1b\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:57 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.773Z"
+      "fetchedAt": "2026-11-14T03:28:40.548Z"
     },
     "https://cdn.fastassets.io/assets/css/plugins/forms/selectivity/selectivity.css": {
       "sha256": "cbde91d63d676ca1d900c662caa7df68d32c70f9fa9d4c1952519b20728b9592",
@@ -120,7 +133,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3c2-a34\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:58 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.765Z"
+      "fetchedAt": "2026-11-14T03:28:40.584Z"
     },
     "https://cdn.fastassets.io/assets/css/plugins/forms/switch.css": {
       "sha256": "92025c777bbd73a8d3a64c3496a0a70cee7606716cee789478f8bc0f8c10b7b9",
@@ -133,7 +146,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c2-a43\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:58 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.773Z"
+      "fetchedAt": "2026-11-14T03:28:40.581Z"
     },
     "https://cdn.fastassets.io/assets/css/plugins/pickers/daterange/daterange.css": {
       "sha256": "a3f1b85f460300d9b35888a03fc65b7c73bc55cac7a18e2a408baa68761f4a6d",
@@ -146,7 +159,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3c2-116\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:58 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.802Z"
+      "fetchedAt": "2026-11-14T03:28:40.590Z"
     },
     "https://cdn.fastassets.io/assets/css/table.css": {
       "sha256": "239037316bcad155a97d39a49d97209a5d6c8369c7bcf1b230d89a61bc981308",
@@ -162,7 +175,7 @@
       ],
       "etag": "\"69b0f3c1-3520\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:57 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.795Z"
+      "fetchedAt": "2026-11-14T03:28:40.595Z"
     },
     "https://cdn.fastassets.io/assets/fonts/flag-icon-css/css/flag-icon.min.css": {
       "sha256": "c791da09b2c361a32959d06fa0e7db96a0f0f645189cc81c335d2c6f425f0cb4",
@@ -676,7 +689,7 @@
       ],
       "etag": "W/\"69b0f3be-81b5\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:54 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.785Z"
+      "fetchedAt": "2026-11-14T03:28:40.602Z"
     },
     "https://cdn.fastassets.io/assets/fonts/icomoon.css": {
       "sha256": "d4b85de8b11f7a222f28e36801ac1bd058a210d428f0ed6c8a4bdf07960d8663",
@@ -695,7 +708,7 @@
       ],
       "etag": "\"69b0f3be-20c26\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:54 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.811Z"
+      "fetchedAt": "2026-11-14T03:28:40.623Z"
     },
     "https://cdn.fastassets.io/assets/js/scripts/extensions/tree-view.js": {
       "sha256": "90867fab1a90d394c6a086f4b076487dbbb510efa9ce537b37283568a80f9bb5",
@@ -708,7 +721,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3bb-29fe\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:51 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.910Z"
+      "fetchedAt": "2026-11-14T03:28:40.673Z"
     },
     "https://cdn.fastassets.io/assets/js/scripts/ui/fullscreenSearch.js?v=100": {
       "sha256": "973cf69b2bd8c384fe94aeb8e4d63a1fc2096113816ab815be49477148b57438",
@@ -721,7 +734,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3bb-ca9\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:51 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.795Z"
+      "fetchedAt": "2026-11-14T03:28:40.683Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/extensions/pace.css": {
       "sha256": "3fc58eff597699668799b9b8eac36490e8a103a26d48bcf15e466690600461cc",
@@ -734,7 +747,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3ca-154\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.815Z"
+      "fetchedAt": "2026-11-14T03:28:40.629Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/extensions/timedropper.min.css": {
       "sha256": "0875b0c19a8047133d9960d3540a56cc4825418a92957523cf7f1a1645b38196",
@@ -745,9 +758,9 @@
       "source": "document",
       "sameOrigin": false,
       "externalReferences": [],
-      "etag": "\"69b0f3ca-18b2\"",
+      "etag": "W/\"69b0f3ca-18b2\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.813Z"
+      "fetchedAt": "2026-11-14T03:28:40.648Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/icheck.css": {
       "sha256": "4ea5542fd2deaa66b48f5f11273a0a5c24406aeee5a637d77eb6394046117327",
@@ -807,7 +820,7 @@
       ],
       "etag": "W/\"69b0f3cb-65c\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.805Z"
+      "fetchedAt": "2026-11-14T03:28:40.650Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/forms/selects/select2.min.css": {
       "sha256": "ea237985427db5573da7d02e2ce688fe2337a308f9a08dbd73697430f6bc0aed",
@@ -820,7 +833,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3ca-3b5d\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.831Z"
+      "fetchedAt": "2026-11-14T03:28:40.666Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/forms/selects/selectivity-full.min.css": {
       "sha256": "70d9275a5a19d0bf2bf304b39c9dc40d3005e7ed9d4bf76c3f66def98210d4ab",
@@ -833,7 +846,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3ca-d6c\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.831Z"
+      "fetchedAt": "2026-11-14T03:28:40.686Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/forms/toggle/bootstrap-switch.min.css": {
       "sha256": "c9d1c1b537049608e885e5f6b1d303954f5e24e0b6b71484e0d58755db46d442",
@@ -846,7 +859,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3cb-1884\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.823Z"
+      "fetchedAt": "2026-11-14T03:28:40.673Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/forms/toggle/switchery.min.css": {
       "sha256": "da426bd59d02d72e73d239e1aff982bb8e89dd1e94b9dfaa0901c0dfd8b5798a",
@@ -859,7 +872,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3cb-2aa\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.823Z"
+      "fetchedAt": "2026-11-14T03:28:40.676Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/pickers/daterange/daterangepicker.css": {
       "sha256": "802ddca8b98e4dddd63ab75ff69002eabac5e23ddab4ef5874e187a1d05d8450",
@@ -872,7 +885,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3cb-20d2\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.844Z"
+      "fetchedAt": "2026-11-14T03:28:40.712Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/pickers/datetime/bootstrap-datetimepicker.css": {
       "sha256": "db7645bcb0b6ad8b0c04b7c7b26f754b3778ce5c22f58c08d5f6db35102a8e08",
@@ -885,7 +898,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3cb-20bd\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.850Z"
+      "fetchedAt": "2026-11-14T03:28:40.810Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/pickers/miniColors/jquery.minicolors.css": {
       "sha256": "5505ec8cebc93a20ec7b6c05b046b5d557970c434a05013c77e4ad4cc7eddbee",
@@ -900,7 +913,7 @@
       ],
       "etag": "W/\"69b0f3cb-17fef\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.866Z"
+      "fetchedAt": "2026-11-14T03:28:40.719Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/pickers/pickadate/pickadate.css": {
       "sha256": "5c95cbfbf29704dff38d5daaed10b1c32763420c1b8cbd64404463b817aeadeb",
@@ -913,7 +926,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3cb-1a52\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.864Z"
+      "fetchedAt": "2026-11-14T03:28:40.719Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/pickers/spectrum/spectrum.css": {
       "sha256": "42c767643a9a494b213db4f2b03df0d42fa42e4616abae51ccf39670d3d0cb9f",
@@ -926,7 +939,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3cb-3c44\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.853Z"
+      "fetchedAt": "2026-11-14T03:28:40.810Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/sliders/slick/slick.css": {
       "sha256": "51833fd9bdec7c501239cec40939564b8c6d925b7bd0815528dec7ea0abded43",
@@ -939,7 +952,7 @@
       "externalReferences": [],
       "etag": "\"69b0f3cb-75d\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T06:53:29.864Z"
+      "fetchedAt": "2026-11-14T03:28:40.810Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/extensions/bootstrap-treeview.min.js": {
       "sha256": "686d83e940384de9e8dc12b778d55d64bced02b1fdb249b71ad9dd35b8ca714c",
@@ -952,7 +965,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c3-4199\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.065Z"
+      "fetchedAt": "2026-11-14T03:28:40.810Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/extensions/datedropper.min.js": {
       "sha256": "dceab70a6ef2ad0ba612d5ddbf7a00bcc4c73fcf4c0b75ad2f32312808e302e2",
@@ -965,7 +978,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c3-411f\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.065Z"
+      "fetchedAt": "2026-11-14T03:28:40.836Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/extensions/dragula.min.js": {
       "sha256": "a3217c8f49e4a22d60bea8759e61818869974be360a2db359044e8aa29c1bbfc",
@@ -978,7 +991,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c3-2c81\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.065Z"
+      "fetchedAt": "2026-11-14T03:28:40.895Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/extensions/pace.min.js": {
       "sha256": "5b5cc718704634518901a47d9748b628f5f4dc21b850175938cf11a1fb046759",
@@ -991,7 +1004,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c3-304c\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.065Z"
+      "fetchedAt": "2026-11-14T03:28:40.883Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/extensions/timedropper.min.js": {
       "sha256": "7f7dd15f639bf8d8c774fc4732d3e2bf729d013960081b7df87465516ff4d0e4",
@@ -1004,7 +1017,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c3-1b92\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.065Z"
+      "fetchedAt": "2026-11-14T03:28:40.968Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/forms/icheck/icheck.min.js": {
       "sha256": "8252527fc362f31388aa28daa93af4592403082dc04f7b2e51226366c688113b",
@@ -1017,7 +1030,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c3-134e\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.066Z"
+      "fetchedAt": "2026-11-14T03:28:40.962Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/forms/select/select2.full.min.js": {
       "sha256": "9b8c0a1953e5ea4dfddeb1dbd04bf03da2bf66b0542fba29bb642ecc2b9768d1",
@@ -1030,7 +1043,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c3-124ff\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.066Z"
+      "fetchedAt": "2026-11-14T03:28:40.962Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/forms/select/selectivity-full.min.js": {
       "sha256": "f2ca1c60914c06bcbb76f8487b8fce3c8c9665b539f8f433fb8f83561ee3071b",
@@ -1043,7 +1056,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c3-b99e\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.119Z"
+      "fetchedAt": "2026-11-14T03:28:41.020Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/forms/toggle/bootstrap-switch.min.js": {
       "sha256": "d160cc3d13c4170ceeb8cfa6f257ae95b04897014ba0ae971aaa8b9d62e06712",
@@ -1056,7 +1069,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c3-3d81\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.158Z"
+      "fetchedAt": "2026-11-14T03:28:40.899Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/forms/toggle/switchery.min.js": {
       "sha256": "07fe3a3658e5426fb3a6535cd5e8d81dfb12ba0130fb01fc0dcd5b9136f13e46",
@@ -1069,7 +1082,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c3-5f75\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.151Z"
+      "fetchedAt": "2026-11-14T03:28:40.931Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/menu/jquery.mmenu.all.min.js": {
       "sha256": "04ad97143856af48b5142e71756ac001d7631629393d9daa70a90f2d1135811e",
@@ -1082,7 +1095,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3c3-ba7d\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.218Z"
+      "fetchedAt": "2026-11-14T03:28:41.134Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/dateTime/bootstrap-datetimepicker.min.js": {
       "sha256": "e3bd7d6040eb6ca4c792633658948585ba624da8af17ae15d6563f7d1f117986",
@@ -1095,7 +1108,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-93c7\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.213Z"
+      "fetchedAt": "2026-11-14T03:28:40.989Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/dateTime/moment-with-locales.min.js": {
       "sha256": "57f934c21e672db11ea94ccbeaafe261b401f559080795f7ea2837a8a5dc366a",
@@ -1108,7 +1121,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-328d3\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.256Z"
+      "fetchedAt": "2026-11-14T03:28:41.337Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/daterange/daterangepicker.js": {
       "sha256": "39b5e9653ed9cfdaab0c2ec169e90fd6a84b813b7f92a9a1efa77fb01a66949f",
@@ -1121,7 +1134,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-109b9\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.217Z"
+      "fetchedAt": "2026-11-14T03:28:40.961Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/miniColors/jquery.minicolors.min.js": {
       "sha256": "e6ab51b709cb10306c78f7eaca073469fb57f09d7fe73184e794a406166cf03f",
@@ -1134,7 +1147,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-3c60\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.155Z"
+      "fetchedAt": "2026-11-14T03:28:41.065Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/pickadate/legacy.js": {
       "sha256": "2f306230f9b1c1619e0f4827d761cd23b8d3a6d94ab99021d07eae0a2bc3dbc2",
@@ -1147,7 +1160,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-76e\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.204Z"
+      "fetchedAt": "2026-11-14T03:28:41.065Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/pickadate/picker.date.js": {
       "sha256": "202786f9431b359a0ffdd47ae4096cd4e3934476beb43c1844620e8389c42210",
@@ -1160,7 +1173,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-31f7\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.240Z"
+      "fetchedAt": "2026-11-14T03:28:40.991Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/pickadate/picker.js": {
       "sha256": "641b78776494fd834c01f6f02a0429faa3ec6279b3d9d73bb66cd951fe7c3973",
@@ -1173,7 +1186,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-9622\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.300Z"
+      "fetchedAt": "2026-11-14T03:28:41.109Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/pickadate/picker.time.js": {
       "sha256": "01bc35c873db1dfbbd2e9840805ec7589bbdf905595fc6e798223bf39c19bc7b",
@@ -1186,7 +1199,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-2367\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.293Z"
+      "fetchedAt": "2026-11-14T03:28:41.131Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/spectrum/spectrum.js": {
       "sha256": "e5d5b2cc80088a9af35daaaed680f831ca095d7a707e0f851fa97a202c29c4c2",
@@ -1199,7 +1212,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-13eb9\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.226Z"
+      "fetchedAt": "2026-11-14T03:28:41.024Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/ui/perfect-scrollbar.jquery.min.js": {
       "sha256": "f2c29f67e6537b08b371d95b28ca322e5c1046422c198bbeb7a4bf62b5ead66c",
@@ -1212,7 +1225,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-64d1\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.302Z"
+      "fetchedAt": "2026-11-14T03:28:41.048Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/ui/screenfull.min.js": {
       "sha256": "05aa6856ea794eae2b1014c55f68fa2e979eee2983730844d33761cc2e1d4972",
@@ -1225,7 +1238,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-6bf\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.307Z"
+      "fetchedAt": "2026-11-14T03:28:41.053Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/ui/tether.min.js": {
       "sha256": "96ac9d7f178af8a3e505f2b04214528961706ce3b1331e53ac51f23c55a3a9ad",
@@ -1238,7 +1251,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-5b29\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.240Z"
+      "fetchedAt": "2026-11-14T03:28:41.075Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/ui/unison.min.js": {
       "sha256": "bffd4a8bd0af39e524339c3497f9abfd590810e93b3d9eb4f8b86bd88522b9a2",
@@ -1251,7 +1264,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3ca-4f4\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.312Z"
+      "fetchedAt": "2026-11-14T03:28:41.197Z"
     },
     "https://cdn.fastassets.io/css/datedropper.min.css": {
       "sha256": "21aeb7f2cc0458a4cfdbff419f4609c3f1b48bb3ab4cceb1ccfeeac3c72ffb19",
@@ -1270,7 +1283,7 @@
       ],
       "etag": "\"69b0f3d2-1ef3\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:14 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.258Z"
+      "fetchedAt": "2026-11-14T03:28:41.091Z"
     },
     "https://cdn.fastassets.io/css/font-awesome.min.css": {
       "sha256": "eb45c2510bf6e715c2a9b401a67428dc57ece2b758ccfa50b35bb37471de42f3",
@@ -1290,7 +1303,7 @@
       ],
       "etag": "\"69b0f3d2-6b50\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:14 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.274Z"
+      "fetchedAt": "2026-11-14T03:28:41.109Z"
     },
     "https://cdn.fastassets.io/css/glyphter.css?v=100": {
       "sha256": "5310d74b6385b094b005a3e52e0e6e85c2c9144b6ecb54a09c3f9000efabbc9a",
@@ -1309,7 +1322,7 @@
       ],
       "etag": "\"69b0f3d2-8a5\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:14 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.292Z"
+      "fetchedAt": "2026-11-14T03:28:41.112Z"
     },
     "https://cdn.fastassets.io/css/lobibox.css?v=100": {
       "sha256": "78ad7568cc1a2619f3b109e5ab03e0d4372b05d923e84460496dea781b14bb80",
@@ -1324,7 +1337,7 @@
       ],
       "etag": "\"69b0f3d4-762c\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:16 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.286Z"
+      "fetchedAt": "2026-11-14T03:28:41.152Z"
     },
     "https://cdn.fastassets.io/css/manager-test.less?v=109": {
       "sha256": "4344633d6b9935a2cb7c21b33cb50d7d8ee7e2745cf9760c609a47051d190c89",
@@ -1344,7 +1357,7 @@
       ],
       "etag": "\"6ac6645b-49f5d\"",
       "lastModified": "Wed, 07 Oct 2026 15:25:15 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.592Z"
+      "fetchedAt": "2026-11-14T03:28:41.574Z"
     },
     "https://cdn.fastassets.io/css/manager.less?v=103": {
       "sha256": "11ed57c4d74428f56736a83cff162d0874eceac119ac27299175b82a5de249bb",
@@ -1359,7 +1372,7 @@
       ],
       "etag": "\"69b0f3d2-be12\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:14 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.458Z"
+      "fetchedAt": "2026-11-14T03:28:41.220Z"
     },
     "https://cdn.fastassets.io/css/material.min.css?v=100": {
       "sha256": "cb13b3eee6f1d0eed12bc6d378a5b0ff344627c3283a78c30807cf9c3b33e654",
@@ -1372,7 +1385,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f3d4-cd6c\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:16 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.319Z"
+      "fetchedAt": "2026-11-14T03:28:41.149Z"
     },
     "https://cdn.fastassets.io/css/scores.less?v=100": {
       "sha256": "8d9a9809cc2e3243ab4a99b3fa6df3decff0752ea0b08192059e0c75c8db82ae",
@@ -1391,13 +1404,13 @@
       ],
       "etag": "\"69b0f3d4-1a64\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:16 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.372Z"
+      "fetchedAt": "2026-11-14T03:28:41.223Z"
     },
     "https://cdn.fastassets.io/css/setting.less?v=1521666264242": {
-      "sha256": "a9796b86d8befc604eca549cd82ad99964d95d38dd37a58623128548bab79d50",
-      "sri": "sha384-tj/NkSEf0/cLpsnSdpoYqt5O3oAdHTW5YVrn5P9XOCEt0Wlv08T6XCRAPHNvHUTw",
+      "sha256": "fecf1738d8f68d6431b8de20c4381ca14228ffa808a741bdcf7ca02168dc6213",
+      "sri": "sha384-7gS6yxKJD4CmLQSPRCAxCump9QxRWDtahFYbDrz5JO4U1bZrD9lrL1wobAcI8f4J",
       "sriEnforceable": true,
-      "bytes": 129332,
+      "bytes": 139045,
       "role": "portal-css",
       "source": "explicit",
       "sameOrigin": false,
@@ -1438,18 +1451,23 @@
         "https://cdn.fastassets.io/fonts/sports/Industry-Medium-webfont.woff",
         "https://cdn.fastassets.io/fonts/sports/Industry-Medium-webfont.woff2",
         "https://cdn.fastassets.io/images/bg.jpg",
+        "https://fonts.gstatic.com/s/oswald/v31/TK3iWkUHHAIjg752FD8Ghe4.woff2",
+        "https://fonts.gstatic.com/s/oswald/v31/TK3iWkUHHAIjg752Fj8Ghe4.woff2",
+        "https://fonts.gstatic.com/s/oswald/v31/TK3iWkUHHAIjg752Fz8Ghe4.woff2",
+        "https://fonts.gstatic.com/s/oswald/v31/TK3iWkUHHAIjg752GT8G.woff2",
+        "https://fonts.gstatic.com/s/oswald/v31/TK3iWkUHHAIjg752HT8Ghe4.woff2",
         "https://fonts.gstatic.com/s/quantico/v5/EVhTOTBlAHgKHA6KCxbw4Y4P5ICox8Kq3LLUNMylGO4.woff2",
         "https://fonts.gstatic.com/s/quantico/v5/HeCYRcZbdRso3ZUu01ELbYWiMMZ7xLd792ULpGE4W_Y.woff2"
       ],
-      "etag": "\"69b0f3d4-1f934\"",
-      "lastModified": "Wed, 11 Mar 2026 04:47:16 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.995Z"
+      "etag": "\"6af5284c-21f25\"",
+      "lastModified": "Thu, 12 Nov 2026 02:45:32 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.643Z"
     },
     "https://cdn.fastassets.io/css/setting.less?v=15216662642435": {
-      "sha256": "a9796b86d8befc604eca549cd82ad99964d95d38dd37a58623128548bab79d50",
-      "sri": "sha384-tj/NkSEf0/cLpsnSdpoYqt5O3oAdHTW5YVrn5P9XOCEt0Wlv08T6XCRAPHNvHUTw",
+      "sha256": "fecf1738d8f68d6431b8de20c4381ca14228ffa808a741bdcf7ca02168dc6213",
+      "sri": "sha384-7gS6yxKJD4CmLQSPRCAxCump9QxRWDtahFYbDrz5JO4U1bZrD9lrL1wobAcI8f4J",
       "sriEnforceable": true,
-      "bytes": 129332,
+      "bytes": 139045,
       "role": "portal-css",
       "source": "explicit",
       "sameOrigin": false,
@@ -1490,12 +1508,17 @@
         "https://cdn.fastassets.io/fonts/sports/Industry-Medium-webfont.woff",
         "https://cdn.fastassets.io/fonts/sports/Industry-Medium-webfont.woff2",
         "https://cdn.fastassets.io/images/bg.jpg",
+        "https://fonts.gstatic.com/s/oswald/v31/TK3iWkUHHAIjg752FD8Ghe4.woff2",
+        "https://fonts.gstatic.com/s/oswald/v31/TK3iWkUHHAIjg752Fj8Ghe4.woff2",
+        "https://fonts.gstatic.com/s/oswald/v31/TK3iWkUHHAIjg752Fz8Ghe4.woff2",
+        "https://fonts.gstatic.com/s/oswald/v31/TK3iWkUHHAIjg752GT8G.woff2",
+        "https://fonts.gstatic.com/s/oswald/v31/TK3iWkUHHAIjg752HT8Ghe4.woff2",
         "https://fonts.gstatic.com/s/quantico/v5/EVhTOTBlAHgKHA6KCxbw4Y4P5ICox8Kq3LLUNMylGO4.woff2",
         "https://fonts.gstatic.com/s/quantico/v5/HeCYRcZbdRso3ZUu01ELbYWiMMZ7xLd792ULpGE4W_Y.woff2"
       ],
-      "etag": "\"69b0f3d4-1f934\"",
-      "lastModified": "Wed, 11 Mar 2026 04:47:16 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.942Z"
+      "etag": "\"6af5284c-21f25\"",
+      "lastModified": "Thu, 12 Nov 2026 02:45:32 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.766Z"
     },
     "https://cdn.fastassets.io/css/special-icons-manager.css?v=100": {
       "sha256": "02c9b715aeeaabb55b0d6246d7862d5b450e2203a4e3ded2cdec43399814690a",
@@ -1510,7 +1533,7 @@
       ],
       "etag": "\"69b0f3d2-1c7e\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:14 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.333Z"
+      "fetchedAt": "2026-11-14T03:28:41.244Z"
     },
     "https://cdn.fastassets.io/css/special-icons.css?v=104": {
       "sha256": "5971ff4f5c799ee7cd494bac73c9fec8fbeeb39e23a01694476c695cc9d5f2ad",
@@ -1525,7 +1548,7 @@
       ],
       "etag": "\"69b0f3d4-1ebf\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:16 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.333Z"
+      "fetchedAt": "2026-11-14T03:28:41.183Z"
     },
     "https://cdn.fastassets.io/css/sports/sports-fonts.css": {
       "sha256": "580df37277b41db127f79c5b30835256de0539eeaee8f5705a82fa46c3949444",
@@ -1543,7 +1566,7 @@
       ],
       "etag": "\"69b0f3d2-864\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:14 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.335Z"
+      "fetchedAt": "2026-11-14T03:28:41.197Z"
     },
     "https://cdn.fastassets.io/js/bootstrap.min.js": {
       "sha256": "5d1858ff2daeb8e684a0d270c84b1eec67335eb0d5f2152fd77b91657f4b5981",
@@ -1556,7 +1579,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2af-d7d7\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:23 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.592Z"
+      "fetchedAt": "2026-11-14T03:28:41.337Z"
     },
     "https://cdn.fastassets.io/js/datatables.min.js": {
       "sha256": "5c9d60e7c068d85af10e419f7971b850d6081420cb9dbda68dc48047aada7c90",
@@ -1569,7 +1592,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-2346d\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.592Z"
+      "fetchedAt": "2026-11-14T03:28:41.226Z"
     },
     "https://cdn.fastassets.io/js/date-format.js": {
       "sha256": "4a336b3ec3bfcc0e59675cf720a65c6dc09e5c42c01f3073b10b3890db52bba9",
@@ -1582,7 +1605,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-40dc\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.415Z"
+      "fetchedAt": "2026-11-14T03:28:41.223Z"
     },
     "https://cdn.fastassets.io/js/excel/FileSaver.js": {
       "sha256": "761af4d42d467e89a5983a3be26edb5fc53e3b90030d44521f32616b6e389279",
@@ -1595,7 +1618,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-2379\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.417Z"
+      "fetchedAt": "2026-11-14T03:28:41.337Z"
     },
     "https://cdn.fastassets.io/js/excel/jhxlsx.js": {
       "sha256": "7391d773003f2be83553d8456f7dba76e51e6fa3f1c9dd613233c1e3a599144c",
@@ -1608,7 +1631,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-18af\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.428Z"
+      "fetchedAt": "2026-11-14T03:28:41.337Z"
     },
     "https://cdn.fastassets.io/js/excel/xlsx.core.min.js": {
       "sha256": "a60800a22bf9c3d38a6086ddd5daa534cc9093ed3d1a8789a07d57b09ae9dab7",
@@ -1621,7 +1644,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-71f7e\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.636Z"
+      "fetchedAt": "2026-11-14T03:28:41.548Z"
     },
     "https://cdn.fastassets.io/js/jquery.js": {
       "sha256": "746e54e89161118a67bd59103c4ab55e3060735cc85c1d047c2cf04d4b12043d",
@@ -1634,7 +1657,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-17881\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.435Z"
+      "fetchedAt": "2026-11-14T03:28:41.336Z"
     },
     "https://cdn.fastassets.io/js/jquery.numeric.min.js": {
       "sha256": "bdc6aa35aca29fe9ff33090831175c057f29b5500248be94e31e3192e5e5a9bb",
@@ -1647,7 +1670,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-1529\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.592Z"
+      "fetchedAt": "2026-11-14T03:28:41.423Z"
     },
     "https://cdn.fastassets.io/js/less.js?v=100": {
       "sha256": "777175dac8e33e97cd0320553bff4e7d849de633ad78c649109af7cdb8f6547a",
@@ -1660,7 +1683,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-23aca\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.610Z"
+      "fetchedAt": "2026-11-14T03:28:41.369Z"
     },
     "https://cdn.fastassets.io/js/lobibox.js?v=432434dad": {
       "sha256": "d2795e2883bf6e24676ebd09d2c03faf2c9fd20d88ffad08874a81e4a055b672",
@@ -1673,7 +1696,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2af-578e\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:23 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.592Z"
+      "fetchedAt": "2026-11-14T03:28:41.486Z"
     },
     "https://cdn.fastassets.io/js/lodash.js": {
       "sha256": "d8d535d5b90ff89bb2131bc98ce528cbaca017a313c43fefd0119367b221c8ef",
@@ -1686,7 +1709,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-1c14e\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.478Z"
+      "fetchedAt": "2026-11-14T03:28:41.379Z"
     },
     "https://cdn.fastassets.io/js/main.js": {
       "sha256": "24be9f447812f7ef3c8d76a97a4d826d1a32c044c0af65e44a4270944f2dfb5f",
@@ -1699,7 +1722,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2af-eb89\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:23 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.636Z"
+      "fetchedAt": "2026-11-14T03:28:41.429Z"
     },
     "https://cdn.fastassets.io/js/mask.min.js": {
       "sha256": "48f63ae0de79a91aa04ab2a67c6b6c51d59f7277225bc6a9ee22734d83f0f310",
@@ -1712,7 +1735,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-34e9\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.673Z"
+      "fetchedAt": "2026-11-14T03:28:41.368Z"
     },
     "https://cdn.fastassets.io/js/moment.js": {
       "sha256": "7cc1955e0e670c944ae93cfc7f666d0c5e80441462d123db24e9d20cbf300b70",
@@ -1725,7 +1748,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-62c7e\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.816Z"
+      "fetchedAt": "2026-11-14T03:28:41.409Z"
     },
     "https://cdn.fastassets.io/js/print.js": {
       "sha256": "dc37f384499846b04e40c06e30cfdace9b5598ded003791e0d2da9da15042631",
@@ -1738,7 +1761,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-25fb\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.673Z"
+      "fetchedAt": "2026-11-14T03:28:41.523Z"
     },
     "https://cdn.fastassets.io/js/require.js": {
       "sha256": "897398f4d179045469ff6e54a17c9f8e6bf31cf8dc19f825858f886a3c8e6d70",
@@ -1751,7 +1774,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2af-3ba4\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:23 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.612Z"
+      "fetchedAt": "2026-11-14T03:28:41.406Z"
     },
     "https://cdn.fastassets.io/js/spliter.min.js": {
       "sha256": "72077a7861f1ba56630807c18b4e2276f8bc1bb24dc26fed0c77cf98ac548bc5",
@@ -1764,7 +1787,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2af-1523\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:23 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.678Z"
+      "fetchedAt": "2026-11-14T03:28:41.432Z"
     },
     "https://cdn.fastassets.io/js/table-sort.js": {
       "sha256": "b90279154254e108748dc80dd226eab336e2c320e4a40569952b46dc5d785536",
@@ -1777,7 +1800,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-4094\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.690Z"
+      "fetchedAt": "2026-11-14T03:28:41.499Z"
     },
     "https://cdn.fastassets.io/js/timer.js": {
       "sha256": "da322da1312fa541cde8dad6b1773791ae7d6ae660d90462e245474dd457ed80",
@@ -1790,7 +1813,7 @@
       "externalReferences": [],
       "etag": "W/\"69b0f2ad-2b9e\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.698Z"
+      "fetchedAt": "2026-11-14T03:28:41.531Z"
     },
     "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.76.4/dist/browser/standalone.js": {
       "sha256": "93951f1794b0463b87ab58d0557a6610075af79a9f94c2a3f261c993bc7f3913",
@@ -1801,9 +1824,9 @@
       "source": "explicit",
       "sameOrigin": false,
       "externalReferences": [],
-      "etag": "W/\"103c91-3468f708dddc41a5\"",
+      "etag": "W/\"4af467-e5c50b3f01002f1c\"",
       "lastModified": null,
-      "fetchedAt": "2026-11-04T06:53:30.859Z"
+      "fetchedAt": "2026-11-14T03:28:41.684Z"
     },
     "https://cdnjs.cloudflare.com/ajax/libs/jquery-scrollTo/2.1.2/jquery.scrollTo.min.js": {
       "sha256": "ed04b5707b07ef987720582b14ab1d8662871e95aa17cdac6fff6f34ba9caacd",
@@ -1816,7 +1839,7 @@
       "externalReferences": [],
       "etag": null,
       "lastModified": "Mon, 04 May 2020 16:11:46 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.708Z"
+      "fetchedAt": "2026-11-14T03:28:41.498Z"
     },
     "https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.31.3/js/jquery.tablesorter.min.js": {
       "sha256": "76d187d57700c8aa2932e8b9c76d0a9cfc6e1ae4b1f51b3aa62241ff83aabba2",
@@ -1829,7 +1852,7 @@
       "externalReferences": [],
       "etag": null,
       "lastModified": "Sat, 06 Jan 2024 20:21:52 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.705Z"
+      "fetchedAt": "2026-11-14T03:28:41.502Z"
     },
     "https://fonts.googleapis.com/icon?family=Material+Icons": {
       "sha256": "07bd90fa08501eef587462beb0d267aef595c95292e002a30c5cd5a20b4af211",
@@ -1842,33 +1865,33 @@
       "externalReferences": [],
       "etag": null,
       "lastModified": null,
-      "fetchedAt": "2026-11-04T06:53:30.755Z"
+      "fetchedAt": "2026-11-14T03:28:41.545Z"
     },
     "https://maps.googleapis.com/maps/api/js?v=3.exp&libraries=geometry&sensor=false&key=%3Credacted%3E": {
-      "sha256": "9c3c83bbc6be25e10b91771e35d32d42b11f577293f7ac18c81a1958a98ed9df",
-      "sri": "sha384-KjHS2LLQPib3XHZenJFAEvT/48O5OY6TdmV3rqPJnwvKQ5JelTCAjUImK9M0ullq",
+      "sha256": "2b5ff1cbd529b4b74e3ef1a971fe580e735dfeedc978f71076387e300cfee81f",
+      "sri": "sha384-mNxrsxN8tVxVgBj8mOlGwNyheiFNIflgfDV7Dcp4cMg+/q78XDpymBo+Px6Inlqa",
       "sriEnforceable": false,
-      "bytes": 330110,
+      "bytes": 331754,
       "role": "portal-js",
       "source": "document",
       "sameOrigin": false,
       "externalReferences": [],
-      "etag": "6a5f23b1",
+      "etag": "7d35bf1d",
       "lastModified": null,
-      "fetchedAt": "2026-11-04T06:53:30.828Z"
+      "fetchedAt": "2026-11-14T03:28:41.652Z"
     },
     "https://telegram.org/js/telegram-web-app.js": {
-      "sha256": "124bdff7ba3fe86c8ba5143467afec21e020405e74abdb92cfdda6c0ee3b5908",
-      "sri": "sha384-PyI6uk8O3pfRRl4+CaepaS++FqtEbco/HaV3jzdYl4y+U7HMQvn3gWVfKhjuzfzG",
+      "sha256": "baa788a6f686f4238db1b82ce8e76470930af7411b18b521ebb95a2c1480a267",
+      "sri": "sha384-Vfd/BDDodKSHihoWEYUp7viIzknmkv8bWNw7o3LJsq4ziOpCagWvXEZLJH5cAgh0",
       "sriEnforceable": true,
-      "bytes": 119731,
+      "bytes": 127770,
       "role": "telegram-web-app",
       "source": "explicit",
       "sameOrigin": false,
       "externalReferences": [],
-      "etag": "W/\"6ac4bef5-1d3b3\"",
-      "lastModified": "Tue, 06 Oct 2026 09:27:17 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.245Z"
+      "etag": "W/\"6af1ca9a-1f31a\"",
+      "lastModified": "Mon, 09 Nov 2026 13:28:58 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.992Z"
     },
     "https://www.fantasy402.com/app/core/class.js": {
       "sha256": "ec89aad6ec9aeed290ef7934b747fe244600d4c004a2558ebd82b7f4ed7efb36",
@@ -1881,7 +1904,150 @@
       "externalReferences": [],
       "etag": "W/\"63c84e75-21f\"",
       "lastModified": "Wed, 18 Jan 2023 19:54:29 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.815Z"
+      "fetchedAt": "2026-11-14T03:28:41.627Z"
+    },
+    "https://www.fantasy402.com/app/customer/cashier/cashier.js": {
+      "sha256": "3dced02c7c63ea194a938ef025c7c6028ec0c59b549b67b37a39a21a1c6ca04f",
+      "sri": "sha384-jrtiRau9n9tHJGmO+Z2dz7g9ZrlLp5ZlK6L9NgoC/DVDDU+yxa4xazRIdmXgJFou",
+      "sriEnforceable": true,
+      "bytes": 34981,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84ed1-88a5\"",
+      "lastModified": "Wed, 18 Jan 2023 19:56:01 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.641Z"
+    },
+    "https://www.fantasy402.com/app/customer/customer.js": {
+      "sha256": "802ba129d837fa9134147046d4762fd92e6f9ce3ecfb4041bbf09f077a221467",
+      "sri": "sha384-2X4FeKtn5Qa/LFk6REknUnTUxpBPgXXANf30N4GHuCOqVgNO81MnJ0MoX87aH8da",
+      "sriEnforceable": true,
+      "bytes": 78346,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84e77-1320a\"",
+      "lastModified": "Wed, 18 Jan 2023 19:54:31 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.671Z"
+    },
+    "https://www.fantasy402.com/app/customer/limit/limit.js": {
+      "sha256": "30887be48817c9604212a125df7ff52681a831ecf02d37261d9780b9b4f3aca3",
+      "sri": "sha384-a8spmoPILGgGiSGMi6OXDFT0cwLcVeuDNb/M82V8OcYX2ET1x/v3auKAI+KvCdzb",
+      "sriEnforceable": true,
+      "bytes": 278549,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84edd-44015\"",
+      "lastModified": "Wed, 18 Jan 2023 19:56:13 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.859Z"
+    },
+    "https://www.fantasy402.com/app/customer/report/report.js": {
+      "sha256": "1d853ccb6c56c4261b0ad59604129fa44e11d821e0de028abab0bd6cc17d2b58",
+      "sri": "sha384-2Nok19lItqoKd7M1RCafQe2/aeRhLjL159D/nWpMyaseTEw7QiXwFeFhE3LireKk",
+      "sriEnforceable": true,
+      "bytes": 400384,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84ef5-61c00\"",
+      "lastModified": "Wed, 18 Jan 2023 19:56:37 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.861Z"
+    },
+    "https://www.fantasy402.com/app/customer/wager/action-reverse.js": {
+      "sha256": "21c956961d6b101737284853f3b1443afe1b00ab25a5b98b05236a541bb3c4da",
+      "sri": "sha384-nX+p/SbxNWPS/dGBKOrafNd/G1di27Gicx4bHTCLcRscqg6Mz2GJYExrpci6gQsG",
+      "sriEnforceable": true,
+      "bytes": 82613,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84f03-142b5\"",
+      "lastModified": "Wed, 18 Jan 2023 19:56:51 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.744Z"
+    },
+    "https://www.fantasy402.com/app/customer/wager/if-bet.js": {
+      "sha256": "8a6860b3b1d484e93dae11b2658ecebf57e3e8ca80a025dbf3f73243b0b15432",
+      "sri": "sha384-anhu1mJwGTZd0Z3WkbGSTaUhZCKFJuo/RMlRt+wGqD4Hk5J+Go5QB/toApyJjHWR",
+      "sriEnforceable": true,
+      "bytes": 120328,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84ef9-1d608\"",
+      "lastModified": "Wed, 18 Jan 2023 19:56:41 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.861Z"
+    },
+    "https://www.fantasy402.com/app/customer/wager/parlay.js": {
+      "sha256": "0d068ea2cf789fea4f949e087a8cafd38a775f8d8420b3447aaacbae60a8997b",
+      "sri": "sha384-aEajHBLw2BneHzg2WY9om6vitfWnYPFAX3s06lhb9L/i5GIuHe8yJoz6YCaEWtDL",
+      "sriEnforceable": true,
+      "bytes": 196266,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84f02-2feaa\"",
+      "lastModified": "Wed, 18 Jan 2023 19:56:50 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.767Z"
+    },
+    "https://www.fantasy402.com/app/customer/wager/round-robin.js": {
+      "sha256": "f971b72d67b46df5fde78eb9eedaad6f3ad31379181de3816537bd1eef5bba43",
+      "sri": "sha384-XPhx41yWNwCZyiR0mMofIidKXkL9rhHwX4UrLVSfbUCWSDW6m2RSOpce9lu5ErIF",
+      "sriEnforceable": true,
+      "bytes": 156984,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84f08-26538\"",
+      "lastModified": "Wed, 18 Jan 2023 19:56:56 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.883Z"
+    },
+    "https://www.fantasy402.com/app/customer/wager/straight.js": {
+      "sha256": "88c746303a8fd973ba4b611007b28120e3cbc3ad5781cf785ada03c77b2164ec",
+      "sri": "sha384-QboqWtTx1aTQP7ijiV/MvEnVU8+IJRnL5g/IPDxLM2DnxRoCbYPPpg08LsSGoRF9",
+      "sriEnforceable": true,
+      "bytes": 168322,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84f0d-29182\"",
+      "lastModified": "Wed, 18 Jan 2023 19:57:01 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.861Z"
+    },
+    "https://www.fantasy402.com/app/customer/wager/teaser.js": {
+      "sha256": "db6eee5283b9fc8acbe6fa969ef6553322bbd55807c07ea1f36cd1cdd235ba9b",
+      "sri": "sha384-eq6E7zKSPZO4ggyWcvpj4wHp77Vg9yaH+cFboICG6c7AiXO/2yEDKaWMYVk4y/qM",
+      "sriEnforceable": true,
+      "bytes": 156928,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84f12-26500\"",
+      "lastModified": "Wed, 18 Jan 2023 19:57:06 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.004Z"
+    },
+    "https://www.fantasy402.com/app/customer/wager/wager.js": {
+      "sha256": "7e704b5e311be2e10f448c8c5016565f361f611ecb9f693b0d858c4c8de884e9",
+      "sri": "sha384-g9PWSG8WqGTdfJlC0sbAMAqtgCNXlZ24njJ9WH1e0C26GbBum9gjPgX4fEC0ycLc",
+      "sriEnforceable": true,
+      "bytes": 214582,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84f1d-34636\"",
+      "lastModified": "Wed, 18 Jan 2023 19:57:17 GMT",
+      "fetchedAt": "2026-11-14T03:28:41.958Z"
     },
     "https://www.fantasy402.com/app/language/language.js": {
       "sha256": "9ff04330f3ed339ad484c8636cdd10f2df1436bf707b351af9a69bf7b5e9c89f",
@@ -1894,7 +2060,7 @@
       "externalReferences": [],
       "etag": "W/\"63c84e78-2a93\"",
       "lastModified": "Wed, 18 Jan 2023 19:54:32 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.991Z"
+      "fetchedAt": "2026-11-14T03:28:41.946Z"
     },
     "https://www.fantasy402.com/app/main-manager.js": {
       "sha256": "032c198495be83e43470a3461c6b41ede22ac47eab21f7033f0ad4a4630b243b",
@@ -1907,20 +2073,20 @@
       "externalReferences": [],
       "etag": "W/\"68b5c8d8-26b\"",
       "lastModified": "Mon, 01 Sep 2025 16:24:56 GMT",
-      "fetchedAt": "2026-11-04T06:53:30.902Z"
+      "fetchedAt": "2026-11-14T03:28:41.946Z"
     },
     "https://www.fantasy402.com/app/manager/manager.js": {
-      "sha256": "82c3d4ec9b5d0531b06219761f0b40db20bf07f4f4250eacdabf527e90e01937",
-      "sri": "sha384-LUa5KLf3oFU1Ku/r1quBbgGyE7qpNuO4cj73oJ2fc4zCWmTbIF1PPfuawjNl4IrG",
+      "sha256": "f592a31cfc6faa396a0e267250ea5f34905b6f1b26a0c2ef5b14c79cdd7fd646",
+      "sri": "sha384-hfFeMKtufUMZvZhXtcmkH4JCJcGol9upU6DlQ1hYfzYx9t+/NO2tCxrdDU57uLKd",
       "sriEnforceable": true,
-      "bytes": 100121,
+      "bytes": 100230,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"6acfc0d6-18719\"",
-      "lastModified": "Wed, 14 Oct 2026 17:50:14 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.115Z"
+      "etag": "W/\"6af5c1d2-18786\"",
+      "lastModified": "Thu, 12 Nov 2026 13:40:34 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.004Z"
     },
     "https://www.fantasy402.com/app/manager/module/add-customer.js": {
       "sha256": "693c510fe1c8446dcf754fef0301a8853d20833d7f62d2745ebd29d5bafd462f",
@@ -1933,7 +2099,7 @@
       "externalReferences": [],
       "etag": "W/\"6aa2c716-4c8a\"",
       "lastModified": "Thu, 10 Sep 2026 15:04:54 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.113Z"
+      "fetchedAt": "2026-11-14T03:28:41.948Z"
     },
     "https://www.fantasy402.com/app/manager/module/agent-billing.js": {
       "sha256": "90808f7e2376e19b95e24e7cd12aa7968d0ebfeac2e0c24f8e3a5cf158777fd2",
@@ -1946,33 +2112,33 @@
       "externalReferences": [],
       "etag": "W/\"69fa2102-2ba5\"",
       "lastModified": "Tue, 05 May 2026 16:55:30 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.113Z"
+      "fetchedAt": "2026-11-14T03:28:42.063Z"
     },
     "https://www.fantasy402.com/app/manager/module/agent-management-thin.js": {
-      "sha256": "b767d8d35e1376ac8a21a394ea9ea35fc2d9090d4e89a55eb99ca7b125dfe72a",
-      "sri": "sha384-90r9LGyLd8Ob/PfDdLpOgiOlWidOTcCObwjcG9fSE8mOUtTJjFKFTPN98srfviX2",
+      "sha256": "afbb89dfe63ca196775cad4ac61fd44a0d5d1fbf13e85e0bb459499abca6f24b",
+      "sri": "sha384-KgsQ+reP9VyIeLMbcGtliNQwGOu/i0Ma3WO1KXk7HEL4GCSXnKqH1/29p6NJXC8c",
       "sriEnforceable": true,
-      "bytes": 136797,
+      "bytes": 137019,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"6acf7e1f-2165d\"",
-      "lastModified": "Wed, 14 Oct 2026 13:05:35 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.113Z"
+      "etag": "W/\"6af75e0a-2173b\"",
+      "lastModified": "Fri, 13 Nov 2026 18:59:22 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.040Z"
     },
     "https://www.fantasy402.com/app/manager/module/agent-performance.js": {
-      "sha256": "3a7773dbf1091c793ae3f55090e22c4b7687f178e5c89e000f8154f8df1a3ae4",
-      "sri": "sha384-Nm6kvp/XAQd2oGbm5paoMj4oPtrdd4GX+cy+NHBXIP8kIAVk58q0ssHiEPDrj2BQ",
+      "sha256": "3bfbc92d6da439f8d9cad36dea09ffdc631c87c730263147f3e7f4feca9657f0",
+      "sri": "sha384-UJVO8qJkoKzSrTmRDrcg6yBkz7nAZ9r7jWf/JZlFu3tSINhlogpjWU/ZtHFUX9RE",
       "sriEnforceable": true,
-      "bytes": 83440,
+      "bytes": 83662,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"6aea0056-145f0\"",
-      "lastModified": "Tue, 03 Nov 2026 15:40:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.208Z"
+      "etag": "W/\"6af75e0a-146ce\"",
+      "lastModified": "Fri, 13 Nov 2026 18:59:22 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.036Z"
     },
     "https://www.fantasy402.com/app/manager/module/agent-position.js": {
       "sha256": "eb2af7e10502cb923aa9ff0dde5e29acacece9bad6b7a53c499f4da06e2927f8",
@@ -1985,20 +2151,20 @@
       "externalReferences": [],
       "etag": "W/\"69fa2102-2527\"",
       "lastModified": "Tue, 05 May 2026 16:55:30 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.115Z"
+      "fetchedAt": "2026-11-14T03:28:42.030Z"
     },
     "https://www.fantasy402.com/app/manager/module/analysis.js": {
-      "sha256": "6174cfb938106f9d23b7d4e41a8732021cde0c98c5f0df09f98bb1fdc46f3c71",
-      "sri": "sha384-6nXJiNO343+OnHNn4uojgLY7/dkX7ptxkxerhTOOHj1z81RoXy/xwYth3Gxrg5hy",
+      "sha256": "89c9bd12dbe9165ee810a60474bb92109addf7a68e2575829ae061edace73683",
+      "sri": "sha384-6h5GuzmJ8zl8H9aX/gvLN09ddt1OYR8tPZOfxebCyxXjPThm5PiN5Uu+sWnX3n4b",
       "sriEnforceable": true,
-      "bytes": 7640,
+      "bytes": 7862,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"6894df11-1dd8\"",
-      "lastModified": "Thu, 07 Aug 2025 17:14:57 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.295Z"
+      "etag": "W/\"6af75e0a-1eb6\"",
+      "lastModified": "Fri, 13 Nov 2026 18:59:22 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.047Z"
     },
     "https://www.fantasy402.com/app/manager/module/bet-ticker.js": {
       "sha256": "cee11f1c32ed676e92a0aff577ea9c27e27be0f203405179086c26c44e16c2f6",
@@ -2011,7 +2177,7 @@
       "externalReferences": [],
       "etag": "W/\"6aab2899-3351\"",
       "lastModified": "Wed, 16 Sep 2026 23:39:05 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.222Z"
+      "fetchedAt": "2026-11-14T03:28:42.118Z"
     },
     "https://www.fantasy402.com/app/manager/module/cashier.js": {
       "sha256": "85a9be8636a39bd4388af4b17ff098b52043fffda74dcc32e6dd81485b54e617",
@@ -2024,20 +2190,72 @@
       "externalReferences": [],
       "etag": "W/\"69fa2103-bbf\"",
       "lastModified": "Tue, 05 May 2026 16:55:31 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.208Z"
+      "fetchedAt": "2026-11-14T03:28:42.091Z"
     },
     "https://www.fantasy402.com/app/manager/module/customer-admin.js": {
-      "sha256": "b97f6d44cc5d63556feadd37058337accaa2ec0074997428db5e01963c60bd08",
-      "sri": "sha384-nFDuidlUw6idSkWCJvIh/NzfVtp1TxPAhcT1TORxq4qLLogyVZwOs3HLWNBOIepg",
+      "sha256": "957ce6a997e97e42e696abbf629cdcb8e524b61903eac93ad3624b36786c4653",
+      "sri": "sha384-EeTo9f/ctqK4LNNg97QicwwBGh3LzXxMGj9VUyCCyM64NXIz7s1DifzRTBAzWrmu",
       "sriEnforceable": true,
-      "bytes": 44980,
+      "bytes": 45441,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"69fa2102-afb4\"",
-      "lastModified": "Tue, 05 May 2026 16:55:30 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.203Z"
+      "etag": "W/\"6af75e0a-b181\"",
+      "lastModified": "Fri, 13 Nov 2026 18:59:22 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.185Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/accounting.js": {
+      "sha256": "95e3bbb508cf7a7f805379eeda24aa4c2181b2a1a43a72a31eaf6f894ba70362",
+      "sri": "sha384-F85WY8B/8cVHshPqWv1BK/g+ChiUOCYPQcf4B17Eb7g2kWyPZWqbqcMlcIqzjga8",
+      "sriEnforceable": true,
+      "bytes": 16553,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6ab3f12b-40a9\"",
+      "lastModified": "Wed, 23 Sep 2026 15:32:59 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.114Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/allow-deny.js": {
+      "sha256": "34c639c08d42898c9e2c494161bdd4bc91c3dae9a9f8ff58587ef51baee6555c",
+      "sri": "sha384-XSuTbjpbmVUSZgGe66QoI1anvG2gDqkNyjrBlrOCsDGgOInqTLr784F4GhOZFjwb",
+      "sriEnforceable": true,
+      "bytes": 22308,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a070264-5724\"",
+      "lastModified": "Fri, 15 May 2026 11:24:20 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.128Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/analysis.js": {
+      "sha256": "91d81cdc407852b1fde8f5831ba8fd12b08cb6a9ad42409cb11c18f724f4e18e",
+      "sri": "sha384-J5qo4o8o42ogUaJerVeJMs8OSPL8rPak0Im1y5PYwhYuT4LHXwMK9MACbk2Ydivt",
+      "sriEnforceable": true,
+      "bytes": 25029,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6af5c1d2-61c5\"",
+      "lastModified": "Thu, 12 Nov 2026 13:40:34 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.125Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/copy-settings.js": {
+      "sha256": "18112847abdcd21293dd6897da83c010ddcf43dfa1b14a713f2896a4282628b8",
+      "sri": "sha384-BUgMhk95EEaHj9POYW35Cee5hb39LeHcU0hqWx5+m6UvxzcdzWoQhyTWG5I/VHvU",
+      "sriEnforceable": true,
+      "bytes": 5503,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6af5c1d2-157f\"",
+      "lastModified": "Thu, 12 Nov 2026 13:40:34 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.132Z"
     },
     "https://www.fantasy402.com/app/manager/module/customer-admin/crash.js": {
       "sha256": "77f71d4a7e79ca4de6dd4d70677c920b4232e6cf1d5f0c2ce2a0f295b51cc289",
@@ -2050,7 +2268,7 @@
       "externalReferences": [],
       "etag": "W/\"69fa2102-14e9\"",
       "lastModified": "Tue, 05 May 2026 16:55:30 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.257Z"
+      "fetchedAt": "2026-11-14T03:28:42.244Z"
     },
     "https://www.fantasy402.com/app/manager/module/customer-admin/dynamic-live.js": {
       "sha256": "bfebdc0ac044bad26a64e736ea0365fc4de3ae6c98c8d4c50c41ea34b42235fa",
@@ -2063,7 +2281,7 @@
       "externalReferences": [],
       "etag": "W/\"6abc3495-3f31\"",
       "lastModified": "Tue, 29 Sep 2026 21:58:45 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.222Z"
+      "fetchedAt": "2026-11-14T03:28:42.178Z"
     },
     "https://www.fantasy402.com/app/manager/module/customer-admin/extended-props.js": {
       "sha256": "7664bceca8d319d8edf1144896d207ec469233f55b5e2471ab69e8dcc38aa64a",
@@ -2076,7 +2294,46 @@
       "externalReferences": [],
       "etag": "W/\"6acf7e20-3bf4\"",
       "lastModified": "Wed, 14 Oct 2026 13:05:36 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.292Z"
+      "fetchedAt": "2026-11-14T03:28:42.197Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/flash-bet.js": {
+      "sha256": "81697c028f87f9cf18a524375e03c3825c1fd8f0f36b8c519ce56f3b3b51e241",
+      "sri": "sha384-5sjXdhRkCaFLMNff4Fl+RG7LlWChqv++XEIpperMU9g16KfyuKFAAQoxQiRlOTTp",
+      "sriEnforceable": true,
+      "bytes": 7857,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"69fa2102-1eb1\"",
+      "lastModified": "Tue, 05 May 2026 16:55:30 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.208Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/free-play.js": {
+      "sha256": "45704c1855fd2ce69201407c70013c29166e2af3c4f283844005922a4675e4b3",
+      "sri": "sha384-lumLZnNKr0EiQv067ccb31Cw2/uvPdM3re5twa7Kt18qBccSsHAfBRUMAHwiNaAa",
+      "sriEnforceable": true,
+      "bytes": 22359,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6acf7e20-5757\"",
+      "lastModified": "Wed, 14 Oct 2026 13:05:36 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.210Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/global-team-limit.js": {
+      "sha256": "bac75d85114fa50f6ff63acf3c6724dc3a1622252437769526835bc915a20618",
+      "sri": "sha384-zEVs+iKj9/L+3CBtSI2LgJsz4qiKqbFYCUO+DYfwkOMWU8CVuSQ+L7BvNW6DaVwY",
+      "sriEnforceable": true,
+      "bytes": 8234,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"69fa2102-202a\"",
+      "lastModified": "Tue, 05 May 2026 16:55:30 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.226Z"
     },
     "https://www.fantasy402.com/app/manager/module/customer-admin/live-casino.js": {
       "sha256": "51781282a546155cced6f4657fa6eb225a245e8f630ed4e2c946e56a9dd436df",
@@ -2089,7 +2346,124 @@
       "externalReferences": [],
       "etag": "W/\"69fa2102-19d8\"",
       "lastModified": "Tue, 05 May 2026 16:55:30 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.308Z"
+      "fetchedAt": "2026-11-14T03:28:42.226Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/max-wager.js": {
+      "sha256": "9170341e023ea6137d9039e31d3515e01922275c4cef67e48e15022576d520dd",
+      "sri": "sha384-RVIWYREPL8jlDUyCYbyD+QE3Y68JGtBLDWfZ6muEu0BjNxY/A0bw4MbUBwX4rqYe",
+      "sriEnforceable": true,
+      "bytes": 32309,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a027772-7e35\"",
+      "lastModified": "Tue, 12 May 2026 00:42:26 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.261Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/new-user-report.js": {
+      "sha256": "c8ed6ed3bb5d3d638ca84595c78f65da3bea69750a4778568dd3e9cca98f5056",
+      "sri": "sha384-DvT6HpLc9UKVm/z/azZ7NLgkpF6ja16XsuwMGzyhc1yfRi3PL4jrkY2DVt5VrtDD",
+      "sriEnforceable": true,
+      "bytes": 4606,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6af75e0a-11fe\"",
+      "lastModified": "Fri, 13 Nov 2026 18:59:22 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.383Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/performance.js": {
+      "sha256": "e4d7ebcf8f21966e764fcc00313b06e9d1f7b4548db055e66268ff8d71911d5a",
+      "sri": "sha384-Nz8OLlo+qKk7srfPMKAQmleTd1D1DoOywl7OpUSwYFxkpKZJaI1yykdKzOGD1SYG",
+      "sriEnforceable": true,
+      "bytes": 4179,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"69fa2103-1053\"",
+      "lastModified": "Tue, 05 May 2026 16:55:31 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.280Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/permission.js": {
+      "sha256": "e199b2c4057f5135e63533c97fbf25882efb442bbf834aa424fb0fc9d2d4ae32",
+      "sri": "sha384-XNChCxN1eCiUiRDMZ4nFzgONZW2K4uKs01728bh4os6PhZC7yB7ONKYO2a/YJVKh",
+      "sriEnforceable": true,
+      "bytes": 23686,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6af75e0a-5c86\"",
+      "lastModified": "Fri, 13 Nov 2026 18:59:22 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.382Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/smart-bookie-report.js": {
+      "sha256": "58cc962ac7ee30a3494ed081f0429a478181c530c5a852acfa79f58a0813f079",
+      "sri": "sha384-v7Q4MuuQmNolcpJ9nWwE0TJ/ZyANGlCPwvxHmb3HUEXRnboMBMIZTHWfJdaBeK21",
+      "sriEnforceable": true,
+      "bytes": 13054,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6af75e0a-32fe\"",
+      "lastModified": "Fri, 13 Nov 2026 18:59:22 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.382Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/smart-bookie.js": {
+      "sha256": "fe2f7bdc5acca5775310bae596e2477084bbaadabca443c64df2c6f5d3661640",
+      "sri": "sha384-Jn66UB8oL3tYakUGhX+5dOGNdczl5l2qKSwDEJvo9IlMV60mB96zwTaf/M87zIsG",
+      "sriEnforceable": true,
+      "bytes": 6202,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"69fa2102-183a\"",
+      "lastModified": "Tue, 05 May 2026 16:55:30 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.383Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/transaction.js": {
+      "sha256": "d41287fd54f3110245c6be4f41178cd20c5cc90b0763cd08bd98624a5c394b86",
+      "sri": "sha384-SQPtQ27wr/i3oEzSDsrVQJoARxH6cekArHdr3hHG0FfCu9cNW3cJXPTlqM0QSbTe",
+      "sriEnforceable": true,
+      "bytes": 14148,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6af75e0b-3744\"",
+      "lastModified": "Fri, 13 Nov 2026 18:59:23 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.383Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/vig-setup.js": {
+      "sha256": "484c6bc781d1630309873b9b679d4e5f3e2cf66c811fa6b50c070c3f90c788b6",
+      "sri": "sha384-XQPkfVVua5fWQ3DqLgDrTtQFKmf6Cw2FS2/7HUoYcoqOlsnUOtwccq3jNehVgHKN",
+      "sriEnforceable": true,
+      "bytes": 24131,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a070263-5e43\"",
+      "lastModified": "Fri, 15 May 2026 11:24:19 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.409Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/customer-admin/wager.js": {
+      "sha256": "ec2eeba5a3eeee871f563d9b42373c4bc36ac9e82bdc9a31ec006118a283c539",
+      "sri": "sha384-Zfp7xh5YrOtg4e0euNg7aYbo6h8Vs8HDxA4ey3H4Vu770FE+TT36FLdwYgqUuZ2g",
+      "sriEnforceable": true,
+      "bytes": 2627,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"66fd7299-a43\"",
+      "lastModified": "Wed, 02 Oct 2024 16:19:37 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.383Z"
     },
     "https://www.fantasy402.com/app/manager/module/delete-wager.js": {
       "sha256": "43d5c70455e939c11a38052592a92ac54ea115482eaf79e48f0dc3ded601f8ea",
@@ -2102,7 +2476,7 @@
       "externalReferences": [],
       "etag": "W/\"69fa2103-34a9\"",
       "lastModified": "Tue, 05 May 2026 16:55:31 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.305Z"
+      "fetchedAt": "2026-11-14T03:28:42.382Z"
     },
     "https://www.fantasy402.com/app/manager/module/enter-transaction.js": {
       "sha256": "e94b3f7796ff2c1a331719ff3b841f0f727faff081141f9e2a9d7c9ccedfc39a",
@@ -2115,20 +2489,20 @@
       "externalReferences": [],
       "etag": "W/\"69fa2103-180c\"",
       "lastModified": "Tue, 05 May 2026 16:55:31 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.329Z"
+      "fetchedAt": "2026-11-14T03:28:42.467Z"
     },
     "https://www.fantasy402.com/app/manager/module/game-admin.js": {
-      "sha256": "0cc4e03b4065ad3d625fcad1e0509664bf570c49a6503bb96f0e8448bf1b19ab",
-      "sri": "sha384-gl+gvLa3t+ZAonkvdmiqe+T0UX3uKvDOD54qGIvZsEQXcQDzrt0z8Wxl3ZBeNpgN",
+      "sha256": "d997c0446d871bda7509f870256abc552c1588574282fd26aa967e02008a75bf",
+      "sri": "sha384-E6qMcJ0QcQtDINNMIwQ6TEIhdEIDTJmxDXzGbz7F50/gJLtWglcvZxo6JbwGF1Kx",
       "sriEnforceable": true,
-      "bytes": 85676,
+      "bytes": 85749,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"6ad63b21-14eac\"",
-      "lastModified": "Mon, 19 Oct 2026 15:45:37 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.339Z"
+      "etag": "W/\"6af5c1d3-14ef5\"",
+      "lastModified": "Thu, 12 Nov 2026 13:40:35 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.478Z"
     },
     "https://www.fantasy402.com/app/manager/module/graded.js": {
       "sha256": "ec21920b708dc70a50be648026343c9ffb44b4f2506fb533033fe2571e65806a",
@@ -2141,7 +2515,7 @@
       "externalReferences": [],
       "etag": "W/\"69fa2102-11d5\"",
       "lastModified": "Tue, 05 May 2026 16:55:30 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.400Z"
+      "fetchedAt": "2026-11-14T03:28:42.467Z"
     },
     "https://www.fantasy402.com/app/manager/module/ip-tracker.js": {
       "sha256": "8bf43a504f03e7f30f5aa8d102381544f394f226942ba116fafdc2eda216b89b",
@@ -2154,7 +2528,7 @@
       "externalReferences": [],
       "etag": "W/\"6a039706-43f8\"",
       "lastModified": "Tue, 12 May 2026 21:09:26 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.350Z"
+      "fetchedAt": "2026-11-14T03:28:42.521Z"
     },
     "https://www.fantasy402.com/app/manager/module/master-sheet.js": {
       "sha256": "2823c3fe61c1ae9f6f5af2cf12254cd2d6adc0ea31f3dbf63ad84c9f36baf78d",
@@ -2167,7 +2541,7 @@
       "externalReferences": [],
       "etag": "W/\"69fa2103-11fc\"",
       "lastModified": "Tue, 05 May 2026 16:55:31 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.377Z"
+      "fetchedAt": "2026-11-14T03:28:42.470Z"
     },
     "https://www.fantasy402.com/app/manager/module/message.js": {
       "sha256": "595abbe823abf01419622d1f1bbbdbe149aad5913ce3cec6521fbd9792adb879",
@@ -2180,7 +2554,7 @@
       "externalReferences": [],
       "etag": "W/\"6a625962-670f\"",
       "lastModified": "Thu, 23 Jul 2026 18:11:46 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.388Z"
+      "fetchedAt": "2026-11-14T03:28:42.467Z"
     },
     "https://www.fantasy402.com/app/manager/module/pending-thin.js": {
       "sha256": "6579ace77f7e919c6f95485211c261e9d8685a96c19bce979df39abe0237586d",
@@ -2193,20 +2567,33 @@
       "externalReferences": [],
       "etag": "W/\"6ac6645b-150fd\"",
       "lastModified": "Wed, 07 Oct 2026 15:25:15 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.516Z"
+      "fetchedAt": "2026-11-14T03:28:42.576Z"
     },
-    "https://www.fantasy402.com/app/manager/module/player-info.js": {
-      "sha256": "865b005a4471a17cba904bce3f6cbc06816afbd20b7ad02904c9b8cb5ba50bf2",
-      "sri": "sha384-WvYI/OULJf1NpVvnbG5E5Q51V2NYhbhhfKCqiZGXjYqgjI5ZAPZkPJGV8VoRXwhJ",
+    "https://www.fantasy402.com/app/manager/module/pending.js": {
+      "sha256": "457055b2bed894b253c42736280233cb300e0098f54cc6ad1c471fa0f8944c91",
+      "sri": "sha384-8M1CPBROufHALe636sxFOYQRwarzMVHqXRf1BLfZxh2J/I2Lsy2eCJTPf1auJGSK",
       "sriEnforceable": true,
-      "bytes": 141157,
+      "bytes": 58558,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"6aea0056-22765\"",
-      "lastModified": "Tue, 03 Nov 2026 15:40:06 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.485Z"
+      "etag": "W/\"69fa2102-e4be\"",
+      "lastModified": "Tue, 05 May 2026 16:55:30 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.572Z"
+    },
+    "https://www.fantasy402.com/app/manager/module/player-info.js": {
+      "sha256": "9f2e59c19a81638d5a31d5c77b6757a7b72c30a562ab71855066f0f527571be4",
+      "sri": "sha384-KmBhx1WFresMYaWK70NwRzVQkX/SR7kyw6NPRwdrppBeQZ4bDDC7MAAGEV05Gjh8",
+      "sriEnforceable": true,
+      "bytes": 141693,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6af5c1d3-2297d\"",
+      "lastModified": "Thu, 12 Nov 2026 13:40:35 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.561Z"
     },
     "https://www.fantasy402.com/app/manager/module/prop-admin.js": {
       "sha256": "c831440b2046b7ed495460498ef3793ff60884ec04cb78db8efde309dfbe50af",
@@ -2219,20 +2606,20 @@
       "externalReferences": [],
       "etag": "W/\"69fa2103-1679\"",
       "lastModified": "Tue, 05 May 2026 16:55:31 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.426Z"
+      "fetchedAt": "2026-11-14T03:28:42.560Z"
     },
     "https://www.fantasy402.com/app/manager/module/rules.js": {
-      "sha256": "cd608020a5df4063714b98fbad6f762b23c8a918bf368a9df81d72d5c14ae39c",
-      "sri": "sha384-BbyDOOho0LQx0ZBK8hvj/cBVxrbL2ZqsPDeOEowFnB1gwWec1DhgSEVU08uCLPbN",
+      "sha256": "8946a48db9413de4b7c685a414bc9ba86938cd9b89b9359942b4ee92d2e0e3f8",
+      "sri": "sha384-mzQXg5FXKv4S1CheSPNHyj7zgkk79c9DMMHh9cCfcWCbeiQacdCV70RXHjXgym+s",
       "sriEnforceable": true,
-      "bytes": 1276,
+      "bytes": 1390,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"64f73e4c-4fc\"",
-      "lastModified": "Tue, 05 Sep 2023 14:42:20 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.434Z"
+      "etag": "W/\"6af5c1d3-56e\"",
+      "lastModified": "Thu, 12 Nov 2026 13:40:35 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.553Z"
     },
     "https://www.fantasy402.com/app/manager/module/settled-figure.js": {
       "sha256": "3abf8f475470c1cd90e21e2d5210585024bb6bd1ad2edb33cec6d6a1515119dc",
@@ -2245,7 +2632,7 @@
       "externalReferences": [],
       "etag": "W/\"6a4c0c66-401e\"",
       "lastModified": "Mon, 06 Jul 2026 20:13:26 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.443Z"
+      "fetchedAt": "2026-11-14T03:28:42.561Z"
     },
     "https://www.fantasy402.com/app/manager/module/sportbook.js": {
       "sha256": "6d6977c151b5063dff678c30fa133d002c27bec7f6b6a54bdac11ba81aed6cc1",
@@ -2258,7 +2645,7 @@
       "externalReferences": [],
       "etag": "W/\"6a73acbf-2156\"",
       "lastModified": "Wed, 05 Aug 2026 21:35:59 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.467Z"
+      "fetchedAt": "2026-11-14T03:28:42.568Z"
     },
     "https://www.fantasy402.com/app/manager/module/total-active-customer.js": {
       "sha256": "af322eed2d33d9cfcdf4efd58f1dacd1d874b1136f75d99e15d0b8217cffeb4f",
@@ -2271,33 +2658,33 @@
       "externalReferences": [],
       "etag": "W/\"69fa2103-192c\"",
       "lastModified": "Tue, 05 May 2026 16:55:31 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.479Z"
+      "fetchedAt": "2026-11-14T03:28:42.605Z"
     },
     "https://www.fantasy402.com/app/manager/module/transaction-history.js": {
-      "sha256": "abe1e29f7eccbb7501f30a522c2ce7d9300409f49cdca47e6079d7c529c3b8ce",
-      "sri": "sha384-X+/v59Q5rwMU20wT7dn3WXB+ha/rmi5YiB4pCHoNn8pNuoe48kH0yGW8L0k77X3s",
+      "sha256": "462ed4c7d8c288645513129b4d9ee338aebe6a7afbefcc5a0ecce2a1631967b2",
+      "sri": "sha384-A9v+QtP6I+OlnvOy2QrRfLY7Z5Vo8CMt0VR8oOXwmL/qpr1MEC0ngO1rdCfQia+Q",
       "sriEnforceable": true,
-      "bytes": 26030,
+      "bytes": 26252,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"6ac6645b-65ae\"",
-      "lastModified": "Wed, 07 Oct 2026 15:25:15 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.496Z"
+      "etag": "W/\"6af75e0b-668c\"",
+      "lastModified": "Fri, 13 Nov 2026 18:59:23 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.640Z"
     },
     "https://www.fantasy402.com/app/manager/module/transaction.js": {
-      "sha256": "51d3d93855f6d28418ac367f3ca0dc7f4292b4a796c75421ae381abc7be5f38f",
-      "sri": "sha384-Erig6dzSwWemA9bOcbGuL00Ov4G84F82N96SIXAbk9BOgTzr68DLRoHtC9H8IW46",
+      "sha256": "71c1564d31fc94d74e827ee154eb1fa0ccd8795109f8c76aa3a8889ed66aa287",
+      "sri": "sha384-xCakfgGHHBgIQ/qvKpwGjL+FWayV8gt0nNVoFbu8raJJHvVAOJCe0Kf9Zs86h65T",
       "sriEnforceable": true,
-      "bytes": 31183,
+      "bytes": 31164,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"6a885f21-79cf\"",
-      "lastModified": "Fri, 21 Aug 2026 14:22:25 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.524Z"
+      "etag": "W/\"6af5c1d3-79bc\"",
+      "lastModified": "Thu, 12 Nov 2026 13:40:35 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.648Z"
     },
     "https://www.fantasy402.com/app/manager/module/weekly-figure-thin.js": {
       "sha256": "2118837947ba9f797d048a0679eec39d9feccde5cf61d4b2d39c7096f0992124",
@@ -2310,20 +2697,59 @@
       "externalReferences": [],
       "etag": "W/\"6a345131-1254b\"",
       "lastModified": "Thu, 18 Jun 2026 20:12:33 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.546Z"
+      "fetchedAt": "2026-11-14T03:28:42.647Z"
     },
     "https://www.fantasy402.com/app/manager/module/weekly-figure.js": {
-      "sha256": "fde5b8da3fdd2cd9a21fb937a27ae879f3223d7cc23a37b9ae33542be60d78bb",
-      "sri": "sha384-MOVYWyfQjsQhE23ozRF60QNzL33wboWb8h9jAqWtB1sPu/XKDXKuFH0n3ttecYrZ",
+      "sha256": "81633eb633a7845417f58f61c54d979cb6161e1a95d90b00cb55a9c626e239d1",
+      "sri": "sha384-Ka+Eaane7WHoqYG2ODnvj3W4VnUIwXGr/KQ2rRDDjjTAXSX869M+chYJdnlLfiE3",
       "sriEnforceable": true,
-      "bytes": 104699,
+      "bytes": 104921,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"6acfa0bd-198fb\"",
-      "lastModified": "Wed, 14 Oct 2026 15:33:17 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.641Z"
+      "etag": "W/\"6af75e0b-199d9\"",
+      "lastModified": "Fri, 13 Nov 2026 18:59:23 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.652Z"
+    },
+    "https://www.fantasy402.com/app/manager/report/help-report.js": {
+      "sha256": "10fbc07dc9dbe85bd78d79ef85bf3312a2b1d6968e79f6971131eed8dd5160f8",
+      "sri": "sha384-l1Bt4na36FaoztatrO6kB9nljNUokrd+GZzNL9GA1ef2DIMXCDbFcuRDoPsc75NJ",
+      "sriEnforceable": true,
+      "bytes": 129750,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a021888-1fad6\"",
+      "lastModified": "Mon, 11 May 2026 17:57:28 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.666Z"
+    },
+    "https://www.fantasy402.com/app/manager/report/report.js": {
+      "sha256": "09cba38e83b44db8a0daf1fb410cf838d3f04916b60fdf543efe07176b803289",
+      "sri": "sha384-twKpAemgWRbnFbA72yYwznG+CFpaIRLiopWiAHPAjbexVg5q99C18mlezTpz4D/G",
+      "sriEnforceable": true,
+      "bytes": 549,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"69fa2103-225\"",
+      "lastModified": "Tue, 05 May 2026 16:55:31 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.756Z"
+    },
+    "https://www.fantasy402.com/app/provider/sport-provider.js": {
+      "sha256": "7c2c0ec0e331a79e1fb91f42dd17d131016204f388e6a3e98e310446d37755b2",
+      "sri": "sha384-rcEBoJyvxOoIC5Aul0zII84R0nduUQ9Rjan2sr2DBfUpU5x+pQD9eSe3wn4RzCx8",
+      "sriEnforceable": true,
+      "bytes": 60845,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6af5c1d3-edad\"",
+      "lastModified": "Thu, 12 Nov 2026 13:40:35 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.739Z"
     },
     "https://www.fantasy402.com/app/setting/config-manager.js": {
       "sha256": "5cfb0ee7a34b217cb4897ef649e780b00edda445d06f9515045cf89a31983188",
@@ -2336,20 +2762,59 @@
       "externalReferences": [],
       "etag": "W/\"66c61507-cb\"",
       "lastModified": "Wed, 21 Aug 2024 16:25:43 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.641Z"
+      "fetchedAt": "2026-11-14T03:28:42.689Z"
     },
     "https://www.fantasy402.com/app/setting/version.js": {
-      "sha256": "7d026b6af39a067eb5324893f17909a96ca14969955faca938b40906ea62f9b9",
-      "sri": "sha384-i6FblSsLYuqhbn2sSj2X0VsJDbSjAX2DplK4Ax55Wg3kpCzbDHjYkmuIBVDQh3HN",
+      "sha256": "0561c40221678b3aeda65c8d1175ada59876c675e8e3731cee8afe45a0f87533",
+      "sri": "sha384-d7tQjkqW2PgTHBHXJwGRp9akYm5dlb8aYL9dcRX0dT6tDiMUEZ5Itb7st56wPwl7",
       "sriEnforceable": true,
       "bytes": 44,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"6aea0091-2c\"",
-      "lastModified": "Tue, 03 Nov 2026 15:41:05 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.641Z"
+      "etag": "W/\"6af75e36-2c\"",
+      "lastModified": "Fri, 13 Nov 2026 19:00:06 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.723Z"
+    },
+    "https://www.fantasy402.com/app/sports/cashier/cashier.js": {
+      "sha256": "ee61782965bc1b0933f8eed8408c789953795de46bd72338e1ea2aee13d818a0",
+      "sri": "sha384-M5j+fjQ0a9UXnjKZHCbfuxt6VnBPhZ4d6GCL7Rk0mSMmeT6tqBA9ctsL+JTG1SN1",
+      "sriEnforceable": true,
+      "bytes": 16644,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"69fa2101-4104\"",
+      "lastModified": "Tue, 05 May 2026 16:55:29 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.731Z"
+    },
+    "https://www.fantasy402.com/app/sports/limit/limit.js": {
+      "sha256": "5c715e42d75fa04e0850305ba64160467525de79e731cda331ce392866484612",
+      "sri": "sha384-1/eg5FG4DTGJtARA6bb9FfOlZibtAe6Zn4EMFmoq4oqUQ8qjRYHDG25iILHX03MD",
+      "sriEnforceable": true,
+      "bytes": 45142,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6ab69eb9-b056\"",
+      "lastModified": "Fri, 25 Sep 2026 16:18:01 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.737Z"
+    },
+    "https://www.fantasy402.com/app/sports/line/line.js": {
+      "sha256": "ba35c6bf2f6a24f5ba67b32cd59fe3de86b82f0b64b4524ad5de94b80db04e21",
+      "sri": "sha384-xByiVJzpe6xxipailDEL0QUs8Yvb6dHbnJXmluUGNLgvZH9GUioDuwn0FiuWEHxi",
+      "sriEnforceable": true,
+      "bytes": 266841,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6af5c1d4-41259\"",
+      "lastModified": "Thu, 12 Nov 2026 13:40:36 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.798Z"
     },
     "https://www.fantasy402.com/app/sports/mail/mail.js": {
       "sha256": "84db61ac0402de9e2ee104d4593630a7465abb821ad645b7e3f8ed6c7c0a56fc",
@@ -2362,7 +2827,7 @@
       "externalReferences": [],
       "etag": "W/\"69fa2101-2102\"",
       "lastModified": "Tue, 05 May 2026 16:55:29 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.641Z"
+      "fetchedAt": "2026-11-14T03:28:42.775Z"
     },
     "https://www.fantasy402.com/app/sports/report/chat.js": {
       "sha256": "5cd4b89d783a1dc5da8b3ee5685b8b35678571462311a021fbdeea95fb22afff",
@@ -2375,7 +2840,46 @@
       "externalReferences": [],
       "etag": "W/\"69fa2102-1994\"",
       "lastModified": "Tue, 05 May 2026 16:55:30 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.641Z"
+      "fetchedAt": "2026-11-14T03:28:42.775Z"
+    },
+    "https://www.fantasy402.com/app/sports/report/figure.js": {
+      "sha256": "110539fd2b348ad7fbee6028329139228b954581bb240910f7d0dc81bf848959",
+      "sri": "sha384-3kjmlr8kNniwaLRjwXKxq+VpKpTw9PHQ58oXOMuGDOoDl4riabKMUE4jN6VmFnHL",
+      "sriEnforceable": true,
+      "bytes": 43457,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a021887-a9c1\"",
+      "lastModified": "Mon, 11 May 2026 17:57:27 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.810Z"
+    },
+    "https://www.fantasy402.com/app/sports/report/pending.js": {
+      "sha256": "26836a982a4469e3a1f38e3da66faa79d145300a06475f56a76e9efda8ea6988",
+      "sri": "sha384-lo4fZKR5vv8Pe2kVM97A7VKTnfrC8yX4FmobKSjWF3nOCSdV21pWGZ8HAq9vz34b",
+      "sriEnforceable": true,
+      "bytes": 42105,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a399927-a479\"",
+      "lastModified": "Mon, 22 Jun 2026 20:20:55 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.818Z"
+    },
+    "https://www.fantasy402.com/app/sports/report/transaction.js": {
+      "sha256": "7410fb09f907eff6998bbd3a0ef5679bd57a5da54c41f06ff86ea95dfab906a9",
+      "sri": "sha384-VosykecvahVIcSpaRBGAM4yvU6RaYRN208Vo9ALjZhijIm4kC3j9arqRcFRW6I4j",
+      "sriEnforceable": true,
+      "bytes": 3358,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a021887-d1e\"",
+      "lastModified": "Mon, 11 May 2026 17:57:27 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.908Z"
     },
     "https://www.fantasy402.com/app/sports/score/score.js": {
       "sha256": "948ba9b6b81b0ac262d7267fa136a75278f795899c1a0ee5edaa10e0018f091b",
@@ -2388,7 +2892,111 @@
       "externalReferences": [],
       "etag": "W/\"6a021887-1439\"",
       "lastModified": "Mon, 11 May 2026 17:57:27 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.641Z"
+      "fetchedAt": "2026-11-14T03:28:42.908Z"
+    },
+    "https://www.fantasy402.com/app/sports/sports.js": {
+      "sha256": "c50ba262ae446d591330e74c1f85fdfada5d580df27708d96395fcb9b510bd50",
+      "sri": "sha384-zHbT5JR5FBUV93bxstrmXW8zqzQEkvBfkNB4MHy6tTQmyv/23LkNCpe0gE04q3/8",
+      "sriEnforceable": true,
+      "bytes": 66551,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6ae36259-103f7\"",
+      "lastModified": "Thu, 29 Oct 2026 15:12:25 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.943Z"
+    },
+    "https://www.fantasy402.com/app/sports/wager/if-bet.js": {
+      "sha256": "06c93ccde2c796e6bf657d159d7c66951ec3d0ffd5397582b248df08dfa1d803",
+      "sri": "sha384-W78o+po+dbNjumABfAltJ3EK+5CksvGyBW2OVZmyHyz8/xJfkQvMYAYRJaf6t96m",
+      "sriEnforceable": true,
+      "bytes": 13367,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a021887-3437\"",
+      "lastModified": "Mon, 11 May 2026 17:57:27 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.908Z"
+    },
+    "https://www.fantasy402.com/app/sports/wager/parlay.js": {
+      "sha256": "4eee2f10d141caa62b5ffc44b229d34cd3e7fbf6c2fea5e8a2aaaaece8f23e9f",
+      "sri": "sha384-RuABeEkq+xK9EjmQD/iQNitELfLXdEw/PIzntBZP6/+Zaht2+mgRcJyXMSspvsGH",
+      "sriEnforceable": true,
+      "bytes": 15596,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a021887-3cec\"",
+      "lastModified": "Mon, 11 May 2026 17:57:27 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.908Z"
+    },
+    "https://www.fantasy402.com/app/sports/wager/reverse.js": {
+      "sha256": "17a0fead17e25e3a51f7ea67448075349eb6a2a806199d747ca4d4a1219349a5",
+      "sri": "sha384-hnAELcE775O7mUZXLeAzG4Hh/L/9brxG0zenhD3PcwYnCy+DnTu8m+3D23BiKsbv",
+      "sriEnforceable": true,
+      "bytes": 12730,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a021887-31ba\"",
+      "lastModified": "Mon, 11 May 2026 17:57:27 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.908Z"
+    },
+    "https://www.fantasy402.com/app/sports/wager/round-robin.js": {
+      "sha256": "b15dd6e921d881ebcd77bd09bd49a2e18fbb85ec2cbf41cffb6a1d89a209328a",
+      "sri": "sha384-KOB85c3bsI9XhfhO/3wXpBT+2paElyJK7ILPDvV3rWJaKQzSxn9c8VS4YxIQpH8l",
+      "sriEnforceable": true,
+      "bytes": 21149,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a739125-529d\"",
+      "lastModified": "Wed, 05 Aug 2026 19:38:13 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.908Z"
+    },
+    "https://www.fantasy402.com/app/sports/wager/straight.js": {
+      "sha256": "ed54115291ceab13e518e6ca0a50014cba8958ed9144c1896bcab8a654a73d9b",
+      "sri": "sha384-eEYUIOFDgwHLLxlPgg7aJu6+w7VRVDBxZD8GjR5gMA4B2EGnUFan/E0wYSXdavpQ",
+      "sriEnforceable": true,
+      "bytes": 17644,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a021887-44ec\"",
+      "lastModified": "Mon, 11 May 2026 17:57:27 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.986Z"
+    },
+    "https://www.fantasy402.com/app/sports/wager/teaser.js": {
+      "sha256": "f3ef924f5155cc5c6a80f8499494174e59cd8b65dc741551c2852e65d8367f9d",
+      "sri": "sha384-XcXRFT9fcA7qcl2/dkhpdKb2PnzP3E3rymV8egtEYeK7+n9/NP3gXp/bjiISUbKU",
+      "sriEnforceable": true,
+      "bytes": 12896,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6a021887-3260\"",
+      "lastModified": "Mon, 11 May 2026 17:57:27 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.994Z"
+    },
+    "https://www.fantasy402.com/app/sports/wager/wager.js": {
+      "sha256": "c1f634ef54cca2190df577fb06147fb396b624d2c6a18d8b9b35cf37d1c94159",
+      "sri": "sha384-yjdi+ShxamTKT0uUZZH/y44ODfniHZ0zRhSwvMqKPEE52voDdEdPtbsHKJqBnQrg",
+      "sriEnforceable": true,
+      "bytes": 22487,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6acf90ee-57d7\"",
+      "lastModified": "Wed, 14 Oct 2026 14:25:50 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.994Z"
     },
     "https://www.fantasy402.com/app/system/log.js": {
       "sha256": "1ea80c0f019b9c8fbacbe8471fe63a4ad78bf559e3c237f8fe862f1b3a70a14f",
@@ -2401,20 +3009,59 @@
       "externalReferences": [],
       "etag": "W/\"6a85b9ba-625\"",
       "lastModified": "Wed, 19 Aug 2026 14:12:10 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.641Z"
+      "fetchedAt": "2026-11-14T03:28:42.989Z"
     },
     "https://www.fantasy402.com/app/system/security.js": {
-      "sha256": "056c0fc2bc075017ed93ba7a3cd9d301c8144f3dee9d56347673d098d6f84e1b",
-      "sri": "sha384-+Gtp4DNmknoDKnoDIe+nPQzCrKetZIsyzPR5EvktZjbtFnpvo7uJglvINP1l0xCW",
+      "sha256": "98a2ecc34bad69776d08fb18f24d8a1072425ae99ded61465ccd8e79caaac832",
+      "sri": "sha384-0UpEkQO9Ner5JulmbSVW7OIbK7kA7GqWqqCEpc0+vSFGpo0vpOUHNxaHnCHkXd6a",
       "sriEnforceable": true,
-      "bytes": 25043,
+      "bytes": 24636,
       "role": "portal-js",
       "source": "app",
       "sameOrigin": true,
       "externalReferences": [],
-      "etag": "W/\"6abc4935-61d3\"",
-      "lastModified": "Tue, 29 Sep 2026 23:26:45 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.728Z"
+      "etag": "W/\"6aedf132-603c\"",
+      "lastModified": "Fri, 06 Nov 2026 15:24:34 GMT",
+      "fetchedAt": "2026-11-14T03:28:43.083Z"
+    },
+    "https://www.fantasy402.com/app/ui/center.js": {
+      "sha256": "c6b62ec05759323bb9adbabd19bf83daf62def3d41bff67b7b5b44334f21ddc5",
+      "sri": "sha384-1W9dJmbanLWdcrFPHjDJKDtf3MEwXZPaqqF1a3+0QoCElXGCwQE/be0641tANR7D",
+      "sriEnforceable": true,
+      "bytes": 4367,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6adbb210-110f\"",
+      "lastModified": "Fri, 23 Oct 2026 19:14:24 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.998Z"
+    },
+    "https://www.fantasy402.com/app/ui/header.js": {
+      "sha256": "8a077e5cc6a2c58e55cfc20bb4cd77f925da6fee541b8d27d2447ae09585207f",
+      "sri": "sha384-335/XuKQJHCDOCaMd5iCzWpG8eOVgYksKIoJrFXsHP0z3wlscUC9f6Jb+k9V9X2v",
+      "sriEnforceable": true,
+      "bytes": 26223,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6adbb210-666f\"",
+      "lastModified": "Fri, 23 Oct 2026 19:14:24 GMT",
+      "fetchedAt": "2026-11-14T03:28:42.998Z"
+    },
+    "https://www.fantasy402.com/app/ui/left.js": {
+      "sha256": "301cf2a45fa50626154840c586061718b8aeb6aaf109b6f1bc1cbdc16b9faa3d",
+      "sri": "sha384-mIzgkWOnrFq07nvf3KvpZn0XqmvnCu148fi4UoG7FZIOjhU0qPULmDU+jGlRIQ6I",
+      "sriEnforceable": true,
+      "bytes": 3945,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6adbb210-f69\"",
+      "lastModified": "Fri, 23 Oct 2026 19:14:24 GMT",
+      "fetchedAt": "2026-11-14T03:28:43.118Z"
     },
     "https://www.fantasy402.com/app/ui/load.js": {
       "sha256": "2411f76d89cae1955333b4471575a75041228dc7698178a2c4e702b872701feb",
@@ -2427,7 +3074,46 @@
       "externalReferences": [],
       "etag": "W/\"63c84e95-2f1a\"",
       "lastModified": "Wed, 18 Jan 2023 19:55:01 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.728Z"
+      "fetchedAt": "2026-11-14T03:28:43.073Z"
+    },
+    "https://www.fantasy402.com/app/ui/right.js": {
+      "sha256": "6255a0885cb848914d7ac7ffc55bf26a8d5e262681be412d9c8b4e8c40d7aafb",
+      "sri": "sha384-ttZuWhaUrN1X44T2aIlljpuDcme45PBqiJxsJlGnsWV2nZCeraxbkDfsIrGBfVz9",
+      "sriEnforceable": true,
+      "bytes": 2619,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6adbb210-a3b\"",
+      "lastModified": "Fri, 23 Oct 2026 19:14:24 GMT",
+      "fetchedAt": "2026-11-14T03:28:43.073Z"
+    },
+    "https://www.fantasy402.com/app/ui/theme-sports.js": {
+      "sha256": "e19ec1085cdd9ee8bad926bdbb149283abfb48bf2d23f9a37c3dfb4ac457e19f",
+      "sri": "sha384-cIShEYxVfCNtXNhEzuLCFaBHFlm/4YuAvGoXX+6E1aOd4MQFcj6zoSJBfdjXHMim",
+      "sriEnforceable": true,
+      "bytes": 20566,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6aedf132-5056\"",
+      "lastModified": "Fri, 06 Nov 2026 15:24:34 GMT",
+      "fetchedAt": "2026-11-14T03:28:43.083Z"
+    },
+    "https://www.fantasy402.com/app/ui/theme.js": {
+      "sha256": "d9f9422fd0ce96340ce9fe9e7f49518aa19e7c1b12a38bbe3a8110981b4947a5",
+      "sri": "sha384-MAL7AEBfn4GD1m+ofxiJb1wgWU2dWO2pULShxXp5FuR49K5EbPsXt+ewTNrSfkJg",
+      "sriEnforceable": true,
+      "bytes": 13846,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84e9a-3616\"",
+      "lastModified": "Wed, 18 Jan 2023 19:55:06 GMT",
+      "fetchedAt": "2026-11-14T03:28:43.083Z"
     },
     "https://www.fantasy402.com/app/ui/ui.js": {
       "sha256": "5e23d81681a34191c1cc7573b5a1ae015751fe864fca428388859c8f5d5e9e2a",
@@ -2440,7 +3126,7 @@
       "externalReferences": [],
       "etag": "W/\"6a34349f-6ad3e\"",
       "lastModified": "Thu, 18 Jun 2026 18:10:39 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.832Z"
+      "fetchedAt": "2026-11-14T03:28:43.099Z"
     },
     "https://www.fantasy402.com/app/util/http.js": {
       "sha256": "a5ad2dda446932168fcf8cef57cf9f1a2f0f3916f1facd58ee1ce5efae44fd40",
@@ -2453,7 +3139,7 @@
       "externalReferences": [],
       "etag": "W/\"63c84ea9-25d\"",
       "lastModified": "Wed, 18 Jan 2023 19:55:21 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.730Z"
+      "fetchedAt": "2026-11-14T03:28:43.087Z"
     },
     "https://www.fantasy402.com/app/util/message.js": {
       "sha256": "53829abed28c20ad53e570287c691a0814a6bab75b2897a14d5d6d367bf31ad0",
@@ -2466,7 +3152,33 @@
       "externalReferences": [],
       "etag": "W/\"68b5c8d8-743\"",
       "lastModified": "Mon, 01 Sep 2025 16:24:56 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.733Z"
+      "fetchedAt": "2026-11-14T03:28:43.157Z"
+    },
+    "https://www.fantasy402.com/app/util/time.js": {
+      "sha256": "39e2c5d28b973db7eb1da2518aa59339cb1f5bf50a717c1e9c2146a08a1b3f6e",
+      "sri": "sha384-OzjFCcTYW/gQ+v8RIjtayVdv24LLX4FC78SFRq/BT5g4ZtR4I9NfqTuuNNAQ79A7",
+      "sriEnforceable": true,
+      "bytes": 741,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"63c84eac-2e5\"",
+      "lastModified": "Wed, 18 Jan 2023 19:55:24 GMT",
+      "fetchedAt": "2026-11-14T03:28:43.153Z"
+    },
+    "https://www.fantasy402.com/app/util/url.js": {
+      "sha256": "d0fb3896d8bd9e117812bcd8a5c962a8fe9112cf643fc730a948a949aa6580d6",
+      "sri": "sha384-Gm8bQAZvTtas1UEKZi0KDbav8syr4IEKjAxUrOo4IvPTwDjx+7GBAHDFdqPe6WI2",
+      "sriEnforceable": true,
+      "bytes": 9234,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6abc4935-2412\"",
+      "lastModified": "Tue, 29 Sep 2026 23:26:45 GMT",
+      "fetchedAt": "2026-11-14T03:28:43.169Z"
     },
     "https://www.fantasy402.com/app/util/util.js": {
       "sha256": "fba79858f48951d827b4fbb6db27531bb15cc519ae55d47e29848e066adf2ec0",
@@ -2479,7 +3191,20 @@
       "externalReferences": [],
       "etag": "W/\"6adbb210-cfc9\"",
       "lastModified": "Fri, 23 Oct 2026 19:14:24 GMT",
-      "fetchedAt": "2026-11-04T06:53:31.744Z"
+      "fetchedAt": "2026-11-14T03:28:43.264Z"
+    },
+    "https://www.fantasy402.com/assets/js/scripts/swal2/sweetalert2.min.js": {
+      "sha256": "acdf1fe2aa8448d14026111b2c336991f24777106153d9b5f49c3d5933560d69",
+      "sri": "sha384-kolx+TuCViu23ogFsz/gDJHCsqH/yTc7UIaH8viCKyAUs/twZjMxX76SvEQ45EbZ",
+      "sriEnforceable": true,
+      "bytes": 43254,
+      "role": "portal-js",
+      "source": "app",
+      "sameOrigin": true,
+      "externalReferences": [],
+      "etag": "W/\"6634057c-a8f6\"",
+      "lastModified": "Thu, 02 May 2024 21:28:28 GMT",
+      "fetchedAt": "2026-11-14T03:28:43.175Z"
     }
   }
 }

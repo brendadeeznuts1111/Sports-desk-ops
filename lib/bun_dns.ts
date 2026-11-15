@@ -308,6 +308,8 @@ export async function classifyIpAddress(
     isDatacenterOrCloud = true;
     organization = "Amazon Web Services (AWS)";
   } else if (
+    ipAddress === "1.1.1.1" ||
+    ipAddress === "1.0.0.1" ||
     combinedHostText.includes("cloudflare") ||
     combinedHostText.includes("1.1.1.1") ||
     combinedHostText.includes("one.one.one.one")
@@ -315,6 +317,8 @@ export async function classifyIpAddress(
     isDatacenterOrCloud = true;
     organization = "Cloudflare Edge";
   } else if (
+    ipAddress === "8.8.8.8" ||
+    ipAddress === "8.8.4.4" ||
     combinedHostText.includes("google") ||
     combinedHostText.includes("1e100.net")
   ) {

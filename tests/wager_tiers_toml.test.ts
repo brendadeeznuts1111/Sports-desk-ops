@@ -26,9 +26,21 @@ describe("Declarative Wager Tiers TOML Config (Bun.TOML v3)", () => {
     const config = await loadTomlConfig(DEFAULT_WAGER_TIERS_CONFIG_PATH);
 
     // Verify Surface with resolved @token:*
-    expect(config.surface.panel).toBe("#0d1527");
+    expect(config.surface.bg).toBe("#070b14");
+    expect(config.surface.panel).toBe("#0b1120");
+    expect(config.surface.elevated).toBe("#121c31");
+    expect(config.surface.raised).toBe("#202f4a");
     expect(config.surface.text).toBe("#f1f5f9"); // Drift fixed from #f8fafc
-    expect(config.surface.border).toBe("#1e293b");
+    expect(config.surface.textSecondary).toBe("#cbd5e1");
+    expect(config.surface.border).toBe("#243247");
+    expect(config.surface.borderStrong).toBe("#7085a1");
+    expect(config.surface.provenance?.liveFg).toBe("#34d399");
+    expect(config.surface.provenance?.staleFg).toBe("#fbbf24");
+
+    // Verify Dashboard defaults & Signal-Honesty invariant
+    expect(config.dashboard?.autoExecute).toBe(false);
+    expect(config.dashboard?.refreshIntervalSeconds).toBe(15);
+    expect(config.dashboard?.staleFeedWarnMinutes).toBe(30);
 
     // Verify Canonical Tiers
     expect(config.tiers.ORIGINATOR_HIGH_RISK).toBeDefined();
@@ -36,7 +48,7 @@ describe("Declarative Wager Tiers TOML Config (Bun.TOML v3)", () => {
     expect(config.tiers.ORIGINATOR_HIGH_RISK.minScore).toBe(9.0);
     expect(config.tiers.ORIGINATOR_HIGH_RISK.action).toBe("ALERT_OPERATOR");
     expect(config.tiers.ORIGINATOR_HIGH_RISK.channels).toContain("telegram");
-    expect(config.tiers.ORIGINATOR_HIGH_RISK.fg).toBe("#f87171");
+    expect(config.tiers.ORIGINATOR_HIGH_RISK.fg).toBe("#fca5a5");
 
     expect(config.tiers.STEAM_MOVE).toBeDefined();
     expect(config.tiers.STEAM_MOVE.badge).toContain("STEAM");

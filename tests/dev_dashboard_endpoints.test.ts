@@ -131,4 +131,61 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
       expect(data.wagers.length).toBeGreaterThan(0);
     });
   });
+
+  describe("Bet-Ticker, R2 Pipeline, and Local Agent/Customer Link Endpoints", () => {
+    it("serves GET /api/bet-ticker with localFeed channels/types and autoExecute: false", async () => {
+      const res = await fetch(`${baseUrl}/api/bet-ticker`);
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as {
+        autoExecute: boolean;
+        localFeed: {
+          tickets: Array<{ ticketId: string }>;
+          byWriter: Array<{ writer: string }>;
+        };
+      };
+      expect(data.autoExecute).toBe(false);
+      expect(Array.isArray(data.localFeed.tickets)).toBe(true);
+      expect(Array.isArray(data.localFeed.byWriter)).toBe(true);
+    });
+
+    it("serves GET /api/r2/pipeline and GET /api/daemon/status", async () => {
+      const [r2Res, daemonRes] = await Promise.all([
+        fetch(`${baseUrl}/api/r2/pipeline`),
+        fetch(`${baseUrl}/api/daemon/status`),
+      ]);
+      expect(r2Res.status).toBe(200);
+      const r2Json = (await r2Res.json()) as {
+        sinks: Array<{ id: string }>;
+        daemon4020: { online: boolean };
+      };
+      expect(Array.isArray(r2Json.sinks)).toBe(true);
+      expect(r2Json.sinks.length).toBe(4);
+      expect(daemonRes.status).toBe(200);
+    });
+
+    it("serves GET /api/agent/:id JSON, GET /agent/:id HTML, and 302 redirect on GET /customer/:id", async () => {
+      const [apiRes, htmlRes, custRes] = await Promise.all([
+        fetch(`${baseUrl}/api/agent/FAKEMONEY`),
+        fetch(`${baseUrl}/agent/FAKEMONEY`),
+        fetch(`${baseUrl}/customer/GP301`, { redirect: "manual" }),
+      ]);
+      expect(apiRes.status).toBe(200);
+      const apiJson = (await apiRes.json()) as {
+        agentId: string;
+        autoExecute: boolean;
+      };
+      expect(apiJson.agentId).toBe("FAKEMONEY");
+      expect(apiJson.autoExecute).toBe(false);
+
+      expect(htmlRes.status).toBe(200);
+      expect(htmlRes.headers.get("content-type")).toContain("text/html");
+      const html = await htmlRes.text();
+      expect(html).toContain("Agent FAKEMONEY");
+
+      expect(custRes.status).toBe(302);
+      expect(custRes.headers.get("location")).toBe(
+        "/?tab=customers&search=GP301",
+      );
+    });
+  });
 });

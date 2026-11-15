@@ -154,6 +154,7 @@ export const styles = {
     borderRadius: "8px",
     padding: "16px",
     overflow: "hidden",
+    minWidth: 0,
   },
   panelTitle: {
     margin: "0 0 16px 0",
@@ -277,11 +278,14 @@ export const styles = {
     top: "20px",
     maxHeight: "calc(100vh - 40px)",
     overflowY: "auto" as const,
+    minWidth: 0,
   },
   inspectorHeader: {
     display: "flex",
+    flexWrap: "wrap" as const,
     justifyContent: "space-between",
     alignItems: "flex-start",
+    gap: "10px",
     marginBottom: "16px",
     borderBottom: "1px solid #1e293b",
     paddingBottom: "12px",
@@ -461,10 +465,11 @@ export const styles = {
   },
   renderedHtml: {
     backgroundColor: "#0d1527",
-    padding: "24px",
+    padding: "20px 24px",
     borderRadius: "8px",
     border: "1px solid #1e293b",
     lineHeight: 1.6,
+    overflowX: "auto" as const,
   },
   rawMarkdown: {
     backgroundColor: "#0d1527",

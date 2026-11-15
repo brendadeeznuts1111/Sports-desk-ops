@@ -68,7 +68,11 @@ function envNumber(
   if (raw === undefined || raw.trim() === "") return fallback;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed < 0) return fallback;
-  return options.integer === true ? Math.trunc(parsed) : parsed;
+  if (options.integer === true) {
+    const truncated = Math.trunc(parsed);
+    return Number.isSafeInteger(truncated) ? truncated : fallback;
+  }
+  return parsed;
 }
 
 function tierFromEnv(

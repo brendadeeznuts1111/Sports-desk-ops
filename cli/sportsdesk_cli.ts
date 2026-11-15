@@ -29,7 +29,11 @@ import {
   verifyR2Connection,
   getR2ConfigInfo,
 } from "../services/sportsdesk_r2_sync.ts";
-import { renderAnsiMarkdown } from "../lib/canonical_osc8_links.ts";
+import {
+  describeAnsiTheme,
+  parseAnsiMarkdownCliOptions,
+  renderAnsiMarkdown,
+} from "../lib/canonical_osc8_links.ts";
 import {
   benchmarkResolverLatency,
   classifyIpAddress,
@@ -217,7 +221,7 @@ Usage: \`bun sportsdesk_cli.ts [command|option] [parameters...]\`
 * **bridge** coverage|value|match: cross-domain join between the customer book and Polymarket wallets
 * **stale** \`-i\` FILE [\`--window-min\` N] [\`--json\`]: Stale-line / post-move bet cohort
 * **shot** <URL> [\`--out\` PATH] [\`--f402-login\`] [\`--profile\` DIR] [\`--format\` png|jpeg|webp]: Bun.WebView screenshot (default \`scratch/shots/\`)
-* **dashboard** [\`--exec\`]: Render dashboard.md with Bun.markdown.ansi in milliseconds
+* **dashboard** [\`--exec\`] [\`--theme\` dark|light|mono|accessible] [\`--columns\` N] [\`--light\`] [\`--no-color\`] [\`--no-hyperlinks\`] [\`--kitty-graphics\`] [\`--linkify-symbols\`]: Render dashboard.md with Bun.markdown.ansi (AnsiTheme) in milliseconds
 * **dns** [\`--backend\` system|c-ares|libc] [\`--json\`]: Bun native DNS cache telemetry and prefetch inspection
 `;
   printAnsiMarkdown(helpMd);
@@ -443,21 +447,21 @@ export function printNeuronRegistry(): void {
     "========================================================================================================================",
   );
   console.log(
-    "QWEN3.5-4B (LAYERS 18-28) NEURON REGISTRY & DECOUPLED THREE-AXIS ARCHITECTURE",
+    "QWEN3.5-4B (LAYERS 17-28) NEURON REGISTRY & DECOUPLED THREE-AXIS ARCHITECTURE",
   );
   console.log(
     "========================================================================================================================",
   );
 
-  // Table 1: Ingestion Signal Channels (Layers 18-24)
+  // Table 1: Ingestion Signal Channels (Layers 17-24D)
   console.log(
-    "\n--- AXIS 1: INGESTION SIGNAL CHANNELS (LAYERS 18-24) • TRANSPORT SLA (ms / POLICY) ---",
+    "\n--- AXIS 1: INGESTION SIGNAL CHANNELS (LAYERS 17-24D) • TRANSPORT SLA (ms / POLICY) ---",
   );
   console.log(
-    " # | Layer ID    | CSS Token          | Hex Code | ANSI Preview  | Channel Code | SLA Policy & Target | Status     | Twin / Volume Rule",
+    " # | Layer ID    | CSS Token          | Hex Code | ANSI Preview  | Channel Code   | SLA Policy & Target | Status     | Twin / Volume Rule",
   );
   console.log(
-    "---+-------------+--------------------+----------+---------------+--------------+---------------------+------------+------------------------------------------",
+    "---+-------------+--------------------+----------+---------------+----------------+---------------------+------------+------------------------------------------",
   );
   INGESTION_CHANNELS.forEach((n, idx) => {
     const num = String(idx + 1).padStart(2);
@@ -473,7 +477,7 @@ export function printNeuronRegistry(): void {
         `${n.tokenName.padEnd(18)} | ` +
         `${n.hex.padEnd(8)} | ` +
         `${preview.padEnd(17)} | ` +
-        `${n.channelCode.padEnd(12)} | ` +
+        `${n.channelCode.padEnd(14)} | ` +
         `${slaStr.padEnd(21)} | ` +
         `${n.channelStatus.padEnd(10)} | ` +
         `${n.volumeRule}`,
@@ -491,7 +495,7 @@ export function printNeuronRegistry(): void {
     "---+-------------+--------------------+----------+---------------+-----------------------------+---------------------+----------------------+-----------------------------+-----------------------",
   );
   ROUTE_CIRCUITS.forEach((n, idx) => {
-    const num = String(idx + 8).padStart(2);
+    const num = String(INGESTION_CHANNELS.length + idx + 1).padStart(2);
     const ansi = Bun.color(n.hex, "ansi-16m") ?? "";
     const preview = `${ansi}████████${reset}`;
 
@@ -499,7 +503,7 @@ export function printNeuronRegistry(): void {
     if (n.threshold.kind === "consensus_lag") {
       threshStr = `Lag <= ${n.threshold.maxLagMs.toLocaleString()} ms`;
     } else if (n.threshold.kind === "bayes_shrinkage") {
-      threshStr = `tau* = ${n.threshold.tauStar}, N >= ${n.threshold.minTickets}`;
+      threshStr = `tau* = ${n.threshold.tauStarBasisPoints} bps, N >= ${n.threshold.minTickets}`;
     } else if (n.threshold.kind === "liquidity_depth") {
       threshStr = `Depth < $${(n.threshold.minDepthCents / 100).toLocaleString()}`;
     } else if (n.threshold.kind === "composite_risk_gate") {
@@ -1760,17 +1764,18 @@ export async function handleDashboardCli(args: string[] = []): Promise<void> {
     return;
   }
 
+  const themeOptions = parseAnsiMarkdownCliOptions(args);
   const start = performance.now();
   const content = await file.text();
-  const rendered = renderAnsiMarkdown(content, {
-    colors: !Bun.env.NO_COLOR && Bun.env.TERM !== "dumb",
-    hyperlinks: true,
-  });
+  const rendered = renderAnsiMarkdown(content, themeOptions);
   const elapsed = (performance.now() - start).toFixed(2);
+  const themeSummary = describeAnsiTheme(themeOptions);
 
   process.stdout.write(rendered);
   console.log(
-    `\n\x1b[2m⚡ Rendered dashboard.md in ${elapsed}ms via Bun.markdown.ansi\x1b[0m`,
+    themeOptions.colors === false
+      ? `\n⚡ Rendered dashboard.md in ${elapsed}ms via Bun.markdown.ansi (AnsiTheme: ${themeSummary})`
+      : `\n\x1b[2m⚡ Rendered dashboard.md in ${elapsed}ms via Bun.markdown.ansi (AnsiTheme: ${themeSummary})\x1b[0m`,
   );
 
   // If shell execution requested (--exec or -x)

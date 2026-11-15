@@ -12,7 +12,9 @@
  * TOML date/times parse to Temporal objects (Instant, PlainDateTime, PlainDate, PlainTime), which
  * `z.date()` rejects; validate them with `z.instanceof(Temporal.PlainDate)` and so on (the global
  * exists at runtime but TypeScript 5.9 and bun-types 1.4.4 do not declare it, so reach it through
- * `globalThis`). This module only reads: `Bun.TOML.stringify` drops comments and reorders keys,
+ * `globalThis`). Since Bun 1.4.0 the global is defined by default (`BUN_JSC_useTemporal=0` turns it
+ * off) and `Bun.deepEquals` / `toEqual` compare Temporal values rather than class identity, so a
+ * test that compares two parsed dates now fails on a value difference instead of passing. This module only reads: `Bun.TOML.stringify` drops comments and reorders keys,
  * so it must not back a writer for hand-edited files.
  */
 

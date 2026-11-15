@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   negotiateEncoding,
   encodedResponse,
+  forwardProxiedResponse,
+  prepareProxyRequestHeaders,
   resetEncodedBodies,
 } from "../lib/http_compression.ts";
 
@@ -120,5 +122,92 @@ describe("encodedResponse", () => {
       headers: { Vary: "Origin" },
     });
     expect(response.headers.get("vary")).toBe("Origin, Accept-Encoding");
+  });
+
+  test("Vary deduplicates Accept-Encoding regardless of case", async () => {
+    resetEncodedBodies();
+    const response = encodedResponse(req("gzip"), {
+      version: "vary-dup",
+      contentType: "text/plain",
+      produce: () => new TextEncoder().encode("e".repeat(4000)),
+      headers: { vary: "Origin, Accept-Encoding" },
+    });
+    expect(response.headers.get("vary")).toBe("Origin, Accept-Encoding");
+  });
+
+  test("skips compression when caller already set Content-Encoding", async () => {
+    resetEncodedBodies();
+    const precompressed = new Uint8Array(
+      Bun.gzipSync(Buffer.from("hello".repeat(500))),
+    );
+    const response = encodedResponse(req("zstd"), {
+      version: "preencoded",
+      contentType: "application/json",
+      produce: () => precompressed,
+      headers: { "Content-Encoding": "gzip" },
+    });
+    expect(response.headers.get("content-encoding")).toBe("gzip");
+    expect(response.headers.get("content-length")).toBe(
+      String(precompressed.byteLength),
+    );
+    const wire = new Uint8Array(await response.arrayBuffer());
+    expect(wire[0]).toBe(0x1f);
+    expect(wire[1]).toBe(0x8b);
+  });
+
+  test("proxy chain strips decoded headers so Bun.serve never emits ERR_CONTENT_DECODING_FAILED", async () => {
+    resetEncodedBodies();
+    const expectedJson = JSON.stringify({
+      ok: true,
+      payload: "x".repeat(3000),
+    });
+
+    const apiServer = Bun.serve({
+      port: 0,
+      routes: {
+        "/api/dashboard": (r) =>
+          encodedResponse(r, {
+            version: "proxy-test-v1",
+            contentType: "application/json; charset=utf-8",
+            produce: () => new TextEncoder().encode(expectedJson),
+          }),
+      },
+    });
+
+    const proxyServer = Bun.serve({
+      port: 0,
+      async fetch(r) {
+        const u = new URL(r.url);
+        // Simulate a proxy that forwards even if client sent zstd/gzip, verifying both paths
+        const upstreamWithForcedEncoding = await fetch(
+          `${apiServer.url.origin}${u.pathname}`,
+          {
+            headers: u.searchParams.has("identity")
+              ? prepareProxyRequestHeaders(r.headers)
+              : r.headers,
+          },
+        );
+        return forwardProxiedResponse(upstreamWithForcedEncoding);
+      },
+    });
+
+    try {
+      for (const query of ["", "?identity=1"]) {
+        for (const accept of ["gzip", "zstd", "gzip, deflate, br, zstd"]) {
+          const res = await fetch(
+            `${proxyServer.url.origin}/api/dashboard${query}`,
+            {
+              headers: { "Accept-Encoding": accept },
+            },
+          );
+          expect(res.status).toBe(200);
+          expect(res.headers.get("content-encoding")).toBeNull();
+          expect(await res.text()).toBe(expectedJson);
+        }
+      }
+    } finally {
+      proxyServer.stop(true);
+      apiServer.stop(true);
+    }
   });
 });

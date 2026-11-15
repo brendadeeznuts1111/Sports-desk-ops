@@ -21,6 +21,7 @@
 // 1. BRANDED UNIT TYPES, BIT-PACKED HANDLES & EXPLICIT SENTINELS
 // ============================================================================
 
+import { SLAB_SERVER } from "./slab_config.ts";
 import type {
   BasisPoints,
   BitSet32,
@@ -57,12 +58,14 @@ export type {
   TransportBridgeBitMask32,
 };
 
-export const NULL_CLV_SENTINEL = -2147483648 as LineHundredths;
-export const NULL_CUSTOMER_HANDLE32 = 0xffffffff as CustomerPackedHandle32;
+export const NULL_CLV_SENTINEL = SLAB_SERVER.sentinels
+  .null_clv as LineHundredths;
+export const NULL_CUSTOMER_HANDLE32 = SLAB_SERVER.sentinels
+  .null_customer_handle32 as CustomerPackedHandle32;
 export const NULL_CUSTOMER_HANDLE64 =
   0xffffffffffffffffn as CustomerPackedHandle64;
-export const NULL_BRIDGE_CHANNEL_WORD32 =
-  0xffffffff as BridgeChannelPackedWord32;
+export const NULL_BRIDGE_CHANNEL_WORD32 = SLAB_SERVER.sentinels
+  .null_bridge_channel_word32 as BridgeChannelPackedWord32;
 export const EMPTY_R2_OBJECT_KEY_SENTINEL = "" as const;
 
 export interface DodGateFailureDetails {

@@ -45,6 +45,7 @@ const COVERAGE: Readonly<Record<string, string>> = {
   example: "template",
   npmrc: "config",
   gitignore: "config",
+  gitattributes: "git attributes (bun.lock text/binary order)",
   "git-blame-ignore-revs": "config",
   "bun-version": "runtime pin",
   gitkeep: "placeholder",
@@ -53,6 +54,8 @@ const COVERAGE: Readonly<Record<string, string>> = {
   plist: "launchd template (macOS operator)",
   sql: "SQL DDL statement check + db_integration tests",
   txt: "plain text document",
+  hex: "even-length hex byte vector + NSH frame golden tests",
+  gz: "Bun.gunzipSync decompression check",
 };
 
 const EXACT_FILES: Readonly<Record<string, string>> = {
@@ -241,6 +244,33 @@ describe("language coverage", () => {
       const stripped = text.replace(/--[^\n]*/g, "").trim();
       if (stripped.length === 0 || !stripped.endsWith(";")) {
         failures.push(`${path}: expected non-empty SQL ending with ';'`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  test("hex byte vectors and gzip fixtures are well-formed", async () => {
+    const failures: string[] = [];
+    for (const path of filesWith("hex")) {
+      const text = (await Bun.file(join(ROOT, path)).text()).trim();
+      if (
+        text.length === 0 ||
+        text.length % 2 !== 0 ||
+        !/^[0-9a-fA-F]+$/.test(text)
+      ) {
+        failures.push(`${path}: expected non-empty even-length hex string`);
+      }
+    }
+    for (const path of filesWith("gz")) {
+      try {
+        const decompressed = Bun.gunzipSync(
+          await Bun.file(join(ROOT, path)).bytes(),
+        );
+        if (decompressed.byteLength === 0) {
+          failures.push(`${path}: decompressed gzip fixture is empty`);
+        }
+      } catch (error) {
+        failures.push(`${path}: ${String(error)}`);
       }
     }
     expect(failures).toEqual([]);

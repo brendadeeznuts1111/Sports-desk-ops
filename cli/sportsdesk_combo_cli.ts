@@ -4,6 +4,8 @@
  */
 
 import { openSportsdeskSqlite } from "../lib/sportsdesk_sqlite.ts";
+import { parseVenueId } from "../lib/domain_venue_registry.ts";
+import { type ComboWireSide } from "../lib/canonical_combo_index.ts";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -30,7 +32,7 @@ function printRootHelp(): void {
 
 Commands:
   derive     Print canonical_combo_id from fixture (debug)
-  ingest     Append combo_legs rows for internal or polymarket side
+  ingest     Append combo_legs rows for desk or polymarket side
   lead-lag   Report shared-combo venue lead-lag (seconds-scale)
 
 Global:
@@ -38,7 +40,7 @@ Global:
   --json
 
 Examples:
-  bun run combo derive --side internal --fixture tests/fixtures/canonical-combo-internal.json
+  bun run combo derive --side desk --fixture tests/fixtures/canonical-combo-internal.json
   bun run combo ingest --db ./combo.sqlite --side polymarket --fixture tests/fixtures/canonical-combo-polymarket.json
   bun run combo lead-lag --db ./combo.sqlite
 `);
@@ -61,11 +63,18 @@ type IngestFixture = {
 };
 
 async function cmdDerive(args: string[], opts: GlobalOpts): Promise<number> {
-  let side: "internal" | "polymarket" = "internal";
+  let side: ComboWireSide = "desk";
   let fixturePath: string | undefined;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--side" && args[i + 1]) {
-      side = args[++i] as "internal" | "polymarket";
+      const parsed = parseVenueId(args[++i]);
+      if (parsed !== "desk" && parsed !== "polymarket") {
+        console.error(
+          `derive: --side must be desk or polymarket (got ${JSON.stringify(args[i])})`,
+        );
+        return 2;
+      }
+      side = parsed;
     } else if (args[i] === "--fixture" && args[i + 1]) {
       fixturePath = resolve(args[++i]!);
     }
@@ -92,7 +101,7 @@ async function cmdDerive(args: string[], opts: GlobalOpts): Promise<number> {
 
 async function cmdIngest(args: string[], opts: GlobalOpts): Promise<number> {
   let dbPath: string | undefined;
-  let side: "internal" | "polymarket" = "internal";
+  let side: ComboWireSide = "desk";
   let fixturePath: string | undefined;
   let runId: AuditRunId = auditRunId();
 
@@ -100,7 +109,14 @@ async function cmdIngest(args: string[], opts: GlobalOpts): Promise<number> {
     const a = args[i];
     if (a === "--db" && args[i + 1]) dbPath = resolve(args[++i]!);
     else if (a === "--side" && args[i + 1]) {
-      side = args[++i] as "internal" | "polymarket";
+      const parsed = parseVenueId(args[++i]);
+      if (parsed !== "desk" && parsed !== "polymarket") {
+        console.error(
+          `ingest: --side must be desk or polymarket (got ${JSON.stringify(args[i])})`,
+        );
+        return 2;
+      }
+      side = parsed;
     } else if (a === "--fixture" && args[i + 1]) {
       fixturePath = resolve(args[++i]!);
     } else if (a === "--run-id" && args[i + 1]) runId = auditRunId(args[++i]!);

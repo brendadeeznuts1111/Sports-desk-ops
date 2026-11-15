@@ -37,9 +37,9 @@ snapshotting either output.
 
 `Bun.markdown.ansi()` takes an `AnsiTheme` only — parser `Options` belong to `html()`/`render()`.
 The current guide lists `wikiLinks`, `underline` and `latexMath` as opt-in (default `false`); measured
-on 1.4.4, `ansi()` leaves wiki brackets, double underscores and dollar math literal, and only
-`html({ wikiLinks: true })` changes output to an `x-wikilink` element. `underline` and `latexMath`
-had no effect on these inputs either way. This doc still avoids all three (test-enforced) so the
+on 1.4.4, `ansi()` keeps wiki brackets (coloured, no target), renders a double-underscore pair as GFM
+`strong` rather than underline, and leaves dollar math literal. Only `html({ wikiLinks: true })` changes
+output (to an `x-wikilink` element); `underline` and `latexMath` had no effect on either renderer. This doc still avoids all three (test-enforced) so the
 artifact cannot opt into a link the terminal view does not render. Per-task colouring requires `render()`, where `listItem.checked` is `undefined` for a plain
 bullet, `false` for `- [ ]`, and `true` for `- [x]`.
 

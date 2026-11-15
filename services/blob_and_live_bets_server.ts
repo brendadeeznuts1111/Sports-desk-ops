@@ -47,7 +47,7 @@ export interface BlobStore {
   ): Promise<{ readonly bytesWritten: number }>;
   exists(key: string): Promise<boolean>;
   stat(key: string): Promise<BlobStat>;
-  /** A 200 body response (`new Response(s3file)` for S3, bytes for memory). */
+  /** A 200 body response (`client.streamResponse` for S3, bytes for memory). */
   getResponse(key: string): Promise<Response>;
   delete(key: string): Promise<void>;
 }
@@ -787,7 +787,7 @@ export function createS3BlobStore(config: {
       return { size: stat.size, contentType: stat.type };
     },
     async getResponse(key) {
-      return client.redirectResponse(path(key));
+      return client.streamResponse(path(key), { type: "image/webp" });
     },
     async delete(key) {
       await client.delete(path(key));

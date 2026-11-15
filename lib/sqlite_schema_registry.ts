@@ -12,6 +12,7 @@ import {
 } from "./brand.ts";
 import { count, type Count } from "./units.ts";
 import { isSsotTableName } from "./ssot_table_name.ts";
+import { VENUE_REGISTRY } from "./domain_venue_registry.ts";
 
 export { sqlCol, sqlDomain, sqlIndex, sqlTable };
 export type SqlColumnName<T extends string = string> = Brand<
@@ -267,7 +268,8 @@ export const COMBO_LEGS_SCHEMA: SqliteTableDef = {
       sqlType: "TEXT",
       kind: "text_enum",
       nullable: false,
-      description: "internal | polymarket",
+      // Derived from VENUE_REGISTRY so the DB enum cannot drift from the code.
+      description: Object.keys(VENUE_REGISTRY).join(" | "),
     },
     { name: c("venue_ref"), sqlType: "TEXT", kind: "text", nullable: false },
     {

@@ -62,6 +62,75 @@ export function Badge(props: BadgeProps): JSX.Element {
   );
 }
 
+export type ProvenanceChannelCode =
+  | "INTERNET"
+  | "BLOCKED"
+  | "GATEWAY"
+  | "ALERT"
+  | "GSBUILDER"
+  | "GSLIVE"
+  | "CSLEVEL2";
+
+const PROV_BADGE_CLASSES: Record<ProvenanceChannelCode, string> = {
+  INTERNET: "border-prov-internet/40 bg-prov-internet/12",
+  BLOCKED: "border-prov-blocked/45 bg-prov-blocked/15",
+  GATEWAY: "border-prov-gateway/40 bg-prov-gateway/12",
+  ALERT: "border-prov-alert/45 bg-prov-alert/15",
+  GSBUILDER: "border-prov-gsbuilder/45 bg-prov-gsbuilder/15",
+  GSLIVE: "border-prov-gslive/40 bg-prov-gslive/12",
+  CSLEVEL2: "border-prov-cslevel2/40 bg-prov-cslevel2/12",
+};
+
+const PROV_DOT_CLASSES: Record<ProvenanceChannelCode, string> = {
+  INTERNET: "bg-prov-internet",
+  BLOCKED: "bg-prov-blocked",
+  GATEWAY: "bg-prov-gateway",
+  ALERT: "bg-prov-alert",
+  GSBUILDER: "bg-prov-gsbuilder",
+  GSLIVE: "bg-prov-gslive",
+  CSLEVEL2: "bg-prov-cslevel2",
+};
+
+const PROV_TEXT_CLASSES: Record<ProvenanceChannelCode, string> = {
+  INTERNET: "font-mono text-xs font-semibold text-prov-internet",
+  BLOCKED: "font-mono text-xs font-semibold text-prov-blocked",
+  GATEWAY: "font-mono text-xs font-semibold text-prov-gateway",
+  ALERT: "font-mono text-xs font-semibold text-prov-alert",
+  GSBUILDER: "font-mono text-xs font-semibold text-prov-gsbuilder",
+  GSLIVE: "font-mono text-xs font-semibold text-prov-gslive",
+  CSLEVEL2: "font-mono text-xs font-semibold text-prov-cslevel2",
+};
+
+export interface ProvenanceChannelBadgeProps extends Omit<
+  ViewProps,
+  "children"
+> {
+  channel: ProvenanceChannelCode;
+  writer?: string;
+}
+
+/**
+ * Ingestion provenance channel badge aligned with `design/tokens.toml` (`prov-*`
+ * semantic tokens). Always pairs color + dot with explicit channel text.
+ */
+export function ProvenanceChannelBadge(
+  props: ProvenanceChannelBadgeProps,
+): JSX.Element {
+  const [own, rest] = split(props, ["channel", "writer", "class"]);
+  const ch = () => own.channel;
+  const labelText = () =>
+    own.writer ? `${own.channel} · ${own.writer}` : own.channel;
+  return (
+    <View
+      {...rest}
+      class={`flex-row items-center gap-1.5 rounded-(--radius-sm) border px-1.5 py-0.5 ${PROV_BADGE_CLASSES[ch()]} ${own.class ?? ""}`}
+    >
+      <View class={`h-1.5 w-1.5 rounded-full ${PROV_DOT_CLASSES[ch()]}`} />
+      <Text class={PROV_TEXT_CLASSES[ch()]}>{labelText()}</Text>
+    </View>
+  );
+}
+
 export function SectionHeader(props: {
   title: string;
   subtitle?: string;
@@ -111,7 +180,7 @@ export function StateNotice(props: {
   onAction?: () => void;
 }): JSX.Element {
   return (
-    <View class="flex-1 items-start justify-center gap-2 p-4">
+    <View class="min-h-20 items-start justify-center gap-2 p-3.5">
       <View class="flex-row items-center gap-2">
         <Badge
           label={

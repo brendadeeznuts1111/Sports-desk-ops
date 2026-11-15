@@ -278,12 +278,24 @@ describe("@sportsdesk-ops/backend workspace services", () => {
 
   test("DashboardMarkdownCache renders local markdown and handles missing files", async () => {
     const mdPath = path.join(SCRATCH, "dashboard.md");
-    writeFileSync(mdPath, "# SportsDesk\n\nLive **check**");
+    writeFileSync(
+      mdPath,
+      "# 📊 SportsDesk\n\nLive **check** · https://example.com <script>alert(1)</script>",
+    );
     const cache = new DashboardMarkdownCache(mdPath);
 
     const rendered = await cache.load();
-    expect(rendered?.markdown).toContain("# SportsDesk");
-    expect(rendered?.html).toContain("<h1");
+    expect(rendered?.markdown).toContain("# 📊 SportsDesk");
+    expect(rendered?.html).toContain('id="sportsdesk"');
+    expect(rendered?.html).toContain('href="#sportsdesk"');
+    expect(rendered?.html).toContain('href="https://example.com"');
+    expect(rendered?.html).not.toContain("<script>");
+    expect(rendered?.nonAsciiChars).toBe(2);
+    expect(rendered?.markdownBytes).toBeGreaterThan(
+      rendered?.markdown.length ?? 0,
+    );
+    expect(rendered?.htmlBytes).toBeGreaterThan(0);
+    expect(rendered?.renderDurationMs).toBeGreaterThanOrEqual(0);
 
     const missingCache = new DashboardMarkdownCache(
       path.join(SCRATCH, "missing.md"),

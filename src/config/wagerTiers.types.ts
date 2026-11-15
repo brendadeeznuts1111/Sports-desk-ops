@@ -65,20 +65,55 @@ export interface MetaConfig {
   deprecatedKeys?: Record<string, string>;
 }
 
+export interface SurfaceProvenanceConfig {
+  liveFg: string;
+  liveBg: string;
+  liveBorder: string;
+  captureFg: string;
+  captureBg: string;
+  captureBorder: string;
+  staleFg: string;
+  staleBg: string;
+  staleBorder: string;
+  fixtureFg: string;
+  fixtureBg: string;
+  fixtureBorder: string;
+}
+
 export interface SurfaceConfig {
+  bg?: string;
+  cli?: string;
   panel: string;
+  elevated?: string;
+  hover?: string;
+  raised?: string;
   border: string;
+  borderStrong?: string;
   text: string;
+  textSecondary?: string;
   muted: string;
   accent: string;
   danger?: string;
   warn?: string;
   ok?: string;
+  info?: string;
+  provenance?: SurfaceProvenanceConfig;
   typography?: {
     fontFamily: string;
     monoFamily: string;
     scale: number;
   };
+}
+
+export interface WagerDashboardConfig {
+  defaultTab: string;
+  refreshIntervalSeconds: number;
+  staleFeedWarnMinutes: number;
+  maxLiveTapeRows: number;
+  highlightSharpScoreMin: number;
+  showProvenanceBadges: boolean;
+  showInlineClvBps: boolean;
+  autoExecute: false;
 }
 
 export interface SurveillanceScoringConfig {
@@ -152,4 +187,5 @@ export interface WagerTiersConfig {
   features?: Record<string, boolean>;
   rateLimits?: Record<string, RateLimitConfig>;
   audit?: AuditConfig;
+  dashboard?: WagerDashboardConfig;
 }

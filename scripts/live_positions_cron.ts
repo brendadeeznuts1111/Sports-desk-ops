@@ -63,7 +63,10 @@ import {
   toLiveWager,
   type LiveWager,
 } from "../lib/live_wagers.ts";
-import { R2S3Client } from "../lib/r2_s3_client.ts";
+import {
+  DEFAULT_METADATA_PUT_RETRIES,
+  R2S3Client,
+} from "../lib/r2_s3_client.ts";
 import { SportsDeskTelegramService } from "../services/sportsdesk_telegram_bot.ts";
 import {
   loadDodCustomerLifetimeMap,
@@ -1004,17 +1007,21 @@ export async function runLivePositionsPulse(options?: {
   try {
     const client = await R2S3Client.fromEnvOrSecrets();
     if (client !== null) {
-      const first = await publishLivePositionsToR2(client, {
-        liveWagersText,
-        liveBetsText,
-        captureHealthText: JSON.stringify(mergedHealth),
-        observedAtIso: nowIso,
-        schemaVersions: {
-          liveWagers: liveWagersPayload.schemaVersion,
-          liveBets: liveBetsArtifact.schemaVersion,
-          captureHealth: mergedHealth.schemaVersion ?? 1,
+      const first = await publishLivePositionsToR2(
+        client,
+        {
+          liveWagersText,
+          liveBetsText,
+          captureHealthText: JSON.stringify(mergedHealth),
+          observedAtIso: nowIso,
+          schemaVersions: {
+            liveWagers: liveWagersPayload.schemaVersion,
+            liveBets: liveBetsArtifact.schemaVersion,
+            captureHealth: mergedHealth.schemaVersion ?? 1,
+          },
         },
-      });
+        { retry: DEFAULT_METADATA_PUT_RETRIES },
+      );
 
       const optionalSpecs: LocalArtifactSpec[] = [
         {
@@ -1047,7 +1054,9 @@ export async function runLivePositionsPulse(options?: {
               writes: [],
               summary: "R2 publish: 0/0 optional (none present)",
             }
-          : await publishArtifactsToR2(client, optional);
+          : await publishArtifactsToR2(client, optional, {
+              retry: DEFAULT_METADATA_PUT_RETRIES,
+            });
 
       const combinedOk = first.ok && second.ok;
       const combinedBytes = [...first.writes, ...second.writes].reduce(

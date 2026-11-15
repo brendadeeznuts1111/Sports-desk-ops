@@ -8,3 +8,4 @@ export * from "./slice_diff_view.ts";
 export * from "./shadow_pricing.ts";
 export * from "./features.ts";
 export * from "./dashboard_hydration.ts";
+export * from "./markdown_telemetry.ts";

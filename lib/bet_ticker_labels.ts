@@ -66,6 +66,19 @@ export type WagerTypeLabel =
 export type SubType = (typeof SUB_TYPE)[keyof typeof SUB_TYPE];
 export type TicketStructure = (typeof TICKET_STRUCTURE)[number];
 
+export {
+  getVendorWagerTypeInfo,
+  getVendorLineTypeDisplay,
+  getVendorWagerStatus,
+  getVendorTotalOU,
+  isVendorAsianLine,
+  formatVendorSpread,
+  formatVendorTotal,
+  F402_BET_SUB_TYPE,
+  F402_STATUS,
+  F402_TRANS,
+} from "./f402_core_vendor.ts";
+
 /** `S` → `Spread`, `P` → `Parlay`; unknown codes stay `Other`. */
 export function wagerTypeLabel(code: string): WagerTypeLabel {
   const key = String(code ?? "")

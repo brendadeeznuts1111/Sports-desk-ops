@@ -41,22 +41,22 @@ describe("bunUrl", () => {
 });
 
 describe("bunReferenceUrl", () => {
-  test("globals/bun/<Symbol> is the reference shape", () => {
-    const url: "https://bun.com/reference/globals/bun/ImportKind" =
-      bunReferenceUrl("globals/bun/ImportKind");
-    expect(url).toBe("https://bun.com/reference/globals/bun/ImportKind");
+  test("bun/<Symbol> is the reference shape", () => {
+    const url: "https://bun.com/reference/bun/ImportKind" =
+      bunReferenceUrl("bun/ImportKind");
+    expect(url).toBe("https://bun.com/reference/bun/ImportKind");
   });
 
   test("a trailing slash on the symbol path is rejected", () => {
-    expect(() => bunReferenceUrl("globals/bun/")).toThrow("must not end");
+    expect(() => bunReferenceUrl("bun/")).toThrow("must not end");
   });
 });
 
 describe("textFragment", () => {
-  test("rebuilds the globals-reference module-list link exactly", () => {
+  test("rebuilds the reference module-list link exactly", () => {
     expect(
       bunUrl(
-        `/reference/globals/bun#${textFragment({
+        `/reference/bun#${textFragment({
           prefix: "node:zlib/iter",
           start: "MODULE",
           end: "YAML related APIs",
@@ -64,7 +64,7 @@ describe("textFragment", () => {
         })}`,
       ),
     ).toBe(
-      "https://bun.com/reference/globals/bun#:~:text=node%3Azlib/iter-,MODULE,YAML%20related%20APIs,-Ask%20AI",
+      "https://bun.com/reference/bun#:~:text=node%3Azlib/iter-,MODULE,YAML%20related%20APIs,-Ask%20AI",
     );
   });
 
@@ -89,7 +89,7 @@ describe("textFragment", () => {
 
   test("canonicalBunUrl keeps a text fragment byte for byte across hosts", () => {
     const fragment =
-      "/reference/globals/bun#:~:text=node%3Azlib/iter-,MODULE,YAML%20related%20APIs,-Ask%20AI";
+      "/reference/bun#:~:text=node%3Azlib/iter-,MODULE,YAML%20related%20APIs,-Ask%20AI";
     expect(canonicalBunUrl(`https://bun.sh${fragment}`)).toBe(
       `https://bun.com${fragment}`,
     );
@@ -97,17 +97,17 @@ describe("textFragment", () => {
 });
 
 describe("canonicalBunUrl", () => {
-  const CANONICAL = "https://bun.com/reference/globals/bun/ImportKind";
+  const CANONICAL = "https://bun.com/reference/bun/ImportKind";
 
   test("bun.sh, www., http and a trailing slash all map to the bun.com form", () => {
     for (const raw of [
       CANONICAL,
-      "https://bun.sh/reference/globals/bun/ImportKind",
-      "https://www.bun.sh/reference/globals/bun/ImportKind",
-      "https://www.bun.com/reference/globals/bun/ImportKind",
-      "http://bun.sh/reference/globals/bun/ImportKind/",
-      "bun.sh/reference/globals/bun/ImportKind",
-      "  HTTPS://BUN.SH/reference/globals/bun/ImportKind  ",
+      "https://bun.sh/reference/bun/ImportKind",
+      "https://www.bun.sh/reference/bun/ImportKind",
+      "https://www.bun.com/reference/bun/ImportKind",
+      "http://bun.sh/reference/bun/ImportKind/",
+      "bun.sh/reference/bun/ImportKind",
+      "  HTTPS://BUN.SH/reference/bun/ImportKind  ",
     ]) {
       expect(canonicalBunUrl(raw)).toBe(CANONICAL);
     }
@@ -147,30 +147,39 @@ describe("canonicalBunUrl", () => {
 describe("Bun reference symbol matching", () => {
   test("BUN_ANSI_THEME_REFERENCE_URL is the canonical AnsiTheme reference URL", () => {
     expect(BUN_ANSI_THEME_REFERENCE_URL).toBe(
-      "https://bun.com/reference/globals/bun/markdown/AnsiTheme",
+      "https://bun.com/reference/bun/markdown/AnsiTheme",
     );
   });
 
   test("parseBunReferenceUrl extracts symbol, module, and canonical URL", () => {
     const ansi = parseBunReferenceUrl(
-      "https://bun.sh/reference/globals/bun/markdown/AnsiTheme",
+      "https://bun.sh/reference/bun/markdown/AnsiTheme",
     );
     expect(ansi).toEqual({
-      canonicalUrl: "https://bun.com/reference/globals/bun/markdown/AnsiTheme",
-      symbolPath: "globals/bun/markdown/AnsiTheme",
-      modulePath: "globals/bun/markdown",
+      canonicalUrl: "https://bun.com/reference/bun/markdown/AnsiTheme",
+      symbolPath: "bun/markdown/AnsiTheme",
+      modulePath: "bun/markdown",
       symbolName: "AnsiTheme",
     });
 
     const importKind = parseBunReferenceUrl(
-      "https://www.bun.com/reference/globals/bun/ImportKind",
+      "https://www.bun.com/reference/bun/ImportKind",
     );
     expect(importKind).toEqual({
-      canonicalUrl: "https://bun.com/reference/globals/bun/ImportKind",
-      symbolPath: "globals/bun/ImportKind",
-      modulePath: "globals/bun",
+      canonicalUrl: "https://bun.com/reference/bun/ImportKind",
+      symbolPath: "bun/ImportKind",
+      modulePath: "bun",
       symbolName: "ImportKind",
     });
+  });
+
+  test("a legacy globals/bun URL still parses, with its path preserved verbatim", () => {
+    const legacy = parseBunReferenceUrl(
+      "https://bun.com/reference/globals/bun/markdown/AnsiTheme",
+    );
+    expect(legacy?.symbolPath).toBe("globals/bun/markdown/AnsiTheme");
+    expect(legacy?.symbolName).toBe("AnsiTheme");
+    // Parsing does not rewrite; resolveBunSymbolReferenceUrl does.
   });
 
   test("parseBunReferenceUrl returns null for non-reference URLs", () => {
@@ -178,16 +187,14 @@ describe("Bun reference symbol matching", () => {
       parseBunReferenceUrl("https://bun.com/docs/runtime/cron"),
     ).toBeNull();
     expect(parseBunReferenceUrl("https://bun.com/reference/")).toBeNull();
+    expect(parseBunReferenceUrl("https://bun.com/reference/bun/")).toBeNull();
     expect(
-      parseBunReferenceUrl("https://bun.com/reference/globals/"),
-    ).toBeNull();
-    expect(
-      parseBunReferenceUrl("https://evil.com/reference/globals/bun/AnsiTheme"),
+      parseBunReferenceUrl("https://evil.com/reference/bun/AnsiTheme"),
     ).toBeNull();
   });
 
   test("matchBunReferenceSymbol matches expected symbols", () => {
-    const url = "https://bun.sh/reference/globals/bun/markdown/AnsiTheme";
+    const url = "https://bun.sh/reference/bun/markdown/AnsiTheme";
     expect(matchBunReferenceSymbol(url, "AnsiTheme")).toBe(true);
     expect(matchBunReferenceSymbol(url, "ansitheme")).toBe(true);
     expect(matchBunReferenceSymbol(url, "ANSITHEME")).toBe(true);
@@ -207,19 +214,45 @@ describe("Bun reference symbol matching", () => {
 
   test("resolveBunSymbolReferenceUrl resolves known symbols to canonical URLs", () => {
     expect(resolveBunSymbolReferenceUrl("AnsiTheme")).toBe(
-      "https://bun.com/reference/globals/bun/markdown/AnsiTheme",
+      "https://bun.com/reference/bun/markdown/AnsiTheme",
     );
     expect(resolveBunSymbolReferenceUrl("`AnsiTheme`")).toBe(
-      "https://bun.com/reference/globals/bun/markdown/AnsiTheme",
+      "https://bun.com/reference/bun/markdown/AnsiTheme",
     );
+    expect(resolveBunSymbolReferenceUrl("Bun.markdown.AnsiTheme")).toBe(
+      "https://bun.com/reference/bun/markdown/AnsiTheme",
+    );
+    expect(resolveBunSymbolReferenceUrl("bun/markdown/AnsiTheme")).toBe(
+      "https://bun.com/reference/bun/markdown/AnsiTheme",
+    );
+    // Legacy path input canonicalizes to the current shape.
+    expect(resolveBunSymbolReferenceUrl("globals/bun/markdown/AnsiTheme")).toBe(
+      "https://bun.com/reference/bun/markdown/AnsiTheme",
+    );
+    expect(
+      resolveBunSymbolReferenceUrl(
+        "https://bun.com/reference/globals/bun/markdown/AnsiTheme",
+      ),
+    ).toBe("https://bun.com/reference/bun/markdown/AnsiTheme");
+    expect(
+      resolveBunSymbolReferenceUrl(
+        "https://bun.com/reference/bun/markdown/AnsiTheme",
+      ),
+    ).toBe("https://bun.com/reference/bun/markdown/AnsiTheme");
     expect(resolveBunSymbolReferenceUrl("Bun.markdown.ansi")).toBe(
-      "https://bun.com/reference/globals/bun/markdown/ansi",
+      "https://bun.com/reference/bun/markdown/ansi",
     );
     expect(resolveBunSymbolReferenceUrl("Bun.inspect.custom")).toBe(
-      "https://bun.com/reference/globals/bun/inspect",
+      "https://bun.com/reference/bun/inspect",
+    );
+    expect(resolveBunSymbolReferenceUrl("Bun.TOML")).toBe(
+      "https://bun.com/reference/bun/TOML",
+    );
+    expect(resolveBunSymbolReferenceUrl("Bun.TOML.stringify")).toBe(
+      "https://bun.com/reference/bun/TOML/stringify",
     );
     expect(resolveBunSymbolReferenceUrl("Bun.Terminal")).toBe(
-      "https://bun.com/reference/globals/bun/Terminal",
+      "https://bun.com/reference/bun/Terminal",
     );
     expect(
       resolveBunSymbolReferenceUrl("unknown_nonexistent_symbol"),
@@ -241,10 +274,10 @@ describe("Bun reference symbol matching", () => {
       "Configure styling with `AnsiTheme` and render using `Bun.markdown.ansi`.";
     const linked = linkifyBunSymbolsInMarkdown(input);
     expect(linked).toContain(
-      "[`AnsiTheme`](https://bun.com/reference/globals/bun/markdown/AnsiTheme)",
+      "[`AnsiTheme`](https://bun.com/reference/bun/markdown/AnsiTheme)",
     );
     expect(linked).toContain(
-      "[`Bun.markdown.ansi`](https://bun.com/reference/globals/bun/markdown/ansi)",
+      "[`Bun.markdown.ansi`](https://bun.com/reference/bun/markdown/ansi)",
     );
   });
 

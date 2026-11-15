@@ -23,6 +23,10 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/streams#bun-arraybuffersink"
     },
+    "build": {
+      "documented": true,
+      "link": "https://bun.com/docs/bundler"
+    },
     "color": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/color#format-colors-as-css"
@@ -166,6 +170,10 @@
     "listen": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/networking/tcp#start-a-server-bun-listen"
+    },
+    "indexOfLine": {
+      "documented": false,
+      "link": null
     },
     "main": {
       "documented": true,
