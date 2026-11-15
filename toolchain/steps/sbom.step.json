@@ -1,0 +1,23 @@
+{
+  "id": "sbom",
+  "description": "CycloneDX SBOM from bun.lock + the runtime pin, fixed timestamp; output is the SBOM's sha256 (the generator is deterministic, so this pins the SBOM bytes).",
+  "argv": [
+    "sh",
+    "-c",
+    "python3 scripts/supply-chain/sbom_from_bunlock.py --timestamp 2026-11-15T00:00:00Z | sha256sum"
+  ],
+  "cwd": ".",
+  "env": { "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8" },
+  "network": "none",
+  "runtime": "any",
+  "normalizer": "raw",
+  "inputs": {
+    "worktree": true,
+    "files": [
+      "bun.lock",
+      "toolchain/bun.pin.json",
+      "scripts/supply-chain/sbom_from_bunlock.py"
+    ]
+  },
+  "timeout_s": 60
+}

@@ -1,0 +1,20 @@
+{
+  "id": "install-repro",
+  "description": "Clean bun install --frozen-lockfile of HEAD into a temp dir with an empty cache, then content digests of every node_modules tree. Needs the npm registry (read-only).",
+  "argv": ["sh", "scripts/supply-chain/install_repro.sh", "{bun}"],
+  "cwd": ".",
+  "env": {
+    "PATH": "{bun_dir}:/usr/bin:/bin",
+    "HOME": "{tmp_home}",
+    "LANG": "C.UTF-8",
+    "NO_COLOR": "1"
+  },
+  "network": "host",
+  "runtime": "pinned",
+  "normalizer": "raw",
+  "inputs": {
+    "worktree": true,
+    "files": ["bun.lock", "package.json", "bunfig.toml"]
+  },
+  "timeout_s": 600
+}

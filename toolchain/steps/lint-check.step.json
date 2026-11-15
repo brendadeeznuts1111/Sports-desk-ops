@@ -1,0 +1,23 @@
+{
+  "id": "lint-check",
+  "description": "The repo's enforced lint gate: bun run lint:check (oxlint --deny-warnings, then the type-aware pass). No network.",
+  "argv": ["{bun}", "run", "lint:check"],
+  "cwd": ".",
+  "env": {
+    "PATH": "{bun_dir}:/usr/bin:/bin",
+    "HOME": "{tmp_home}",
+    "TZ": "UTC",
+    "LANG": "C.UTF-8",
+    "NO_COLOR": "1",
+    "FORCE_COLOR": "0"
+  },
+  "network": "none",
+  "runtime": "pinned",
+  "normalizer": "oxlint",
+  "inputs": {
+    "worktree": true,
+    "files": ["bun.lock", ".oxlintrc.json", ".oxlintrc.type-aware.json"],
+    "trees": ["node_modules"]
+  },
+  "timeout_s": 600
+}

@@ -1,0 +1,19 @@
+{
+  "id": "verify-bun-fake-pin",
+  "description": "Negative control: the boot verifier must reject the runtime against a pin of all-zero hashes (exit 1).",
+  "argv": ["sh", "toolchain/verify-bun.sh"],
+  "cwd": ".",
+  "env": {
+    "PATH": "{bun_dir}:/usr/bin:/bin",
+    "DX_BUN_BIN": "{bun}",
+    "DX_BUN_PIN": "toolchain/testdata/bun.fake.pin.json"
+  },
+  "network": "none",
+  "runtime": "any",
+  "normalizer": "verify-bun",
+  "inputs": {
+    "worktree": true,
+    "files": ["toolchain/verify-bun.sh", "toolchain/testdata/bun.fake.pin.json"]
+  },
+  "timeout_s": 60
+}

@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bw496915-cmyk/Sports-desk-ops/schema/tool-step-envelope.schema.json",
+  "title": "sportsdesk tool-step envelope v0.1",
+  "description": "A captured tool-execution step that any machine can replay and check: inputs by content hash, exact argv and explicit env, network policy, runtime pin, expected exit code and SHA-256 of the normalized output. Produced and verified by scripts/supply-chain/rerun.py. Modeled on agent-rerun v0.1 (canonical JSON + SHA-256 + optional Ed25519) but for tool steps, not LLM steps.",
+  "type": "object",
+  "required": [
+    "envelope_version",
+    "step",
+    "command",
+    "repo",
+    "inputs",
+    "runtime",
+    "expected",
+    "tolerance",
+    "recorded"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  },
+  "properties": {
+    "envelope_version": { "const": "sportsdesk.tool-step/0.1" },
+    "step": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "description": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "command": {
+      "type": "object",
+      "required": ["argv", "network"],
+      "additionalProperties": false,
+      "properties": {
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Templates: {bun} {bun_dir} {repo} {tmp_home}"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Repo-relative working directory"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "The complete environment; nothing is inherited unless listed in env_passthrough"
+        },
+        "env_passthrough": { "type": "array", "items": { "type": "string" } },
+        "network": { "enum": ["none", "loopback", "host"] },
+        "timeout_s": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "repo": {
+      "type": "object",
+      "required": ["commit"],
+      "properties": {
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      },
+      "additionalProperties": false
+    },
+    "inputs": {
+      "type": "object",
+      "required": ["files", "trees", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "worktree": {
+          "type": "object",
+          "required": ["sha256", "files", "excludes"],
+          "properties": {
+            "sha256": { "$ref": "#/$defs/sha256" },
+            "files": { "type": "integer" },
+            "excludes": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": { "type": "string" },
+              "sha256": { "$ref": "#/$defs/sha256" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "trees": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "manifest_sha256"],
+            "properties": {
+              "path": { "type": "string" },
+              "manifest_sha256": { "$ref": "#/$defs/sha256" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "digest": {
+          "$ref": "#/$defs/sha256",
+          "description": "sha256 of canonical JSON of worktree+files+trees"
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["policy", "pin", "captured_with_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "policy": { "enum": ["pinned", "any"] },
+        "pin": {
+          "type": "object",
+          "required": ["version", "binary_sha256"],
+          "properties": {
+            "version": { "type": "string" },
+            "revision": { "type": "string" },
+            "binary_sha256": {
+              "type": "object",
+              "additionalProperties": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        },
+        "captured_with_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "required": ["exit_code", "normalizer", "normalized_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "exit_code": { "type": "integer" },
+        "normalizer": { "enum": ["bun-test", "oxlint", "verify-bun", "raw"] },
+        "normalized_sha256": { "$ref": "#/$defs/sha256" },
+        "normalized_file": { "type": "string" },
+        "summary": { "type": "object" }
+      }
+    },
+    "tolerance": {
+      "type": "object",
+      "required": ["level"],
+      "properties": { "level": { "const": "byte-normalized" } },
+      "additionalProperties": false
+    },
+    "recorded": {
+      "type": "object",
+      "description": "Informational only; never verified (timestamps, duration, host)."
+    },
+    "signature": {
+      "type": "object",
+      "required": ["alg", "sig"],
+      "properties": {
+        "alg": { "const": "ed25519" },
+        "sig": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "description": "Ed25519 over the canonical JSON of the envelope without this key."
+    }
+  }
+}

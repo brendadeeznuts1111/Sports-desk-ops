@@ -1,0 +1,39 @@
+{
+  "id": "regression-suite",
+  "description": "Agent tool-execution paths, offline: dx CLI dispatch + run control, F402 session file read/write/validation/refresh, session login CLI (live login disabled), replay transport, bet-ticker JSONL/delta/ingest, client seams, module attributes, runtime-pin verifier. Loopback-only network namespace: local Bun.serve fixtures work, nothing leaves the box.",
+  "argv": [
+    "{bun}",
+    "test",
+    "tests/dx_cli.test.ts",
+    "tests/dx_run_control.test.ts",
+    "tests/f402_session.test.ts",
+    "tests/f402_session_validation.test.ts",
+    "tests/f402_session_refresh.test.ts",
+    "tests/session_login_cli.test.ts",
+    "tests/f402_replay_transport.test.ts",
+    "tests/f402_bet_ticker_jsonl.test.ts",
+    "tests/f402_bet_ticker_delta.test.ts",
+    "tests/f402_bet_ticker_ingest.test.ts",
+    "tests/f402_client_seams.test.ts",
+    "tests/module_attributes.test.ts",
+    "tests/toolchain_verify_bun.test.ts"
+  ],
+  "cwd": ".",
+  "env": {
+    "PATH": "{bun_dir}:/usr/bin:/bin",
+    "HOME": "{tmp_home}",
+    "TZ": "UTC",
+    "LANG": "C.UTF-8",
+    "NO_COLOR": "1",
+    "FORCE_COLOR": "0"
+  },
+  "network": "loopback",
+  "runtime": "pinned",
+  "normalizer": "bun-test",
+  "inputs": {
+    "worktree": true,
+    "files": ["bun.lock", "bunfig.toml"],
+    "trees": ["node_modules"]
+  },
+  "timeout_s": 600
+}

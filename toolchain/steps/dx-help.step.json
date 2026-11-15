@@ -1,0 +1,23 @@
+{
+  "id": "dx-help",
+  "description": "./bin/dx help with DX_VERIFY_RUNTIME=1. The help text embeds the live 'bun run --help' flag catalog, so it is a direct probe of the runtime's CLI surface. Throwaway HOME; no network.",
+  "argv": ["./bin/dx", "help"],
+  "cwd": ".",
+  "env": {
+    "PATH": "{bun_dir}:/usr/bin:/bin",
+    "HOME": "{tmp_home}",
+    "TZ": "UTC",
+    "LANG": "C.UTF-8",
+    "NO_COLOR": "1",
+    "FORCE_COLOR": "0",
+    "DX_VERIFY_RUNTIME": "1"
+  },
+  "network": "none",
+  "runtime": "pinned",
+  "normalizer": "raw",
+  "inputs": {
+    "worktree": true,
+    "files": ["toolchain/bun.pin.json"]
+  },
+  "timeout_s": 120
+}
