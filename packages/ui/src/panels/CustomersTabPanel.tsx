@@ -1,10 +1,13 @@
 import type React from "react";
+import { DASHBOARD_FRESHNESS } from "../config/dashboard.ts";
 import { styles } from "../dashboard_styles.ts";
 import {
+  type CustomerCohortKpiTone,
   deriveCustomerCohortKpiCards,
   formatProvenanceBadge,
   PENDING_COHORTS_PROVENANCE,
 } from "../hydration.ts";
+import { getLocalAgentHref } from "../links.ts";
 import type {
   CustomersApiResponse,
   CustomerSortKey,
@@ -37,7 +40,87 @@ export interface CustomersTabPanelProps {
   readonly onClearForensicResult: () => void;
   readonly onRunReverseLookup: (ipAddress: string) => void;
   readonly onOpenTerminalProfile: (customerId: string) => void;
+  readonly onSelectAgent?: ((agentId: string) => void) | undefined;
+  readonly onViewCustomerWagers?: ((customerId: string) => void) | undefined;
 }
+
+interface CustomerCohortSummary {
+  readonly totalVarUsd: number;
+  readonly totalCapUsd: number;
+  readonly alertCount: number;
+  readonly avgSharpness: string;
+}
+
+function summarizeDisplayedCustomers(
+  rows: readonly ShowcaseCustomer[],
+): CustomerCohortSummary {
+  let totalVarUsd = 0;
+  let totalCapUsd = 0;
+  let alertCount = 0;
+  let sharpSum = 0;
+  for (const row of rows) {
+    totalVarUsd += row.var95Usd;
+    totalCapUsd += row.recommendedLimitUsd;
+    if (row.action.includes("ALERT")) alertCount++;
+    sharpSum += row.score;
+  }
+  return {
+    totalVarUsd,
+    totalCapUsd,
+    alertCount,
+    avgSharpness: rows.length > 0 ? (sharpSum / rows.length).toFixed(1) : "n/a",
+  };
+}
+
+interface RadarAxisSpec {
+  readonly label: string;
+  readonly valueKey:
+    "clvScore" | "skillScore" | "sizingScore" | "sigScore" | "timingScore";
+  readonly max: number;
+  readonly color: string;
+}
+
+const RADAR_AXES: readonly RadarAxisSpec[] = [
+  {
+    label: "CLV Beat Margin",
+    valueKey: "clvScore",
+    max: 3.0,
+    color: "#38bdf8",
+  },
+  {
+    label: "Bayesian Skill",
+    valueKey: "skillScore",
+    max: 2.5,
+    color: "#a855f7",
+  },
+  {
+    label: "Sizing Discipline",
+    valueKey: "sizingScore",
+    max: 1.5,
+    color: "#22c55e",
+  },
+  {
+    label: "Signature Specialization",
+    valueKey: "sigScore",
+    max: 2.0,
+    color: "#f59e0b",
+  },
+  {
+    label: "Timing / Parlay Exploitation",
+    valueKey: "timingScore",
+    max: 1.0,
+    color: "#ef4444",
+  },
+];
+
+const KPI_TONE_ACCENT: Record<CustomerCohortKpiTone, string> = {
+  sky: "#38bdf8",
+  red: "#f87171",
+  amber: "#fbbf24",
+  slate: "#94a3b8",
+  emerald: "#34d399",
+  violet: "#a78bfa",
+};
 
 export function CustomersTabPanel({
   bannerDismissed,
@@ -62,6 +145,8 @@ export function CustomersTabPanel({
   onClearForensicResult,
   onRunReverseLookup,
   onOpenTerminalProfile,
+  onSelectAgent,
+  onViewCustomerWagers,
 }: CustomersTabPanelProps): React.ReactElement {
   const effectiveStatus: "pending" | "ready" | "unavailable" =
     cohortsStatus ?? (cohortsReport !== null ? "ready" : "pending");
@@ -79,6 +164,7 @@ export function CustomersTabPanel({
           observedAt: "",
         }
       : (cohortsReport?.provenance ?? PENDING_COHORTS_PROVENANCE),
+    { staleAfterMinutes: DASHBOARD_FRESHNESS.stale_after_minutes },
   );
 
   return (
@@ -199,13 +285,97 @@ export function CustomersTabPanel({
       {/* KPI Summary Cards (Collapsible, hydrated dynamically from /api/customers) */}
       {!kpisCollapsed && (
         <div className="kpi-strip" style={styles.kpiGrid}>
-          {kpiCards.map((card) => (
-            <div key={card.label} style={styles.kpiCard}>
-              <div style={styles.kpiLabel}>{card.label}</div>
-              <div style={styles.kpiVal}>{card.value}</div>
-              <div style={styles.kpiSub}>{card.sub}</div>
-            </div>
-          ))}
+          {kpiCards.map((card) => {
+            const accent =
+              card.status === "unavailable"
+                ? "#f87171"
+                : card.status === "pending"
+                  ? "#64748b"
+                  : KPI_TONE_ACCENT[card.tone];
+            const isInteractive =
+              card.status === "ready" && card.filterTier !== null;
+            const isActiveFilter =
+              isInteractive &&
+              card.filterTier !== "ALL" &&
+              filterTier === card.filterTier;
+            const cardStyle: React.CSSProperties = {
+              ...styles.kpiCard,
+              borderLeft: `3px solid ${accent}`,
+              borderColor: isActiveFilter ? accent : "#1e293b",
+              textAlign: "left",
+              width: "100%",
+              cursor: isInteractive ? "pointer" : "default",
+            };
+            const content = (
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
+                  }}
+                >
+                  <span style={styles.kpiLabel}>{card.label}</span>
+                  {card.sharePct !== null &&
+                    card.id !== "unique-surveillance" && (
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          color: accent,
+                          backgroundColor: "rgba(15, 23, 42, 0.85)",
+                          border: "1px solid #1e293b",
+                          borderRadius: "999px",
+                          padding: "1px 6px",
+                          whiteSpace: "nowrap",
+                        }}
+                        title={`${card.sharePct}% of Unique Surveillance (${card.count?.toLocaleString() ?? "?"})`}
+                      >
+                        {card.sharePct}%
+                      </span>
+                    )}
+                </div>
+                <div
+                  style={{
+                    ...styles.kpiVal,
+                    color:
+                      card.status === "ready"
+                        ? "#f1f5f9"
+                        : card.status === "unavailable"
+                          ? "#fca5a5"
+                          : "#94a3b8",
+                  }}
+                >
+                  {card.value}
+                </div>
+                <div style={styles.kpiSub}>{card.sub}</div>
+              </>
+            );
+            return isInteractive ? (
+              <button
+                key={card.id}
+                type="button"
+                style={cardStyle}
+                onClick={() => {
+                  if (card.filterTier) {
+                    onFilterTierChange(card.filterTier);
+                  }
+                }}
+                title={
+                  card.filterTier === "ALL"
+                    ? "Show all customer profiles"
+                    : `Filter profiles to ${card.filterTier}`
+                }
+              >
+                {content}
+              </button>
+            ) : (
+              <div key={card.id} style={cardStyle}>
+                {content}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -257,526 +427,1060 @@ export function CustomersTabPanel({
       </div>
 
       {/* Two-Column Grid: Customer Table & Deep Inspector */}
-      <div style={styles.showcaseGrid}>
-        {/* Left Column: Customers Table */}
-        <div style={styles.tablePanel}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "12px",
-            }}
-          >
-            <h3 style={{ margin: 0, fontSize: "16px", color: "#f8fafc" }}>
-              Profiled Bettors ({sortedCustomers.length})
-            </h3>
-            <span style={{ fontSize: "11px", color: "#64748b" }}>
-              Click header to sort · Pinned Directive
-            </span>
-          </div>
-          <div className="profiles-wrap">
-            <table style={styles.table}>
-              <thead>
-                <tr style={styles.thRow}>
-                  <th
-                    className="sortable"
-                    style={styles.th}
-                    onClick={() => onCustomerSort("id")}
-                  >
-                    Customer
-                    <span className="sort-arrow">
-                      {customerSort.key === "id"
-                        ? customerSort.dir === 1
-                          ? "▲"
-                          : "▼"
-                        : ""}
-                    </span>
-                  </th>
-                  <th
-                    className="sortable"
-                    style={styles.th}
-                    onClick={() => onCustomerSort("score")}
-                  >
-                    Unified Sharpness
-                    <span className="sort-arrow">
-                      {customerSort.key === "score"
-                        ? customerSort.dir === 1
-                          ? "▲"
-                          : "▼"
-                        : ""}
-                    </span>
-                  </th>
-                  <th
-                    className="sortable"
-                    style={styles.th}
-                    onClick={() => onCustomerSort("gini")}
-                  >
-                    Sizing Strategy
-                    <span className="sort-arrow">
-                      {customerSort.key === "gini"
-                        ? customerSort.dir === 1
-                          ? "▲"
-                          : "▼"
-                        : ""}
-                    </span>
-                  </th>
-                  <th style={styles.th}>Specialization</th>
-                  <th style={styles.th}>Correlated Par</th>
-                  <th
-                    className="sortable"
-                    style={styles.th}
-                    onClick={() => onCustomerSort("var95Usd")}
-                  >
-                    7d VaR (95%)
-                    <span className="sort-arrow">
-                      {customerSort.key === "var95Usd"
-                        ? customerSort.dir === 1
-                          ? "▲"
-                          : "▼"
-                        : ""}
-                    </span>
-                  </th>
-                  <th
-                    className="sortable directive"
-                    style={styles.th}
-                    onClick={() => onCustomerSort("holdPct")}
-                  >
-                    Desk Directive
-                    <span className="sort-arrow">
-                      {customerSort.key === "holdPct"
-                        ? customerSort.dir === 1
-                          ? "▲"
-                          : "▼"
-                        : ""}
-                    </span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedCustomers.map((cust) => {
-                  const isSelected = selectedCustomer?.id === cust.id;
-                  const tierClass = cust.tier.includes("TIER_1")
-                    ? "tier-1"
-                    : cust.tier.includes("TIER_2")
-                      ? "tier-2"
-                      : cust.tier.includes("TIER_3")
-                        ? "tier-3"
-                        : cust.tier.includes("TIER_4")
-                          ? "tier-4"
-                          : "tier-5";
+      {(() => {
+        const cohortSummary = summarizeDisplayedCustomers(sortedCustomers);
+        const hasActiveFilter =
+          searchQuery.trim() !== "" || filterTier !== "ALL";
+        const selectedIndex = selectedCustomer
+          ? sortedCustomers.findIndex((c) => c.id === selectedCustomer.id)
+          : -1;
+        const canStepPrev = selectedIndex > 0;
+        const canStepNext =
+          selectedIndex >= 0 && selectedIndex < sortedCustomers.length - 1;
+        const resetFilters = () => {
+          onSearchQueryChange("");
+          onFilterTierChange("ALL");
+        };
+        const stepCustomer = (delta: -1 | 1) => {
+          if (sortedCustomers.length === 0) return;
+          const nextIdx =
+            selectedIndex < 0
+              ? 0
+              : Math.min(
+                  sortedCustomers.length - 1,
+                  Math.max(0, selectedIndex + delta),
+                );
+          const next = sortedCustomers[nextIdx];
+          if (next) {
+            onSelectCustomer(next);
+            onClearForensicResult();
+          }
+        };
 
-                  const actionClass = cust.action.includes("ALERT")
-                    ? "action-alert"
-                    : cust.action.includes("MONITOR") ||
-                        cust.action.includes("THROTTLE")
-                      ? "action-monitor"
-                      : "action-accept";
-
-                  return (
-                    <tr
-                      key={cust.id}
-                      style={styles.tr(isSelected)}
-                      onClick={() => {
-                        onSelectCustomer(cust);
-                        onClearForensicResult();
-                      }}
-                    >
-                      <td style={styles.td}>
-                        <div style={styles.custCell}>
-                          <span
-                            style={{
-                              ...styles.custLink,
-                              cursor: "pointer",
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectCustomer(cust);
-                              onClearForensicResult();
-                            }}
-                          >
-                            {cust.id}
-                          </span>
-                          <a
-                            href={`https://fantasy402.com/manager.html?customer=${cust.id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              color: "#94a3b8",
-                              textDecoration: "none",
-                              fontSize: "11px",
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            title="Open in Fantasy402 Manager Portal"
-                          >
-                            ↗
-                          </a>
-                          {cust.subAccountIndex !== null && (
-                            <span style={styles.subBadge}>
-                              Seat #{cust.subAccountIndex}
-                            </span>
-                          )}
-                        </div>
-                        <div style={styles.custAgent}>
-                          Agent:{" "}
-                          <a
-                            href={`https://desk.bookdeskops.com/agent/${cust.agentId}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              color: "#38bdf8",
-                              textDecoration: "none",
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            title="Open Agent Desk Profile"
-                          >
-                            {cust.agentId} ↗
-                          </a>
-                        </div>
-                      </td>
-                      <td style={styles.td}>
-                        <span className={`chip ${tierClass}`}>
-                          {cust.score >= 9.0
-                            ? "🚨 "
-                            : cust.score >= 8.0
-                              ? "⚡ "
-                              : cust.score >= 7.0
-                                ? "⚠️ "
-                                : "✅ "}
-                          {cust.score.toFixed(1)} ·{" "}
-                          {cust.tier.replace("TIER_", "T")}
-                        </span>
-                      </td>
-                      <td style={styles.td}>
-                        <div>{cust.sizingStrategy}</div>
-                        <div style={styles.custSub}>
-                          Gini: {cust.gini.toFixed(3)}
-                        </div>
-                      </td>
-                      <td style={styles.td}>
-                        <div>{cust.specialization}</div>
-                        <div style={styles.custSub}>{cust.timingArchetype}</div>
-                      </td>
-                      <td style={styles.td}>
-                        <span style={styles.corrBadge(cust.correlatedRisk)}>
-                          {cust.correlatedRisk}
-                        </span>
-                      </td>
-                      <td style={styles.td}>
-                        <div>${cust.var95Usd.toLocaleString()}</div>
-                        <div
-                          className={cust.holdPct < 0 ? "hold-neg" : "hold-pos"}
-                          style={{ fontSize: "11px" }}
-                        >
-                          Hold: {cust.holdPct}%
-                        </div>
-                      </td>
-                      <td className="directive" style={styles.td}>
-                        <span className={`chip ${actionClass}`}>
-                          {cust.action}
-                        </span>
-                        <div style={styles.custSub}>
-                          Cap: ${cust.recommendedLimitUsd.toLocaleString()}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Right Column: Deep-Dive Inspector */}
-        <div className="detail-panel" style={styles.inspectorPanel}>
-          {selectedCustomer ? (
-            <div>
-              <div style={styles.inspectorHeader}>
-                <div>
-                  <h2 style={styles.inspectorTitle}>{selectedCustomer.id}</h2>
-                  <div style={styles.inspectorSub}>
-                    {selectedCustomer.name} · Agent:{" "}
-                    <b>{selectedCustomer.agentId}</b> (Master:{" "}
-                    <b>{selectedCustomer.masterAgent}</b>)
-                  </div>
-                </div>
+        return (
+          <div style={styles.showcaseGrid}>
+            {/* Left Column: Customers Table */}
+            <div style={styles.tablePanel}>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "8px 12px",
+                  marginBottom: "10px",
+                }}
+              >
                 <div
                   style={{
                     display: "flex",
-                    flexWrap: "wrap",
-                    justifyContent: "flex-end",
                     alignItems: "center",
-                    gap: "6px",
+                    gap: "10px",
+                    flexWrap: "wrap",
                   }}
                 >
-                  <button
-                    type="button"
+                  <h3 style={{ margin: 0, fontSize: "16px", color: "#f8fafc" }}>
+                    Profiled Bettors ({sortedCustomers.length})
+                  </h3>
+                  <span
                     style={{
-                      ...styles.actionBtn,
-                      padding: "4px 8px",
+                      padding: "2px 7px",
+                      borderRadius: "4px",
+                      backgroundColor: "rgba(56, 189, 248, 0.12)",
+                      color: "#7dd3fc",
                       fontSize: "11px",
-                      cursor: "pointer",
+                      fontWeight: 600,
                     }}
-                    onClick={() => onOpenTerminalProfile(selectedCustomer.id)}
-                    title="Inspect this customer in Bun.Terminal emulator"
                   >
-                    💻 Terminal
-                  </button>
-                  <button
-                    type="button"
+                    Avg Sharp: {cohortSummary.avgSharpness}
+                  </span>
+                  <span
                     style={{
-                      ...styles.actionBtn,
-                      padding: "4px 8px",
+                      padding: "2px 7px",
+                      borderRadius: "4px",
+                      backgroundColor: "rgba(239, 68, 68, 0.14)",
+                      color: "#fca5a5",
                       fontSize: "11px",
-                      cursor: "pointer",
+                      fontWeight: 600,
                     }}
-                    onClick={() => onCopyCli(selectedCustomer.id)}
-                    title="Copy terminal CLI command to clipboard"
                   >
-                    {copiedCliId === selectedCustomer.id
-                      ? "✓ Copied CLI"
-                      : "📋 Copy CLI"}
-                  </button>
-                  <a
-                    href={`https://fantasy402.com/manager.html?customer=${selectedCustomer.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      ...styles.actionBtn,
-                      padding: "4px 8px",
-                      fontSize: "11px",
-                      textDecoration: "none",
-                      color: "#0f172a",
-                    }}
-                    title="Requires active Fantasy402 manager session in your browser"
-                  >
-                    Portal ↗
-                  </a>
-                  <span style={styles.tierBadge(selectedCustomer.tier)}>
-                    {selectedCustomer.tier} (Score:{" "}
-                    {selectedCustomer.score.toFixed(1)}/10.0)
+                    {cohortSummary.alertCount} Alerts
+                  </span>
+                  <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                    Σ VaR: <b>${cohortSummary.totalVarUsd.toLocaleString()}</b>{" "}
+                    · Σ Caps:{" "}
+                    <b>${cohortSummary.totalCapUsd.toLocaleString()}</b>
                   </span>
                 </div>
-              </div>
-
-              {/* Decomposed Score Progress Bars */}
-              <div style={styles.radarCard}>
-                <h4 style={styles.cardHeader}>
-                  🎯 Decomposed Sharpness Radars
-                </h4>
-                <div style={styles.radarRow}>
-                  <span>
-                    CLV Beat Margin ({selectedCustomer.clvScore}/3.0):
-                  </span>
-                  <div style={styles.progressBarBg}>
-                    <div
-                      style={styles.progressBarFill(
-                        (selectedCustomer.clvScore / 3.0) * 100,
-                        "#38bdf8",
-                      )}
-                    />
-                  </div>
-                </div>
-                <div style={styles.radarRow}>
-                  <span>
-                    Bayesian Skill ({selectedCustomer.skillScore}/2.5):
-                  </span>
-                  <div style={styles.progressBarBg}>
-                    <div
-                      style={styles.progressBarFill(
-                        (selectedCustomer.skillScore / 2.5) * 100,
-                        "#a855f7",
-                      )}
-                    />
-                  </div>
-                </div>
-                <div style={styles.radarRow}>
-                  <span>
-                    Sizing Discipline ({selectedCustomer.sizingScore}/1.5):
-                  </span>
-                  <div style={styles.progressBarBg}>
-                    <div
-                      style={styles.progressBarFill(
-                        (selectedCustomer.sizingScore / 1.5) * 100,
-                        "#22c55e",
-                      )}
-                    />
-                  </div>
-                </div>
-                <div style={styles.radarRow}>
-                  <span>
-                    Signature Specialization ({selectedCustomer.sigScore}/2.0):
-                  </span>
-                  <div style={styles.progressBarBg}>
-                    <div
-                      style={styles.progressBarFill(
-                        (selectedCustomer.sigScore / 2.0) * 100,
-                        "#f59e0b",
-                      )}
-                    />
-                  </div>
-                </div>
-                <div style={styles.radarRow}>
-                  <span>
-                    Timing / Parlay Exploitation ({selectedCustomer.timingScore}
-                    /1.0):
-                  </span>
-                  <div style={styles.progressBarBg}>
-                    <div
-                      style={styles.progressBarFill(
-                        (selectedCustomer.timingScore / 1.0) * 100,
-                        "#ef4444",
-                      )}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Sizing & Portfolio Risk */}
-              <div style={styles.detailGrid}>
-                <div style={styles.detailCard}>
-                  <h4 style={styles.cardHeader}>💰 Stake Sizing & Variance</h4>
-                  <div>
-                    Strategy: <b>{selectedCustomer.sizingStrategy}</b>
-                  </div>
-                  <div>
-                    Gini Inequality: <b>{selectedCustomer.gini}</b>
-                  </div>
-                  <div>
-                    Mean Stake:{" "}
-                    <b>${selectedCustomer.meanStake.toLocaleString()}</b>
-                  </div>
-                </div>
-                <div style={styles.detailCard}>
-                  <h4 style={styles.cardHeader}>📊 Risk & Expected Value</h4>
-                  <div>
-                    7d 95% VaR:{" "}
-                    <b>${selectedCustomer.var95Usd.toLocaleString()}</b>
-                  </div>
-                  <div>
-                    Expected Shortfall (CVaR):{" "}
-                    <b>${selectedCustomer.cvar95Usd.toLocaleString()}</b>
-                  </div>
-                  <div>
-                    Lifetime Hold:{" "}
-                    <b
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: "8px" }}
+                >
+                  {hasActiveFilter && (
+                    <button
+                      type="button"
+                      onClick={resetFilters}
                       style={{
-                        color:
-                          selectedCustomer.holdPct < 0 ? "#f87171" : "#4ade80",
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        backgroundColor: "rgba(245, 158, 11, 0.14)",
+                        border: "1px solid rgba(251, 191, 36, 0.35)",
+                        color: "#fbbf24",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        cursor: "pointer",
                       }}
                     >
-                      {selectedCustomer.holdPct}%
-                    </b>
-                  </div>
-                  <div>
-                    Projected LTV:{" "}
-                    <b>
-                      ${Math.abs(selectedCustomer.ltvUsd).toLocaleString()}
-                      {selectedCustomer.ltvUsd < 0
-                        ? " (Loss to Desk)"
-                        : " (Desk Hold)"}
-                    </b>
-                  </div>
-                </div>
-              </div>
-
-              {/* Correlated Parlay & Timing */}
-              <div style={styles.detailGrid}>
-                <div style={styles.detailCard}>
-                  <h4 style={styles.cardHeader}>🔗 Correlated Parlays</h4>
-                  <div>
-                    Risk Tier:{" "}
-                    <span
-                      style={styles.corrBadge(selectedCustomer.correlatedRisk)}
-                    >
-                      {selectedCustomer.correlatedRisk}
-                    </span>
-                  </div>
-                  <div>
-                    Exploit Rate:{" "}
-                    <b>
-                      {(selectedCustomer.correlatedExploitRate * 100).toFixed(
-                        0,
-                      )}
-                      %
-                    </b>
-                  </div>
-                </div>
-                <div style={styles.detailCard}>
-                  <h4 style={styles.cardHeader}>⏱️ Timing Fingerprint</h4>
-                  <div>
-                    Archetype: <b>{selectedCustomer.timingArchetype}</b>
-                  </div>
-                  <div>
-                    Downline Syndicate:{" "}
-                    <b>
-                      {(selectedCustomer.syndicateProb * 100).toFixed(0)}% Prob
-                    </b>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actionable Operator Directives */}
-              <div style={styles.directiveCard}>
-                <h4 style={styles.cardHeader}>🚨 Actionable Desk Directives</h4>
-                <div style={styles.directiveRow}>
-                  <span>Action:</span>
-                  <span style={styles.actionBadge(selectedCustomer.action)}>
-                    {selectedCustomer.action}
+                      ✕ Reset filters
+                    </button>
+                  )}
+                  <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    Click header to sort · Pinned Directive
                   </span>
                 </div>
-                <div style={styles.directiveRow}>
-                  <span>Max Stake Ceiling:</span>
-                  <b>
-                    ${selectedCustomer.recommendedLimitUsd.toLocaleString()}
-                  </b>
-                </div>
-                <div style={styles.directiveRow}>
-                  <span>In-Play Submission Delay:</span>
-                  <b>{selectedCustomer.inPlayDelaySec} seconds</b>
-                </div>
-                <div style={styles.directiveRow}>
-                  <span>Line Shading:</span>
-                  <b>{selectedCustomer.lineShadeCents}¢ against action</b>
-                </div>
-                <div style={styles.directiveRow}>
-                  <span>Shadow Copy Multiplier:</span>
-                  <b>{selectedCustomer.shadowCopyMultiplier.toFixed(2)}x</b>
-                </div>
               </div>
+              <div className="profiles-wrap">
+                <table style={styles.table}>
+                  <thead>
+                    <tr style={styles.thRow}>
+                      <th
+                        className="sortable"
+                        style={styles.th}
+                        onClick={() => onCustomerSort("id")}
+                      >
+                        Customer
+                        <span className="sort-arrow">
+                          {customerSort.key === "id"
+                            ? customerSort.dir === 1
+                              ? "▲"
+                              : "▼"
+                            : ""}
+                        </span>
+                      </th>
+                      <th
+                        className="sortable"
+                        style={styles.th}
+                        onClick={() => onCustomerSort("score")}
+                      >
+                        Unified Sharpness
+                        <span className="sort-arrow">
+                          {customerSort.key === "score"
+                            ? customerSort.dir === 1
+                              ? "▲"
+                              : "▼"
+                            : ""}
+                        </span>
+                      </th>
+                      <th
+                        className="sortable"
+                        style={styles.th}
+                        onClick={() => onCustomerSort("gini")}
+                      >
+                        Sizing Strategy
+                        <span className="sort-arrow">
+                          {customerSort.key === "gini"
+                            ? customerSort.dir === 1
+                              ? "▲"
+                              : "▼"
+                            : ""}
+                        </span>
+                      </th>
+                      <th style={styles.th}>Specialization</th>
+                      <th style={styles.th}>Correlated Par</th>
+                      <th
+                        className="sortable"
+                        style={styles.th}
+                        onClick={() => onCustomerSort("var95Usd")}
+                      >
+                        7d VaR (95%)
+                        <span className="sort-arrow">
+                          {customerSort.key === "var95Usd"
+                            ? customerSort.dir === 1
+                              ? "▲"
+                              : "▼"
+                            : ""}
+                        </span>
+                      </th>
+                      <th
+                        className="sortable directive"
+                        style={styles.th}
+                        onClick={() => onCustomerSort("holdPct")}
+                      >
+                        Desk Directive
+                        <span className="sort-arrow">
+                          {customerSort.key === "holdPct"
+                            ? customerSort.dir === 1
+                              ? "▲"
+                              : "▼"
+                            : ""}
+                        </span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedCustomers.map((cust) => {
+                      const isSelected = selectedCustomer?.id === cust.id;
+                      const tierClass = cust.tier.includes("TIER_1")
+                        ? "tier-1"
+                        : cust.tier.includes("TIER_2")
+                          ? "tier-2"
+                          : cust.tier.includes("TIER_3")
+                            ? "tier-3"
+                            : cust.tier.includes("TIER_4")
+                              ? "tier-4"
+                              : "tier-5";
 
-              {/* Real-time Reverse DNS Forensics Trigger */}
-              <div style={styles.forensicCard}>
-                <h4 style={styles.cardHeader}>
-                  🌐 Reverse DNS & Proxy Forensics
-                </h4>
-                <div style={styles.forensicRow}>
-                  <span>Observed Login IP:</span>
-                  <code>{selectedCustomer.ipAddress}</code>
-                  <button
-                    type="button"
-                    style={styles.actionBtnSmall}
-                    onClick={() =>
-                      onRunReverseLookup(selectedCustomer.ipAddress)
-                    }
-                  >
-                    🔍 Run Reverse DNS
-                  </button>
-                </div>
-                {customerForensicResult && (
-                  <div style={styles.forensicResult}>
-                    {customerForensicResult}
-                  </div>
-                )}
+                      const actionClass = cust.action.includes("ALERT")
+                        ? "action-alert"
+                        : cust.action.includes("MONITOR") ||
+                            cust.action.includes("THROTTLE")
+                          ? "action-monitor"
+                          : "action-accept";
+
+                      return (
+                        <tr
+                          key={cust.id}
+                          style={styles.tr(isSelected)}
+                          onClick={() => {
+                            onSelectCustomer(cust);
+                            onClearForensicResult();
+                          }}
+                        >
+                          <td style={styles.td}>
+                            <div style={styles.custCell}>
+                              <span
+                                style={{
+                                  ...styles.custLink,
+                                  cursor: "pointer",
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectCustomer(cust);
+                                  onClearForensicResult();
+                                }}
+                              >
+                                {cust.id}
+                              </span>
+                              <a
+                                href={`https://fantasy402.com/manager.html?customer=${cust.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  color: "#94a3b8",
+                                  textDecoration: "none",
+                                  fontSize: "11px",
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                title="Open in Fantasy402 Manager Portal"
+                              >
+                                ↗
+                              </a>
+                              {cust.subAccountIndex !== null && (
+                                <span style={styles.subBadge}>
+                                  Seat #{cust.subAccountIndex}
+                                </span>
+                              )}
+                            </div>
+                            <div style={styles.custAgent}>
+                              Agent:{" "}
+                              <a
+                                href={getLocalAgentHref(cust.agentId)}
+                                style={{
+                                  color: "#38bdf8",
+                                  textDecoration: "none",
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (
+                                    onSelectAgent &&
+                                    !e.metaKey &&
+                                    !e.ctrlKey &&
+                                    e.button === 0
+                                  ) {
+                                    e.preventDefault();
+                                    onSelectAgent(cust.agentId);
+                                  }
+                                }}
+                                title="Open SportsDesk Agent Inspector"
+                              >
+                                {cust.agentId} ↗
+                              </a>
+                            </div>
+                          </td>
+                          <td style={styles.td}>
+                            <span className={`chip ${tierClass}`}>
+                              {cust.score >= 9.0
+                                ? "🚨 "
+                                : cust.score >= 8.0
+                                  ? "⚡ "
+                                  : cust.score >= 7.0
+                                    ? "⚠️ "
+                                    : "✅ "}
+                              {cust.score.toFixed(1)} ·{" "}
+                              {cust.tier.replace("TIER_", "T")}
+                            </span>
+                          </td>
+                          <td style={styles.td}>
+                            <div>{cust.sizingStrategy}</div>
+                            <div style={styles.custSub}>
+                              Gini: {cust.gini.toFixed(3)}
+                            </div>
+                          </td>
+                          <td
+                            style={{
+                              ...styles.td,
+                              maxWidth: "168px",
+                              whiteSpace: "normal",
+                              overflowWrap: "anywhere",
+                            }}
+                          >
+                            <div>{cust.specialization}</div>
+                            <div style={styles.custSub}>
+                              {cust.timingArchetype}
+                            </div>
+                          </td>
+                          <td style={styles.td}>
+                            <span style={styles.corrBadge(cust.correlatedRisk)}>
+                              {cust.correlatedRisk}
+                            </span>
+                          </td>
+                          <td style={styles.td}>
+                            <div>${cust.var95Usd.toLocaleString()}</div>
+                            <div
+                              className={
+                                cust.holdPct < 0 ? "hold-neg" : "hold-pos"
+                              }
+                              style={{ fontSize: "11px" }}
+                            >
+                              Hold: {cust.holdPct}%
+                            </div>
+                          </td>
+                          <td className="directive" style={styles.td}>
+                            <span className={`chip ${actionClass}`}>
+                              {cust.action}
+                            </span>
+                            <div style={styles.custSub}>
+                              Cap: ${cust.recommendedLimitUsd.toLocaleString()}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {sortedCustomers.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          style={{
+                            padding: "24px 16px",
+                            textAlign: "center",
+                            color: "#94a3b8",
+                            fontSize: "12px",
+                          }}
+                        >
+                          No profiled bettors match current filters.{" "}
+                          {hasActiveFilter && (
+                            <button
+                              type="button"
+                              onClick={resetFilters}
+                              style={{
+                                marginLeft: "8px",
+                                padding: "3px 10px",
+                                borderRadius: "4px",
+                                backgroundColor: "rgba(56, 189, 248, 0.16)",
+                                border: "1px solid rgba(56, 189, 248, 0.4)",
+                                color: "#7dd3fc",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Reset filters
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
-          ) : (
-            <div style={styles.loading}>
-              Select a customer to inspect deep multidimensional profile.
+
+            {/* Right Column: Deep-Dive Inspector */}
+            <div className="detail-panel" style={styles.inspectorPanel}>
+              {selectedCustomer ? (
+                <div>
+                  <div style={styles.inspectorHeader}>
+                    <div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <h2 style={styles.inspectorTitle}>
+                          {selectedCustomer.id}
+                        </h2>
+                        {selectedIndex >= 0 && (
+                          <span
+                            style={{
+                              padding: "1px 7px",
+                              borderRadius: "999px",
+                              backgroundColor: "#1e293b",
+                              color: "#94a3b8",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            #{selectedIndex + 1} / {sortedCustomers.length}
+                          </span>
+                        )}
+                      </div>
+                      <div style={styles.inspectorSub}>
+                        {selectedCustomer.name} · Agent:{" "}
+                        <b>{selectedCustomer.agentId}</b> (Master:{" "}
+                        <b>{selectedCustomer.masterAgent}</b>)
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        justifyContent: "flex-start",
+                        alignItems: "center",
+                        gap: "6px",
+                        maxWidth: "100%",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        disabled={!canStepPrev}
+                        onClick={() => stepCustomer(-1)}
+                        style={{
+                          padding: "4px 7px",
+                          borderRadius: "4px",
+                          backgroundColor: "#1e293b",
+                          color: canStepPrev ? "#e2e8f0" : "#475569",
+                          border: "1px solid #334155",
+                          fontSize: "11px",
+                          cursor: canStepPrev ? "pointer" : "default",
+                        }}
+                        title="Previous customer in current sort order"
+                      >
+                        ← Prev
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canStepNext}
+                        onClick={() => stepCustomer(1)}
+                        style={{
+                          padding: "4px 7px",
+                          borderRadius: "4px",
+                          backgroundColor: "#1e293b",
+                          color: canStepNext ? "#e2e8f0" : "#475569",
+                          border: "1px solid #334155",
+                          fontSize: "11px",
+                          cursor: canStepNext ? "pointer" : "default",
+                        }}
+                        title="Next customer in current sort order"
+                      >
+                        Next →
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.actionBtn,
+                          padding: "4px 8px",
+                          fontSize: "11px",
+                          cursor: "pointer",
+                        }}
+                        onClick={() =>
+                          onOpenTerminalProfile(selectedCustomer.id)
+                        }
+                        title="Inspect this customer in Bun.Terminal emulator"
+                      >
+                        💻 Terminal
+                      </button>
+                      {onViewCustomerWagers && (
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.actionBtn,
+                            padding: "4px 8px",
+                            fontSize: "11px",
+                            cursor: "pointer",
+                          }}
+                          onClick={() =>
+                            onViewCustomerWagers(selectedCustomer.id)
+                          }
+                          title="Filter Live Wagers tape to this customer"
+                        >
+                          ⚡ Wager Tape
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.actionBtn,
+                          padding: "4px 8px",
+                          fontSize: "11px",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => onCopyCli(selectedCustomer.id)}
+                        title="Copy terminal CLI command to clipboard"
+                      >
+                        {copiedCliId === selectedCustomer.id
+                          ? "✓ Copied CLI"
+                          : "📋 Copy CLI"}
+                      </button>
+                      <a
+                        href={`https://fantasy402.com/manager.html?customer=${selectedCustomer.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          ...styles.actionBtn,
+                          padding: "4px 8px",
+                          fontSize: "11px",
+                          textDecoration: "none",
+                          color: "#0f172a",
+                        }}
+                        title="Requires active Fantasy402 manager session in your browser"
+                      >
+                        Portal ↗
+                      </a>
+                      <span style={styles.tierBadge(selectedCustomer.tier)}>
+                        {selectedCustomer.tier} (Score:{" "}
+                        {selectedCustomer.score.toFixed(1)}/10.0)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Decomposed Score Progress Bars */}
+                  <div style={styles.radarCard}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <h4 style={styles.cardHeader}>
+                        🎯 Decomposed Sharpness Radars
+                      </h4>
+                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                        Sum:{" "}
+                        <b style={{ color: "#f8fafc" }}>
+                          {(
+                            selectedCustomer.clvScore +
+                            selectedCustomer.skillScore +
+                            selectedCustomer.sizingScore +
+                            selectedCustomer.sigScore +
+                            selectedCustomer.timingScore
+                          ).toFixed(1)}
+                        </b>
+                        /10.0
+                      </span>
+                    </div>
+                    {RADAR_AXES.map((axis) => {
+                      const val = selectedCustomer[axis.valueKey];
+                      const pct = Math.min(
+                        100,
+                        Math.max(0, (val / axis.max) * 100),
+                      );
+                      return (
+                        <div key={axis.valueKey} style={styles.radarRow}>
+                          <span>
+                            {axis.label} ({val.toFixed(1)}/{axis.max.toFixed(1)}
+                            ):
+                          </span>
+                          <div style={styles.progressBarBg}>
+                            <div
+                              style={styles.progressBarFill(pct, axis.color)}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Sizing & Portfolio Risk */}
+                  <div style={styles.detailGrid}>
+                    <div style={styles.detailCard}>
+                      <h4 style={styles.cardHeader}>
+                        💰 Stake Sizing & Variance
+                      </h4>
+                      <div>
+                        Strategy: <b>{selectedCustomer.sizingStrategy}</b>
+                      </div>
+                      <div>
+                        Gini Inequality: <b>{selectedCustomer.gini}</b>
+                      </div>
+                      <div>
+                        Mean Stake:{" "}
+                        <b>${selectedCustomer.meanStake.toLocaleString()}</b>
+                      </div>
+                      <div>
+                        VaR / Max Cap:{" "}
+                        <b
+                          style={{
+                            color:
+                              selectedCustomer.recommendedLimitUsd > 0 &&
+                              selectedCustomer.var95Usd >
+                                selectedCustomer.recommendedLimitUsd
+                                ? "#f87171"
+                                : "#7dd3fc",
+                          }}
+                        >
+                          {selectedCustomer.recommendedLimitUsd > 0
+                            ? `${Math.round((selectedCustomer.var95Usd / selectedCustomer.recommendedLimitUsd) * 100)}%`
+                            : "n/a"}
+                        </b>
+                      </div>
+                    </div>
+                    <div style={styles.detailCard}>
+                      <h4 style={styles.cardHeader}>
+                        📊 Risk & Expected Value
+                      </h4>
+                      <div>
+                        7d 95% VaR:{" "}
+                        <b>${selectedCustomer.var95Usd.toLocaleString()}</b>
+                      </div>
+                      <div>
+                        Expected Shortfall (CVaR):{" "}
+                        <b>${selectedCustomer.cvar95Usd.toLocaleString()}</b>
+                      </div>
+                      <div>
+                        Lifetime Hold:{" "}
+                        <b
+                          style={{
+                            color:
+                              selectedCustomer.holdPct < 0
+                                ? "#f87171"
+                                : "#4ade80",
+                          }}
+                        >
+                          {selectedCustomer.holdPct}%
+                        </b>
+                      </div>
+                      <div>
+                        Projected LTV:{" "}
+                        <b>
+                          ${Math.abs(selectedCustomer.ltvUsd).toLocaleString()}
+                          {selectedCustomer.ltvUsd < 0
+                            ? " (Loss to Desk)"
+                            : " (Desk Hold)"}
+                        </b>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Correlated Parlay & Timing */}
+                  <div style={styles.detailGrid}>
+                    <div style={styles.detailCard}>
+                      <h4 style={styles.cardHeader}>🔗 Correlated Parlays</h4>
+                      <div>
+                        Risk Tier:{" "}
+                        <span
+                          style={styles.corrBadge(
+                            selectedCustomer.correlatedRisk,
+                          )}
+                        >
+                          {selectedCustomer.correlatedRisk}
+                        </span>
+                      </div>
+                      <div>
+                        Exploit Rate:{" "}
+                        <b>
+                          {(
+                            selectedCustomer.correlatedExploitRate * 100
+                          ).toFixed(0)}
+                          %
+                        </b>
+                      </div>
+                    </div>
+                    <div style={styles.detailCard}>
+                      <h4 style={styles.cardHeader}>⏱️ Timing Fingerprint</h4>
+                      <div>
+                        Archetype: <b>{selectedCustomer.timingArchetype}</b>
+                      </div>
+                      <div>
+                        Downline Syndicate:{" "}
+                        <b>
+                          {(selectedCustomer.syndicateProb * 100).toFixed(0)}%
+                          Prob
+                        </b>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actionable Operator Directives */}
+                  <div style={styles.directiveCard}>
+                    <h4 style={styles.cardHeader}>
+                      🚨 Actionable Desk Directives
+                    </h4>
+                    <div style={styles.directiveRow}>
+                      <span>Action:</span>
+                      <span style={styles.actionBadge(selectedCustomer.action)}>
+                        {selectedCustomer.action}
+                      </span>
+                    </div>
+                    <div style={styles.directiveRow}>
+                      <span>Max Stake Ceiling:</span>
+                      <b>
+                        ${selectedCustomer.recommendedLimitUsd.toLocaleString()}
+                      </b>
+                    </div>
+                    <div style={styles.directiveRow}>
+                      <span>In-Play Submission Delay:</span>
+                      <b>{selectedCustomer.inPlayDelaySec} seconds</b>
+                    </div>
+                    <div style={styles.directiveRow}>
+                      <span>Line Shading:</span>
+                      <b>{selectedCustomer.lineShadeCents}¢ against action</b>
+                    </div>
+                    <div style={styles.directiveRow}>
+                      <span>Shadow Copy Multiplier:</span>
+                      <b>{selectedCustomer.shadowCopyMultiplier.toFixed(2)}x</b>
+                    </div>
+                  </div>
+
+                  {/* Cross-Endpoint Portal & Figure-Date Reconciliation Card */}
+                  {selectedCustomer.portalReconciliation && (
+                    <div
+                      style={{
+                        ...styles.detailCard,
+                        marginBottom: "14px",
+                        border: "1px solid rgba(56, 189, 248, 0.35)",
+                        backgroundColor: "rgba(15, 23, 42, 0.78)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: "6px",
+                          marginBottom: "8px",
+                        }}
+                      >
+                        <h4 style={{ ...styles.cardHeader, margin: 0 }}>
+                          🧾 Cross-Endpoint Portal & Figure-Date Reconciliation
+                        </h4>
+                        <span
+                          style={{
+                            padding: "2px 8px",
+                            borderRadius: "999px",
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            backgroundColor: selectedCustomer
+                              .portalReconciliation.creditEquationBalanced
+                              ? "rgba(34, 197, 94, 0.16)"
+                              : "rgba(239, 68, 68, 0.18)",
+                            color: selectedCustomer.portalReconciliation
+                              .creditEquationBalanced
+                              ? "#4ade80"
+                              : "#f87171",
+                            border: `1px solid ${
+                              selectedCustomer.portalReconciliation
+                                .creditEquationBalanced
+                                ? "rgba(74, 222, 128, 0.4)"
+                                : "rgba(248, 113, 113, 0.45)"
+                            }`,
+                          }}
+                        >
+                          {selectedCustomer.portalReconciliation
+                            .creditEquationBalanced
+                            ? "✓ CREDIT & CARRYOVER BALANCED (0¢ DELTA)"
+                            : "⚠️ LEDGER DELTA"}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: "8px",
+                          fontSize: "12px",
+                          marginBottom: "8px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            padding: "8px",
+                            borderRadius: "6px",
+                            backgroundColor: "#091020",
+                            border: "1px solid #1e293b",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "10px",
+                              color: "#94a3b8",
+                              textTransform: "uppercase",
+                              marginBottom: "4px",
+                            }}
+                          >
+                            getInfoPlayer Credit-Line Identity
+                          </div>
+                          <div>
+                            Credit Limit:{" "}
+                            <b>
+                              $
+                              {selectedCustomer.portalReconciliation.creditLimitUsd.toLocaleString()}
+                            </b>
+                          </div>
+                          <div>
+                            Current Balance:{" "}
+                            <b
+                              style={{
+                                color:
+                                  selectedCustomer.portalReconciliation
+                                    .currentBalanceUsd < 0
+                                    ? "#f87171"
+                                    : "#4ade80",
+                              }}
+                            >
+                              {selectedCustomer.portalReconciliation
+                                .currentBalanceUsd < 0
+                                ? `-$${Math.abs(selectedCustomer.portalReconciliation.currentBalanceUsd).toLocaleString()}`
+                                : `+$${selectedCustomer.portalReconciliation.currentBalanceUsd.toLocaleString()}`}
+                            </b>
+                          </div>
+                          <div>
+                            Pending Exposure:{" "}
+                            <b style={{ color: "#fbbf24" }}>
+                              $
+                              {selectedCustomer.portalReconciliation.pendingWagerBalanceUsd.toLocaleString()}
+                            </b>{" "}
+                            (
+                            {
+                              selectedCustomer.portalReconciliation
+                                .pendingWagerCount
+                            }{" "}
+                            open)
+                          </div>
+                          <div>
+                            Available Balance:{" "}
+                            <b style={{ color: "#38bdf8" }}>
+                              $
+                              {selectedCustomer.portalReconciliation.availableBalanceUsd.toLocaleString()}
+                            </b>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            padding: "8px",
+                            borderRadius: "6px",
+                            backgroundColor: "#091020",
+                            border: "1px solid #1e293b",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "10px",
+                              color: "#94a3b8",
+                              textTransform: "uppercase",
+                              marginBottom: "4px",
+                            }}
+                          >
+                            getPerformancePlayer ↔ CarryOver Split
+                          </div>
+                          <div>
+                            Carryover Prefix:{" "}
+                            <b style={{ color: "#f87171" }}>
+                              +$
+                              {selectedCustomer.portalReconciliation.carryOverUsd.toLocaleString()}
+                            </b>{" "}
+                            <span
+                              style={{ fontSize: "10px", color: "#4ade80" }}
+                            >
+                              (
+                              {selectedCustomer.portalReconciliation
+                                .carryOverParityMatched
+                                ? "PreviousBalance × 100 ✓"
+                                : "Mismatch"}
+                              )
+                            </span>
+                          </div>
+                          <div style={{ fontSize: "11px", color: "#94a3b8" }}>
+                            Window:{" "}
+                            {
+                              selectedCustomer.portalReconciliation
+                                .carryOverWindow
+                            }
+                          </div>
+                          <div>
+                            Post-Carryover Net:{" "}
+                            <b
+                              style={{
+                                color:
+                                  selectedCustomer.portalReconciliation
+                                    .postCarryOverNetUsd < 0
+                                    ? "#4ade80"
+                                    : "#f87171",
+                              }}
+                            >
+                              {selectedCustomer.portalReconciliation
+                                .postCarryOverNetUsd < 0
+                                ? `-$${Math.abs(selectedCustomer.portalReconciliation.postCarryOverNetUsd).toLocaleString()}`
+                                : `+$${selectedCustomer.portalReconciliation.postCarryOverNetUsd.toLocaleString()}`}
+                            </b>
+                          </div>
+                          <div>
+                            31d Customer Net:{" "}
+                            <b style={{ color: "#f87171" }}>
+                              +$
+                              {selectedCustomer.portalReconciliation.net31dUsd.toLocaleString()}
+                            </b>{" "}
+                            ({selectedCustomer.portalReconciliation.winDays31d}W
+                            -{selectedCustomer.portalReconciliation.lossDays31d}
+                            L ·{" "}
+                            {
+                              selectedCustomer.portalReconciliation
+                                .activeDays31d
+                            }{" "}
+                            figureDates)
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "6px",
+                          fontSize: "11px",
+                          color: "#cbd5e1",
+                          marginBottom: "6px",
+                        }}
+                      >
+                        <span>
+                          Wager Limit:{" "}
+                          <b>
+                            $
+                            {selectedCustomer.portalReconciliation.wagerLimitUsd.toLocaleString()}
+                          </b>
+                        </span>
+                        <span>·</span>
+                        <span>
+                          Settle Figure:{" "}
+                          <b>
+                            $
+                            {selectedCustomer.portalReconciliation.settleFigureUsd.toLocaleString()}
+                          </b>
+                        </span>
+                        <span>·</span>
+                        <span>
+                          WiseLineWeight:{" "}
+                          <b>
+                            {
+                              selectedCustomer.portalReconciliation
+                                .wiseLineMovementWeight
+                            }
+                          </b>
+                        </span>
+                        <span>·</span>
+                        <span>
+                          Delay:{" "}
+                          <b>
+                            {
+                              selectedCustomer.portalReconciliation
+                                .confirmationDelaySec
+                            }
+                            s
+                          </b>
+                        </span>
+                        <span>·</span>
+                        <span>
+                          Inet:{" "}
+                          <code>
+                            {selectedCustomer.portalReconciliation.inetTarget}
+                          </code>
+                        </span>
+                        <span>·</span>
+                        <span>
+                          Parlay:{" "}
+                          <b>
+                            {
+                              selectedCustomer.portalReconciliation
+                                .assignedParlayName
+                            }
+                          </b>
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "5px",
+                        }}
+                      >
+                        {selectedCustomer.portalReconciliation.postureFlags.map(
+                          (flag) => (
+                            <span
+                              key={flag}
+                              style={{
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontSize: "10px",
+                                fontWeight: 700,
+                                fontFamily: "monospace",
+                                backgroundColor:
+                                  flag === "LINE_MOVER_WEIGHT_ACTIVE"
+                                    ? "rgba(239, 68, 68, 0.16)"
+                                    : flag === "BETTING_ALERTS_DISABLED"
+                                      ? "rgba(245, 158, 11, 0.16)"
+                                      : "rgba(56, 189, 248, 0.12)",
+                                color:
+                                  flag === "LINE_MOVER_WEIGHT_ACTIVE"
+                                    ? "#fca5a5"
+                                    : flag === "BETTING_ALERTS_DISABLED"
+                                      ? "#fbbf24"
+                                      : "#7dd3fc",
+                                border: "1px solid rgba(148, 163, 184, 0.25)",
+                              }}
+                            >
+                              {flag}
+                            </span>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Real-time Reverse DNS Forensics Trigger */}
+                  <div style={styles.forensicCard}>
+                    <h4 style={styles.cardHeader}>
+                      🌐 Reverse DNS & Proxy Forensics
+                    </h4>
+                    <div style={styles.forensicRow}>
+                      <span>Observed Login IP:</span>
+                      <code>{selectedCustomer.ipAddress}</code>
+                      <button
+                        type="button"
+                        style={styles.actionBtnSmall}
+                        onClick={() =>
+                          onRunReverseLookup(selectedCustomer.ipAddress)
+                        }
+                      >
+                        🔍 Run Reverse DNS
+                      </button>
+                    </div>
+                    {customerForensicResult && (
+                      <div style={styles.forensicResult}>
+                        {customerForensicResult}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div style={styles.loading}>
+                  Select a customer to inspect deep multidimensional profile.
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

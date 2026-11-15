@@ -1,11 +1,20 @@
 # ==============================================================================
 # SportsDesk & Fantasy402 Design Token & Neuron Registry (Single Source of Truth)
-# Evaluated and generated via: bun run gen:tokens
+# Evaluated and generated via: bun run --filter sportsdesk-ops gen:tokens:gate
 # ==============================================================================
 
 [meta]
-version = "1.1.0"
+schema = "sportsdesk-tokens/v1"
+version = "1.3.0"
 author = "bw496915-cmyk"
+updated_at = "2026-11-14T20:15:00Z" # quoted ISO-8601 — avoids Temporal.* in browser bundles
+
+[gates]
+min_body_contrast_ratio_milli = 4500 # 4.50:1 WCAG AA body copy on all surfaces
+min_aaa_slate_contrast_milli = 7000 # 7.00:1 WCAG AAA (#94a3b8 on #0b1120)
+min_ui_component_contrast_milli = 3000 # 3.00:1 WCAG 1.4.11 focus rings, active borders, badges
+min_cross_state_delta_e00_milli = 7000 # 7.00 CIEDE2000 across card -> hover -> selected
+min_fresh_vs_stale_delta_e00_milli = 40000 # 40.00 CIEDE2000 between SLA_FRESH and SLA_STALE
 
 # ------------------------------------------------------------------------------
 # Surfaces & Base Design Canvas
@@ -31,48 +40,162 @@ protocol = "ANSI 24-bit TrueColor (\\x1b[38;2;R;G;Bm)"
 color_depth = "24-bit TrueColor RGB"
 
 # ------------------------------------------------------------------------------
-# Dashboard UI Chrome (cards, borders, text)
-# role: surface | border | text. Text tokens must reach WCAG 4.5:1 on every surface.
+# Dashboard UI Chrome & Interactive State Slots
+# role: surface | border_hairline | border_interactive | focus | text
+# Every text token reaches >= 4.5:1 on every surface token.
 # ------------------------------------------------------------------------------
 [ui.surface_card]
 token_name = "--sd-surface-card"
-hex = "#0d1527"
+hex = "#0b1120" # L*=5.2; #94a3b8 achieves 7.35:1 AAA
 role = "surface"
+state_slot = "rest"
 description = "Cards, panels, table bodies"
+
+[ui.surface_elevated]
+token_name = "--sd-surface-elevated"
+hex = "#121c31" # L*=10.4; #94a3b8 achieves 6.63:1
+role = "surface"
+state_slot = "elevated"
+description = "Elevated drawers, modals, and floating popovers"
 
 [ui.surface_hover]
 token_name = "--sd-surface-hover"
-hex = "#131f38"
+hex = "#19263d" # L*=15.6; dE00(card, hover)=7.85; #94a3b8 achieves 5.88:1
 role = "surface"
-description = "Hovered cards and table rows"
+state_slot = "hover"
+description = "Hovered cards, interactive controls, and table rows"
+
+[ui.surface_raised]
+token_name = "--sd-surface-raised"
+hex = "#202f4a" # L*=19.5; #94a3b8 achieves 5.20:1
+role = "surface"
+state_slot = "raised"
+description = "Raised headers, toolbar strips, and inspector sub-cards"
+
+[ui.surface_selected]
+token_name = "--sd-surface-selected"
+hex = "#0f3a5d" # L*=23.4; dE00(hover, selected)=7.26; #94a3b8 achieves 4.59:1
+role = "surface"
+state_slot = "selected"
+description = "Active BitSet32 roving tab slot and selected DataTable row"
 
 [ui.surface_border]
 token_name = "--sd-surface-border"
-hex = "#1e293b"
-role = "border"
-description = "Hairlines and dividers"
+hex = "#243247"
+role = "border_hairline"
+description = "Decorative hairlines and non-interactive structural dividers"
+
+[ui.border_strong]
+token_name = "--sd-border-strong"
+hex = "#7085a1" # >= 3.07:1 across all surfaces including surface_selected
+role = "border_interactive"
+description = "Emphasized panel borders, active control outlines, and keycaps"
+
+[ui.focus_ring]
+token_name = "--sd-focus-ring"
+hex = "#38bdf8" # >= 5.50:1 across all surfaces; 2px solid outline
+role = "focus"
+description = "Keyboard roving tabindex and modal restore focus ring"
+
+[ui.focus_ring_offset]
+token_name = "--sd-focus-ring-offset"
+hex = "#070b14"
+role = "border_hairline"
+description = "2px inner separation ring isolating focus_ring from active fills"
 
 [ui.text_primary]
 token_name = "--sd-text-primary"
-hex = "#f1f5f9"
+hex = "#f1f5f9" # >= 10.72:1 across all surfaces
 role = "text"
 description = "Body copy and headings"
 
+[ui.text_secondary]
+token_name = "--sd-text-secondary"
+hex = "#cbd5e1" # >= 7.94:1 across all surfaces
+role = "text"
+description = "Subheadings, metric values, and active controls"
+
 [ui.text_muted]
 token_name = "--sd-text-muted"
-hex = "#94a3b8"
+hex = "#94a3b8" # 7.35:1 AAA on surface_card; >= 4.59:1 across all surfaces
 role = "text"
-description = "Secondary copy, labels, table headers"
+description = "Secondary copy, labels, disabled hints, and table headers"
 
 # ------------------------------------------------------------------------------
-# Axis 1: Ingestion Signal Channels (Layers 18-24)
-# SLA is strictly discriminated: latency (ms) vs sentinel_drop policy
+# Dual-Clock R2 Freshness & Poison SLA States (dE00(fresh, stale) = 55.4 >= 40.0)
 # ------------------------------------------------------------------------------
+[sla.fresh]
+state_id = "SLA_FRESH"
+token_name = "--sd-sla-fresh"
+fg_hex = "#34d399"
+bg_hex = "#0a2922"
+border_hex = "#10b981"
+description = "Publish age and upstream data_window_max_epoch_ms within SLA"
+
+[sla.warn]
+state_id = "SLA_WARN"
+token_name = "--sd-sla-warn"
+fg_hex = "#38bdf8"
+bg_hex = "#0c2438"
+border_hex = "#29b6f6"
+description = "Half-window aging advisory; polling active"
+
+[sla.stale]
+state_id = "SLA_STALE"
+token_name = "--sd-sla-stale"
+fg_hex = "#fbbf24"
+bg_hex = "#2b200c"
+border_hex = "#f59e0b"
+description = "BLK_R2_PUBLISH_STALE or BLK_R2_WINDOW_LAG_STALE breached"
+
+[sla.poison]
+state_id = "SLA_POISON"
+token_name = "--sd-sla-poison"
+fg_hex = "#fca5a5"
+bg_hex = "#2d161d"
+border_hex = "#ff7878"
+description = "STALE_SNAPSHOT_POISON_BIT set or Class A HTML-on-200 quarantine"
+
+# ------------------------------------------------------------------------------
+# Source-Bridge Provenance Discriminants (2-bit SourceBridgeId2)
+# ------------------------------------------------------------------------------
+[bridges]
+INGEST_STAGE1_DROP = 0
+FANTASY_402_BRIDGE_3AB = 1
+PARTNER_118_BRIDGE_3C = 2
+
+# ------------------------------------------------------------------------------
+# Axis 1: Ingestion Signal Channels & Stage 1 Router Demux
+# Pack layout: packChannelHandle32 = [4b channel_id | 8b sla_tens_of_ms | 20b rowIdx20]
+# Every active channel hex meets >= 4.5:1 across all dashboard surfaces.
+# ------------------------------------------------------------------------------
+[ingestion.L17_DROP]
+channel_id = 0
+source_bridge_id = 0
+canonical_provenance = "INGEST_NON_SPORTS_DROP"
+layer_id = "L17.N0000"
+token_name = "--sd-tier-drop"
+hex = "#94a3b8"
+channel_code = "NON_SPORTS"
+wire_aliases = ["CASINO", "VIRTUAL", "WAGER_TYPE_C", "WAGER_TYPE_A"]
+signal_tier = "SIGNAL_STAGE1_DROP"
+transport_uri = "portal://ingest/non-sports-drop"
+channel_status = "DROPPED"
+volume_rule = "STAGE1_DROP (canonicalVolumeCents = 0)"
+operational_role = "Non-Sports Casino & Virtual Stage 1 Drop"
+sla_kind = "sentinel_drop"
+sla_tens_of_ms = 0
+
 [ingestion.L18_N0204]
+channel_id = 1
+source_bridge_id = 1
+canonical_provenance = "FANTASY_402_INTERNET_L18"
 layer_id = "L18.N0204"
 token_name = "--sd-tier-retail"
-hex = "#1d84b5"
+hex = "#29b6f6" # upgraded from #1d84b5 (3.72:1 -> 5.16:1 on raised)
+legacy_wire_hex = "#1d84b5"
 channel_code = "Internet"
+wire_aliases = ["Internet", "INTERNET", "MOBILE", "WAP"]
 signal_tier = "SIGNAL_INTERNET"
 transport_uri = "portal://ticker/live-stream"
 channel_status = "ACTIVE"
@@ -80,24 +203,37 @@ volume_rule = "TARGET_TWIN (gapDurationSeconds = Internet - ALERT)"
 operational_role = "Retail Pregame Baseline Gate"
 sla_kind = "latency"
 sla_ms = 1500
+sla_tens_of_ms = 150
 
 [ingestion.L19_N0518]
+channel_id = 2
+source_bridge_id = 1
+canonical_provenance = "FANTASY_402_BLOCKED_L19"
 layer_id = "L19.N0518"
 token_name = "--sd-tier-blocked"
-hex = "#64748b"
+hex = "#8fa3bf" # upgraded from #64748b (3.27:1 -> 5.18:1 on raised)
+legacy_wire_hex = "#64748b"
 channel_code = "BLOCKED"
+wire_aliases = ["BLOCKED"]
 signal_tier = "SIGNAL_SENTINEL_DROP"
 transport_uri = "portal://pending/noise-filter"
 channel_status = "DROPPED"
-volume_rule = "DROP_BEFORE_GROUPING (unconditionally dropped on getPending)"
+volume_rule = "DROP_BEFORE_GROUPING (index sharp intent; drop before exposure sum)"
 operational_role = "Blocked Sentinel & Zero-Stake Filter"
 sla_kind = "sentinel_drop"
+sla_tens_of_ms = 0
 
 [ingestion.L20_N1105]
+channel_id = 3
+source_bridge_id = 1
+canonical_provenance = "FANTASY_402_GATEWAY_L20"
 layer_id = "L20.N1105"
-token_name = "--sd-theme-emerald"
-hex = "#10b981"
+token_name = "--sd-tier-gateway"
+legacy_token_name = "--sd-theme-emerald"
+hex = "#22d39a" # calibrated from #10b981 for selected-row AA safety (6.88:1 on raised)
+legacy_wire_hex = "#10b981"
 channel_code = "GATEWAY"
+wire_aliases = ["GATEWAY"]
 signal_tier = "SIGNAL_EQUILIBRIUM_GATE"
 transport_uri = "portal://gateway/equilibrium-gate"
 channel_status = "ACTIVE"
@@ -105,12 +241,18 @@ volume_rule = "EQUILIBRIUM_SWEEP (+15c/+20c vig persist read-backs)"
 operational_role = "Equilibrium Confirm & Vig Gate"
 sla_kind = "latency"
 sla_ms = 1000
+sla_tens_of_ms = 100
 
 [ingestion.L21_N0884]
+channel_id = 4
+source_bridge_id = 1
+canonical_provenance = "FANTASY_402_ALERT_L21"
 layer_id = "L21.N0884"
 token_name = "--sd-tier-alert"
-hex = "#ef4444"
+hex = "#ff7878" # upgraded from #ef4444 (4.14:1 -> 5.21:1 on raised, 4.60:1 on selected)
+legacy_wire_hex = "#ef4444"
 channel_code = "ALERT"
+wire_aliases = ["ALERT"]
 signal_tier = "SIGNAL_ALERT_TWIN"
 transport_uri = "portal://ticker/alert-twins"
 channel_status = "ALERT"
@@ -118,38 +260,55 @@ volume_rule = "SOURCE_ALERT (canonicalVolumeCents = 0; skip Bayes scoring)"
 operational_role = "Syndicate Sub-acct Syntax & Twin Buffer"
 sla_kind = "latency"
 sla_ms = 250
+sla_tens_of_ms = 25
 
 [ingestion.L22_N1402]
+channel_id = 5
+source_bridge_id = 2
+canonical_provenance = "PARTNER_118_GSBUILDER_L22"
 layer_id = "L22.N1402"
 token_name = "--sd-tier-steam"
 hex = "#f59e0b"
 channel_code = "GSBUILDER"
+wire_aliases = ["GSBUILDER"]
 signal_tier = "SIGNAL_SGP_BUILDER"
 transport_uri = "portal://ticker/sgp-builder"
 channel_status = "STEERABLE"
-volume_rule = "GS118_JOIN (joined via M.G<betGroupId>; steerable via --steer)"
+volume_rule = "GS118_JOIN (joined via G<id> / M.G<betGroupId>; steerable via --steer)"
 operational_role = "Steam / Line Chase Phrasing & SGP Builder"
 sla_kind = "latency"
 sla_ms = 1000
+sla_tens_of_ms = 100
 
 [ingestion.L23_N0412]
+channel_id = 6
+source_bridge_id = 2
+canonical_provenance = "PARTNER_118_GSLIVE_L23"
 layer_id = "L23.N0412"
 token_name = "--sd-tier-whale"
-hex = "#28a745"
+hex = "#4ade80" # upgraded from #28a745 (4.97:1 -> 7.62:1 on raised; distinct from L20)
+legacy_wire_hex = "#28a745"
 channel_code = "GSLIVE"
+wire_aliases = ["GSLIVE"]
 signal_tier = "SIGNAL_GS_INPLAY"
 transport_uri = "portal://ticker/gs-partner-118"
 channel_status = "CRITICAL"
-volume_rule = "GS118_JOIN (forces rotationGrade='LIVE'; extracts M.G<id>; +20c tax)"
+volume_rule = "GS118_JOIN (forces rotationGrade='LIVE'; extracts G<id> / M.G<id>; +20c tax)"
 operational_role = "Whale Sizing Anomaly & In-Play Live Move"
 sla_kind = "latency"
 sla_ms = 500
+sla_tens_of_ms = 50
 
 [ingestion.L24_N2019]
+channel_id = 7
+source_bridge_id = 1
+canonical_provenance = "FANTASY_402_CSLEVEL2_L24"
 layer_id = "L24.N2019"
 token_name = "--sd-tier-rec-bias"
-hex = "#38bdf8"
+hex = "#7dd3fc" # separated in L* from L18 #29b6f6; 7.59:1 on raised
+legacy_wire_hex = "#38bdf8"
 channel_code = "CSLEVEL2"
+wire_aliases = ["CSLEVEL2"]
 signal_tier = "SIGNAL_SYNDICATE_L2"
 transport_uri = "portal://ticker/cslevel2-feed"
 channel_status = "SUPPRESSED"
@@ -157,15 +316,71 @@ volume_rule = "NONE (secondary syndicate/tennis/prop feed; steerable via --steer
 operational_role = "Recreational Longshot Bias Ingestion"
 sla_kind = "latency"
 sla_ms = 2000
+sla_tens_of_ms = 200
+
+[ingestion.L24B_LIVE_CWS]
+channel_id = 8
+source_bridge_id = 1
+canonical_provenance = "FANTASY_402_LIVE_CWS"
+layer_id = "L24B.N2110"
+token_name = "--sd-tier-live-cws"
+hex = "#67e8f9"
+channel_code = "LIVEBETTINGCWS"
+wire_aliases = ["LIVEBETTINGCWS", "EZLIVE"]
+signal_tier = "SIGNAL_F402_INPLAY"
+transport_uri = "portal://ticker/f402-live-cws"
+channel_status = "ACTIVE"
+volume_rule = "F402_INPLAY (promotes WagerType='G' and rotationGrade='LIVE')"
+operational_role = "Fantasy402 Native In-Play Feed"
+sla_kind = "latency"
+sla_ms = 750
+sla_tens_of_ms = 75
+
+[ingestion.L24C_PHONE]
+channel_id = 9
+source_bridge_id = 1
+canonical_provenance = "FANTASY_402_PHONE"
+layer_id = "L24C.N2204"
+token_name = "--sd-tier-phone"
+hex = "#a5b4fc"
+channel_code = "PHONE"
+wire_aliases = ["PHONE", "CLERK"]
+signal_tier = "SIGNAL_CLERK_ASSISTED"
+transport_uri = "portal://ticker/clerk-phone"
+channel_status = "ACTIVE"
+volume_rule = "AUDIT_MODE_2_10 (preserves clerkOperatorIdentifier)"
+operational_role = "Clerk-Assisted Phone Ticket Ingestion"
+sla_kind = "latency"
+sla_ms = 1500
+sla_tens_of_ms = 150
+
+[ingestion.L24D_HOUSE]
+channel_id = 10
+source_bridge_id = 1
+canonical_provenance = "FANTASY_402_HOUSE_BOOK"
+layer_id = "L24D.N2308"
+token_name = "--sd-tier-house"
+hex = "#e2e8f0"
+channel_code = "HOUSE"
+wire_aliases = ["AGENT", "ADMIN", "HOUSE"]
+signal_tier = "SIGNAL_HOUSE_LEDGER"
+transport_uri = "portal://ticker/house-ledger"
+channel_status = "ACTIVE"
+volume_rule = "AUDIT_MODE_2_10 (routes to Mode 2 & Mode 10 audit ledgers)"
+operational_role = "Agent / Admin / House Transfer & Offset Ledger"
+sla_kind = "latency"
+sla_ms = 1500
+sla_tens_of_ms = 150
 
 # ------------------------------------------------------------------------------
 # Axis 2: Risk Decision & Route Continuum (Layers 25-28)
-# Strongly typed predicates, move flags, and mathematical thresholds
+# Zero IEEE-754 floats: all thresholds expressed as integer Cents / BasisPoints / ms
 # ------------------------------------------------------------------------------
 [routes.L25_N1882]
+route_id = 0
 layer_id = "L25.N1882"
 token_name = "--sd-route-devig"
-hex = "#06b6d4"
+hex = "#22d3ee" # 7.38:1 on raised
 route_name = "Route 04 Devig Consensus"
 move_flag = "STEAM_CONVERGENCE"
 trigger_kind = "ADVERSE_SELECTION"
@@ -175,22 +390,24 @@ mitigation_kind = "DYNAMIC_REPRICE"
 operational_role = "Steam Convergence & Consensus Price Arbitration"
 
 [routes.L26_N3104]
+route_id = 1
 layer_id = "L26.N3104"
 token_name = "--sd-route-sharp"
-hex = "#a855f7"
+hex = "#c892ff" # upgraded from #a855f7 (3.46:1 -> 5.64:1 on raised)
 route_name = "Route 02 Sharp Shrinkage"
 move_flag = "SHRINKAGE_SHARP"
 trigger_kind = "CLV_MARGIN_DECAY"
 threshold_kind = "bayes_shrinkage"
-tau_star = 0.68
+tau_star_basis_points = 6800 # integer BasisPoints replacing float 0.68
 min_tickets = 8
 mitigation_kind = "SHRINKAGE_RECALIBRATE"
 operational_role = "Bayesian Sharp Detection & Margin Decay Guard"
 
 [routes.L27_N0912]
+route_id = 2
 layer_id = "L27.N0912"
 token_name = "--sd-route-pending"
-hex = "#d97706"
+hex = "#fb923c" # upgraded from #d97706 (4.06:1 -> 5.90:1 on raised)
 route_name = "Route 01 Liquidity Breaker"
 move_flag = "LIQUIDITY_HALT"
 trigger_kind = "ORDER_BOOK_EXHAUSTION"
@@ -200,9 +417,10 @@ mitigation_kind = "CIRCUIT_BREAKER_HALT"
 operational_role = "Liquidity Exhaustion Protection & Breaker Trip"
 
 [routes.L28_N2501]
+route_id = 3
 layer_id = "L28.N2501"
 token_name = "--sd-route-manager"
-hex = "#f43f5e"
+hex = "#ff758f" # upgraded from #f43f5e (4.24:1 -> 5.20:1 on raised)
 route_name = "Route 03 Manager Terminal"
 move_flag = "TERMINAL_ENFORCE"
 trigger_kind = "TERMINAL_DEFICIT_ESCALATION"
@@ -213,43 +431,174 @@ max_deficit_cents = 10000000
 mitigation_kind = "MANAGER_LIMIT_CLAMP"
 operational_role = "Terminal Risk Containment & Manager Write-Gate"
 
+# ------------------------------------------------------------------------------
+# Axis 3: Deterministic BitSet32 Masks (Unsigned >>> 0 Shift Contract; Bit <= 30)
+# Bits capped at 30 (0x40000000) so signed 32-bit JS SMI shifts never go negative.
+# ------------------------------------------------------------------------------
+[bitmasks.bet_legs]
+IS_LIVE_LEG = 0 # (1 << 0) >>> 0 = 0x00000001
+IS_ALT_SPREAD_PLUS_5000 = 1 # (1 << 1) >>> 0 = 0x00000002
+IS_SPLIT_MARKET_EXEMPT = 2 # (1 << 2) >>> 0 = 0x00000004 (ANOM-01 ML vs Total)
+IS_SIGNAL_DONOR_EXEMPT = 3 # (1 << 3) >>> 0 = 0x00000008
+IS_PARTNER_118_SKIN = 4 # (1 << 4) >>> 0 = 0x00000010 (G<id> / M.G<id>)
+IS_SAME_GAME_CORRELATED = 5 # (1 << 5) >>> 0 = 0x00000020
+
+[bitmasks.ui_state]
+MODAL_OPEN_BIT = 0 # 0x00000001 — cleared on Escape; restores trigger focus
+INSPECTOR_DRAWER_BIT = 1 # 0x00000002 — detail drawer open
+FILTER_LOCK_BIT = 2 # 0x00000004 — channel filter pinned
+ARIA_LIVE_COALESCE_BIT = 3 # 0x00000008 — <= 2 Hz polite throttle latch
+FOCUS_RING_VISIBLE_BIT = 4 # 0x00000010 — keyboard modality active
+STALE_SNAPSHOT_POISON_BIT = 30 # 0x40000000 — halts A11y green-pass & write promotion
+
+# ------------------------------------------------------------------------------
+# Axis 4: 10-Key Bijective Operator Keymap & Roving Tab Slots (Modes 1..10)
+# Invariant: slot_index (0..9) <-> key_code <-> forensic_mode (1..10) <-> (1 << slot_index)
+# ------------------------------------------------------------------------------
+[keymap.M01]
+slot_index = 0
+bit_mask = 1
+key_code = "Digit1"
+keycap = "1"
+forensic_mode = 1
+label = "Live Ticker"
+
+[keymap.M02]
+slot_index = 1
+bit_mask = 2
+key_code = "Digit2"
+keycap = "2"
+forensic_mode = 2
+label = "Clerk & House Audit"
+
+[keymap.M03]
+slot_index = 2
+bit_mask = 4
+key_code = "Digit3"
+keycap = "3"
+forensic_mode = 3
+label = "Pending Exposure"
+
+[keymap.M04]
+slot_index = 3
+bit_mask = 8
+key_code = "Digit4"
+keycap = "4"
+forensic_mode = 4
+label = "Parlay & Combo Ladder"
+
+[keymap.M05]
+slot_index = 4
+bit_mask = 16
+key_code = "Digit5"
+keycap = "5"
+forensic_mode = 5
+label = "Partner 118 GSLive"
+
+[keymap.M06]
+slot_index = 5
+bit_mask = 32
+key_code = "Digit6"
+keycap = "6"
+forensic_mode = 6
+label = "WebLog & IP Tracker"
+
+[keymap.M07]
+slot_index = 6
+bit_mask = 64
+key_code = "Digit7"
+keycap = "7"
+forensic_mode = 7
+label = "Sharp Shrinkage"
+
+[keymap.M08]
+slot_index = 7
+bit_mask = 128
+key_code = "Digit8"
+keycap = "8"
+forensic_mode = 8
+label = "Delay Bitsets (10-12s)"
+
+[keymap.M09]
+slot_index = 8
+bit_mask = 256
+key_code = "Digit9"
+keycap = "9"
+forensic_mode = 9
+label = "Cross-Market Hedge"
+
+[keymap.M10]
+slot_index = 9
+bit_mask = 512
+key_code = "Digit0"
+keycap = "0"
+forensic_mode = 10
+label = "Reconciliation & Ledger"
+
 # ==============================================================================
 # Token Map for Wager Tiers and Surveillance (@token:<name> references)
+# Must stay byte-identical to canonical [surfaces.*], [ui.*], and [sla.*] hexes.
 # ==============================================================================
 [tokens]
 
-# --- Surfaces & structure --------------------------------------------------
-"sd-surface-panel" = "#0d1527"
-"sd-surface-raised" = "#1a2436"
-"sd-border-default" = "#1e293b"
-"sd-border-strong" = "#334155"
+# --- Surfaces & structure (canonical + legacy aliases locked) --------------
+"sd-surface-bg" = "#070b14"
+"sd-surface-cli" = "#04070e"
+"sd-surface-card" = "#0b1120"
+"sd-surface-panel" = "#0b1120" # alias for wager_tiers.toml compatibility
+"sd-surface-elevated" = "#121c31"
+"sd-surface-hover" = "#19263d"
+"sd-surface-raised" = "#202f4a"
+"sd-surface-selected" = "#0f3a5d"
+"sd-surface-border" = "#243247"
+"sd-border-default" = "#243247" # alias for wager_tiers.toml compatibility
+"sd-border-strong" = "#7085a1"
+"sd-focus-ring" = "#38bdf8"
+"sd-focus-ring-offset" = "#070b14"
 
 # --- Text ------------------------------------------------------------------
-"sd-text-primary" = "#f1f5f9" # canonical; wager_tiers previously drifted to #f8fafc
+"sd-text-primary" = "#f1f5f9"
 "sd-text-secondary" = "#cbd5e1"
 "sd-text-muted" = "#94a3b8"
 
-# --- Semantic accents ------------------------------------------------------
+# --- Semantic accents (>= 4.5:1 across all surfaces) -----------------------
 "sd-accent" = "#38bdf8"
-"sd-danger" = "#ef4444"
+"sd-danger" = "#ff7878"
 "sd-warn" = "#f59e0b"
-"sd-ok" = "#22c55e"
-"sd-info" = "#818cf8"
+"sd-ok" = "#4ade80"
+"sd-info" = "#a5b4fc"
+"sd-theme-emerald" = "#22d39a" # legacy L20 alias
+
+# --- Signal-Honesty Provenance Badges (#73 / #74; borders >= 3.0:1) --------
+"sd-provenance-live-fg" = "#34d399"
+"sd-provenance-live-bg" = "#0a2922"
+"sd-provenance-live-border" = "#10b981"
+
+"sd-provenance-capture-fg" = "#38bdf8"
+"sd-provenance-capture-bg" = "#0c2438"
+"sd-provenance-capture-border" = "#29b6f6"
+
+"sd-provenance-stale-fg" = "#fbbf24"
+"sd-provenance-stale-bg" = "#2b200c"
+"sd-provenance-stale-border" = "#f59e0b"
+
+"sd-provenance-fixture-fg" = "#d8b4fe"
+"sd-provenance-fixture-bg" = "#221636"
+"sd-provenance-fixture-border" = "#c084fc"
 
 # --- Tier colors (bound to tier keys in wager_tiers.toml) ------------------
-"sd-tier-originator-fg" = "#f87171"
-"sd-tier-originator-bg" = "#302332"
-"sd-tier-originator-border" = "#ef4444"
+"sd-tier-originator-fg" = "#fca5a5"
+"sd-tier-originator-bg" = "#2d161d"
+"sd-tier-originator-border" = "#ff7878"
 
-"sd-tier-steam-fg" = "#f59e0b" # canonical; wager_tiers previously drifted to #fb923c
-"sd-tier-steam-bg" = "#31282a"
+"sd-tier-steam-fg" = "#f59e0b"
+"sd-tier-steam-bg" = "#2c1f0e"
 "sd-tier-steam-border" = "#f59e0b"
 
-"sd-tier-latency-fg" = "#c084fc"
-"sd-tier-latency-bg" = "#282647"
+"sd-tier-latency-fg" = "#d8b4fe"
+"sd-tier-latency-bg" = "#201a3a"
 "sd-tier-latency-border" = "#c084fc"
 
 "sd-tier-baseline-fg" = "#4ade80"
-"sd-tier-baseline-bg" = "#163334"
+"sd-tier-baseline-bg" = "#0d2922"
 "sd-tier-baseline-border" = "#22c55e"
-

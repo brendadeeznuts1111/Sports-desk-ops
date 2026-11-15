@@ -28,10 +28,6 @@
     "desk-provenance": "bin/desk-provenance.ts"
   },
   "trustedDependencies": [],
-  "publishConfig": {
-    "access": "restricted",
-    "registry": "http://127.0.0.1:50851/"
-  },
   "description": "SportsDesk & Fantasy402 Downline Risk Surveillance, Bettor Churn Simulation, and Cloudflare R2 Sync Suite",
   "workspaces": [
     "packages/*"
@@ -173,6 +169,7 @@
     "session:login": "bun run scripts/session_login.ts",
     "session:status": "bun run scripts/session_login.ts --status",
     "mcp:dx": "bun run scripts/mcp_dx_server.ts",
+    "mcp:serve": "bun --no-orphans run cli/sportsdesk_mcp_cli.ts",
     "cli": "bun run cli/sportsdesk_cli.ts",
     "replay": "bun run cli/sportsdesk_replay_cli.ts",
     "ingestion:enrich-xml-golden": "bun run scripts/enrich_ingestion_jsonl_xml_golden.ts",
@@ -353,12 +350,18 @@
     "nsh:run": "bun run scripts/nsh_desk_cli.ts run",
     "nsh:package:web": "bun run scripts/nsh_desk_cli.ts package-web",
     "nsh:sign:verify": "bun run scripts/nsh_desk_cli.ts sign-verify",
-    "typecheck:ws": "bun check --no-script -p packages/contracts/tsconfig.json && bun check --no-script -p packages/ui/tsconfig.json && bun check --no-script -p packages/backend/tsconfig.json && bun check --no-script -p packages/api/tsconfig.json",
+    "typecheck:ws": "bun check --no-script -b -p tsconfig.workspaces.json",
     "dev:ui": "bun run scripts/dev_dashboard.ts",
     "dev:api": "bun run scripts/dev_dashboard.ts --api-only",
-    "test:ws": "PRETEST_SKIP=1 bun test --parallel tests/workspace_packs.test.ts tests/dx_workspaces.test.ts tests/verify_fast_scope.test.ts tests/dashboard_backend_workspace.test.ts tests/dashboard_api_inmemory.test.ts tests/dashboard_ui_panels.test.tsx tests/dashboard_build_and_markdown.test.ts tests/enhanced_dashboard_builder.test.ts tests/slice_metrics.test.ts tests/wager_tiers_toml.test.ts",
+    "test:ws": "PRETEST_SKIP=1 bun test --parallel tests/workspace_packs.test.ts tests/dx_workspaces.test.ts tests/verify_fast_scope.test.ts tests/dashboard_backend_workspace.test.ts tests/dashboard_api_inmemory.test.ts tests/dashboard_ui_panels.test.tsx tests/dashboard_build_and_markdown.test.ts tests/enhanced_dashboard_builder.test.ts tests/slice_metrics.test.ts tests/wager_tiers_toml.test.ts tests/dashboard_config_validation.test.ts",
     "build:ws": "bun run scripts/build_dashboard.ts",
-    "pack:check": "bun run scripts/check_workspace_packs.ts"
+    "validate:dashboard": "bun scripts/validate_dashboard_config.ts",
+    "pack:check": "bun run scripts/check_workspace_packs.ts",
+    "naming:fitness": "bun scripts/naming_fitness.ts",
+    "venue:table": "bun scripts/venue_registry_table.ts",
+    "audit:deps": "bun audit",
+    "audit:deps:json": "bun audit --json",
+    "validate:field-contract": "bun scripts/validate_wagers_field_contract.ts"
   },
   "keywords": [
     "sportsdesk",
@@ -408,5 +411,9 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "zod": "4.6.7"
+  },
+  "overrides": {
+    "got": "11.8.5",
+    "ws": "5.2.5"
   }
 }

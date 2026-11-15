@@ -16,6 +16,7 @@ import {
   type Feature,
 } from "../types/features.ts";
 import { runBunBuild } from "./build.ts";
+import { slabConfigGuard } from "./build_plugins/slab_config_guard.ts";
 
 export interface DashboardBuildOptions {
   readonly target?: BuildTarget | undefined;
@@ -67,6 +68,7 @@ export async function buildEnhancedDashboard(
     outdir,
     target: "browser",
     features: enabledFeatures,
+    plugins: [slabConfigGuard],
     minify,
     sourcemap: target === "prod" ? "external" : "inline",
   });

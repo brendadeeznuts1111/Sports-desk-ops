@@ -102,8 +102,21 @@ interface LifetimeColumns {
 /** 4 bytes: the only width the reader must branch on besides 8. */
 const WORD_BYTES = 4;
 
-function sectionOffset(header: Uint32Array, sectionIndex: number): number {
-  return header[HEADER_SECTION_TABLE_START + sectionIndex * 3]!;
+/**
+ * Words per section-table entry: the offset, then two fields the reader does not
+ * read. Exported with the accessor so a probe validates the table through THIS
+ * function instead of re-deriving the stride from the header layout.
+ */
+export const SECTION_TABLE_STRIDE_WORDS = 3;
+
+/** The declared byte offset of one section, straight out of the header table. */
+export function sectionOffset(
+  header: Uint32Array,
+  sectionIndex: number,
+): number {
+  return header[
+    HEADER_SECTION_TABLE_START + sectionIndex * SECTION_TABLE_STRIDE_WORDS
+  ]!;
 }
 
 /**

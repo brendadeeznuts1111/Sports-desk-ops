@@ -66,7 +66,9 @@ export function buildLeadLagPairs(
       entry = {};
       byCombo.set(row.canonical_combo_id, entry);
     }
-    if (row.venue === "internal") {
+    // The desk side used to be a venue called "internal"; the venue is `desk`
+    // (the host), split from `lakehouse` which never trades.
+    if (row.venue === "desk") {
       entry.internal = row.first_valid_time;
     } else if (row.venue === "polymarket") {
       entry.polymarket = row.first_valid_time;

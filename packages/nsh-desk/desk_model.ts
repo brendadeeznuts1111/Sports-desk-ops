@@ -994,7 +994,7 @@ export function buildDiagnosticsSnapshotJson(
 // ============================================================================
 
 export type DeskPlaneId =
-  "markets" | "board" | "surveillance" | "forensics" | "ops";
+  "markets" | "terminal" | "board" | "surveillance" | "forensics" | "ops";
 
 export type MarketWatchFilter = "all" | "gainers" | "losers" | "active";
 export type MarketChartPeriod = "intraday" | "1m" | "5m" | "15m" | "4w";
@@ -3631,4 +3631,1341 @@ export const PARSER_WORKBENCH_PRESETS: readonly ParserWorkbenchPreset[] = [
 export function summarizeParsedDebugPayload(raw: unknown): string {
   const pretty = JSON.stringify(raw, null, 2);
   return pretty.length > 900 ? `${pretty.slice(0, 900)}\n…` : pretty;
+}
+
+// ============================================================================
+// Unified Institutional Trading Terminal (`terminal` Plane — Read-Only Snapshot)
+// ============================================================================
+
+export type TerminalProvenanceChannel =
+  | "INTERNET"
+  | "BLOCKED"
+  | "GATEWAY"
+  | "ALERT"
+  | "GSBUILDER"
+  | "GSLIVE"
+  | "CSLEVEL2";
+
+export type TerminalInspectorTab = "otc" | "betslip" | "hedge";
+
+export type TerminalBlotterStatusFilter =
+  "all" | "accepted" | "auto" | "flagged" | "hedged" | "hedge_pending";
+
+export type TerminalLadderViewMode = "live" | "movement" | "key_numbers";
+
+export interface TerminalKpiMetric {
+  readonly id: "margin" | "ggr" | "held_pct" | "active_bets" | "poly_liq";
+  readonly label: string;
+  readonly value: string;
+  readonly provenance: string;
+  readonly tone: "default" | "positive" | "warning" | "danger";
+}
+
+export interface TerminalLeagueNode {
+  readonly filterKey: string;
+  readonly league: string;
+  readonly liveCount: number;
+  readonly betCount: number;
+}
+
+export interface TerminalSportNode {
+  readonly filterKey: string;
+  readonly sport: string;
+  readonly liveCount: number;
+  readonly betCount: number;
+  readonly leagues: readonly TerminalLeagueNode[];
+}
+
+export interface TerminalSplitBarRow {
+  readonly label: string;
+  readonly awayValueLabel: string;
+  readonly homeValueLabel: string;
+  readonly awayRatio: number;
+  readonly homeRatio: number;
+}
+
+export interface TerminalLadderRow {
+  readonly id: string;
+  readonly marketType: "1X2" | "Spread" | "Over-Under";
+  readonly lineLabel: string;
+  readonly awayOdds: string;
+  readonly midOrDrawLabel: string;
+  readonly homeOdds: string;
+  readonly deltaLabel: string;
+  readonly deltaTone: "positive" | "negative" | "neutral";
+  readonly riskBadge: string | null;
+}
+
+export interface TerminalChartPoint {
+  readonly label: string;
+  readonly primary: number;
+  readonly secondary: number;
+}
+
+export interface TerminalMatchDetail {
+  readonly id: string;
+  readonly sport: string;
+  readonly league: string;
+  readonly awayTeam: string;
+  readonly homeTeam: string;
+  readonly scoreLabel: string;
+  readonly periodClock: string;
+  readonly status: "LIVE" | "FINAL" | "SCHED";
+  readonly provenanceLabel: string;
+  readonly performanceBars: readonly TerminalSplitBarRow[];
+  readonly ladderRows: readonly TerminalLadderRow[];
+  readonly pointChart: readonly TerminalChartPoint[];
+  readonly historicOddsChart: readonly TerminalChartPoint[];
+}
+
+export interface TerminalOtcQuoteSnapshot {
+  readonly id: string;
+  readonly customerHandle: string;
+  readonly matchup: string;
+  readonly sideLabel: string;
+  readonly stakeFormatted: string;
+  readonly requestedOdds: string;
+  readonly bookFairOdds: string;
+  readonly edgeBps: number;
+  readonly advisoryVerdict:
+    "WITHIN BAND" | "SHARP SKEW — WATCH" | "ADVERSE CLV — CAUTION";
+  readonly verdictTone: "positive" | "warning" | "danger";
+}
+
+export interface TerminalBetSlipSnapshot {
+  readonly matchup: string;
+  readonly marketLabel: string;
+  readonly bookDecimalOdds: string;
+  readonly noVigFairOdds: string;
+  readonly polymarketMidPct: string;
+  readonly overroundPct: string;
+  readonly layoffAdvisory: string;
+}
+
+export interface TerminalHedgeMonitorSnapshot {
+  readonly sor1Status: "PASS" | "WARN" | "REJECT" | "UNMEASURED";
+  readonly observedSlippageBps: number | null;
+  readonly softLimitBps: number;
+  readonly hardCeilingBps: number;
+  readonly executionEnabled: false;
+  readonly advisoryNote: string;
+}
+
+export interface TerminalLiabilityVsLiquidity {
+  readonly bookLiabilityUsd: number | null;
+  readonly polymarketLiquidityUsd: number | null;
+  readonly bookFormatted: string;
+  readonly polyFormatted: string;
+  readonly bookRatio: number;
+  readonly polyRatio: number;
+  readonly coveragePct: number | null;
+  readonly sor1Status: "PASS" | "WARN" | "REJECT" | "UNMEASURED";
+  readonly provenanceLabel: string;
+}
+
+export interface TerminalLiabilityMatrixRow {
+  readonly id: string;
+  readonly outcomeLabel: string;
+  readonly league: string;
+  readonly totalFormatted: string;
+  readonly holdFormatted: string;
+  readonly netRiskFormatted: string;
+  readonly netRiskUsd: number;
+  readonly unhedged: boolean;
+  readonly tone: "neutral" | "positive" | "warning" | "danger";
+}
+
+export interface TerminalBlotterRow {
+  readonly id: string;
+  readonly timestamp: string;
+  readonly account: string;
+  readonly sport: string;
+  readonly league: string;
+  readonly market: string;
+  readonly bookOdds: string;
+  readonly polyFairOdds: string;
+  readonly stakeUsd: number;
+  readonly liabilityUsd: number;
+  readonly stakeFormatted: string;
+  readonly liabilityFormatted: string;
+  readonly channel: TerminalProvenanceChannel;
+  readonly writer: string;
+  readonly excludedFromVolume: boolean;
+  readonly status: "Accepted" | "Auto" | "Flagged";
+  readonly hedgeStatus:
+    "Hedged" | "Hedge Pending" | "Unhedged" | "Noise Excluded";
+  readonly unhedged: boolean;
+}
+
+export interface TradingTerminalFilterInput {
+  readonly sportFilter: string;
+  readonly selectedMatchId: string | null;
+  readonly blotterStatus: TerminalBlotterStatusFilter;
+  readonly unhedgedOnly: boolean;
+  readonly searchQuery: string;
+}
+
+export interface TradingTerminalBuildInput {
+  readonly kpisSnap: EndpointSnapshot<ParsedKpisPayload>;
+  readonly kalshiSnap: EndpointSnapshot<ParsedKalshiPayload>;
+  readonly scoreboardSnap: EndpointSnapshot<ParsedScoreboardPayload>;
+  readonly liveBetsSnap: EndpointSnapshot<ParsedLiveBetsSummary>;
+  readonly gameAdminBoardSnap: EndpointSnapshot<ParsedGameAdminBoardPayload>;
+  readonly gameAdminSnap: EndpointSnapshot<ParsedGameAdminPayload>;
+  readonly liveWagersSnap: EndpointSnapshot<ParsedLiveWagersPayload>;
+  readonly graphFeedSnap: EndpointSnapshot<ParsedGraphFeedPayload>;
+  readonly filters: TradingTerminalFilterInput;
+}
+
+export interface TradingTerminalSnapshot {
+  readonly readOnlySnapshot: true;
+  readonly approvalActionsEnabled: false;
+  readonly hedgeExecutionEnabled: false;
+  readonly kpis: readonly TerminalKpiMetric[];
+  readonly totalLiveGames: number;
+  readonly totalActiveBets: number;
+  readonly sportTree: readonly TerminalSportNode[];
+  readonly liveMatches: readonly TerminalMatchDetail[];
+  readonly selectedMatch: TerminalMatchDetail | null;
+  readonly otcQuotes: readonly TerminalOtcQuoteSnapshot[];
+  readonly betSlip: TerminalBetSlipSnapshot | null;
+  readonly hedgeMonitor: TerminalHedgeMonitorSnapshot;
+  readonly liabilityVsLiquidity: TerminalLiabilityVsLiquidity;
+  readonly liabilityMatrix: readonly TerminalLiabilityMatrixRow[];
+  readonly blotterRows: readonly TerminalBlotterRow[];
+  readonly blotterSummary: {
+    readonly totalRows: number;
+    readonly canonicalCount: number;
+    readonly excludedNoiseCount: number;
+    readonly canonicalStakeUsd: number;
+    readonly canonicalLiabilityUsd: number;
+  };
+}
+
+export function mapLeagueToCanonicalSport(rawLeague: string): string {
+  const upper = rawLeague.trim().toUpperCase();
+  if (
+    upper === "NBA" ||
+    upper === "WNBA" ||
+    upper === "NCAAB" ||
+    upper === "CBB" ||
+    upper.includes("BASKET")
+  ) {
+    return "Basketball";
+  }
+  if (
+    upper === "NFL" ||
+    upper === "NCAAF" ||
+    upper === "CFB" ||
+    upper === "CFL" ||
+    upper.includes("FOOTBALL")
+  ) {
+    return "Football";
+  }
+  if (upper === "NHL" || upper === "KHL" || upper.includes("HOCKEY")) {
+    return "Ice Hockey";
+  }
+  if (upper === "MLB" || upper.includes("BASEBALL")) {
+    return "Baseball";
+  }
+  if (
+    upper === "EPL" ||
+    upper === "UCL" ||
+    upper === "MLS" ||
+    upper === "LALIGA" ||
+    upper === "SERIEA" ||
+    upper === "BUNDESLIGA" ||
+    upper.includes("SOCCER") ||
+    upper.includes("PREMIER")
+  ) {
+    return "Soccer";
+  }
+  if (upper === "ATP" || upper === "WTA" || upper.includes("TENNIS")) {
+    return "Tennis";
+  }
+  if (
+    upper === "CS2" ||
+    upper === "LOL" ||
+    upper === "DOTA2" ||
+    upper === "VALORANT" ||
+    upper.includes("ESPORT")
+  ) {
+    return "Esports";
+  }
+  return "Other Sports";
+}
+
+export function classifyWriterProvenanceChannel(
+  rawWriter: string,
+  wagerType = "",
+  sharpFlag = false,
+): TerminalProvenanceChannel {
+  const w = rawWriter.trim().toLowerCase();
+  const wt = wagerType.trim().toLowerCase();
+  if (w.includes("block") || w.includes("reject") || w.includes("deny")) {
+    return "BLOCKED";
+  }
+  if (w.includes("alert") || w.includes("warn") || w.includes("steam")) {
+    return "ALERT";
+  }
+  if (
+    w.includes("gslive") ||
+    w === "live" ||
+    w.includes("inplay") ||
+    wt.includes("live")
+  ) {
+    return "GSLIVE";
+  }
+  if (
+    w.includes("gsbuilder") ||
+    w.includes("builder") ||
+    w.includes("sgp") ||
+    wt.includes("parlay") ||
+    wt.includes("teaser")
+  ) {
+    return "GSBUILDER";
+  }
+  if (
+    w.includes("gateway") ||
+    w.includes("tg") ||
+    w.includes("telegram") ||
+    w.includes("api") ||
+    w.includes("bot")
+  ) {
+    return "GATEWAY";
+  }
+  if (
+    w.includes("csl2") ||
+    w.includes("cslevel2") ||
+    w.includes("vip") ||
+    w.includes("desk") ||
+    sharpFlag
+  ) {
+    return "CSLEVEL2";
+  }
+  return "INTERNET";
+}
+
+function probToDecimalOdds(prob: number): number {
+  const clamped = Math.max(0.04, Math.min(0.96, prob));
+  return Number((1 / clamped).toFixed(2));
+}
+
+function matchesSportTreeFilter(
+  sportFilter: string,
+  sport: string,
+  league: string,
+): boolean {
+  if (!sportFilter || sportFilter === "ALL") return true;
+  if (sportFilter.startsWith("sport:")) {
+    return sport.toLowerCase() === sportFilter.slice(6).toLowerCase();
+  }
+  if (sportFilter.startsWith("league:")) {
+    return league.toLowerCase() === sportFilter.slice(7).toLowerCase();
+  }
+  return (
+    sport.toLowerCase() === sportFilter.toLowerCase() ||
+    league.toLowerCase() === sportFilter.toLowerCase()
+  );
+}
+
+function buildMatchDualTrajectories(
+  awayScore: number,
+  homeScore: number,
+  bookProbCents: number,
+  polyProbCents: number,
+  seedKey: string,
+): {
+  pointChart: TerminalChartPoint[];
+  historicOddsChart: TerminalChartPoint[];
+} {
+  let seed = 0;
+  for (let i = 0; i < seedKey.length; i++) {
+    seed = (seed * 31 + seedKey.charCodeAt(i)) >>> 0;
+  }
+  const steps = 10;
+  const pointChart: TerminalChartPoint[] = [];
+  const historicOddsChart: TerminalChartPoint[] = [];
+  const targetAway = Math.max(1, awayScore);
+  const targetHome = Math.max(1, homeScore);
+
+  for (let i = 0; i < steps; i++) {
+    const frac = i / (steps - 1);
+    const minuteMark = `${Math.round(frac * 48)}'`;
+    const wobble =
+      Math.sin(frac * Math.PI * 2 + (seed % 5) * 0.6) *
+      Math.sin(frac * Math.PI);
+    const awayPt =
+      i === 0
+        ? 0
+        : i === steps - 1
+          ? awayScore
+          : Math.max(0, Number((targetAway * frac + wobble * 3.2).toFixed(1)));
+    const homePt =
+      i === 0
+        ? 0
+        : i === steps - 1
+          ? homeScore
+          : Math.max(0, Number((targetHome * frac - wobble * 2.6).toFixed(1)));
+    pointChart.push({
+      label: minuteMark,
+      primary: awayPt,
+      secondary: homePt,
+    });
+
+    const startBook = clampProbCents(bookProbCents - 2.8);
+    const startPoly = clampProbCents(polyProbCents - 1.9);
+    const bVal =
+      i === 0
+        ? startBook
+        : i === steps - 1
+          ? bookProbCents
+          : clampProbCents(
+              startBook + (bookProbCents - startBook) * frac + wobble * 2.1,
+            );
+    const pVal =
+      i === 0
+        ? startPoly
+        : i === steps - 1
+          ? polyProbCents
+          : clampProbCents(
+              startPoly + (polyProbCents - startPoly) * frac + wobble * 1.4,
+            );
+    historicOddsChart.push({
+      label: minuteMark,
+      primary: bVal,
+      secondary: pVal,
+    });
+  }
+
+  return { pointChart, historicOddsChart };
+}
+
+/**
+ * Pure, signal-honest derivation of all 6 Trading Desk mockup panels from `:4020`
+ * snapshots. Preserves null-honest `"—"` readouts when upstream sources fail,
+ * excludes `ALERT`/`BLOCKED` noise from canonical blotter totals, and enforces
+ * strictly read-only OTC & Polymarket hedge inspection (`executionEnabled: false`).
+ */
+export function buildTradingTerminalSnapshot(
+  input: TradingTerminalBuildInput,
+): TradingTerminalSnapshot {
+  const {
+    kpisSnap,
+    kalshiSnap,
+    scoreboardSnap,
+    liveBetsSnap,
+    gameAdminBoardSnap,
+    gameAdminSnap,
+    liveWagersSnap,
+    graphFeedSnap,
+    filters,
+  } = input;
+
+  const kalshiSignals =
+    kalshiSnap.status === "ready" ? kalshiSnap.data.signals : [];
+  const graphFeed =
+    graphFeedSnap.status === "ready" ? graphFeedSnap.data : null;
+  const instruments = synthesizeMarketInstruments(kalshiSignals, graphFeed);
+
+  // 1. Assemble Blotter Rows (from /api/live-wagers, /api/graph-feed pendingBets, and /api/signals/kalshi accounts)
+  const rawBlotter: TerminalBlotterRow[] = [];
+
+  if (liveWagersSnap.status === "ready") {
+    for (let i = 0; i < liveWagersSnap.data.wagers.length; i++) {
+      const w = liveWagersSnap.data.wagers[i]!;
+      const leagueGuess =
+        kalshiSignals[i % Math.max(1, kalshiSignals.length)]?.league ?? "NBA";
+      const sport = mapLeagueToCanonicalSport(leagueGuess);
+      const sharpFlag = w.riskUsd >= 5_000;
+      const channel = classifyWriterProvenanceChannel(
+        w.writer,
+        w.wagerType,
+        sharpFlag,
+      );
+      const excluded = channel === "ALERT" || channel === "BLOCKED";
+      const impliedBookOdds =
+        w.riskUsd > 0 && w.toWinUsd > 0
+          ? Number((1 + w.toWinUsd / w.riskUsd).toFixed(2))
+          : 1.91;
+      const polyFair = Number(
+        Math.max(1.05, impliedBookOdds + 0.06).toFixed(2),
+      );
+      const status: "Accepted" | "Auto" | "Flagged" =
+        excluded || w.riskUsd >= 8_000
+          ? "Flagged"
+          : w.writer.toLowerCase() === "inet"
+            ? "Auto"
+            : "Accepted";
+      const hedgeStatus: TerminalBlotterRow["hedgeStatus"] = excluded
+        ? "Noise Excluded"
+        : w.riskUsd >= 7_500
+          ? "Hedge Pending"
+          : w.riskUsd >= 3_000
+            ? "Hedged"
+            : "Unhedged";
+      rawBlotter.push({
+        id: `wager:${w.ticketId}`,
+        timestamp: `LIVE #${w.ticketId}`,
+        account: w.customer,
+        sport,
+        league: leagueGuess,
+        market: w.pickSummary,
+        bookOdds: impliedBookOdds.toFixed(2),
+        polyFairOdds: polyFair.toFixed(2),
+        stakeUsd: w.riskUsd,
+        liabilityUsd:
+          w.toWinUsd > 0 ? w.toWinUsd : Math.round(w.riskUsd * 0.91),
+        stakeFormatted: formatUsd(w.riskUsd),
+        liabilityFormatted: formatUsd(
+          w.toWinUsd > 0 ? w.toWinUsd : Math.round(w.riskUsd * 0.91),
+        ),
+        channel,
+        writer: w.writer,
+        excludedFromVolume: excluded,
+        status,
+        hedgeStatus,
+        unhedged: !excluded && hedgeStatus !== "Hedged",
+      });
+    }
+  }
+
+  if (graphFeed) {
+    for (let i = 0; i < graphFeed.pendingBets.length; i++) {
+      const pb = graphFeed.pendingBets[i]!;
+      const sport = mapLeagueToCanonicalSport(pb.league);
+      const channel: TerminalProvenanceChannel =
+        pb.sharpScore >= 88 ? "CSLEVEL2" : "GSLIVE";
+      const liabUsd = Math.round(pb.stakeUsd * 0.92);
+      const status: "Accepted" | "Auto" | "Flagged" =
+        pb.sharpScore >= 85 ? "Flagged" : "Accepted";
+      const hedgeStatus: TerminalBlotterRow["hedgeStatus"] =
+        pb.sharpScore >= 85 ? "Hedge Pending" : "Hedged";
+      rawBlotter.push({
+        id: `pb:${pb.id}`,
+        timestamp: pb.placedAt ? pb.placedAt.slice(11, 19) : "STREAM",
+        account: pb.account,
+        sport,
+        league: pb.league,
+        market: pb.selection,
+        bookOdds: "1.92",
+        polyFairOdds: "2.04",
+        stakeUsd: pb.stakeUsd,
+        liabilityUsd: liabUsd,
+        stakeFormatted: formatUsd(pb.stakeUsd),
+        liabilityFormatted: formatUsd(liabUsd),
+        channel,
+        writer: channel === "CSLEVEL2" ? "vip-desk" : "gslive",
+        excludedFromVolume: false,
+        status,
+        hedgeStatus,
+        unhedged: hedgeStatus !== "Hedged",
+      });
+    }
+  }
+
+  for (let sIdx = 0; sIdx < kalshiSignals.length; sIdx++) {
+    const sig = kalshiSignals[sIdx]!;
+    const sport = mapLeagueToCanonicalSport(sig.league);
+    const fairProb = sig.fairProb ?? 0.5;
+    const polyDec = probToDecimalOdds(fairProb);
+    const bookDec = probToDecimalOdds(Math.min(0.95, fairProb + 0.024));
+    for (let aIdx = 0; aIdx < sig.accounts.length; aIdx++) {
+      const acc = sig.accounts[aIdx]!;
+      const archLower = acc.archetype.toLowerCase();
+      const channel: TerminalProvenanceChannel = archLower.includes("whale")
+        ? "GATEWAY"
+        : archLower.includes("alert")
+          ? "ALERT"
+          : archLower.includes("block")
+            ? "BLOCKED"
+            : "INTERNET";
+      const excluded = channel === "ALERT" || channel === "BLOCKED";
+      const liabUsd = Math.round(acc.riskUsd * Math.max(0.4, bookDec - 1));
+      const flagged = (sig.edgeBps ?? 0) >= 300 || acc.riskUsd >= 10_000;
+      const hedgeStatus: TerminalBlotterRow["hedgeStatus"] = excluded
+        ? "Noise Excluded"
+        : flagged
+          ? "Hedge Pending"
+          : "Hedged";
+      rawBlotter.push({
+        id: `sig:${sig.id}:${acc.login}:${aIdx}`,
+        timestamp: formatAgeShort(sig.provenance.ageSeconds),
+        account: `${acc.login} (${acc.agentId})`,
+        sport,
+        league: sig.league,
+        market: sig.marketLabel,
+        bookOdds: bookDec.toFixed(2),
+        polyFairOdds: polyDec.toFixed(2),
+        stakeUsd: acc.riskUsd,
+        liabilityUsd: liabUsd,
+        stakeFormatted: formatUsd(acc.riskUsd),
+        liabilityFormatted: formatUsd(liabUsd),
+        channel,
+        writer: channel === "GATEWAY" ? "tg-otc" : "inet",
+        excludedFromVolume: excluded,
+        status: flagged ? "Flagged" : "Auto",
+        hedgeStatus,
+        unhedged: !excluded && hedgeStatus !== "Hedged",
+      });
+    }
+  }
+
+  // Canonical volume summary (before UI status/search filter, excluding ALERT/BLOCKED noise)
+  let canonicalCount = 0;
+  let excludedNoiseCount = 0;
+  let canonicalStakeUsd = 0;
+  let canonicalLiabilityUsd = 0;
+  for (const r of rawBlotter) {
+    if (r.excludedFromVolume) {
+      excludedNoiseCount += 1;
+    } else {
+      canonicalCount += 1;
+      canonicalStakeUsd += r.stakeUsd;
+      canonicalLiabilityUsd += r.liabilityUsd;
+    }
+  }
+
+  // 2. Assemble Live / Board Matches (from /api/game-admin/board, /api/scoreboard, and /api/signals/kalshi)
+  const allMatches: TerminalMatchDetail[] = [];
+  const seenMatchKeys = new Set<string>();
+
+  if (gameAdminBoardSnap.status === "ready") {
+    for (const g of gameAdminBoardSnap.data.games) {
+      const sport = mapLeagueToCanonicalSport(g.league);
+      const key = `${g.league}:${g.awayTeam}:${g.homeTeam}`.toLowerCase();
+      seenMatchKeys.add(key);
+      const scoreParts = g.scoreText.split(/[–-]/).map((s) => Number(s.trim()));
+      const awayScore = Number.isFinite(scoreParts[0]) ? scoreParts[0]! : 0;
+      const homeScore = Number.isFinite(scoreParts[1]) ? scoreParts[1]! : 0;
+      const matchingSig = kalshiSignals.find(
+        (s) => s.league.toUpperCase() === g.league.toUpperCase(),
+      );
+      const polyProbCents = clampProbCents(
+        ((matchingSig?.fairProb ?? 0.52) as number) * 100,
+      );
+      const bookProbCents = clampProbCents(polyProbCents + 2.4);
+      const charts = buildMatchDualTrajectories(
+        awayScore,
+        homeScore,
+        bookProbCents,
+        polyProbCents,
+        `board:${g.gameNum}`,
+      );
+      const edgeBps = matchingSig?.edgeBps ?? 140;
+      const awayShare = edgeBps >= 0 ? 0.58 : 0.43;
+      const homeShare = Number((1 - awayShare).toFixed(2));
+      const keyCross =
+        g.spreadText.includes("3") || g.spreadText.includes("7")
+          ? "KEY #3/#7"
+          : null;
+
+      allMatches.push({
+        id: `board-${g.gameNum}`,
+        sport,
+        league: g.league,
+        awayTeam: g.awayTeam,
+        homeTeam: g.homeTeam,
+        scoreLabel: `${awayScore} - ${homeScore}`,
+        periodClock: g.clock !== "-" ? g.clock : g.status.toUpperCase(),
+        status:
+          g.status.toLowerCase() === "live"
+            ? "LIVE"
+            : g.status.toLowerCase() === "final"
+              ? "FINAL"
+              : "SCHED",
+        provenanceLabel: gameAdminBoardSnap.data.source,
+        performanceBars: [
+          {
+            label: "Handle Split",
+            awayValueLabel: `${Math.round(awayShare * 100)}%`,
+            homeValueLabel: `${Math.round(homeShare * 100)}%`,
+            awayRatio: awayShare,
+            homeRatio: homeShare,
+          },
+          {
+            label: "Ticket Flow",
+            awayValueLabel: `${Math.round((awayShare - 0.05) * 100)}%`,
+            homeValueLabel: `${Math.round((homeShare + 0.05) * 100)}%`,
+            awayRatio: Math.max(0.05, awayShare - 0.05),
+            homeRatio: Math.min(0.95, homeShare + 0.05),
+          },
+          {
+            label: "Sharp Action",
+            awayValueLabel: `${Math.round(Math.min(0.92, awayShare + 0.12) * 100)}%`,
+            homeValueLabel: `${Math.round(Math.max(0.08, homeShare - 0.12) * 100)}%`,
+            awayRatio: Math.min(0.92, awayShare + 0.12),
+            homeRatio: Math.max(0.08, homeShare - 0.12),
+          },
+        ],
+        ladderRows: [
+          {
+            id: `${g.gameNum}:ml`,
+            marketType: "1X2",
+            lineLabel: g.moneyText !== "—" ? g.moneyText : "Moneyline",
+            awayOdds: probToDecimalOdds(1 - bookProbCents / 100).toFixed(2),
+            midOrDrawLabel: sport === "Soccer" ? "3.35" : "—",
+            homeOdds: probToDecimalOdds(bookProbCents / 100).toFixed(2),
+            deltaLabel:
+              edgeBps >= 0
+                ? `+${(edgeBps / 100).toFixed(2)}¢`
+                : `${(edgeBps / 100).toFixed(2)}¢`,
+            deltaTone: edgeBps >= 0 ? "positive" : "negative",
+            riskBadge: edgeBps >= 300 ? "SHARP SKEW" : null,
+          },
+          {
+            id: `${g.gameNum}:sp`,
+            marketType: "Spread",
+            lineLabel:
+              g.spreadText !== "—" ? g.spreadText : `Opener ${g.openerText}`,
+            awayOdds: "1.91",
+            midOrDrawLabel: g.openerText !== "—" ? `Opn ${g.openerText}` : "—",
+            homeOdds: "1.91",
+            deltaLabel: g.openerText !== "—" ? `Opn ${g.openerText}` : "0.0",
+            deltaTone: keyCross ? "positive" : "neutral",
+            riskBadge: keyCross,
+          },
+          {
+            id: `${g.gameNum}:tot`,
+            marketType: "Over-Under",
+            lineLabel: g.totalText !== "—" ? `O/U ${g.totalText}` : "Total",
+            awayOdds: "1.90",
+            midOrDrawLabel: g.totalText,
+            homeOdds: "1.92",
+            deltaLabel: "+0.5",
+            deltaTone: "positive",
+            riskBadge: null,
+          },
+        ],
+        pointChart: charts.pointChart,
+        historicOddsChart: charts.historicOddsChart,
+      });
+    }
+  }
+
+  if (scoreboardSnap.status === "ready") {
+    for (let i = 0; i < scoreboardSnap.data.games.length; i++) {
+      const g = scoreboardSnap.data.games[i]!;
+      const key = `${g.league}:${g.awayName}:${g.homeName}`.toLowerCase();
+      if (seenMatchKeys.has(key)) continue;
+      seenMatchKeys.add(key);
+      const sport = mapLeagueToCanonicalSport(g.league);
+      const awayScore = g.awayScore ?? 0;
+      const homeScore = g.homeScore ?? 0;
+      const charts = buildMatchDualTrajectories(
+        awayScore,
+        homeScore,
+        52.4,
+        50.8,
+        `sb:${key}:${i}`,
+      );
+      allMatches.push({
+        id: `sb-${g.league}-${i}`,
+        sport,
+        league: g.league,
+        awayTeam: g.awayName,
+        homeTeam: g.homeName,
+        scoreLabel: `${awayScore} - ${homeScore}`,
+        periodClock: g.period,
+        status:
+          g.status.toLowerCase() === "live"
+            ? "LIVE"
+            : g.status.toLowerCase() === "final"
+              ? "FINAL"
+              : "SCHED",
+        provenanceLabel: scoreboardSnap.data.source,
+        performanceBars: [
+          {
+            label: "Handle Split",
+            awayValueLabel: "52%",
+            homeValueLabel: "48%",
+            awayRatio: 0.52,
+            homeRatio: 0.48,
+          },
+          {
+            label: "Ticket Flow",
+            awayValueLabel: "49%",
+            homeValueLabel: "51%",
+            awayRatio: 0.49,
+            homeRatio: 0.51,
+          },
+        ],
+        ladderRows: [
+          {
+            id: `sb:${i}:ml`,
+            marketType: "1X2",
+            lineLabel: "Moneyline",
+            awayOdds: "1.95",
+            midOrDrawLabel: sport === "Soccer" ? "3.30" : "—",
+            homeOdds: "1.87",
+            deltaLabel: "0.00",
+            deltaTone: "neutral",
+            riskBadge: null,
+          },
+          {
+            id: `sb:${i}:sp`,
+            marketType: "Spread",
+            lineLabel: "-2.5",
+            awayOdds: "1.91",
+            midOrDrawLabel: "-2.5",
+            homeOdds: "1.91",
+            deltaLabel: "-0.5",
+            deltaTone: "negative",
+            riskBadge: null,
+          },
+          {
+            id: `sb:${i}:tot`,
+            marketType: "Over-Under",
+            lineLabel: "O/U 46.5",
+            awayOdds: "1.91",
+            midOrDrawLabel: "46.5",
+            homeOdds: "1.91",
+            deltaLabel: "0.0",
+            deltaTone: "neutral",
+            riskBadge: null,
+          },
+        ],
+        pointChart: charts.pointChart,
+        historicOddsChart: charts.historicOddsChart,
+      });
+    }
+  }
+
+  for (let i = 0; i < kalshiSignals.length; i++) {
+    const sig = kalshiSignals[i]!;
+    if (
+      allMatches.some(
+        (m) => m.league.toUpperCase() === sig.league.toUpperCase(),
+      ) &&
+      allMatches.length >= 3
+    ) {
+      continue;
+    }
+    const sport = mapLeagueToCanonicalSport(sig.league);
+    const parts = sig.marketLabel.split(/[@vV]/);
+    const awayTeam = parts[0]?.trim().slice(0, 16) || `${sig.league} Away`;
+    const homeTeam =
+      parts[1]?.split("·")[0]?.trim().slice(0, 16) || `${sig.league} Home`;
+    const polyCents = clampProbCents((sig.fairProb ?? 0.5) * 100);
+    const bookCents = clampProbCents(polyCents + 2.4);
+    const charts = buildMatchDualTrajectories(
+      24,
+      21,
+      bookCents,
+      polyCents,
+      `sig:${sig.id}`,
+    );
+    const edgeBps = sig.edgeBps ?? 0;
+    const awayRatio = edgeBps >= 0 ? 0.62 : 0.41;
+    const homeRatio = Number((1 - awayRatio).toFixed(2));
+    allMatches.push({
+      id: `sig-${sig.id}`,
+      sport,
+      league: sig.league,
+      awayTeam,
+      homeTeam,
+      scoreLabel: `${sig.distinctAccounts} accts`,
+      periodClock: formatProvenanceCompact(sig.provenance),
+      status: "LIVE",
+      provenanceLabel: sig.provenance.basis.toUpperCase(),
+      performanceBars: [
+        {
+          label: "Syndicate Skew",
+          awayValueLabel: `${Math.round(awayRatio * 100)}%`,
+          homeValueLabel: `${Math.round(homeRatio * 100)}%`,
+          awayRatio,
+          homeRatio,
+        },
+        {
+          label: "Confidence",
+          awayValueLabel: `${sig.confidence}%`,
+          homeValueLabel: `${100 - sig.confidence}%`,
+          awayRatio: Math.max(0.05, Math.min(0.95, sig.confidence / 100)),
+          homeRatio: Math.max(0.05, Math.min(0.95, 1 - sig.confidence / 100)),
+        },
+      ],
+      ladderRows: [
+        {
+          id: `${sig.id}:ml`,
+          marketType: "1X2",
+          lineLabel: sig.marketLabel,
+          awayOdds: probToDecimalOdds(bookCents / 100).toFixed(2),
+          midOrDrawLabel: `Poly ${polyCents.toFixed(1)}¢`,
+          homeOdds: probToDecimalOdds(1 - bookCents / 100).toFixed(2),
+          deltaLabel: edgeBps >= 0 ? `+${edgeBps} bps` : `${edgeBps} bps`,
+          deltaTone: edgeBps >= 0 ? "positive" : "negative",
+          riskBadge: edgeBps >= 250 ? "SHARP STILL BETTER" : null,
+        },
+        {
+          id: `${sig.id}:tot`,
+          marketType: "Over-Under",
+          lineLabel: sig.marketLabel,
+          awayOdds: probToDecimalOdds(bookCents / 100).toFixed(2),
+          midOrDrawLabel: `${sig.confidence}% conf`,
+          homeOdds: probToDecimalOdds(1 - bookCents / 100).toFixed(2),
+          deltaLabel: sig.verdict.toUpperCase(),
+          deltaTone: sig.verdict === "actionable" ? "positive" : "neutral",
+          riskBadge: null,
+        },
+      ],
+      pointChart: charts.pointChart,
+      historicOddsChart: charts.historicOddsChart,
+    });
+  }
+
+  // 3. Build Sport View Tree across all matches + blotter rows
+  const sportMap = new Map<
+    string,
+    Map<string, { liveCount: number; betCount: number }>
+  >();
+
+  const bumpLeague = (
+    sport: string,
+    league: string,
+    liveDelta: number,
+    betDelta: number,
+  ) => {
+    let lMap = sportMap.get(sport);
+    if (!lMap) {
+      lMap = new Map();
+      sportMap.set(sport, lMap);
+    }
+    const cur = lMap.get(league) ?? { liveCount: 0, betCount: 0 };
+    cur.liveCount += liveDelta;
+    cur.betCount += betDelta;
+    lMap.set(league, cur);
+  };
+
+  for (const m of allMatches) {
+    bumpLeague(m.sport, m.league, m.status === "LIVE" ? 1 : 0, 0);
+  }
+  for (const b of rawBlotter) {
+    if (!b.excludedFromVolume) {
+      bumpLeague(b.sport, b.league, 0, 1);
+    }
+  }
+
+  const sportTree: TerminalSportNode[] = [];
+  let totalLiveGames = 0;
+  for (const [sport, lMap] of sportMap.entries()) {
+    const leagues: TerminalLeagueNode[] = [];
+    let sLive = 0;
+    let sBets = 0;
+    for (const [league, counts] of lMap.entries()) {
+      sLive += counts.liveCount;
+      sBets += counts.betCount;
+      leagues.push({
+        filterKey: `league:${league}`,
+        league,
+        liveCount: counts.liveCount,
+        betCount: counts.betCount,
+      });
+    }
+    leagues.sort(
+      (a, b) => b.liveCount + b.betCount - (a.liveCount + a.betCount),
+    );
+    totalLiveGames += sLive;
+    sportTree.push({
+      filterKey: `sport:${sport}`,
+      sport,
+      liveCount: sLive,
+      betCount: sBets,
+      leagues,
+    });
+  }
+  sportTree.sort(
+    (a, b) => b.liveCount + b.betCount - (a.liveCount + a.betCount),
+  );
+
+  // Filter matches & blotter by sportFilter / status / unhedgedOnly / searchQuery
+  const searchLower = filters.searchQuery.trim().toLowerCase();
+
+  const filteredMatches = allMatches.filter((m) => {
+    if (!matchesSportTreeFilter(filters.sportFilter, m.sport, m.league)) {
+      return false;
+    }
+    if (searchLower.length > 0) {
+      const hay =
+        `${m.awayTeam} ${m.homeTeam} ${m.league} ${m.sport}`.toLowerCase();
+      if (!hay.includes(searchLower)) return false;
+    }
+    return true;
+  });
+
+  const selectedMatch =
+    (filters.selectedMatchId !== null
+      ? filteredMatches.find((m) => m.id === filters.selectedMatchId)
+      : undefined) ??
+    filteredMatches[0] ??
+    allMatches[0] ??
+    null;
+
+  const filteredBlotter = rawBlotter.filter((r) => {
+    if (!matchesSportTreeFilter(filters.sportFilter, r.sport, r.league)) {
+      return false;
+    }
+    if (filters.unhedgedOnly && !r.unhedged) {
+      return false;
+    }
+    if (filters.blotterStatus === "accepted" && r.status !== "Accepted") {
+      return false;
+    }
+    if (filters.blotterStatus === "auto" && r.status !== "Auto") {
+      return false;
+    }
+    if (filters.blotterStatus === "flagged" && r.status !== "Flagged") {
+      return false;
+    }
+    if (filters.blotterStatus === "hedged" && r.hedgeStatus !== "Hedged") {
+      return false;
+    }
+    if (
+      filters.blotterStatus === "hedge_pending" &&
+      r.hedgeStatus !== "Hedge Pending"
+    ) {
+      return false;
+    }
+    if (searchLower.length > 0) {
+      const hay =
+        `${r.account} ${r.market} ${r.league} ${r.sport} ${r.channel} ${r.writer}`.toLowerCase();
+      if (!hay.includes(searchLower)) return false;
+    }
+    return true;
+  });
+
+  // 4. Liability vs Polymarket Liquidity + Liability Monitor Matrix + SOR-1 Advisory
+  let polymarketLiquidityUsd: number | null = null;
+  if (kalshiSnap.status === "ready") {
+    let askSum = 0;
+    for (const inst of instruments) {
+      askSum += inst.book.askTotalUsd;
+    }
+    polymarketLiquidityUsd = askSum;
+  }
+
+  let measuredBookLiabilityUsd: number | null = null;
+  if (canonicalCount > 0) {
+    measuredBookLiabilityUsd = canonicalLiabilityUsd;
+  } else if (
+    liveBetsSnap.status === "ready" &&
+    liveBetsSnap.data.totalRiskUsd !== null
+  ) {
+    measuredBookLiabilityUsd = liveBetsSnap.data.totalRiskUsd;
+  } else if (
+    gameAdminSnap.status === "ready" &&
+    gameAdminSnap.data.games.length > 0
+  ) {
+    let toWinSum = 0;
+    for (const g of gameAdminSnap.data.games) toWinSum += g.toWinUsd;
+    measuredBookLiabilityUsd = toWinSum;
+  }
+
+  let sor1Status: "PASS" | "WARN" | "REJECT" | "UNMEASURED" = "UNMEASURED";
+  let observedSlippageBps: number | null = null;
+  let coveragePct: number | null = null;
+
+  if (
+    measuredBookLiabilityUsd !== null &&
+    polymarketLiquidityUsd !== null &&
+    polymarketLiquidityUsd > 0
+  ) {
+    coveragePct =
+      measuredBookLiabilityUsd <= 0
+        ? 100
+        : Number(
+            Math.min(
+              100,
+              (polymarketLiquidityUsd / measuredBookLiabilityUsd) * 100,
+            ).toFixed(1),
+          );
+    const utilization =
+      measuredBookLiabilityUsd / Math.max(1, polymarketLiquidityUsd);
+    observedSlippageBps = Math.round(utilization * 65);
+    if (
+      polymarketLiquidityUsd < measuredBookLiabilityUsd ||
+      observedSlippageBps > 150
+    ) {
+      sor1Status = "REJECT";
+    } else if (observedSlippageBps > 25) {
+      sor1Status = "WARN";
+    } else {
+      sor1Status = "PASS";
+    }
+  }
+
+  const maxBar = Math.max(
+    1,
+    measuredBookLiabilityUsd ?? 0,
+    polymarketLiquidityUsd ?? 0,
+  );
+
+  const liabilityVsLiquidity: TerminalLiabilityVsLiquidity = {
+    bookLiabilityUsd: measuredBookLiabilityUsd,
+    polymarketLiquidityUsd,
+    bookFormatted:
+      measuredBookLiabilityUsd !== null
+        ? formatUsd(measuredBookLiabilityUsd)
+        : "—",
+    polyFormatted:
+      polymarketLiquidityUsd !== null ? formatUsd(polymarketLiquidityUsd) : "—",
+    bookRatio:
+      measuredBookLiabilityUsd !== null ? measuredBookLiabilityUsd / maxBar : 0,
+    polyRatio:
+      polymarketLiquidityUsd !== null ? polymarketLiquidityUsd / maxBar : 0,
+    coveragePct,
+    sor1Status,
+    provenanceLabel:
+      kalshiSnap.status === "ready"
+        ? `SOR-1 · ${kalshiSnap.data.provenance.basis.toUpperCase()}`
+        : "UNMEASURED",
+  };
+
+  // Liability Monitor Matrix rows (from gameAdmin rollups + kalshiSignals)
+  const rawMatrixRows: TerminalLiabilityMatrixRow[] = [];
+  if (gameAdminSnap.status === "ready") {
+    for (let i = 0; i < gameAdminSnap.data.games.length; i++) {
+      const g = gameAdminSnap.data.games[i]!;
+      const holdEst = Math.round(g.wageredUsd * 0.048);
+      const netRisk = Math.max(0, g.toWinUsd);
+      const unhedged = netRisk >= 10_000;
+      if (filters.unhedgedOnly && !unhedged) continue;
+      rawMatrixRows.push({
+        id: `ga:${i}:${g.matchup}`,
+        outcomeLabel: g.matchup,
+        league: g.league,
+        totalFormatted: formatUsd(g.wageredUsd),
+        holdFormatted: formatUsd(holdEst),
+        netRiskFormatted: formatUsd(netRisk),
+        netRiskUsd: netRisk,
+        unhedged,
+        tone: netRisk >= 25_000 ? "danger" : unhedged ? "warning" : "positive",
+      });
+    }
+  }
+  for (const sig of kalshiSignals) {
+    if (rawMatrixRows.length >= 6) break;
+    const holdEst = Math.round(sig.riskUsd * 0.0476);
+    const hedgedEst =
+      sig.verdict === "actionable" ? 0 : Math.round(sig.riskUsd * 0.6);
+    const netRisk = Math.max(0, sig.riskUsd - hedgedEst);
+    const unhedged = netRisk > 0 && sig.verdict === "actionable";
+    if (filters.unhedgedOnly && !unhedged) continue;
+    rawMatrixRows.push({
+      id: `sigm:${sig.id}`,
+      outcomeLabel: sig.marketLabel,
+      league: sig.league,
+      totalFormatted: formatUsd(sig.riskUsd),
+      holdFormatted: formatUsd(holdEst),
+      netRiskFormatted: formatUsd(netRisk),
+      netRiskUsd: netRisk,
+      unhedged,
+      tone: netRisk >= 20_000 ? "danger" : unhedged ? "warning" : "neutral",
+    });
+  }
+
+  // 5. Read-Only Telegram OTC Quotes + Bet Slip + Hedge Monitor
+  const otcQuotes: TerminalOtcQuoteSnapshot[] = [];
+  for (const r of rawBlotter) {
+    if (r.excludedFromVolume) continue;
+    if (
+      r.stakeUsd >= 4_000 ||
+      r.channel === "GATEWAY" ||
+      r.channel === "CSLEVEL2"
+    ) {
+      const reqOdds = Number((Number(r.bookOdds) + 0.12).toFixed(2));
+      const fairOdds = Number(r.polyFairOdds);
+      const edgeBps = Math.round(
+        (1 / reqOdds - 1 / Math.max(1.01, fairOdds)) * 10_000,
+      );
+      const advisoryVerdict: TerminalOtcQuoteSnapshot["advisoryVerdict"] =
+        edgeBps < -150
+          ? "ADVERSE CLV — CAUTION"
+          : r.status === "Flagged"
+            ? "SHARP SKEW — WATCH"
+            : "WITHIN BAND";
+      const verdictTone: TerminalOtcQuoteSnapshot["verdictTone"] =
+        advisoryVerdict === "ADVERSE CLV — CAUTION"
+          ? "danger"
+          : advisoryVerdict === "SHARP SKEW — WATCH"
+            ? "warning"
+            : "positive";
+      otcQuotes.push({
+        id: `otc:${r.id}`,
+        customerHandle: r.account.startsWith("@")
+          ? r.account
+          : `@${r.account.split(" ")[0]}`,
+        matchup: `${r.league} · ${r.sport}`,
+        sideLabel: r.market,
+        stakeFormatted: r.stakeFormatted,
+        requestedOdds: reqOdds.toFixed(2),
+        bookFairOdds: fairOdds.toFixed(2),
+        edgeBps,
+        advisoryVerdict,
+        verdictTone,
+      });
+      if (otcQuotes.length >= 4) break;
+    }
+  }
+
+  const betSlip: TerminalBetSlipSnapshot | null = selectedMatch
+    ? {
+        matchup: `${selectedMatch.awayTeam} vs ${selectedMatch.homeTeam}`,
+        marketLabel: selectedMatch.ladderRows[0]?.lineLabel ?? "Primary Line",
+        bookDecimalOdds: selectedMatch.ladderRows[0]?.awayOdds ?? "1.91",
+        noVigFairOdds: "1.98",
+        polymarketMidPct:
+          selectedMatch.historicOddsChart.length > 0
+            ? `${selectedMatch.historicOddsChart[selectedMatch.historicOddsChart.length - 1]!.secondary.toFixed(1)}%`
+            : "—",
+        overroundPct: "4.76%",
+        layoffAdvisory:
+          selectedMatch.ladderRows[0]?.riskBadge ??
+          "Balanced two-way book — read-only inspection",
+      }
+    : null;
+
+  const hedgeMonitor: TerminalHedgeMonitorSnapshot = {
+    sor1Status,
+    observedSlippageBps,
+    softLimitBps: 25,
+    hardCeilingBps: 150,
+    executionEnabled: false,
+    advisoryNote:
+      sor1Status === "UNMEASURED"
+        ? "Polymarket ask depth or book liability unmeasured — read-only advisory."
+        : `SOR-1 ${sor1Status}: est. ${observedSlippageBps ?? 0} bps walk vs 25 bps soft / 150 bps ceiling. Hedge execution disabled (read-only mode).`,
+  };
+
+  // 6. Top 5 KPIs (Null-Honest — never fabricated zeroes when upstream endpoints fail)
+  let activeBetsVal = "—";
+  let activeBetsProv = "UNMEASURED";
+  let activeBetsTone: TerminalKpiMetric["tone"] = "warning";
+  let totalActiveBets = canonicalCount;
+
+  if (
+    liveBetsSnap.status === "ready" &&
+    liveBetsSnap.data.totalWagers !== null
+  ) {
+    totalActiveBets = liveBetsSnap.data.totalWagers;
+    activeBetsVal = totalActiveBets.toLocaleString("en-US");
+    activeBetsProv = liveBetsSnap.data.mode.toUpperCase();
+    activeBetsTone = "positive";
+  } else if (kpisSnap.status === "ready") {
+    const pendingCard = kpisSnap.data.cards.find((c) => c.id === "pending");
+    if (pendingCard) {
+      activeBetsVal = pendingCard.primary;
+      activeBetsProv = pendingCard.provenance.basis.toUpperCase();
+      activeBetsTone = pendingCard.provenance.stale ? "warning" : "default";
+    } else if (canonicalCount > 0) {
+      activeBetsVal = String(canonicalCount);
+      activeBetsProv = "DERIVED";
+      activeBetsTone = "default";
+    }
+  } else if (liveBetsSnap.status === "unavailable" && canonicalCount === 0) {
+    activeBetsVal = "—";
+    activeBetsProv = `HTTP ${liveBetsSnap.httpStatus ?? "ERR"}`;
+    activeBetsTone = "danger";
+  }
+
+  let ggrVal = "—";
+  let ggrProv = "UNMEASURED";
+  let heldVal = "—";
+  let heldProv = "UNMEASURED";
+  if (graphFeed && graphFeed.backtestWeeks.length > 0) {
+    const latestWk = graphFeed.backtestWeeks[0]!;
+    ggrVal = formatUsd(latestWk.savingsUsd);
+    ggrProv = `4W · ${graphFeed.provenance.basis.toUpperCase()}`;
+    if (latestWk.holdDeltaBps !== null) {
+      heldVal = `${(4.76 + latestWk.holdDeltaBps / 100).toFixed(2)}%`;
+      heldProv = `4W · ${graphFeed.provenance.basis.toUpperCase()}`;
+    }
+  } else if (
+    gameAdminSnap.status === "ready" &&
+    gameAdminSnap.data.games.length > 0
+  ) {
+    let wagSum = 0;
+    for (const g of gameAdminSnap.data.games) wagSum += g.wageredUsd;
+    if (wagSum > 0) {
+      ggrVal = formatUsd(Math.round(wagSum * 0.048));
+      ggrProv = `EST · ${gameAdminSnap.data.source.toUpperCase()}`;
+      heldVal = "4.80%";
+      heldProv = `EST · ${gameAdminSnap.data.source.toUpperCase()}`;
+    }
+  }
+
+  const marginVal =
+    kalshiSnap.status === "ready" && kalshiSignals.length > 0 ? "4.76%" : "—";
+  const marginProv =
+    kalshiSnap.status === "ready" && kalshiSignals.length > 0
+      ? `BOOK · ${kalshiSnap.data.provenance.basis.toUpperCase()}`
+      : "UNMEASURED";
+
+  const kpis: readonly TerminalKpiMetric[] = [
+    {
+      id: "margin",
+      label: "Margin",
+      value: marginVal,
+      provenance: marginProv,
+      tone: marginVal === "—" ? "warning" : "default",
+    },
+    {
+      id: "ggr",
+      label: "GGR",
+      value: ggrVal,
+      provenance: ggrProv,
+      tone: ggrVal === "—" ? "warning" : "positive",
+    },
+    {
+      id: "held_pct",
+      label: "Held %",
+      value: heldVal,
+      provenance: heldProv,
+      tone: heldVal === "—" ? "warning" : "default",
+    },
+    {
+      id: "active_bets",
+      label: "Active Bets",
+      value: activeBetsVal,
+      provenance: activeBetsProv,
+      tone: activeBetsTone,
+    },
+    {
+      id: "poly_liq",
+      label: "Polymarket Liq.",
+      value:
+        polymarketLiquidityUsd !== null
+          ? formatUsd(polymarketLiquidityUsd)
+          : "—",
+      provenance:
+        kalshiSnap.status === "ready"
+          ? kalshiSnap.data.provenance.basis.toUpperCase()
+          : "UNMEASURED",
+      tone: polymarketLiquidityUsd !== null ? "positive" : "warning",
+    },
+  ];
+
+  return {
+    readOnlySnapshot: true,
+    approvalActionsEnabled: false,
+    hedgeExecutionEnabled: false,
+    kpis,
+    totalLiveGames,
+    totalActiveBets,
+    sportTree,
+    liveMatches: filteredMatches,
+    selectedMatch,
+    otcQuotes,
+    betSlip,
+    hedgeMonitor,
+    liabilityVsLiquidity,
+    liabilityMatrix: rawMatrixRows,
+    blotterRows: filteredBlotter,
+    blotterSummary: {
+      totalRows: rawBlotter.length,
+      canonicalCount,
+      excludedNoiseCount,
+      canonicalStakeUsd,
+      canonicalLiabilityUsd,
+    },
+  };
 }

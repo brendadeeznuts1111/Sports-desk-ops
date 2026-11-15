@@ -107,25 +107,69 @@ export function encodedResponse(
   },
 ): Response {
   const entry = bodyFor(options.version, options.produce);
-  const headers: Record<string, string> = {
-    ...options.headers,
-    "Content-Type": options.contentType,
-  };
+  const headers = new Headers(options.headers);
+  headers.set("Content-Type", options.contentType);
+
+  if (headers.has("content-encoding")) {
+    if (!headers.has("content-length")) {
+      headers.set("Content-Length", String(entry.plain.byteLength));
+    }
+    return new Response(entry.plain, { headers });
+  }
+
   const encoding = negotiateEncoding(req.headers.get("accept-encoding"));
   if (encoding === null || entry.plain.byteLength < MIN_COMPRESS_BYTES) {
-    headers["Content-Length"] = String(entry.plain.byteLength);
+    headers.set("Content-Length", String(entry.plain.byteLength));
     return new Response(entry.plain, { headers });
   }
   const compressed =
     entry.encoded[encoding] ??
     (entry.encoded[encoding] = encode(entry.plain, encoding));
-  headers["Content-Encoding"] = encoding;
-  headers["Content-Length"] = String(compressed.byteLength);
+  headers.set("Content-Encoding", encoding);
+  headers.set("Content-Length", String(compressed.byteLength));
   // The response differs per client, so a shared cache must key on the header.
-  headers["Vary"] = headers["Vary"]
-    ? `${headers["Vary"]}, Accept-Encoding`
-    : "Accept-Encoding";
+  const existingVary = headers.get("vary");
+  if (!existingVary) {
+    headers.set("Vary", "Accept-Encoding");
+  } else if (
+    !existingVary
+      .split(",")
+      .some((token) => token.trim().toLowerCase() === "accept-encoding")
+  ) {
+    headers.set("Vary", `${existingVary}, Accept-Encoding`);
+  }
   return new Response(compressed, { headers });
+}
+
+/**
+ * Prepare outgoing headers for a Bun `fetch()` upstream proxy call.
+ *
+ * Forces `accept-encoding: identity` because Bun's `fetch()` transparently decompresses
+ * upstream `gzip`/`zstd`/`br` bodies while keeping `content-encoding` on `Response.headers`;
+ * asking upstream for identity avoids double framing bugs and wasted CPU.
+ */
+export function prepareProxyRequestHeaders(source: Headers): Headers {
+  const headers = new Headers(source);
+  headers.set("accept-encoding", "identity");
+  return headers;
+}
+
+/**
+ * Forward a Bun `fetch()` upstream `Response` safely from a `Bun.serve` handler.
+ *
+ * Deletes `content-encoding` and `content-length` because Bun's `fetch()` exposes an
+ * already-decoded body stream; leaving those headers intact causes `ERR_CONTENT_DECODING_FAILED`
+ * when the browser attempts to decode plain JSON/bytes a second time.
+ */
+export function forwardProxiedResponse(upstream: Response): Response {
+  const headers = new Headers(upstream.headers);
+  headers.delete("content-encoding");
+  headers.delete("content-length");
+  return new Response(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers,
+  });
 }
 
 /** Drop cached bodies; tests use it to prove the cache is keyed on the version, not the path. */

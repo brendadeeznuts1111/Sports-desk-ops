@@ -250,22 +250,22 @@ export const PROBE_OPS: readonly ProbeOp[] = [
     operation: "getPerformancePlayer",
     method: "POST",
     readOnly: true,
-    note: "customer-admin performance tab (manager/module/customer-admin/performance.html)",
-    params: [
-      "agentID",
-      "agentOwner",
-      "customerID",
-      "token",
-      "operation",
-      "RRO",
-    ],
+    // Observed Chrome wire (2026-11-13):
+    // POST /cloud/api/Manager/getPerformancePlayer
+    // acc=BRT106&period=0&operation=getPerformancePlayer&RRO=1&agentID=BILLY666&agentOwner=BILLY666
+    // Response: 31-day [{ Date: "MM/DD/YYYY DayName", Won, Lost }, ...] series (cents).
+    // Drilling into an active day fires POST /cloud/api/Report/getWagersByFigureDate
+    // with figureDate="YYYY-MM-DD" derived from row.Date.
+    // No token or customerID key on wire; uses acc + period=0.
+    note: "customer-admin performance tab (app/manager/module/customer-admin/performance.js?bust=1.0.287): acc+period+operation+RRO",
+    params: ["acc", "period", "operation", "RRO", "agentID", "agentOwner"],
     defaultPrefix: "/cloud/api/Manager",
   },
   {
     operation: "getWagersByFigureDate",
     method: "POST",
     readOnly: true,
-    note: "customer-admin performance tab & daily-figures drill-down (report.js:46608,60279: customerID, figureDate, graded, operation, RRO)",
+    note: "customer-admin performance & daily-figures drill-down (report.js form + Manager JSON {agentID,agentOwner,customerID,date,figureDate,graded,path,sort:1,typeSort:2,week:0,RRO:1})",
     params: ["customerID", "figureDate", "graded", "token", "operation", "RRO"],
     defaultPrefix: "/cloud/api/Report",
   },
@@ -604,8 +604,11 @@ export const CLIENT_JS_CONFIRMED_READ_ONLY_OPS = new Set<string>([
   "PendingDelete",
 ]);
 
-/** Player-info tab calls use form field `acc` (padded customer id), not `customerID`. */
-export const PROBE_ACC_IS_CUSTOMER_OPS = new Set<string>(["getTeaserProfile"]);
+/** Player-info & performance tab calls use form field `acc` (customer id), not `customerID`. */
+export const PROBE_ACC_IS_CUSTOMER_OPS = new Set<string>([
+  "getTeaserProfile",
+  "getPerformancePlayer",
+]);
 
 /**
  * A read whose contract is confirmed by client JS or a prior capture. An unconfirmed read
@@ -1303,8 +1306,11 @@ function resolveParamMap(
     } else if (name === "sportSubType") {
       out[name] = options.sportSubType ?? ".";
     } else if (name === "period") {
-      // `Util.typePeriod.GAME` in util.js (bundle sha256 fba79858…).
-      out[name] = options.period ?? "Game";
+      // `customer-admin/performance.js?bust=1.0.287` posts integer period index (`"0"` = weekly detail);
+      // `Util.typePeriod.GAME` = `"Game"` in util.js (`Get_LeagueLines`).
+      out[name] =
+        options.period ??
+        (op.operation === "getPerformancePlayer" ? "0" : "Game");
     } else if (name === "hourFilter") {
       out[name] = options.hourFilter ?? "0";
     } else if (name === "wagerType") {
@@ -1388,4 +1394,65 @@ export function probeUrl(
     throw new Error(`probe prefix must start with /, got ${prefix}`);
   const root = `${parsed.origin}${parsed.pathname.replace(/\/$/, "")}`;
   return `${root}${prefix.replace(/\/$/, "")}/${op.operation}`;
+}
+
+/**
+ * Manager-portal JSON request options for `/cloud/api/Report/getWagersByFigureDate`.
+ *
+ * Observed on `manager.html` when drilling into a customer's daily figure date:
+ * `{ RRO: 1, agentID, agentOwner, customerID, date, figureDate, graded: 0, path: "/cloud/api/Report/getWagersByFigureDate", sort: 1, typeSort: 2, week: 0 }`
+ * where `sort: 1` orders by `AcceptedDateTime` and `typeSort: 2` is descending (`1` = ascending).
+ */
+export interface ManagerWagersByFigureDateOptions {
+  readonly agentID: string;
+  readonly agentOwner?: string;
+  readonly customerID: string;
+  readonly date: string;
+  readonly figureDate: string;
+  readonly graded?: number;
+  readonly path?: string;
+  readonly sort?: number;
+  readonly typeSort?: number;
+  readonly week?: number;
+  readonly RRO?: number;
+}
+
+export interface ManagerWagersByFigureDatePayload {
+  readonly RRO: number;
+  readonly agentID: string;
+  readonly agentOwner: string;
+  readonly customerID: string;
+  readonly date: string;
+  readonly figureDate: string;
+  readonly graded: number;
+  readonly path: string;
+  readonly sort: number;
+  readonly typeSort: number;
+  readonly week: number;
+}
+
+export function buildManagerWagersByFigureDatePayload(
+  options: ManagerWagersByFigureDateOptions,
+): ManagerWagersByFigureDatePayload {
+  const agentID = options.agentID.trim();
+  const agentOwner = (options.agentOwner ?? agentID).trim();
+  return {
+    RRO: options.RRO ?? 1,
+    agentID,
+    agentOwner,
+    customerID: options.customerID.trim(),
+    date: options.date.trim(),
+    figureDate: options.figureDate.trim(),
+    graded: options.graded ?? 0,
+    path: options.path ?? "/cloud/api/Report/getWagersByFigureDate",
+    sort: options.sort ?? 1,
+    typeSort: options.typeSort ?? 2,
+    week: options.week ?? 0,
+  };
+}
+
+export function buildManagerWagersByFigureDateBody(
+  options: ManagerWagersByFigureDateOptions,
+): string {
+  return JSON.stringify(buildManagerWagersByFigureDatePayload(options));
 }

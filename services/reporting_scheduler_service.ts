@@ -44,6 +44,7 @@ import {
  * double-fires. Add new daemon-owned schedules here, not to the bot's `only` list.
  */
 export const BRIDGE_SCHEDULE_IDS = [
+  "sched_10m_positions_pulse",
   "sched_bridge_rollup_15m",
   "sched_bridge_weblog_hourly",
   "sched_agent_tree_hourly",

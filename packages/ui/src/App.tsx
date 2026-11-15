@@ -1,6 +1,9 @@
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseDashboardWsSignal } from "@sportsdesk-ops/contracts";
+import {
+  parseDashboardWsSignal,
+  resolveDaemon4020State,
+} from "@sportsdesk-ops/contracts";
 import "./desk.css";
 import { ShadowPricingPanel } from "./ShadowPricingPanel.tsx";
 import { styles } from "./dashboard_styles.ts";
@@ -10,10 +13,13 @@ import {
   SHOWCASE_WAGERS_PROVENANCE,
 } from "./hydration.ts";
 import {
+  AgentInspectorModal,
   AlertsTabPanel,
+  BetTickerTabPanel,
   BuildMatrixDrawer,
   CustomersTabPanel,
   LiveWagersTabPanel,
+  R2PipelineTabPanel,
   RankingsTabPanel,
   ShiftHandoffModal,
   SurveillanceTabPanel,
@@ -33,26 +39,37 @@ import {
   TERMINAL_INITIAL_COMMANDS,
   TERMINAL_WELCOME_HELP_STDOUT,
 } from "./showcase_data.ts";
-import type {
-  AlertFilter,
-  AlertToastState,
-  BuildMatrixRow,
-  CustomersApiResponse,
-  CustomerSortKey,
-  DashboardAlertRecord,
-  DashboardData,
-  DashboardSourceProvenance,
-  DashboardTabId,
-  DnsData,
-  HealthData,
-  LiveWager,
-  RankingsFilter,
-  ShiftSummaryData,
-  ShowcaseCustomer,
-  TerminalCategory,
-  TerminalHistoryEntry,
-  TierStyleConfig,
-  WagerSortField,
+import {
+  DASHBOARD_API,
+  DASHBOARD_DEFAULT_TAB,
+  dashboardApiUrl,
+} from "./config/dashboard.ts";
+import { WAGERS_DEFAULTS } from "./config/wagers.ts";
+import {
+  type AlertFilter,
+  type AlertToastState,
+  type BetTickerApiResponse,
+  type BuildMatrixRow,
+  type CustomersApiResponse,
+  type CustomerSortKey,
+  type DashboardAlertRecord,
+  type DashboardData,
+  type DashboardSourceProvenance,
+  type DashboardTabId,
+  type DnsData,
+  type HealthData,
+  type LiveWager,
+  type R2PipelineApiResponse,
+  type RankingsFilter,
+  resolveDashboardTabId,
+  type ShiftSummaryData,
+  type ShowcaseCustomer,
+  type TerminalCategory,
+  type TerminalHistoryEntry,
+  type TierStyleConfig,
+  type SlabPolicySummary,
+  type WagerSortField,
+  type WagersWireContractSummary,
 } from "./types.ts";
 
 export * from "./types.ts";
@@ -82,20 +99,21 @@ function apiPostHeaders(): HeadersInit {
 }
 
 function resolveInitialTab(): DashboardTabId {
-  if (typeof window === "undefined") return "customers";
-  const raw = new URLSearchParams(window.location.search).get("tab");
-  if (
-    raw === "shadow" ||
-    raw === "surveillance" ||
-    raw === "customers" ||
-    raw === "terminal" ||
-    raw === "rankings" ||
-    raw === "wagers" ||
-    raw === "alerts"
-  ) {
-    return raw;
+  if (typeof window === "undefined") return DASHBOARD_DEFAULT_TAB;
+  const params = new URLSearchParams(window.location.search);
+  const queryTab = params.get("tab");
+  if (queryTab) {
+    return resolveDashboardTabId(queryTab, DASHBOARD_DEFAULT_TAB);
   }
-  return "customers";
+  if (window.location.hash) {
+    return resolveDashboardTabId(window.location.hash, DASHBOARD_DEFAULT_TAB);
+  }
+  return DASHBOARD_DEFAULT_TAB;
+}
+
+function resolveInitialUrlParam(name: string): string {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get(name)?.trim() ?? "";
 }
 
 export function App(): React.ReactElement {
@@ -110,8 +128,15 @@ export function App(): React.ReactElement {
     readonly BuildMatrixRow[] | null
   >(null);
   const [buildMatrixLoading, setBuildMatrixLoading] = useState<boolean>(false);
+  const [buildMatrixError, setBuildMatrixError] = useState<string | null>(null);
   const [rankingsFilter, setRankingsFilter] = useState<RankingsFilter>("ALL");
-  const [rankingsSearch, setRankingsSearch] = useState<string>("");
+  const [rankingsSearch, setRankingsSearch] = useState<string>(() =>
+    resolveInitialUrlParam("agent"),
+  );
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(() => {
+    const a = resolveInitialUrlParam("agent");
+    return a ? a.toUpperCase() : null;
+  });
   const [wagerSearch, setWagerSearch] = useState("");
   const [wagerSportFilter, setWagerSportFilter] = useState<string>("ALL");
   const [wagerAlertFilter, setWagerAlertFilter] = useState<string>("ALL");
@@ -120,9 +145,13 @@ export function App(): React.ReactElement {
   const [selectedWager, setSelectedWager] = useState<LiveWager | null>(
     SAMPLE_LIVE_WAGERS[0] ?? null,
   );
-  const [wagerSortField, setWagerSortField] =
-    useState<WagerSortField>("timestamp");
-  const [wagerSortDir, setWagerSortDir] = useState<"asc" | "desc">("desc");
+  // Default sort comes from packages/ui/src/config/wagers.toml ([table] table).
+  const [wagerSortField, setWagerSortField] = useState<WagerSortField>(
+    WAGERS_DEFAULTS.sort_field,
+  );
+  const [wagerSortDir, setWagerSortDir] = useState<"asc" | "desc">(
+    WAGERS_DEFAULTS.sort_dir,
+  );
   const [clockTime, setClockTime] = useState<string>("");
   const [terminalCategory, setTerminalCategory] =
     useState<TerminalCategory>("ALL");
@@ -131,6 +160,8 @@ export function App(): React.ReactElement {
   );
   const [data, setData] = useState<DashboardData | null>(null);
   const [dnsData, setDnsData] = useState<DnsData | null>(null);
+  const [dnsRefreshing, setDnsRefreshing] = useState(false);
+  const [dnsError, setDnsError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"interactive" | "raw">(
     "interactive",
   );
@@ -141,11 +172,20 @@ export function App(): React.ReactElement {
   const [reverseResult, setReverseResult] = useState<string | null>(null);
 
   // Customer Showcase state
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() =>
+    resolveInitialUrlParam("search"),
+  );
   const [filterTier, setFilterTier] = useState<string>("ALL");
   const [copiedCliId, setCopiedCliId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] =
-    useState<ShowcaseCustomer | null>(SAMPLE_PROFILE_DATA[0] ?? null);
+    useState<ShowcaseCustomer | null>(() => {
+      const q = resolveInitialUrlParam("search").toUpperCase();
+      if (q) {
+        const match = SAMPLE_PROFILE_DATA.find((c) => c.id.toUpperCase() === q);
+        if (match) return match;
+      }
+      return SAMPLE_PROFILE_DATA[0] ?? null;
+    });
   const [customerForensicResult, setCustomerForensicResult] = useState<
     string | null
   >(null);
@@ -157,6 +197,17 @@ export function App(): React.ReactElement {
   const [wagersProvenance, setWagersProvenance] =
     useState<DashboardSourceProvenance>(SHOWCASE_WAGERS_PROVENANCE);
   const [wagersError, setWagersError] = useState<string | null>(null);
+  const [wireContract, setWireContract] =
+    useState<WagersWireContractSummary | null>(null);
+  const [slabPolicy, setSlabPolicy] = useState<SlabPolicySummary | null>(null);
+  const [betTickerData, setBetTickerData] =
+    useState<BetTickerApiResponse | null>(null);
+  const [betTickerLoading, setBetTickerLoading] = useState<boolean>(false);
+  const [betTickerError, setBetTickerError] = useState<string | null>(null);
+  const [r2PipelineData, setR2PipelineData] =
+    useState<R2PipelineApiResponse | null>(null);
+  const [r2PipelineLoading, setR2PipelineLoading] = useState<boolean>(false);
+  const [r2PipelineError, setR2PipelineError] = useState<string | null>(null);
   const [cohortsReport, setCohortsReport] =
     useState<CustomersApiResponse | null>(null);
   const [cohortsStatus, setCohortsStatus] = useState<
@@ -166,7 +217,7 @@ export function App(): React.ReactElement {
 
   const fetchTiersConfig = async () => {
     try {
-      const res = await fetch("/api/config/tiers");
+      const res = await fetch(dashboardApiUrl(DASHBOARD_API.tiers));
       if (!res.ok) return;
       const cfg = (await res.json()) as { tiers?: TierStyleConfig } | null;
       if (cfg?.tiers) {
@@ -182,7 +233,7 @@ export function App(): React.ReactElement {
 
   const fetchLiveWagers = async () => {
     try {
-      const res = await fetch("/api/wagers");
+      const res = await fetch(dashboardApiUrl(DASHBOARD_API.wagers));
       if (!res.ok) {
         setWagersError(
           `GET /api/wagers returned HTTP ${res.status} (${res.statusText || "error"})`,
@@ -198,6 +249,8 @@ export function App(): React.ReactElement {
       }
       setLiveWagers(normalized.wagers);
       setWagersProvenance(normalized.provenance);
+      setWireContract(normalized.wireContract);
+      setSlabPolicy(normalized.slabPolicy);
       setWagersError(null);
       if (normalized.wagers.length > 0) {
         setSelectedWager((prev) =>
@@ -215,7 +268,7 @@ export function App(): React.ReactElement {
 
   const fetchCustomersCohorts = async () => {
     try {
-      const res = await fetch("/api/customers");
+      const res = await fetch(dashboardApiUrl(DASHBOARD_API.customers));
       if (!res.ok) {
         setCohortsStatus("unavailable");
         setCohortsError(
@@ -242,11 +295,91 @@ export function App(): React.ReactElement {
     }
   };
 
+  const fetchBetTicker = async () => {
+    setBetTickerLoading(true);
+    try {
+      const res = await fetch(dashboardApiUrl(DASHBOARD_API.bet_ticker));
+      if (!res.ok) {
+        setBetTickerError(
+          `GET /api/bet-ticker returned HTTP ${res.status} (${res.statusText || "error"})`,
+        );
+        return;
+      }
+      const payload = (await res.json()) as BetTickerApiResponse;
+      setBetTickerData(payload);
+      setBetTickerError(null);
+    } catch (err) {
+      setBetTickerError(
+        `GET /api/bet-ticker failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setBetTickerLoading(false);
+    }
+  };
+
+  const fetchR2Pipeline = async (force = false) => {
+    setR2PipelineLoading(true);
+    try {
+      const res = await fetch(
+        force ? "/api/r2/pipeline?refresh=1" : "/api/r2/pipeline",
+      );
+      if (!res.ok) {
+        setR2PipelineError(
+          `GET /api/r2/pipeline returned HTTP ${res.status} (${res.statusText || "error"})`,
+        );
+        return;
+      }
+      const payload = (await res.json()) as R2PipelineApiResponse;
+      setR2PipelineData(payload);
+      setR2PipelineError(null);
+    } catch (err) {
+      setR2PipelineError(
+        `GET /api/r2/pipeline failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setR2PipelineLoading(false);
+    }
+  };
+
+  const fetchBuildMatrix = () => {
+    setBuildMatrixLoading(true);
+    setBuildMatrixError(null);
+    fetch("/api/build-matrix")
+      .then(async (r) => {
+        if (!r.ok) {
+          throw new Error(`GET /api/build-matrix returned HTTP ${r.status}`);
+        }
+        return (await r.json()) as {
+          targets?: readonly BuildMatrixRow[];
+        };
+      })
+      .then((json) => {
+        if (json?.targets) {
+          debugDashboardTrace("loaded DCE build matrix", json);
+          setBuildMatrixRows(json.targets);
+        }
+      })
+      .catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn("Build matrix probe unavailable:", err);
+        setBuildMatrixError(msg);
+      })
+      .finally(() => setBuildMatrixLoading(false));
+  };
+
   useEffect(() => {
     void fetchTiersConfig();
     void fetchLiveWagers();
     void fetchCustomersCohorts();
+    void fetchBetTicker();
+    void fetchR2Pipeline();
   }, []);
+
+  useEffect(() => {
+    if (showBuildMatrix && !buildMatrixRows && !buildMatrixLoading) {
+      fetchBuildMatrix();
+    }
+  }, [showBuildMatrix]);
 
   // UI enhancement states: banner dismissal & collapsible KPI cards
   const [bannerDismissed, setBannerDismissed] = useState(
@@ -277,7 +410,13 @@ export function App(): React.ReactElement {
 
   const fetchHealth = () => {
     fetch("/health")
-      .then((res) => (res.ok ? res.json() : null))
+      .then(async (res) => {
+        const contentType = res.headers.get("content-type") ?? "";
+        if (contentType !== "" && !contentType.toLowerCase().includes("json")) {
+          return null;
+        }
+        return (await res.json().catch(() => null)) as HealthData | null;
+      })
       .then((health) => {
         if (health) {
           setHealthData(health);
@@ -474,6 +613,12 @@ export function App(): React.ReactElement {
       } else if (e.ctrlKey && e.key === "7") {
         e.preventDefault();
         setActiveTab("shadow");
+      } else if (e.ctrlKey && e.key === "8") {
+        e.preventDefault();
+        setActiveTab("bet-ticker");
+      } else if (e.ctrlKey && e.key === "9") {
+        e.preventDefault();
+        setActiveTab("r2");
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
@@ -688,22 +833,36 @@ export function App(): React.ReactElement {
     }
   };
 
+  const fetchDnsTelemetry = async () => {
+    setDnsRefreshing(true);
+    setDnsError(null);
+    try {
+      const dnsRes = await fetch("/api/dns/telemetry").then(async (res) => {
+        if (!res.ok) return fetch("/api/dns");
+        return res;
+      });
+      if (dnsRes.ok) {
+        const json = (await dnsRes.json()) as DnsData;
+        setDnsData(json);
+      } else {
+        setDnsError(`HTTP ${dnsRes.status}`);
+      }
+    } catch (err) {
+      setDnsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDnsRefreshing(false);
+    }
+  };
+
   const fetchDashboard = async () => {
     try {
-      const [dashRes, dnsRes] = await Promise.all([
+      const [dashRes] = await Promise.all([
         fetch("/api/dashboard"),
-        fetch("/api/dns/telemetry").then(async (res) => {
-          if (!res.ok) return fetch("/api/dns");
-          return res;
-        }),
+        fetchDnsTelemetry(),
       ]);
       if (dashRes.ok) {
         const json = (await dashRes.json()) as DashboardData;
         setData(json);
-      }
-      if (dnsRes.ok) {
-        const json = (await dnsRes.json()) as DnsData;
-        setDnsData(json);
       }
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
@@ -750,6 +909,7 @@ export function App(): React.ReactElement {
         case "reload":
           void fetchDashboard();
           void fetchLiveWagers();
+          void fetchBetTicker();
           void fetchCustomersCohorts();
           void fetchTiersConfig();
           break;
@@ -758,6 +918,7 @@ export function App(): React.ReactElement {
           break;
         case "wagers-updated":
           void fetchLiveWagers();
+          void fetchBetTicker();
           break;
         case "tiers-updated":
           if (action.tiers) {
@@ -829,6 +990,80 @@ export function App(): React.ReactElement {
     });
   }, [filteredCustomers, customerSort]);
 
+  const handleSelectCustomerById = (customerId: string) => {
+    const upper = customerId.trim().toUpperCase();
+    const found = SAMPLE_PROFILE_DATA.find((c) => c.id.toUpperCase() === upper);
+    if (found) {
+      setSelectedCustomer(found);
+    }
+    setSearchQuery(customerId);
+    setActiveTab("customers");
+  };
+
+  const daemon4020 = r2PipelineData?.daemon4020;
+  const daemonState = resolveDaemon4020State(daemon4020);
+  const daemonLatency = daemon4020?.latencyMs ?? 1;
+  const daemonPill =
+    daemonState === "online"
+      ? {
+          color: "#4ade80",
+          label: `● API :4020 (${daemonLatency}ms)`,
+          title: `SportsDesk Daemon :4020 online (${daemonLatency}ms)`,
+        }
+      : daemonState === "degraded"
+        ? {
+            color: "#fbbf24",
+            label: `◐ API :4020 ${daemon4020?.operationalStatus === "down" ? "Auth Down" : "Degraded"} (${daemonLatency}ms)`,
+            title: `SportsDesk Daemon :4020 reachable (HTTP ${daemon4020?.status ?? 503}, ${daemonLatency}ms)${daemon4020?.reason ? ` — ${daemon4020.reason}` : ""}`,
+          }
+        : daemonState === "offline"
+          ? {
+              color: "#fbbf24",
+              label: "○ API :4020 Offline",
+              title: `SportsDesk Daemon :4020 offline (${daemon4020?.reason ?? "unreachable"})`,
+            }
+          : {
+              color: "#94a3b8",
+              label: "◌ API :4020 Probing...",
+              title: "SportsDesk Daemon :4020 probing...",
+            };
+
+  const alertsStatus = healthData?.alerts?.status;
+  const opStatus = healthData?.operationalStatus;
+  const isHealthError =
+    alertsStatus === "degraded" ||
+    opStatus === "down" ||
+    healthData?.status === "down";
+  const isHealthWarn =
+    !isHealthError &&
+    (alertsStatus === "warning" ||
+      opStatus === "degraded" ||
+      healthData?.status === "degraded");
+  const degradedReasonSummary = healthData?.degradedReasons
+    ?.map((r) => r.message)
+    .slice(0, 3)
+    .join("; ");
+  const systemHealthUi = isHealthError
+    ? {
+        border: "#ef4444",
+        bg: "rgba(239, 68, 68, 0.15)",
+        color: "#f87171",
+        label: alertsStatus === "degraded" ? "🚨 DEGRADED" : "🚨 AUTH DOWN",
+      }
+    : isHealthWarn
+      ? {
+          border: "#f59e0b",
+          bg: "rgba(245, 158, 11, 0.15)",
+          color: "#fbbf24",
+          label: alertsStatus === "warning" ? "⚠️ WARNING" : "⚠️ DEGRADED",
+        }
+      : {
+          border: "#22c55e",
+          bg: "rgba(34, 197, 94, 0.15)",
+          color: "#4ade80",
+          label: "● System OK",
+        };
+
   return (
     <div style={styles.container}>
       {/* Global Header */}
@@ -849,9 +1084,78 @@ export function App(): React.ReactElement {
                 ● Local :4022 SPA
               </span>
               <span>·</span>
-              <span style={{ color: "#4ade80", fontWeight: 600 }}>
-                ● API :4020
+              <span
+                style={{
+                  color: daemonPill.color,
+                  fontWeight: 600,
+                }}
+                title={daemonPill.title}
+              >
+                {daemonPill.label}
               </span>
+              <span>·</span>
+              <button
+                type="button"
+                onClick={() => setActiveTab("r2")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color:
+                    r2PipelineData?.overallStatus === "fresh"
+                      ? "#4ade80"
+                      : r2PipelineData?.overallStatus === "stale"
+                        ? "#fbbf24"
+                        : r2PipelineData
+                          ? "#f87171"
+                          : "#94a3b8",
+                }}
+                title="Open R2 Pipeline Monitor"
+              >
+                {r2PipelineData
+                  ? `☁️ R2 ${r2PipelineData.freshCount}/${r2PipelineData.totalCount} Fresh`
+                  : "☁️ R2 Probing..."}
+              </button>
+              <span>·</span>
+              <a
+                href="/live-bets"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  color: "#38bdf8",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                }}
+              >
+                📈 Live Bets ↗
+              </a>
+              <a
+                href="/graph"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  color: "#38bdf8",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                }}
+              >
+                🕸️ Graph ↗
+              </a>
+              <a
+                href="/status"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  color: "#38bdf8",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                }}
+              >
+                🩺 Status ↗
+              </a>
               <span>·</span>
               <span style={{ color: "#f59e0b", fontWeight: 600 }}>
                 🛡️ autoExecute: false
@@ -891,35 +1195,17 @@ export function App(): React.ReactElement {
               fontSize: "11px",
               fontWeight: 600,
               cursor: "pointer",
-              border: `1px solid ${
-                healthData?.alerts?.status === "degraded"
-                  ? "#ef4444"
-                  : healthData?.alerts?.status === "warning"
-                    ? "#f59e0b"
-                    : "#22c55e"
-              }`,
-              background:
-                healthData?.alerts?.status === "degraded"
-                  ? "rgba(239, 68, 68, 0.15)"
-                  : healthData?.alerts?.status === "warning"
-                    ? "rgba(245, 158, 11, 0.15)"
-                    : "rgba(34, 197, 94, 0.15)",
-              color:
-                healthData?.alerts?.status === "degraded"
-                  ? "#f87171"
-                  : healthData?.alerts?.status === "warning"
-                    ? "#fbbf24"
-                    : "#4ade80",
+              border: `1px solid ${systemHealthUi.border}`,
+              background: systemHealthUi.bg,
+              color: systemHealthUi.color,
             }}
-            title="Surveillance Alert Health (O(1) in-memory probe) · Click to view Shift Handoff Summary"
+            title={
+              degradedReasonSummary
+                ? `Health probe: ${degradedReasonSummary} · Click to view Shift Handoff Summary`
+                : "Surveillance Alert Health (O(1) in-memory probe) · Click to view Shift Handoff Summary"
+            }
           >
-            <span>
-              {healthData?.alerts?.status === "degraded"
-                ? "🚨 DEGRADED"
-                : healthData?.alerts?.status === "warning"
-                  ? "⚠️ WARNING"
-                  : "● System OK"}
-            </span>
+            <span>{systemHealthUi.label}</span>
             {healthData?.alerts && (
               <span style={{ color: "#94a3b8", fontSize: "10px" }}>
                 (DLQ: {healthData.alerts.dead} · Backlog:{" "}
@@ -955,25 +1241,7 @@ export function App(): React.ReactElement {
               const next = !showBuildMatrix;
               setShowBuildMatrix(next);
               if (next && !buildMatrixRows && !buildMatrixLoading) {
-                setBuildMatrixLoading(true);
-                fetch("/api/build-matrix")
-                  .then((r) =>
-                    r.ok
-                      ? (r.json() as Promise<{
-                          targets?: readonly BuildMatrixRow[];
-                        }>)
-                      : null,
-                  )
-                  .then((json) => {
-                    if (json?.targets) {
-                      debugDashboardTrace("loaded DCE build matrix", json);
-                      setBuildMatrixRows(json.targets);
-                    }
-                  })
-                  .catch((err) => {
-                    console.warn("Build matrix probe unavailable:", err);
-                  })
-                  .finally(() => setBuildMatrixLoading(false));
+                fetchBuildMatrix();
               }
             }}
             title="Inspect compile-time bun:bundle dead-code elimination & tokens.toml CSS Houdini registry"
@@ -1092,6 +1360,39 @@ export function App(): React.ReactElement {
             ) : null}
             <span style={styles.keyShortcutBadge}>Ctrl+6</span>
           </button>
+          <button
+            type="button"
+            style={styles.tabBtn(activeTab === "bet-ticker")}
+            onClick={() => setActiveTab("bet-ticker")}
+          >
+            📡 Bet Ticker (
+            {betTickerData?.localFeed.actionableTicketCount ?? "…"})
+            <span style={styles.keyShortcutBadge}>Ctrl+8</span>
+          </button>
+          <button
+            type="button"
+            style={styles.tabBtn(activeTab === "r2")}
+            onClick={() => setActiveTab("r2")}
+          >
+            ☁️ R2 Pipeline
+            {r2PipelineData?.staleKeys &&
+            r2PipelineData.staleKeys.length > 0 ? (
+              <span
+                style={{
+                  fontSize: "10px",
+                  padding: "1px 5px",
+                  borderRadius: "8px",
+                  backgroundColor: "#f59e0b",
+                  color: "#090d16",
+                  fontWeight: 700,
+                  marginLeft: "4px",
+                }}
+              >
+                {r2PipelineData.staleKeys.length} STALE
+              </span>
+            ) : null}
+            <span style={styles.keyShortcutBadge}>Ctrl+9</span>
+          </button>
         </div>
       </header>
 
@@ -1100,8 +1401,184 @@ export function App(): React.ReactElement {
           dceMarker={runtimeFlags.dceMarker}
           loading={buildMatrixLoading}
           rows={buildMatrixRows}
+          target={runtimeFlags.target}
+          enabledFeatures={runtimeFlags.enabledFeatures}
+          error={buildMatrixError}
+          onRefresh={fetchBuildMatrix}
         />
       ) : null}
+
+      {/* Cross-Desk Operations Command Ribbon */}
+      <section
+        aria-label="Operations Command Ribbon"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "8px 14px",
+          padding: "8px 20px",
+          backgroundColor: "#0b1120",
+          borderBottom: "1px solid #1e293b",
+          fontSize: "11px",
+          color: "#cbd5e1",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "8px 12px",
+          }}
+        >
+          <span
+            style={{
+              fontWeight: 700,
+              color: "#38bdf8",
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+            }}
+          >
+            🧭 Desk Quick-Jump:
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setWagerSportFilter("ALL");
+              setWagerSearch("");
+              setActiveTab("wagers");
+            }}
+            style={{
+              padding: "3px 9px",
+              borderRadius: "999px",
+              border: "1px solid rgba(56, 189, 248, 0.35)",
+              backgroundColor: "rgba(56, 189, 248, 0.1)",
+              color: "#7dd3fc",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+            title="Open Live Wagers tape"
+          >
+            ⚡ Active Risk: $
+            {liveWagers.reduce((s, w) => s + w.riskUsd, 0).toLocaleString()} (
+            {liveWagers.length} tickets)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setWagerSportFilter("NCAAB");
+              setWagerSearch("");
+              setActiveTab("wagers");
+            }}
+            style={{
+              padding: "3px 9px",
+              borderRadius: "999px",
+              border: "1px solid rgba(245, 158, 11, 0.35)",
+              backgroundColor: "rgba(245, 158, 11, 0.12)",
+              color: "#fbbf24",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+            title="Filter Live Wagers to College Basketball (NCAAB 1H & Game)"
+          >
+            🏀 NCAAB Slice (
+            {liveWagers.filter((w) => w.sport.toUpperCase() === "NCAAB").length}
+            )
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setWagerSportFilter("ALL");
+              setWagerSearch("live");
+              setActiveTab("wagers");
+            }}
+            style={{
+              padding: "3px 9px",
+              borderRadius: "999px",
+              border: "1px solid rgba(192, 132, 252, 0.35)",
+              backgroundColor: "rgba(192, 132, 252, 0.12)",
+              color: "#d8b4fe",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+            title="Filter Live Wagers to GSLive / In-Play tickets"
+          >
+            🔴 GSLive / In-Play (
+            {
+              liveWagers.filter(
+                (w) =>
+                  w.alertTier === "LATENCY" ||
+                  /live|in-play/i.test(w.selection) ||
+                  /ezl/i.test(w.ticketWriter ?? ""),
+              ).length
+            }
+            )
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleSelectCustomerById("BRT106");
+            }}
+            style={{
+              padding: "3px 9px",
+              borderRadius: "999px",
+              border: "1px solid rgba(34, 197, 94, 0.38)",
+              backgroundColor: "rgba(34, 197, 94, 0.12)",
+              color: "#4ade80",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+            title="Inspect BRT106 (BGMASTER / BILLY666) 3-endpoint portal & figureDate reconciliation"
+          >
+            🧾 Figure-Date Audit: BRT106 (+$76,950 · 0¢ Delta)
+          </button>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "8px 12px",
+            color: "#94a3b8",
+          }}
+        >
+          <span>
+            Bridge 3a Watermark:{" "}
+            <code style={{ color: "#e2e8f0" }}>
+              {betTickerData?.bridge3aR2.watermark ?? "pending"}
+            </code>
+          </span>
+          <span>·</span>
+          <span>
+            Top Conduit:{" "}
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedAgentId(
+                  PROXY_CONDUITS_30D[0]?.agentId ?? "FAKEMONEY",
+                )
+              }
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                color: "#38bdf8",
+                fontWeight: 600,
+                fontSize: "11px",
+                cursor: "pointer",
+              }}
+            >
+              {PROXY_CONDUITS_30D[0]?.agentId ?? "FAKEMONEY"} (
+              {PROXY_CONDUITS_30D[0]?.concPct ?? 100}%) ↗
+            </button>
+          </span>
+        </div>
+      </section>
 
       {/* Main View Area */}
       <main style={styles.main}>
@@ -1150,10 +1627,29 @@ export function App(): React.ReactElement {
               setActiveTab("terminal");
               void runTerminalCommand(`profile ${customerId}`);
             }}
+            onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
+            onViewCustomerWagers={(customerId) => {
+              setWagerSportFilter("ALL");
+              setWagerAlertFilter("ALL");
+              setWagerTypeFilter("ALL");
+              setWagerSearch(customerId);
+              const match = liveWagers.find(
+                (w) => w.customerId.toUpperCase() === customerId.toUpperCase(),
+              );
+              if (match) {
+                setSelectedWager(match);
+              }
+              setActiveTab("wagers");
+            }}
           />
         ) : activeTab === "surveillance" ? (
           <SurveillanceTabPanel
             dnsData={dnsData}
+            dnsRefreshing={dnsRefreshing}
+            dnsError={dnsError}
+            onRefreshDns={() => {
+              void fetchDnsTelemetry();
+            }}
             benchLoading={benchLoading}
             benchResult={benchResult}
             onRunBenchmark={() => {
@@ -1168,6 +1664,7 @@ export function App(): React.ReactElement {
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             data={data}
+            onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
           />
         ) : activeTab === "terminal" ? (
           <TerminalTabPanel
@@ -1203,6 +1700,8 @@ export function App(): React.ReactElement {
               setActiveTab("terminal");
               void runTerminalCommand(`p ${customerId} --radar`);
             }}
+            onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
+            onSelectCustomerById={handleSelectCustomerById}
           />
         ) : activeTab === "alerts" ? (
           <AlertsTabPanel
@@ -1256,11 +1755,37 @@ export function App(): React.ReactElement {
               void runTerminalCommand(cmd);
             }}
           />
+        ) : activeTab === "bet-ticker" ? (
+          <BetTickerTabPanel
+            data={betTickerData}
+            loading={betTickerLoading}
+            error={betTickerError}
+            onRefresh={() => {
+              void fetchBetTicker();
+            }}
+            onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
+            onSelectCustomerById={handleSelectCustomerById}
+            onInspectPty={(customerId) => {
+              setActiveTab("terminal");
+              void runTerminalCommand(`profile ${customerId} --radar`);
+            }}
+          />
+        ) : activeTab === "r2" ? (
+          <R2PipelineTabPanel
+            data={r2PipelineData}
+            loading={r2PipelineLoading}
+            error={r2PipelineError}
+            onRefresh={(force) => {
+              void fetchR2Pipeline(Boolean(force));
+            }}
+          />
         ) : (
           <LiveWagersTabPanel
             wagers={liveWagers}
             provenance={wagersProvenance}
             wagersError={wagersError}
+            wireContract={wireContract}
+            slabPolicy={slabPolicy}
             onRefreshWagers={() => {
               void fetchLiveWagers();
             }}
@@ -1284,15 +1809,8 @@ export function App(): React.ReactElement {
               setTimeout(() => setCopiedTicketId(null), 1500);
             }}
             tiersConfig={tiersConfig}
-            onSelectCustomerById={(customerId) => {
-              const found = SAMPLE_PROFILE_DATA.find(
-                (c) => c.id === customerId,
-              );
-              if (found) {
-                setSelectedCustomer(found);
-                setActiveTab("customers");
-              }
-            }}
+            onSelectCustomerById={handleSelectCustomerById}
+            onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
             onInspectPty={(customerId) => {
               setActiveTab("terminal");
               void runTerminalCommand(`profile ${customerId} --radar`);
@@ -1306,10 +1824,27 @@ export function App(): React.ReactElement {
         <span>Updated: {data?.updatedAt ?? "—"}</span>
         <span>
           Native Bun HTML Bundler + Bun.serve Routes + bun:bundle (
-          {runtimeFlags.target}) + tokens.toml v1.1.0 · autoExecute: false
-          invariant active
+          {runtimeFlags.target}) + tokens.toml v1.2.0 · dashboard.toml v2.0.0 ·
+          autoExecute: false invariant active
         </span>
       </footer>
+
+      {selectedAgentId !== null && (
+        <AgentInspectorModal
+          agentId={selectedAgentId}
+          onClose={() => setSelectedAgentId(null)}
+          onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
+          onSelectCustomerById={(customerId) => {
+            setSelectedAgentId(null);
+            handleSelectCustomerById(customerId);
+          }}
+          onInspectPty={(customerId) => {
+            setSelectedAgentId(null);
+            setActiveTab("terminal");
+            void runTerminalCommand(`profile ${customerId} --radar`);
+          }}
+        />
+      )}
 
       {/* Operator Shift Summary & Handoff Modal */}
       {isShiftModalOpen && (

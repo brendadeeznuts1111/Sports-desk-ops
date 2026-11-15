@@ -9,7 +9,7 @@
     <meta name="sportsdesk-bridge-ws" content="" />
     <script
       src="https://telegram.org/js/telegram-web-app.js"
-      integrity="sha384-PyI6uk8O3pfRRl4+CaepaS++FqtEbco/HaV3jzdYl4y+U7HMQvn3gWVfKhjuzfzG"
+      integrity="sha384-Vfd/BDDodKSHihoWEYUp7viIzknmkv8bWNw7o3LJsq4ziOpCagWvXEZLJH5cAgh0"
       crossorigin="anonymous"
     ></script>
     <title>
@@ -34,24 +34,124 @@
       @property --sd-surface-card {
         syntax: "<color>";
         inherits: true;
-        initial-value: #0d1527;
+        initial-value: #0b1120;
+      }
+      @property --sd-surface-elevated {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #121c31;
       }
       @property --sd-surface-hover {
         syntax: "<color>";
         inherits: true;
-        initial-value: #131f38;
+        initial-value: #19263d;
+      }
+      @property --sd-surface-raised {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #202f4a;
+      }
+      @property --sd-surface-selected {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #0f3a5d;
       }
       @property --sd-surface-border {
         syntax: "<color>";
         inherits: true;
-        initial-value: #1e293b;
+        initial-value: #243247;
+      }
+      @property --sd-border-strong {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #7085a1;
+      }
+      @property --sd-focus-ring {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #38bdf8;
+      }
+      @property --sd-focus-ring-offset {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #070b14;
       }
       @property --sd-text-primary {
         syntax: "<color>";
         inherits: true;
         initial-value: #f1f5f9;
       }
+      @property --sd-text-secondary {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #cbd5e1;
+      }
       @property --sd-text-muted {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #94a3b8;
+      }
+      @property --sd-sla-fresh {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #34d399;
+      }
+      @property --sd-sla-fresh-bg {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #0a2922;
+      }
+      @property --sd-sla-fresh-border {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #10b981;
+      }
+      @property --sd-sla-warn {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #38bdf8;
+      }
+      @property --sd-sla-warn-bg {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #0c2438;
+      }
+      @property --sd-sla-warn-border {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #29b6f6;
+      }
+      @property --sd-sla-stale {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #fbbf24;
+      }
+      @property --sd-sla-stale-bg {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #2b200c;
+      }
+      @property --sd-sla-stale-border {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #f59e0b;
+      }
+      @property --sd-sla-poison {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #fca5a5;
+      }
+      @property --sd-sla-poison-bg {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #2d161d;
+      }
+      @property --sd-sla-poison-border {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #ff7878;
+      }
+      @property --sd-tier-drop {
         syntax: "<color>";
         inherits: true;
         initial-value: #94a3b8;
@@ -59,22 +159,22 @@
       @property --sd-tier-retail {
         syntax: "<color>";
         inherits: true;
-        initial-value: #1d84b5;
+        initial-value: #29b6f6;
       }
       @property --sd-tier-blocked {
         syntax: "<color>";
         inherits: true;
-        initial-value: #64748b;
+        initial-value: #8fa3bf;
       }
-      @property --sd-theme-emerald {
+      @property --sd-tier-gateway {
         syntax: "<color>";
         inherits: true;
-        initial-value: #10b981;
+        initial-value: #22d39a;
       }
       @property --sd-tier-alert {
         syntax: "<color>";
         inherits: true;
-        initial-value: #ef4444;
+        initial-value: #ff7878;
       }
       @property --sd-tier-steam {
         syntax: "<color>";
@@ -84,60 +184,99 @@
       @property --sd-tier-whale {
         syntax: "<color>";
         inherits: true;
-        initial-value: #28a745;
+        initial-value: #4ade80;
       }
       @property --sd-tier-rec-bias {
         syntax: "<color>";
         inherits: true;
-        initial-value: #38bdf8;
+        initial-value: #7dd3fc;
+      }
+      @property --sd-tier-live-cws {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #67e8f9;
+      }
+      @property --sd-tier-phone {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #a5b4fc;
+      }
+      @property --sd-tier-house {
+        syntax: "<color>";
+        inherits: true;
+        initial-value: #e2e8f0;
       }
       @property --sd-route-devig {
         syntax: "<color>";
         inherits: true;
-        initial-value: #06b6d4;
+        initial-value: #22d3ee;
       }
       @property --sd-route-sharp {
         syntax: "<color>";
         inherits: true;
-        initial-value: #a855f7;
+        initial-value: #c892ff;
       }
       @property --sd-route-pending {
         syntax: "<color>";
         inherits: true;
-        initial-value: #d97706;
+        initial-value: #fb923c;
       }
       @property --sd-route-manager {
         syntax: "<color>";
         inherits: true;
-        initial-value: #f43f5e;
+        initial-value: #ff758f;
       }
 
       /* ==========================================================================
        2. Canonical :root Variables and Backward-Compatible Aliases
        ========================================================================== */
       :root {
-        /* Generated from tokens.toml (v1.1.0) */
+        /* Generated from tokens.toml (v1.3.0) */
         --sd-surface-bg: #070b14;
         --sd-surface-cli: #04070e;
-        --sd-surface-card: #0d1527;
-        --sd-surface-hover: #131f38;
-        --sd-surface-border: #1e293b;
+        --sd-surface-card: #0b1120;
+        --sd-surface-elevated: #121c31;
+        --sd-surface-hover: #19263d;
+        --sd-surface-raised: #202f4a;
+        --sd-surface-selected: #0f3a5d;
+        --sd-surface-border: #243247;
+        --sd-border-strong: #7085a1;
+        --sd-focus-ring: #38bdf8;
+        --sd-focus-ring-offset: #070b14;
         --sd-text-primary: #f1f5f9;
+        --sd-text-secondary: #cbd5e1;
         --sd-text-muted: #94a3b8;
-        --sd-tier-retail: #1d84b5;
-        --sd-tier-blocked: #64748b;
-        --sd-theme-emerald: #10b981;
-        --sd-tier-alert: #ef4444;
+        --sd-sla-fresh: #34d399;
+        --sd-sla-fresh-bg: #0a2922;
+        --sd-sla-fresh-border: #10b981;
+        --sd-sla-warn: #38bdf8;
+        --sd-sla-warn-bg: #0c2438;
+        --sd-sla-warn-border: #29b6f6;
+        --sd-sla-stale: #fbbf24;
+        --sd-sla-stale-bg: #2b200c;
+        --sd-sla-stale-border: #f59e0b;
+        --sd-sla-poison: #fca5a5;
+        --sd-sla-poison-bg: #2d161d;
+        --sd-sla-poison-border: #ff7878;
+        --sd-tier-drop: #94a3b8;
+        --sd-tier-retail: #29b6f6;
+        --sd-tier-blocked: #8fa3bf;
+        --sd-tier-gateway: #22d39a;
+        --sd-tier-alert: #ff7878;
         --sd-tier-steam: #f59e0b;
-        --sd-tier-whale: #28a745;
-        --sd-tier-rec-bias: #38bdf8;
-        --sd-route-devig: #06b6d4;
-        --sd-route-sharp: #a855f7;
-        --sd-route-pending: #d97706;
-        --sd-route-manager: #f43f5e;
+        --sd-tier-whale: #4ade80;
+        --sd-tier-rec-bias: #7dd3fc;
+        --sd-tier-live-cws: #67e8f9;
+        --sd-tier-phone: #a5b4fc;
+        --sd-tier-house: #e2e8f0;
+        --sd-route-devig: #22d3ee;
+        --sd-route-sharp: #c892ff;
+        --sd-route-pending: #fb923c;
+        --sd-route-manager: #ff758f;
+        --sd-theme-emerald: var(--sd-tier-gateway);
 
         --sd-primary: var(--sd-tier-rec-bias);
-        --sd-accent: var(--sd-theme-emerald);
+        --sd-accent: var(--sd-tier-gateway);
         --sd-danger: var(--sd-tier-alert);
         --sd-warning: var(--sd-tier-steam);
         --sd-purple: var(--sd-route-sharp);

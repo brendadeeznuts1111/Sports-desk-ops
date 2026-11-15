@@ -356,3 +356,63 @@ about reachable code and pinned bytes, not about a successful takeover. Server-s
 The seam's authenticated path is **unverified** here: the live probe ran without a session, so
 `isAuthenticated() === true` on the bet-ticker page has not been demonstrated, and the
 `external-view` fix stays behind its flag until it is.
+
+## Addendum 2026-11-13 — vendor `1.0.281` → `1.0.287`
+
+Measured, not inferred: live `app/setting/version.js` returned `1.0.287` (pinned copy says
+`1.0.281`), and `bun run pin:cdn:update --vendor-version 1.0.287` recorded 192 assets (87 document,
+4 explicit, 101 app modules) after the discovery change described below. The two assets whose
+1.0.281 bytes exist in `pinned/` were diffed structurally (quoted-literal and module-id sets, not
+raw bytes):
+
+| Asset                                           | 1.0.281 → 1.0.287 | Measured delta                                                                             |
+| ----------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------ |
+| `app/system/security.js`                        | 25043 → 24636 B   | `helpOldSite` removed; nothing added                                                       |
+| `app/manager/manager.js`                        | 100121 → 100230 B | `#options-add-customer`, `[data-click="hide-modal"]` added; no module ids added or removed |
+| `app/util/util.js`, `app/sports/score/score.js` | unchanged         | —                                                                                          |
+
+The removed function sent the entered login and a **plaintext password** to a cleartext URL:
+
+```js
+helpOldSite:function(e){var t=window.location.host,a=e[0].val,i=e[1].val;
+window.location.href="http://agents."+t.replace(/www./g,"")+"/Qubic/redirectlogin.php?customerID="+a+"&password="+i}
+```
+
+`isRedirect()` — which only _detects_ a `redirectlogin.php` arrival — remains; the URL builder does
+not. Treat the 1.0.287 bundle delta as a vendor security fix, with the usual caveat that this is
+byte evidence, not the vendor's changelog.
+
+Also measured: the pin gate's module discovery was one hop deep (`manager/manager.js`'s own
+`require` lists), so a module required by another module was unpinned. `customer-admin/performance.js`
+is required by `player-info.js`. Discovery now walks the transitive graph and resolves RequireJS
+`paths` aliases; the gate reports `app_module_unpinned` / `app_module_unreachable` for the closure.
+
+### `+222 × 5` attributed
+
+The five identical size deltas in the 1.0.287 pin are one inserted statement, measured at **exactly
+222 bytes** in each: `agent-management-thin`, `agent-performance`, `analysis`, `transaction-history`,
+`weekly-figure`.
+
+```js
+window.saveAs=function(t,a){const e=window.URL.createObjectURL(t),n=document.createElement("a");
+n.style.display="none",n.href=e,n.download=a,document.body.appendChild(n),n.click(),
+window.URL.revokeObjectURL(e),n.remove()},
+```
+
+Every byte-identity test missed it, and each was structurally unable to succeed: the minifier renames
+the parameters and locals per file (`function(a,e)` / `function(t,e)` / `function(t,a)` / `function(a,t)`),
+so the copies are **length-identical and byte-different**. 32-byte window scans found only the 149 B
+`define([...])` preamble, the token intersection found no quoted strings (the helper has none), and
+head/tail hashes differed on both ends because the statement is inserted mid-file. Only the unrenamed
+surface — `window.saveAs`, `document.createElement`, `URL.createObjectURL` — survives minification, and
+that is what identified it.
+
+Scope measured over the 101 pinned app modules: **9 define it** (the five above, `manager/module/customer-admin`,
+`customer-admin/transaction`, `customer-admin/new-user-report`, `customer-admin/smart-bookie-report`) and
+**none calls it** — every occurrence in the corpus is the definition. `customer-admin.js` carries the same
+222 B statement but moved +461 B, leaving **+239 B unattributed**; its 1.0.281 bytes are not in `pinned/`.
+
+Egress framing, corrected: 1.0.287 **removes** the plaintext-password-over-HTTP redirect (`helpOldSite`,
+190 B plus its call site) and **adds** an uncalled `window.saveAs` global. The first closes an egress path.
+The second does not open an export path by itself — nothing invokes it — but it does place a
+blob-plus-filename download primitive on `window` for any page script or console session to call.

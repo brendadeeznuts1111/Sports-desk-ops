@@ -161,7 +161,7 @@ function link(
   fallbackLink?: string | null,
 ): string {
   if (status === 200) {
-    return `[reference](https://bun.com/reference/globals/bun/${shape})`;
+    return `[reference](https://bun.com/reference/bun/${shape})`;
   }
   return fallbackLink
     ? `no reference page (see [docs](${fallbackLink}))`
@@ -316,7 +316,7 @@ if (import.meta.main) {
   if (args.has("--refresh-links")) {
     const refreshed: Record<string, number> = {};
     for (const shape of BUN_SHAPES) {
-      const url = `https://bun.com/reference/globals/bun/${shape.name}`;
+      const url = `https://bun.com/reference/bun/${shape.name}`;
       refreshed[shape.name] = await probeShapeReferenceUrl(url, shape.name);
     }
     await Bun.write(

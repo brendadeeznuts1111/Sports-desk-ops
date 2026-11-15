@@ -1,28 +1,86 @@
 {
   "name": "@sportsdesk-ops/contracts",
   "version": "0.1.0",
-  "private": true,
+  "description": "Shared SportsDesk contracts: wager tokens, slice metrics/registry, shadow pricing, feature flags, dashboard hydration.",
+  "keywords": [
+    "sportsdesk",
+    "contracts",
+    "wager",
+    "types",
+    "bun"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bw496915-cmyk/Sports-desk-ops.git",
+    "directory": "packages/contracts"
+  },
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./wager-tokens": "./src/wager_tokens.ts",
-    "./slice-metrics": "./src/slice_metrics.ts",
-    "./slice-registry": "./src/slice_registry.ts",
-    "./slice-data-table": "./src/slice_data_table.ts",
-    "./slice-diff-view": "./src/slice_diff_view.ts",
-    "./shadow-pricing": "./src/shadow_pricing.ts",
-    "./features": "./src/features.ts",
-    "./dashboard-hydration": "./src/dashboard_hydration.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "bun": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./wager-tokens": {
+      "types": "./src/wager_tokens.ts",
+      "bun": "./src/wager_tokens.ts",
+      "default": "./dist/wager_tokens.js"
+    },
+    "./slice-metrics": {
+      "types": "./src/slice_metrics.ts",
+      "bun": "./src/slice_metrics.ts",
+      "default": "./dist/slice_metrics.js"
+    },
+    "./slice-registry": {
+      "types": "./src/slice_registry.ts",
+      "bun": "./src/slice_registry.ts",
+      "default": "./dist/slice_registry.js"
+    },
+    "./slice-data-table": {
+      "types": "./src/slice_data_table.ts",
+      "bun": "./src/slice_data_table.ts",
+      "default": "./dist/slice_data_table.js"
+    },
+    "./slice-diff-view": {
+      "types": "./src/slice_diff_view.ts",
+      "bun": "./src/slice_diff_view.ts",
+      "default": "./dist/slice_diff_view.js"
+    },
+    "./shadow-pricing": {
+      "types": "./src/shadow_pricing.ts",
+      "bun": "./src/shadow_pricing.ts",
+      "default": "./dist/shadow_pricing.js"
+    },
+    "./features": {
+      "types": "./src/features.ts",
+      "bun": "./src/features.ts",
+      "default": "./dist/features.js"
+    },
+    "./dashboard-hydration": {
+      "types": "./src/dashboard_hydration.ts",
+      "bun": "./src/dashboard_hydration.ts",
+      "default": "./dist/dashboard_hydration.js"
+    }
   },
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
   "scripts": {
     "typecheck": "bun check --no-script -p tsconfig.json",
     "lint": "bun x --cwd ../.. oxlint -c .oxlintrc.json --deny-warnings packages/contracts/src",
-    "test": "bun test --no-script --cwd ../.. tests/slice_metrics.test.ts tests/wager_tiers_toml.test.ts tests/dashboard_ui_hydration.test.tsx tests/workspace_packs.test.ts"
+    "test": "bun test --no-script --cwd ../.. tests/slice_metrics.test.ts tests/wager_tiers_toml.test.ts tests/dashboard_ui_hydration.test.tsx tests/workspace_packs.test.ts",
+    "build": "bun scripts/build.ts",
+    "prepack": "bun run build"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

@@ -18,7 +18,7 @@ body {
   color: var(--sd-text-primary);
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+    Arial, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -314,4 +314,119 @@ blockquote {
 .sd-soa-table th,
 .sd-soa-table td {
   padding: 7px 8px;
+}
+
+/* ── Rendered Markdown Telemetry Brief (.sd-markdown-doc) ── */
+.sd-markdown-doc {
+  color: var(--sd-text-primary);
+  font-size: 13.5px;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+
+.sd-markdown-doc > *:first-child {
+  margin-top: 0;
+}
+
+.sd-markdown-doc > *:last-child {
+  margin-bottom: 0;
+}
+
+.sd-markdown-doc h1 {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  margin: 0 0 10px 0;
+  color: var(--sd-text-primary);
+}
+
+.sd-markdown-doc h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 22px 0 10px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--sd-surface-border);
+  color: var(--sd-text-primary);
+  scroll-margin-top: 16px;
+}
+
+.sd-markdown-doc h3 {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 14px 0 8px 0;
+  color: var(--sd-tier-rec-bias);
+}
+
+.sd-markdown-doc h1 a,
+.sd-markdown-doc h2 a,
+.sd-markdown-doc h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.sd-markdown-doc h1 a:hover,
+.sd-markdown-doc h2 a:hover,
+.sd-markdown-doc h3 a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--sd-tier-rec-bias);
+}
+
+.sd-markdown-doc blockquote {
+  margin: 0 0 16px 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--sd-tier-rec-bias);
+  border-radius: 0 6px 6px 0;
+  background: rgba(4, 7, 14, 0.65);
+  color: #cbd5e1;
+  font-size: 12.5px;
+}
+
+.sd-markdown-doc blockquote p {
+  margin: 0;
+}
+
+.sd-markdown-doc blockquote a {
+  font-weight: 600;
+}
+
+.sd-markdown-doc hr {
+  border: none;
+  border-top: 1px solid var(--sd-surface-border);
+  margin: 18px 0;
+}
+
+.sd-markdown-doc ul,
+.sd-markdown-doc ol {
+  margin: 8px 0 14px 0;
+  padding-left: 20px;
+}
+
+.sd-markdown-doc li {
+  margin: 4px 0;
+  color: #cbd5e1;
+}
+
+.sd-markdown-doc pre {
+  margin: 12px 0 0 0;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--sd-surface-border);
+  background: var(--sd-surface-cli);
+  overflow-x: auto;
+}
+
+.sd-markdown-doc pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--sd-theme-emerald);
+  font-size: 12px;
+}
+
+.sd-markdown-doc table {
+  margin: 10px 0 16px 0;
+}
+
+.sd-markdown-doc th {
+  white-space: nowrap;
 }

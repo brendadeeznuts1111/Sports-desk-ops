@@ -3,8 +3,8 @@ import { parseNpmrc, registryFor, registryHost } from "../lib/npm_registry.ts";
 
 const NPMRC = `# comment
 registry=https://registry.npmjs.org/
-@tennis-hq:registry=http://127.0.0.1:50851/
-//127.0.0.1:50851/:_authToken=\${TENNIS_NPM_TOKEN}
+@acme:registry=https://npm.acme.invalid/
+//npm.acme.invalid/:_authToken=\${ACME_TOKEN}
 @other:registry=https://npm.pkg.github.com/
 `;
 
@@ -13,15 +13,15 @@ describe("npmrc registry resolution", () => {
     const config = parseNpmrc(NPMRC);
     expect(config.defaultRegistry).toBe("https://registry.npmjs.org/");
     expect(config.scopes).toEqual({
-      "@tennis-hq": "http://127.0.0.1:50851/",
+      "@acme": "https://npm.acme.invalid/",
       "@other": "https://npm.pkg.github.com/",
     });
   });
 
   test("routes a scoped name to its registry and everything else to the default", () => {
     const config = parseNpmrc(NPMRC);
-    expect(registryFor("@tennis-hq/sportsdesk-workspace", config)).toBe(
-      "http://127.0.0.1:50851/",
+    expect(registryFor("@acme/widget", config)).toBe(
+      "https://npm.acme.invalid/",
     );
     expect(registryFor("@other/pkg", config)).toBe(
       "https://npm.pkg.github.com/",
@@ -35,7 +35,7 @@ describe("npmrc registry resolution", () => {
   test("ignores auth lines and comments", () => {
     const config = parseNpmrc(NPMRC);
     expect(Object.keys(config.scopes)).not.toContain(
-      "//127.0.0.1:50851/:_authToken",
+      "//npm.acme.invalid/:_authToken",
     );
     expect(config.defaultRegistry).not.toContain("token");
   });

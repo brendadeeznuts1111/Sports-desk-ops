@@ -254,6 +254,8 @@ type LockFile = {
   workspaces?: Record<string, LockWorkspaceEntry>;
   patchedDependencies?: Record<string, string>;
   trustedDependencies?: unknown;
+  catalog?: Record<string, string>;
+  catalogs?: Record<string, Record<string, string>>;
 };
 
 export interface WorkspacePackageInfo {
@@ -363,6 +365,106 @@ async function readLock(root: string): Promise<LockFile> {
   return Bun.JSONC.parse(
     await Bun.file(path.join(root, "bun.lock")).text(),
   ) as LockFile;
+}
+
+/** `catalogs` maps a named catalog to its `name -> version` pins. */
+function normalizeNamedCatalogs(
+  raw: unknown,
+): Record<string, Record<string, string>> {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
+  const out: Record<string, Record<string, string>> = {};
+  for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+    out[name] = normalizeStringMap(value);
+  }
+  return out;
+}
+
+function diffCatalogMap(
+  label: string,
+  manifest: Readonly<Record<string, string>>,
+  lock: Readonly<Record<string, string>>,
+  drift: string[],
+): void {
+  for (const [name, pin] of Object.entries(manifest)) {
+    const locked = lock[name];
+    if (locked === undefined) {
+      drift.push(
+        `${label}.${name} is in package.json but missing from bun.lock`,
+      );
+    } else if (locked !== pin) {
+      drift.push(`${label}.${name} "${pin}" != bun.lock "${locked}"`);
+    }
+  }
+  for (const name of Object.keys(lock)) {
+    if (manifest[name] === undefined) {
+      drift.push(
+        `${label}.${name} is in bun.lock but missing from package.json`,
+      );
+    }
+  }
+}
+
+export interface WorkspaceCatalogSyncReport {
+  readonly rootEntries: number;
+  readonly namedCatalogs: number;
+  /** False when the repo has no bun.lock; the "single bun.lock" gate owns that failure. */
+  readonly lockPresent: boolean;
+  readonly drift: readonly string[];
+}
+
+/**
+ * Root `catalog` / `catalogs` pins must match the copies Bun writes into `bun.lock`.
+ *
+ * Editing a pin without running `bun install` leaves the two disagreeing, and
+ * every `catalog:` consumer then resolves against a version the lockfile does
+ * not describe. This is a lock-consistency check, not a resolution check; the
+ * `missing-catalog-entry` issue in `analyzeWorkspaceGraph` owns resolution.
+ */
+export async function lockCatalogSync(
+  root: string,
+): Promise<WorkspaceCatalogSyncReport> {
+  const manifest = (await Bun.file(
+    path.join(root, "package.json"),
+  ).json()) as RawManifest;
+  const manifestCatalog = normalizeStringMap(manifest.catalog);
+  const manifestNamed = normalizeNamedCatalogs(manifest.catalogs);
+  const lockPath = path.join(root, "bun.lock");
+  if (!(await Bun.file(lockPath).exists())) {
+    return {
+      rootEntries: Object.keys(manifestCatalog).length,
+      namedCatalogs: Object.keys(manifestNamed).length,
+      lockPresent: false,
+      drift: [],
+    };
+  }
+
+  const lock = (Bun.JSONC.parse(await Bun.file(lockPath).text()) ??
+    {}) as LockFile;
+  const drift: string[] = [];
+  diffCatalogMap(
+    "catalog",
+    manifestCatalog,
+    normalizeStringMap(lock.catalog),
+    drift,
+  );
+  const lockNamed = normalizeNamedCatalogs(lock.catalogs);
+  const names = [
+    ...new Set([...Object.keys(manifestNamed), ...Object.keys(lockNamed)]),
+  ].sort();
+  for (const name of names) {
+    diffCatalogMap(
+      `catalogs.${name}`,
+      manifestNamed[name] ?? {},
+      lockNamed[name] ?? {},
+      drift,
+    );
+  }
+  return {
+    rootEntries: Object.keys(manifestCatalog).length,
+    namedCatalogs: Object.keys(manifestNamed).length,
+    lockPresent: true,
+    drift,
+  };
 }
 
 function normalizeStringMap(raw: unknown): Record<string, string> {
@@ -1280,4 +1382,75 @@ export function formatWorkspaceLinkSpecifier(
     depName: target.name,
     specifier: "workspace:*",
   };
+}
+
+/**
+ * Default package-manager env-file policy: `.env` in this repository is a 1Password FIFO pipe
+ * and `.env.local` may exist locally, so package-manager commands (`install`, `add`, `remove`,
+ * `pm`, `publish`, `outdated`, `audit`) pass `--no-env-file` by default unless `--env-file` is
+ * explicitly requested.
+ */
+export const DEFAULT_PM_ENV_FILE_FLAG = "--no-env-file" as const;
+
+/**
+ * Default `bunx --minimum-release-age` in seconds (72 hours = 259,200s), matching the machine
+ * `minimumReleaseAge = 259200` supply-chain cooldown in `~/.config/.bunfig.toml`.
+ */
+export const DEFAULT_BUNX_MINIMUM_RELEASE_AGE_SECONDS = 259_200 as const;
+
+/**
+ * Bun 1.4.4 package-manager flag translations from npm, Yarn, and pnpm to canonical Bun flags.
+ * Unknown flags outside Bun's flag set and this table are rejected by Bun rather than ignored.
+ */
+export const PM_FLAG_TRANSLATIONS: Readonly<Record<string, string>> = {
+  "--immutable": "--frozen-lockfile",
+  "--package-lock-only": "--lockfile-only",
+  "--save-dev": "--dev",
+  "--save-exact": "--exact",
+  "--save-optional": "--optional",
+  "--save-peer": "--peer",
+  "--save-catalog": "--catalog",
+  "--no-optional": "--omit=optional",
+  "--ignore-optional": "--omit=optional",
+  "--only=production": "--omit=dev",
+  "--location=global": "--global",
+  "--shamefully-hoist": "--linker=hoisted",
+  "--node-linker=hoisted": "--linker=hoisted",
+  "--install-strategy=hoisted": "--linker=hoisted",
+  "--node-linker=isolated": "--linker=isolated",
+  "--install-strategy=linked": "--linker=isolated",
+} as const;
+
+/**
+ * Translates an npm, Yarn, or pnpm CLI flag into its canonical Bun 1.4.4 equivalent when mapped;
+ * returns the input flag unchanged otherwise.
+ */
+export function translatePackageManagerFlag(flag: string): string {
+  const trimmed = flag.trim();
+  return PM_FLAG_TRANSLATIONS[trimmed] ?? trimmed;
+}
+
+/**
+ * Normalizes a list of package-manager CLI flags/arguments by translating foreign npm/Yarn/pnpm
+ * flags and injecting `--no-env-file` by default unless `--no-env-file` or `--env-file` is already
+ * present.
+ */
+export function normalizePackageManagerArgs(
+  args: readonly string[],
+  options: { readonly defaultNoEnvFile?: boolean } = {},
+): string[] {
+  const defaultNoEnvFile = options.defaultNoEnvFile ?? true;
+  const translated = args.map((token) =>
+    token.startsWith("-") ? translatePackageManagerFlag(token) : token,
+  );
+  const hasEnvFlag = translated.some(
+    (token) =>
+      token === "--no-env-file" ||
+      token === "--env-file" ||
+      token.startsWith("--env-file="),
+  );
+  if (defaultNoEnvFile && !hasEnvFlag) {
+    return [DEFAULT_PM_ENV_FILE_FLAG, ...translated];
+  }
+  return translated;
 }

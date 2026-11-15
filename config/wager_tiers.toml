@@ -9,9 +9,9 @@
 # =============================================================================
 
 schema = "wager-tiers/v3"
-version = "3.0.0"
+version = "3.1.0"
 environment = "production"
-updatedAt = 2025-01-15T00:00:00Z
+updatedAt = "2026-11-14T00:00:00Z" # quoted ISO-8601 — browser-bundle safe (no Temporal.*)
 timezone = "UTC"
 
 # ---------------------------------------------------------------------------
@@ -58,14 +58,36 @@ RECREATIONAL = "BASELINE"
 # Every value MUST be a "@token:*" reference; literal hex is rejected by CI.
 # ---------------------------------------------------------------------------
 [surface]
+bg = "@token:sd-surface-bg"
+cli = "@token:sd-surface-cli"
 panel = "@token:sd-surface-panel"
+elevated = "@token:sd-surface-elevated"
+hover = "@token:sd-surface-hover"
+raised = "@token:sd-surface-raised"
 border = "@token:sd-border-default"
+borderStrong = "@token:sd-border-strong"
 text = "@token:sd-text-primary" # canonical #f1f5f9 (was #f8fafc — drift fixed)
+textSecondary = "@token:sd-text-secondary"
 muted = "@token:sd-text-muted"
 accent = "@token:sd-accent"
 danger = "@token:sd-danger"
 warn = "@token:sd-warn"
 ok = "@token:sd-ok"
+info = "@token:sd-info"
+
+[surface.provenance]
+liveFg = "@token:sd-provenance-live-fg"
+liveBg = "@token:sd-provenance-live-bg"
+liveBorder = "@token:sd-provenance-live-border"
+captureFg = "@token:sd-provenance-capture-fg"
+captureBg = "@token:sd-provenance-capture-bg"
+captureBorder = "@token:sd-provenance-capture-border"
+staleFg = "@token:sd-provenance-stale-fg"
+staleBg = "@token:sd-provenance-stale-bg"
+staleBorder = "@token:sd-provenance-stale-border"
+fixtureFg = "@token:sd-provenance-fixture-fg"
+fixtureBg = "@token:sd-provenance-fixture-bg"
+fixtureBorder = "@token:sd-provenance-fixture-border"
 
 [surface.typography]
 fontFamily = "Inter, ui-sans-serif, system-ui"
@@ -271,18 +293,39 @@ sampleRate = 1.0
 redactPII = true
 
 # ---------------------------------------------------------------------------
+# Dashboard dispatch, polling & Signal-Honesty UI defaults
+# ---------------------------------------------------------------------------
+[dashboard]
+defaultTab = "customers"
+refreshIntervalSeconds = 15
+staleFeedWarnMinutes = 30
+maxLiveTapeRows = 250
+highlightSharpScoreMin = 7.5
+showProvenanceBadges = true
+showInlineClvBps = true
+autoExecute = false # Signal Honesty invariant: human desk review required
+
+# ---------------------------------------------------------------------------
 # Slice Hold-Floor Policy & Blended Hold SLO (src/risk/hold_floor_config.ts)
 # Constraint: Do NOT lower hold_floors to hide negative floor deltas; gates flag asymmetry instead.
 # ---------------------------------------------------------------------------
 [slo]
 blended_hold_floor_pct = 3.50
+max_default_fallback_share_pct = 0.0 # 0% unmapped fallback budget across SLICE_REGISTRY
 exclude_blocked = true
 exclude_directional = true
 
 [hold_floors]
 default_pct = 3.50
 
+# Canonical 4-segment SLICE_REGISTRY overrides (<sport>:<league>:<period>:<market>).
+# Precedence: by_slice[slice_id] -> by_sport[sport] -> by_market[market] -> default_pct.
 [hold_floors.by_slice]
+"football:nfl:p0_game:spread" = 3.75 # key 3/7/10/14 spread buy exposure
+"football:ncaaf:p0_game:spread" = 3.75 # college key-number spread exposure
+"basketball:nba:p0_game:spread" = 3.50 # balanced bell-curve vig preservation
+"basketball:ncaab:halves:all" = 3.75 # 20m derivative halves guard
+"live:all:p0_inplay:all" = 4.25 # in-play clock/feed latency premium
 
 [hold_floors.by_sport]
 Football = 3.50
@@ -290,6 +333,9 @@ Basketball = 3.50
 Hockey = 3.00
 Baseball = 3.00
 Soccer = 3.50
+Tennis = 3.50
+MMA = 4.00
+Golf = 4.50
 LIVE = 4.00
 Other = 3.00
 
@@ -298,4 +344,8 @@ Moneyline = 3.25
 Spread = 3.50
 Total = 3.50
 "Team Total" = 3.75
+"Derivative" = 4.00
+"Player Prop" = 4.25
+"Teaser" = 4.50
+"Parlay" = 6.50
 "All Markets" = 3.50

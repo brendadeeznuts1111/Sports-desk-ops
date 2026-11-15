@@ -39,6 +39,7 @@ const QUICK_TERMINAL_CHIPS: readonly {
 }[] = [
   { label: "⚡ p GP301", cmd: "p GP301", cat: "SHARPS" },
   { label: "⚡ p BRT5229", cmd: "p BRT5229", cat: "SHARPS" },
+  { label: "⚡ p BRT106", cmd: "p BRT106", cat: "SHARPS" },
   { label: "🏆 rank-all", cmd: "rank-all", cat: "SHARPS" },
   { label: "🏆 sh", cmd: "sh", cat: "SHARPS" },
   { label: "🔍 f syndicate", cmd: "f syndicate", cat: "SHARPS" },
@@ -53,6 +54,11 @@ const QUICK_TERMINAL_CHIPS: readonly {
   { label: "📊 g", cmd: "g", cat: "RISK" },
   { label: "📊 stat", cmd: "stat", cat: "RISK" },
   { label: "📝 md", cmd: "markdown", cat: "RISK" },
+  {
+    label: "🎨 md dashboard.md",
+    cmd: "md --theme dark --columns 110 --linkify-symbols dashboard.md",
+    cat: "RISK",
+  },
   { label: "🌐 ws", cmd: "ws", cat: "NET" },
   { label: "🌐 d fantasy402.com", cmd: "d fantasy402.com", cat: "NET" },
   { label: "🛡️ r 1.1.1.1", cmd: "r 1.1.1.1", cat: "NET" },

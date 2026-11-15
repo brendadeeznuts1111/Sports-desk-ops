@@ -22,80 +22,110 @@ const cleanFile = (path: string) => {
   }
 };
 
-describe("PTY Shell Injection Defense (lib/terminal_emulator.ts & lib/bun_terminal.ts)", () => {
-  it("treats semicolons as literal arguments, preventing chained command injection", async () => {
-    const probe = createProbePath();
-    try {
-      // If passed to a shell (sh -c), touch would create probe
-      const result = await executeTerminalQuery(`echo test; touch ${probe}`);
+/**
+ * Probe PTY availability at module scope, deliberately.
+ *
+ * `describe.skipIf` is evaluated when the suite is registered, which happens before any
+ * `beforeAll` runs. A flag set in `beforeAll` is therefore still `false` at decision time and the
+ * whole suite skips on every host — including CI, where PTYs exist (measured: 0 pass, 1 skip with
+ * a probe that had already succeeded). `new Bun.Terminal` is synchronous, so the check belongs here.
+ *
+ * Without the guard, a host that cannot allocate a PTY fails these tests with
+ * `[TERMINAL_ERROR] Execution failed: Failed to open PTY` and reports it as an injection-defense
+ * regression. The security assertion (`probeFile.exists() === false`) still holds in that case;
+ * only the stdout positive-control cannot be satisfied.
+ */
+function ptyAvailable(): boolean {
+  try {
+    new Bun.Terminal({ cols: 80, rows: 24 }).close();
+    return true;
+  } catch (error) {
+    console.warn(
+      `pty_injection: skipping — PTY unavailable (${(error as Error).message})`,
+    );
+    return false;
+  }
+}
 
-      // Verify file was never created
-      const probeFile = Bun.file(probe);
-      expect(await probeFile.exists()).toBe(false);
+const hasPty = ptyAvailable();
 
-      // Verify stdout printed literal semicolon as argv argument
-      expect(result.stdout).toContain("test;");
-    } finally {
-      cleanFile(probe);
-    }
-  });
+describe.skipIf(!hasPty)(
+  "PTY Shell Injection Defense (lib/terminal_emulator.ts & lib/bun_terminal.ts)",
+  () => {
+    it("treats semicolons as literal arguments, preventing chained command injection", async () => {
+      const probe = createProbePath();
+      try {
+        // If passed to a shell (sh -c), touch would create probe
+        const result = await executeTerminalQuery(`echo test; touch ${probe}`);
 
-  it("prevents pipe hijacking in customer query inputs", async () => {
-    const probe = createProbePath();
-    try {
-      const result = await executeTerminalQuery(
-        `profile GP301 | touch ${probe}`,
-      );
+        // Verify file was never created
+        const probeFile = Bun.file(probe);
+        expect(await probeFile.exists()).toBe(false);
 
-      const probeFile = Bun.file(probe);
-      expect(await probeFile.exists()).toBe(false);
-      expect(result.exitCode).toBe(0);
-    } finally {
-      cleanFile(probe);
-    }
-  });
+        // Verify stdout printed literal semicolon as argv argument
+        expect(result.stdout).toContain("test;");
+      } finally {
+        cleanFile(probe);
+      }
+    });
 
-  it("prevents backtick command substitution from executing subcommands", async () => {
-    const probe = createProbePath();
-    try {
-      const result = await executeTerminalQuery(`echo \`touch ${probe}\``);
+    it("prevents pipe hijacking in customer query inputs", async () => {
+      const probe = createProbePath();
+      try {
+        const result = await executeTerminalQuery(
+          `profile GP301 | touch ${probe}`,
+        );
 
-      const probeFile = Bun.file(probe);
-      expect(await probeFile.exists()).toBe(false);
-      expect(result.stdout).toContain("`touch");
-    } finally {
-      cleanFile(probe);
-    }
-  });
+        const probeFile = Bun.file(probe);
+        expect(await probeFile.exists()).toBe(false);
+        expect(result.exitCode).toBe(0);
+      } finally {
+        cleanFile(probe);
+      }
+    });
 
-  it("prevents $(...) command substitution", async () => {
-    const probe = createProbePath();
-    try {
-      const result = await executeTerminalQuery(`echo $(touch ${probe})`);
+    it("prevents backtick command substitution from executing subcommands", async () => {
+      const probe = createProbePath();
+      try {
+        const result = await executeTerminalQuery(`echo \`touch ${probe}\``);
 
-      const probeFile = Bun.file(probe);
-      expect(await probeFile.exists()).toBe(false);
-      expect(result.stdout).toContain("$(touch");
-    } finally {
-      cleanFile(probe);
-    }
-  });
+        const probeFile = Bun.file(probe);
+        expect(await probeFile.exists()).toBe(false);
+        expect(result.stdout).toContain("`touch");
+      } finally {
+        cleanFile(probe);
+      }
+    });
 
-  it("TerminalSession.start uses direct array-form execve without shell wrapper", async () => {
-    const probe = createProbePath();
-    try {
-      await using session = await TerminalSession.start([
-        "echo",
-        `safe; touch ${probe}`,
-      ]);
+    it("prevents $(...) command substitution", async () => {
+      const probe = createProbePath();
+      try {
+        const result = await executeTerminalQuery(`echo $(touch ${probe})`);
 
-      await session.wait();
+        const probeFile = Bun.file(probe);
+        expect(await probeFile.exists()).toBe(false);
+        expect(result.stdout).toContain("$(touch");
+      } finally {
+        cleanFile(probe);
+      }
+    });
 
-      const probeFile = Bun.file(probe);
-      expect(await probeFile.exists()).toBe(false);
-      expect(session.raw).toContain("safe;");
-    } finally {
-      cleanFile(probe);
-    }
-  });
-});
+    it("TerminalSession.start uses direct array-form execve without shell wrapper", async () => {
+      const probe = createProbePath();
+      try {
+        await using session = await TerminalSession.start([
+          "echo",
+          `safe; touch ${probe}`,
+        ]);
+
+        await session.wait();
+
+        const probeFile = Bun.file(probe);
+        expect(await probeFile.exists()).toBe(false);
+        expect(session.raw).toContain("safe;");
+      } finally {
+        cleanFile(probe);
+      }
+    });
+  },
+);

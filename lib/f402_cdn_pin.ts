@@ -63,7 +63,8 @@ export type CdnAssetSource = "document" | "explicit" | "app";
  */
 /**
  * Modules the controller chooses through a variable rather than a literal `require([...])` entry.
- * They are invisible to AMD-literal extraction, so the pin gate must carry them explicitly.
+ * They are invisible to AMD-literal extraction and to the graph walk, so the pin gate must carry
+ * them explicitly. Anything reachable through a literal `require` needs no entry here.
  */
 export const DYNAMIC_APP_MODULES: readonly string[] = [
   "manager/module/weekly-figure",
@@ -111,6 +112,153 @@ export function extractAmdModuleIds(js: string): string[] {
     }
   }
   return [...ids].sort();
+}
+
+/**
+ * RequireJS `paths` aliases (`paths:{swal2:"../assets/js/scripts/swal2.min"}`), which map a module
+ * id to a file outside `/app/`. Without these an aliased id is resolved to `/app/<id>.js` and
+ * reported as a 404 that does not exist.
+ */
+export function extractRequirePaths(js: string): Map<string, string> {
+  const table = new Map<string, string>();
+  for (const block of js.matchAll(/paths\s*:\s*\{([^}]*)\}/g)) {
+    for (const pair of (block[1] ?? "").matchAll(
+      /["']?([A-Za-z0-9_$.-]+)["']?\s*:\s*["']([^"']+)["']/g,
+    )) {
+      const alias = pair[1];
+      const target = pair[2];
+      if (alias !== undefined && target !== undefined) table.set(alias, target);
+    }
+  }
+  return table;
+}
+
+/**
+ * Absolute URL a `paths` alias points at, resolved the way the loader does: relative to `/app/`,
+ * with the loader's implicit `.js` when the value carries no extension.
+ */
+export function requireAliasUrl(host: string, value: string): string | null {
+  if (/^https?:\/\//.test(value)) return value;
+  const base = host.startsWith("http") ? host : `https://${host}`;
+  try {
+    const url = new URL(value, `${base.replace(/\/$/, "")}/app/`);
+    // RequireJS appends `.js` unless the value already names a script; `x.min` is not a script.
+    if (!/\.js$/i.test(url.pathname)) url.pathname += ".js";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** Where the graph walker looks up a module's bytes; `null` means the fetch failed. */
+export type AppModuleLoader = (url: string) => Promise<string | null>;
+
+export interface AppModuleGraph {
+  /** Module URLs reachable from the seeds that loaded, path-aliased ones included, sorted. */
+  readonly urls: readonly string[];
+  /** Ids that could not be mapped to a URL at all. */
+  readonly unresolvedIds: readonly string[];
+  /** URLs that were mapped but did not load. */
+  readonly failedUrls: readonly string[];
+}
+
+/**
+ * Transitive `require([...])` closure over the AMD graph.
+ *
+ * The original coverage check read one module (`manager/manager`) and compared its literal
+ * requires against the manifest. That is one hop deep, so a module required by a *non-controller*
+ * module was invisible: `manager/module/customer-admin/performance.js` is required by
+ * `player-info.js`, and no amount of curating a list keeps up with that. Walking the graph finds
+ * them structurally.
+ */
+export async function discoverAppModuleGraph(options: {
+  readonly host: string;
+  readonly seeds: readonly string[];
+  readonly load: AppModuleLoader;
+  /** Guard against a pathological graph; a walk past this stops and reports nothing more. */
+  readonly maxModules?: number;
+}): Promise<AppModuleGraph> {
+  const { host, seeds, load } = options;
+  const maxModules = options.maxModules ?? 500;
+  const aliases = new Map<string, string>();
+  const urls = new Set<string>();
+  const unresolvedIds = new Set<string>();
+  const failedUrls = new Set<string>();
+  const pending: string[] = [];
+
+  const enqueue = (id: string): void => {
+    const alias = aliases.get(id);
+    const url =
+      alias === undefined
+        ? appModuleUrl(host, id)
+        : requireAliasUrl(host, alias);
+    if (url === null) {
+      unresolvedIds.add(id);
+      return;
+    }
+    if (urls.has(url)) return;
+    urls.add(url);
+    pending.push(url);
+  };
+
+  for (const id of seeds) enqueue(id);
+
+  while (pending.length > 0 && urls.size <= maxModules) {
+    const batch = pending.splice(0, 8);
+    const loaded = await Promise.all(
+      batch.map(async (url) => ({ url, js: await load(url) })),
+    );
+    for (const { url, js } of loaded) {
+      if (js === null) {
+        failedUrls.add(url);
+        continue;
+      }
+      for (const [alias, target] of extractRequirePaths(js)) {
+        aliases.set(alias, target);
+      }
+      for (const id of extractAmdModuleIds(js)) enqueue(id);
+    }
+  }
+
+  // A module that did not load is reported as `failedUrls` only: counting it as reachable would
+  // report the same module twice (unpinned *and* unreachable) for one cause.
+  return {
+    urls: [...urls].filter((url) => !failedUrls.has(url)).sort(),
+    unresolvedIds: [...unresolvedIds].sort(),
+    failedUrls: [...failedUrls].sort(),
+  };
+}
+
+export interface AppGraphCoverage {
+  /** Reachable module URLs the manifest does not pin. */
+  readonly unpinned: readonly string[];
+  /** Reachable module URLs that were mapped but do not load. */
+  readonly unreachable: readonly string[];
+}
+
+/**
+ * Graph coverage for one manifest: walk from the controller's own `require` lists and report what
+ * the manifest does not pin. `load` should serve bytes the caller already fetched where possible.
+ */
+export async function appGraphCoverage(options: {
+  readonly manifest: CdnManifest;
+  readonly managerJs: string;
+  readonly load: AppModuleLoader;
+}): Promise<AppGraphCoverage> {
+  const { manifest, managerJs, load } = options;
+  const graph = await discoverAppModuleGraph({
+    host: manifest.host,
+    seeds: [
+      ...APP_BOOT_MODULES,
+      ...DYNAMIC_APP_MODULES,
+      ...extractAmdModuleIds(managerJs),
+    ],
+    load,
+  });
+  return {
+    unpinned: graph.urls.filter((url) => manifest.assets[url] === undefined),
+    unreachable: graph.failedUrls,
+  };
 }
 
 /** `/app/` module URLs the controller requires that the manifest does not pin. */
@@ -479,9 +627,35 @@ export async function collectLiveCdnAssetDrift(options?: {
     );
     if (managerOutcome.kind === "ok") {
       const managerJs = new TextDecoder().decode(managerOutcome.bytes);
-      for (const missing of appModuleCoverage(managerJs, manifest)) {
+      const fetchedBytes = new Map<string, string>();
+      for (const row of rows) {
+        if (row.outcome.kind === "ok") {
+          fetchedBytes.set(
+            row.url,
+            new TextDecoder().decode(row.outcome.bytes),
+          );
+        }
+      }
+      const coverage = await appGraphCoverage({
+        manifest,
+        managerJs,
+        load: async (url) => {
+          const cached = fetchedBytes.get(url);
+          if (cached !== undefined) return cached;
+          const outcome = await fetchAssetOutcome(url);
+          return outcome.kind === "ok"
+            ? new TextDecoder().decode(outcome.bytes)
+            : null;
+        },
+      });
+      for (const missing of coverage.unpinned) {
         details.push(
-          `cdn_app_module_unpinned ${missing}: required but not pinned`,
+          `cdn_app_module_unpinned ${missing}: reachable from the AMD graph but not pinned`,
+        );
+      }
+      for (const failed of coverage.unreachable) {
+        details.push(
+          `cdn_app_module_unreachable ${failed}: required by the AMD graph but does not load`,
         );
       }
       for (const anchor of missingExternalViewGuardAnchors(managerJs)) {

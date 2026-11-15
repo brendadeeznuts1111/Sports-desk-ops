@@ -1,0 +1,58 @@
+name: publish-contracts
+
+# Manual or tag-driven publish for the one workspace package that opts into
+# publication (@sportsdesk-ops/contracts, publishConfig access=public on npmjs).
+# Requires the NPM_TOKEN repository secret; the tag is `contracts-v<version>` and
+# must match packages/contracts/package.json.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "contracts-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Require the npm token
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN is not set; add it in repository secrets"
+            exit 1
+          fi
+      # Bun reads the npmrc named by NPM_CONFIG_USERCONFIG, the same file
+      # actions/setup-node writes. The token never touches the workspace.
+      - name: Authenticate for the public registry
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$RUNNER_TEMP/.npmrc"
+          echo "NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/.npmrc" >> "$GITHUB_ENV"
+      # A tag must name the version it publishes, or the release goes out under
+      # whatever the manifest happens to say.
+      - name: Tag matches the manifest version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag_version="${GITHUB_REF_NAME#contracts-v}"
+          manifest_version="$(bun -e 'console.log((await Bun.file("packages/contracts/package.json").json()).version)')"
+          if [ "$tag_version" != "$manifest_version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package version $manifest_version"
+            exit 1
+          fi
+      # Dry-run checks config, access, and file selection; it does NOT validate the
+      # token (a fake token passes it — measured 2026-11-14). It is a config gate,
+      # not an auth gate.
+      - name: Publish dry-run
+        run: bun publish --cwd packages/contracts --dry-run
+      - name: Publish @sportsdesk-ops/contracts
+        run: bun publish --cwd packages/contracts

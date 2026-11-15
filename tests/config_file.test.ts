@@ -48,6 +48,21 @@ describe("parseConfig", () => {
     expect(parseConfig("a: 1\nb:\n  - 2\n", "yaml")).toEqual({ a: 1, b: [2] });
   });
 
+  test("YAML 1.2: yes/no/on/off are strings, and an Actions `on:` key stays a string", () => {
+    // Release note: Bun.YAML follows YAML 1.2, so these read as strings rather
+    // than booleans, and a GitHub Actions workflow's `on:` key parses as "on".
+    expect(
+      parseConfig("on: push\na: yes\nb: no\nc: on\nd: off", "yaml"),
+    ).toEqual({ on: "push", a: "yes", b: "no", c: "on", d: "off" });
+
+    const workflow = parseConfig(
+      "on:\n  push:\n    branches: [main]\njobs:\n  test:\n    runs-on: ubuntu-latest",
+      "yaml",
+    ) as Record<string, unknown>;
+    expect(Object.keys(workflow)).toContain("on");
+    expect(workflow["on"]).toEqual({ push: { branches: ["main"] } });
+  });
+
   test("a syntax error becomes a UsageError led by the source, with the parser error as cause", () => {
     let caught: unknown;
     try {

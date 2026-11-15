@@ -90,12 +90,34 @@ if [[ "${DRY_RUN}" == true ]]; then
   exit 0
 fi
 
+# Credentials: Bun invoked as node (`bun x --bun`) no longer loads .env files
+# (Bun 1.4.x release note), so load the documented operator files explicitly.
+# Only fills values that are not already exported, and never prints a value.
+if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+  for credentials in "${REPO_ROOT}/cloudflare.env" "${XDG_CONFIG_HOME:-${HOME}/.config}/cloudflare/pages.env"; do
+    if [[ -r "${credentials}" ]]; then
+      set -a
+      # shellcheck disable=SC1090
+      . "${credentials}"
+      set +a
+      echo "Loaded Cloudflare credentials from ${credentials}"
+      break
+    fi
+  done
+fi
+
 # Step 3: Deploy via keyless Wrangler (`bun x wrangler` / `bin/wrangler`)
 echo ""
 echo "[3/3] Publishing to Cloudflare Pages (project: ${PROJECT_NAME})..."
 if [[ -x "${REPO_ROOT}/bin/wrangler" ]]; then
   "${REPO_ROOT}/bin/wrangler" pages deploy dist --project-name="${PROJECT_NAME}" --branch=main
 elif command -v bun >/dev/null 2>&1; then
+  if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+    echo "Error: CLOUDFLARE_API_TOKEN is not set and no credential file was found." >&2
+    echo "  Export it, or place ./cloudflare.env / \$XDG_CONFIG_HOME/cloudflare/pages.env." >&2
+    echo "  Bun runs as node here (--bun), so it does not auto-load .env files." >&2
+    exit 1
+  fi
   bun x --bun wrangler pages deploy dist --project-name="${PROJECT_NAME}" --branch=main
 else
   echo "Error: wrangler not found. Ensure bin/wrangler exists or run with Bun installed." >&2

@@ -36,7 +36,7 @@ describe("Enhanced Dashboard Builder & Shadow-Pricing Suite", () => {
       expect(css).toContain("@property --sd-tier-alert");
       expect(css).toContain("@property --sd-route-sharp");
       expect(css).toContain("--sd-surface-bg: #070b14;");
-      expect(css).toContain("--sd-surface-card: #0d1527;");
+      expect(css).toContain("--sd-surface-card: #0b1120;");
       expect(css).toContain("--accent: var(--sd-tier-rec-bias);");
     });
   });

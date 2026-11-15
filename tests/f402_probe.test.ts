@@ -4,6 +4,8 @@ import {
   PROBE_OPS,
   buildInstallRequestSnifferExpression,
   buildJsonProbeBody,
+  buildManagerWagersByFigureDateBody,
+  buildManagerWagersByFigureDatePayload,
   buildProbeExpression,
   buildProbeBody,
   buildReadRequestSnifferExpression,
@@ -281,6 +283,27 @@ describe("f402 probe plan", () => {
       "acc=BILLY666&operation=getTeaserProfile&RRO=1&agentID=BILLY666&agentOwner=BILLY666",
     );
 
+    const perfPlayer = PROBE_OPS.find(
+      (op) => op.operation === "getPerformancePlayer",
+    )!;
+    expect(
+      new URLSearchParams(
+        buildProbeBody(perfPlayer, "BILLY666", "BRT106"),
+      ).toString(),
+    ).toBe(
+      "acc=BRT106&period=0&operation=getPerformancePlayer&RRO=1&agentID=BILLY666&agentOwner=BILLY666",
+    );
+    expect(
+      new URLSearchParams(
+        buildProbeBody(perfPlayer, "BILLY666", "BRT106", { period: "2" }),
+      ).toString(),
+    ).toBe(
+      "acc=BRT106&period=2&operation=getPerformancePlayer&RRO=1&agentID=BILLY666&agentOwner=BILLY666",
+    );
+    expect(probeUrl("https://fantasy402.com", perfPlayer)).toBe(
+      "https://fantasy402.com/cloud/api/Manager/getPerformancePlayer",
+    );
+
     // PendingDelete sends sentinel ticketNumber=-1 by default
     const pendingDelete = new URLSearchParams(
       buildProbeBody(
@@ -324,6 +347,42 @@ describe("f402 probe plan", () => {
       week: "__WEEK__",
       operation: "getDailyFiguresByCustomer",
     });
+
+    // Manager-portal JSON wire envelope for /cloud/api/Report/getWagersByFigureDate
+    const managerFigurePayload = buildManagerWagersByFigureDatePayload({
+      agentID: "BILLY666",
+      customerID: "BRT106",
+      date: "2026-11-13",
+      figureDate: "2026-11-12",
+    });
+    expect(managerFigurePayload).toEqual({
+      RRO: 1,
+      agentID: "BILLY666",
+      agentOwner: "BILLY666",
+      customerID: "BRT106",
+      date: "2026-11-13",
+      figureDate: "2026-11-12",
+      graded: 0,
+      path: "/cloud/api/Report/getWagersByFigureDate",
+      sort: 1,
+      typeSort: 2,
+      week: 0,
+    });
+    expect(
+      JSON.parse(
+        buildManagerWagersByFigureDateBody({
+          agentID: "BILLY666",
+          agentOwner: "BILLY666",
+          customerID: "BRT106",
+          date: "2026-11-13",
+          figureDate: "2026-11-12",
+          graded: 0,
+          sort: 1,
+          typeSort: 2,
+          week: 0,
+        }),
+      ),
+    ).toEqual(managerFigurePayload);
   });
 
   test("validates the page result before it is treated as evidence", () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { resolve } from "node:path";
 import { handleDashboardCli } from "../cli/sportsdesk_cli.ts";
 import { renderAnsiMarkdown } from "../lib/canonical_osc8_links.ts";
+import { dashboardAnsiTheme } from "../lib/dashboard_render.ts";
 import {
   SURFACE,
   TIER,
@@ -318,6 +319,68 @@ describe("Dashboard Build and Markdown Pipeline", () => {
   });
 
   describe("Bun.markdown", () => {
+    it("maps dashboard ANSI options onto AnsiTheme and forwards explicit light both ways", () => {
+      // Omitted light -> Bun detects from COLORFGBG.
+      expect("light" in dashboardAnsiTheme({})).toBe(false);
+      // Explicit false must force dark instead of falling back to detection.
+      expect(dashboardAnsiTheme({ light: false }).light).toBe(false);
+      expect(dashboardAnsiTheme({ light: true }).light).toBe(true);
+
+      expect(dashboardAnsiTheme({})).toEqual({
+        colors: true,
+        hyperlinks: true,
+        columns: 100,
+      });
+      expect(dashboardAnsiTheme({ colors: false }).hyperlinks).toBe(false);
+      expect(
+        dashboardAnsiTheme({ colors: true, hyperlinks: false }).hyperlinks,
+      ).toBe(false);
+      expect(dashboardAnsiTheme({ kittyGraphics: true }).kittyGraphics).toBe(
+        true,
+      );
+      expect(dashboardAnsiTheme({ columns: 0 }).columns).toBe(0);
+    });
+
+    it("parses Bun.markdown.ansi OSC 8 hyperlinks with nested SGR, 256-color AnsiTheme.light palettes, italic, and strikethrough", () => {
+      const darkAnsi = Bun.markdown.ansi(
+        "*italic* ~~strike~~ `code` [GP301](https://fantasy402.com/manager.html?customer=GP301)",
+        { colors: true, hyperlinks: true, light: false, columns: 0 },
+      );
+      const darkTokens = parseAnsiTokens(darkAnsi);
+
+      // No raw OSC 8 framing may leak into visible text
+      for (const seg of darkTokens) {
+        expect(seg.text).not.toContain("]8;;");
+      }
+
+      const italicSeg = darkTokens.find((s) => s.text === "italic");
+      expect(italicSeg?.italic).toBe(true);
+
+      const strikeSeg = darkTokens.find((s) => s.text === "strike");
+      expect(strikeSeg?.strikethrough).toBe(true);
+
+      const darkCodeSeg = darkTokens.find((s) => s.text === "code");
+      expect(darkCodeSeg?.color).toBe("rgb(255, 175, 95)");
+      expect(darkCodeSeg?.bg).toBe("rgb(48, 48, 48)");
+
+      const linkSeg = darkTokens.find((s) => s.text === "GP301");
+      expect(linkSeg?.linkUrl).toBe(
+        "https://fantasy402.com/manager.html?customer=GP301",
+      );
+      expect(linkSeg?.underline).toBe(true);
+
+      const lightAnsi = Bun.markdown.ansi("`code`", {
+        colors: true,
+        light: true,
+        columns: 0,
+      });
+      const lightCodeSeg = parseAnsiTokens(lightAnsi).find(
+        (s) => s.text === "code",
+      );
+      expect(lightCodeSeg?.color).toBe("rgb(175, 0, 0)");
+      expect(lightCodeSeg?.bg).toBe("rgb(228, 228, 228)");
+    });
+
     it("renders dashboard.md to ANSI terminal presentation in single-digit milliseconds", async () => {
       const file = Bun.file(resolve(process.cwd(), "dashboard.md"));
       expect(await file.exists()).toBe(true);

@@ -5,6 +5,7 @@ import { DeskInput, DeskSelect } from "./Field";
 import { SegmentedTabs, type SegmentedTabItem } from "./SegmentedTabs";
 import {
   DayRangeBar,
+  DualTrajectoryCanvas,
   LiveDot,
   SparklineCanvas,
   SpringBar,
@@ -12,6 +13,7 @@ import {
 } from "./StockPrimitives";
 import {
   Badge,
+  ProvenanceChannelBadge,
   SectionHeader,
   Separator,
   StateNotice,
@@ -224,13 +226,35 @@ export function UiKitGalleryDialog(props: {
       <Separator />
 
       <View class="gap-2">
-        <SectionHeader title="Semantic status badges (text + token)" />
+        <SectionHeader title="Semantic status & 7-channel provenance badges (text + token)" />
         <View class="flex-row flex-wrap items-center gap-2">
           <Badge label="NEUTRAL · FIXTURE" tone="neutral" />
           <Badge label="LIVE · 12s" tone="positive" />
           <Badge label="DATA-STALE · #78" tone="warning" />
           <Badge label="HTTP 503 · UNAUTHORIZED" tone="danger" />
         </View>
+        <View class="flex-row flex-wrap items-center gap-2">
+          <ProvenanceChannelBadge channel="INTERNET" />
+          <ProvenanceChannelBadge channel="GSLIVE" />
+          <ProvenanceChannelBadge channel="GSBUILDER" />
+          <ProvenanceChannelBadge channel="GATEWAY" />
+          <ProvenanceChannelBadge channel="CSLEVEL2" />
+          <ProvenanceChannelBadge channel="ALERT" />
+          <ProvenanceChannelBadge channel="BLOCKED" />
+        </View>
+        <DualTrajectoryCanvas
+          primaryLabel="Book"
+          secondaryLabel="Poly"
+          unitSuffix="¢"
+          baseline={50}
+          points={[
+            { label: "00'", primary: 48.5, secondary: 47.2 },
+            { label: "15'", primary: 51.0, secondary: 49.8 },
+            { label: "30'", primary: 53.5, secondary: 52.1 },
+            { label: "45'", primary: 52.0, secondary: 53.4 },
+            { label: "60'", primary: 55.2, secondary: 54.6 },
+          ]}
+        />
       </View>
 
       <Separator />

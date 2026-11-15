@@ -7,7 +7,7 @@
  */
 import { join } from "node:path";
 
-const SOURCE = "https://bun.sh/reference/globals/bun";
+const SOURCE = "https://bun.sh/reference/bun";
 const ROOT = join(import.meta.dir, "..");
 const DOCS_DIR = join(ROOT, "docs");
 const SCRATCH_DIR = join(ROOT, "scratch");

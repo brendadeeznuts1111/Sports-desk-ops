@@ -3,7 +3,7 @@
   "bunVersion": "1.4.4",
   "bunVersionWithSha": "v1.4.4 (38afee6c8)",
   "sourceBuild": "bun.sh docs",
-  "source": "https://bun.sh/reference/globals/bun",
+  "source": "https://bun.sh/reference/bun",
   "symbolNormalization": "data-algolia-id",
   "kindRowCount": 331,
   "distinctSymbolCount": 323,
@@ -49,5 +49,6 @@
   "signatureCounts": {
     "type": 207,
     "value": 124
-  }
+  },
+  "urlShapeMigration": "2026-11-14: /reference/globals/bun/* -> /reference/bun/* (old shape now 404); rows unchanged"
 }

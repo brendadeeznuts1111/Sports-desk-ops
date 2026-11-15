@@ -24,6 +24,7 @@
   "markdown": 200,
   "stringWidth": 200,
   "wrapAnsi": 200,
+  "indexOfLine": 200,
   "Cookie": 200,
   "CookieMap": 200,
   "Glob": 200,

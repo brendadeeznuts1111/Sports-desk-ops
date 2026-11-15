@@ -13,6 +13,7 @@ import {
   buildExposurePlotData,
   buildScoreboardRows,
   buildSignalArenaIndex,
+  buildTradingTerminalSnapshot,
   computeMarketComposite,
   DESK_ENDPOINT_CATALOG,
   DESK_PREFS_STORAGE_KEY,
@@ -99,6 +100,9 @@ import {
   type ParsedTelegramStatusPayload,
   type ParsedWatchlistPayload,
   type ResolvedDeskOrigin,
+  type TerminalBlotterStatusFilter,
+  type TerminalInspectorTab,
+  type TerminalLadderViewMode,
 } from "./desk_model";
 import type { DataTableSort, DockAreaLayout } from "./ui";
 
@@ -349,11 +353,22 @@ export function createDeskStore() {
   const activePlane = signal<DeskPlaneId>("markets");
   const planeLoaded = signal<Record<DeskPlaneId, boolean>>({
     markets: true,
+    terminal: false,
     board: false,
     surveillance: false,
     forensics: false,
     ops: false,
   });
+
+  // Trading Desk (`terminal` Plane) read-only state & filters
+  const terminalSportFilter = signal("ALL");
+  const terminalExpandedSports = signal<Record<string, boolean>>({});
+  const terminalSelectedMatchId = signal<string | null>(null);
+  const terminalLadderMode = signal<TerminalLadderViewMode>("live");
+  const terminalInspectorTab = signal<TerminalInspectorTab>("otc");
+  const terminalBlotterStatus = signal<TerminalBlotterStatusFilter>("all");
+  const terminalUnhedgedOnly = signal(false);
+  const terminalSearchQuery = signal("");
 
   // Ledger of probed status per DESK_ENDPOINT_CATALOG id
   const parityLedger = signal<Record<string, EndpointLedgerRow>>({});
@@ -1139,7 +1154,10 @@ export function createDeskStore() {
     recordLedger("live-bets-summary", nextLiveBets);
 
     const plane = activePlane();
-    if (plane === "board") void loadBoardPlane();
+    if (plane === "terminal") {
+      void loadBoardPlane();
+      void loadSurveillancePlane();
+    } else if (plane === "board") void loadBoardPlane();
     else if (plane === "surveillance") void loadSurveillancePlane();
     else if (plane === "forensics") void loadForensicsPlane();
     else if (plane === "ops") void loadOpsPlane();
@@ -1289,6 +1307,26 @@ export function createDeskStore() {
     return k.status === "ready" ? k.data.r2Sinks : [];
   });
 
+  const tradingTerminalSnapshot = computed(() =>
+    buildTradingTerminalSnapshot({
+      kpisSnap: kpisSnap(),
+      kalshiSnap: kalshiSnap(),
+      scoreboardSnap: scoreboardSnap(),
+      liveBetsSnap: liveBetsSnap(),
+      gameAdminBoardSnap: gameAdminBoardSnap(),
+      gameAdminSnap: gameAdminSnap(),
+      liveWagersSnap: liveWagersSnap(),
+      graphFeedSnap: graphFeedSnap(),
+      filters: {
+        sportFilter: terminalSportFilter(),
+        selectedMatchId: terminalSelectedMatchId(),
+        blotterStatus: terminalBlotterStatus(),
+        unhedgedOnly: terminalUnhedgedOnly(),
+        searchQuery: terminalSearchQuery(),
+      },
+    }),
+  );
+
   const copyDiagnosticsToClipboard = async (): Promise<boolean> => {
     if (!originInfo.ok) return false;
     const snapshot = buildDiagnosticsSnapshotJson({
@@ -1320,7 +1358,10 @@ export function createDeskStore() {
       const loaded = planeLoaded();
       if (!loaded[plane]) {
         planeLoaded.set({ ...loaded, [plane]: true });
-        if (plane === "board") void loadBoardPlane();
+        if (plane === "terminal") {
+          void loadBoardPlane();
+          void loadSurveillancePlane();
+        } else if (plane === "board") void loadBoardPlane();
         else if (plane === "surveillance") void loadSurveillancePlane();
         else if (plane === "forensics") void loadForensicsPlane();
         else if (plane === "ops") void loadOpsPlane();
@@ -1330,6 +1371,33 @@ export function createDeskStore() {
     parityProgress,
     sweepingAll: () => sweepingAll(),
     sweepAllEndpoints,
+
+    // Trading Desk (`terminal` Plane — strictly read-only snapshots)
+    tradingTerminalSnapshot,
+    terminalSportFilter: () => terminalSportFilter(),
+    setTerminalSportFilter: (next: string) => terminalSportFilter.set(next),
+    terminalExpandedSports: () => terminalExpandedSports(),
+    toggleTerminalSportExpanded: (sport: string) =>
+      terminalExpandedSports.update((prev) => ({
+        ...prev,
+        [sport]: prev[sport] === false,
+      })),
+    terminalSelectedMatchId: () => terminalSelectedMatchId(),
+    setTerminalSelectedMatchId: (id: string | null) =>
+      terminalSelectedMatchId.set(id),
+    terminalLadderMode: () => terminalLadderMode(),
+    setTerminalLadderMode: (mode: TerminalLadderViewMode) =>
+      terminalLadderMode.set(mode),
+    terminalInspectorTab: () => terminalInspectorTab(),
+    setTerminalInspectorTab: (tab: TerminalInspectorTab) =>
+      terminalInspectorTab.set(tab),
+    terminalBlotterStatus: () => terminalBlotterStatus(),
+    setTerminalBlotterStatus: (status: TerminalBlotterStatusFilter) =>
+      terminalBlotterStatus.set(status),
+    terminalUnhedgedOnly: () => terminalUnhedgedOnly(),
+    setTerminalUnhedgedOnly: (next: boolean) => terminalUnhedgedOnly.set(next),
+    terminalSearchQuery: () => terminalSearchQuery(),
+    setTerminalSearchQuery: (q: string) => terminalSearchQuery.set(q),
 
     // Core boot endpoints
     kpisSnap: () => kpisSnap(),

@@ -187,7 +187,7 @@ Implementation: `scripts/pm_doctor.ts`. Exit **1** if any selected check has sta
 | `patchedDependencies` in manifest, lock stale | **Pass** (if frozen allows)     | **Fail** (`patches`)                                                                         | **Fail**                         |
 | Hoisted `node_modules` (no `.bun`)            | **Pass** if lock OK             | **Pass**                                                                                     | **Warn** (`installed tree`)      |
 | Global bunfig missing / wrong linker          | **Pass** on CI (ubuntu default) | **Pass**                                                                                     | **Fail**                         |
-| `@tennis-hq` registry down                    | **Pass** for npmjs root deps    | **Pass**                                                                                     | **Warn**                         |
+| a scoped registry (user `~/.npmrc`) is down   | **Pass** for npmjs root deps    | **Pass**                                                                                     | **Warn**                         |
 
 ### Frozen install traps (repo checks)
 
@@ -211,7 +211,7 @@ Catalog and workspace-scoped adds: run **`bun-deps`** (or `bun run deps` / `./bi
 | Manifest vs lock (no install) | `bun install --frozen-lockfile --dry-run`                                                                            |
 | Change dependencies           | `bun-deps add                                                                                                        | remove | update | install …`via`deps`/`dx deps`(uses`~/dotfiles/bun/unfrozen.bunfig.toml`with`frozenLockfile = false` only) |
 
-`pm:doctor` is read-only (no install). Registry probes for `@tennis-hq` are **warn**-level and skipped when `--only` filters exclude registry/token names.
+`pm:doctor` is read-only (no install). Registry probes for scopes declared in the user-level `~/.npmrc` are **warn**-level and skipped when `--only` filters exclude registry/token names.
 
 ### Which config loads for which command
 
@@ -317,7 +317,7 @@ Root manifest: `"private": true` and `"workspaces": ["packages/*"]` ([workspaces
 ```sh
 ./bin/dx workspaces                                     # List root + packages/*, waves & isolated links
 ./bin/dx workspaces graph --mermaid                     # Emit Mermaid flowchart of workspace:* waves
-./bin/dx workspaces audit [--strict-root]               # Run 7 monorepo gates (exit 1 on any failure)
+./bin/dx workspaces audit [--strict-root]               # Run the monorepo gates (exit 1 on any failure)
 ./bin/dx workspaces run --topological test              # Execute waves dependency-first (--parallel per wave)
 ./bin/dx workspaces run --filter '@sportsdesk-ops/*' check
 ./bin/dx workspaces add ba-example zod                  # Runs unfrozen bun-deps in packages/ba-example + lock check
@@ -344,9 +344,65 @@ Root manifest: `"private": true` and `"workspaces": ["packages/*"]` ([workspaces
 
 Root `dependencies` / `devDependencies` use **exact** versions (no `^` on pinned packages in `package.json`; the lock holds the same pins). CI installs on **linux x64**; `bun.lock` still lists every `@oxlint/binding-*` optional platform package so the lock stays cross-platform ([install → platform-specific](https://bun.com/docs/pm/cli/install#platform-specific-dependencies)). Prod license audit: regenerate gitignored `licenses.json` with `bun pm licenses --prod --json` (see `.gitignore`).
 
-### Scoped registry (`@tennis-hq`)
+### Scoped registries
 
-Committed [`.npmrc`](../../.npmrc) routes `@tennis-hq` to the machine-local registry (`127.0.0.1:50851`); **tokens stay in `~/.npmrc`** (`TENNIS_NPM_TOKEN` or similar), never in git (`tests/bun_config_policy.test.ts`). Root `publishConfig.registry` matches that scope for workspace publishes. `pm:doctor` pings the registry and warns when the token env var is unset — relevant for publish and scoped installs, not for day-to-day npmjs devDeps on the root workspace.
+No registry is configured in the repository. Everything resolves through the user-level `~/.npmrc` default (`https://registry.npmjs.org/`), which is all this workspace needs: it publishes nothing, and its DSH plugin bundles install from git commits, not npm.
+
+The previous setup — a committed `.npmrc` routing `@tennis-hq` to `http://127.0.0.1:50851/`, a matching root `publishConfig`, and a `TENNIS_NPM_TOKEN` — was removed 2026-11-14. It never worked: the registry was down when committed (acf8140), the token was never present, the scope had no dependents, and the package name was later reverted to unscoped `sportsdesk-ops`, so `publishConfig.access: restricted` also produced `unable to restrict access to unscoped package`. `tests/bun_config_policy.test.ts` now rejects any committed loopback registry or `_authToken` instead of pinning that dead route.
+
+If a private registry is ever needed, configure it **outside** the repo. Bun recommends `bunfig.toml`; `.npmrc` works too. Both were verified against a fake registry on 2026-11-14 (`tests/bun_registry_config.test.ts` records the routing and the Authorization header each form sends):
+
+```toml
+# machine-level bunfig (~/.bunfig.toml); repo files stay registry-free
+[install]
+registry = { url = "https://registry.myorg.com/", token = "$npm_token" }  # global default
+# registry = "https://<username>:<password>@registry.myorg.com/"          # userinfo form
+# registry = "https://registry.npmjs.org"                                 # bare url
+
+[install.scopes]
+"@myorg" = { token = "$npm_token", url = "https://registry.myorg.com/" }  # or a plain URL string
+"@myorg2" = { username = "u", password = "$npm_pass", url = "https://…/" }
+```
+
+- Credentials are **environment references** (`$name`), never literals in a tracked file. `bun install` auto-loads `.env.production.local`, `.env.local`, `.env.production`, `.env` (first file wins); `BUN_ENV`/`NODE_ENV=development` substitutes `.env.development.local`/`.env.development`. Measured divergence from the docs: `NODE_ENV=test` **does** load `.env.test` (it is ignored otherwise). `--env-file` / `--no-env-file` override the set.
+- `publishConfig.registry` / `publishConfig["@scope:registry"]` belong on a scoped, non-private package — `access: restricted` is invalid for an unscoped name (measured 2026-11-14).
+- `bun install --registry <url>` and `bun publish --registry <url>` override every config source for a one-off command.
+- Verify the result with `bun run registry:check <name>` (resolves and probes) and `bun run pm:doctor` (warn-level when a configured scope is unreachable).
+
+### Publishing a scoped workspace package
+
+Workspace packages are **private by default**, and `scripts/check_workspace_packs.ts` enforces it: a package without `"private": true` must opt in explicitly with `publishConfig { access: "public", registry: "https://…" }`. Loopback or plain-http registries never qualify (measured 2026-11-14).
+
+`@sportsdesk-ops/contracts` is the pilot: `private` removed, `publishConfig.access: "public"` against npmjs, `repository.directory` set. Exports are conditional — `types`/`bun` resolve the TypeScript source, `default` resolves `dist/<name>.js` — and `prepack` runs `scripts/build.ts`, so a packed tarball always carries the dist. `dist/` is gitignored; it is built during `bun pm pack`/`bun publish`, not committed.
+
+Verified 2026-11-14 by installing the packed tarball into a throwaway project: Bun imports the source condition (59 exports, 5 features) and Node imports the dist (59 exports, 5 features). Node cannot load the TypeScript source at all (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), so the dist leg is what makes the package usable outside Bun. `tests/contracts_pack_consumer.test.ts` keeps that true.
+
+Before the first publish:
+
+1. Create the npm scope: an npm account must own `@sportsdesk-ops` (npm org or user scope). Without it, publish fails authorization even with a valid token.
+2. Decide a license — the repo has no `LICENSE` file, and npm warns on a package without one.
+3. Authenticate: `bunx npm login` locally, and put `NPM_TOKEN` in the GitHub repository secrets for the workflow.
+
+Publish:
+
+```sh
+cd packages/contracts && bun pm pack --dry-run  # inspect the tarball contents
+bun publish --cwd packages/contracts --dry-run # resolves the registry + access, then asks for auth
+bun publish --cwd packages/contracts           # real publish
+```
+
+`.github/workflows/publish-contracts.yml` publishes on a `contracts-v*` tag (or manual dispatch) using `NPM_TOKEN`; it writes a temporary npmrc and points `NPM_CONFIG_USERCONFIG` at it, which Bun reads (the same mechanism `actions/setup-node` uses). Prerelease versions need `--tag` (Bun refuses `2.0.0-beta.1` without one).
+
+`files` entries follow Bun's glob semantics, measured 2026-11-14 against `bun pm pack --dry-run`: `*` does not cross `/`, `**` does (including zero directories, so `src/**/*.ts` matches `src/a.ts`), a directory entry such as `src` covers the whole tree, and `!pattern` excludes. `package.json`, `README*`, `LICENSE*` and `CHANGELOG*` always ship regardless of the list — even a negation cannot drop them. `scripts/check_workspace_packs.ts` matches the packed output with `Bun.Glob` under those rules, so a README no longer reads as a leak and a wildcard is not misread.
+
+Measured behaviour worth knowing before a release (2026-11-14):
+
+- `bun publish --dry-run` checks config, access and file selection but **not the token**: with a fake `_authToken` in `NPM_CONFIG_USERCONFIG` it prints `+ @sportsdesk-ops/contracts@0.1.0 (dry-run)` and exits 0. Without any token it fails with `missing authentication`. So the dry-run is a config gate; only a real publish tests the credential.
+- The name is unpublished (`bun info @sportsdesk-ops/contracts` → "does not exist"), and scope ownership cannot be checked unauthenticated: `registry.npmjs.org/-/org/sportsdesk-ops` returns 404 for a missing org _and_ for an org your token cannot see. After `bunx npm login`, run `npm org ls sportsdesk-ops` (or create it on npmjs.com).
+- Bun 1.4.4 has no `--provenance` / OIDC support in `bun publish` (checked via `--help`). Publishing with npm provenance would require `npm publish --provenance` in the workflow instead; that trades Bun's publish path for the attestation.
+- The workflow adds two guards: a tag/version match on `contracts-v*` (a tag that names the wrong version fails) and a dry-run before the real publish.
+
+Other workspace packages are not publishable yet: `api`, `backend` and `ui` depend on `@sportsdesk-ops/contracts` via `workspace:*`, which npm consumers cannot resolve; enabling them needs real version ranges and a publish order (contracts first).
 
 ### CI install vs local doctor
 
@@ -438,7 +494,7 @@ What CI and tests enforce without a maintainer machine bunfig.
 | lockfile workspace versions match                      | `lockWorkspaceVersions` parity (excludes root `""` version)                                                        |
 | every declared patch in lock and on disk               | `patchState` declared = locked, files exist                                                                        |
 | global bunfig path XDG rule                            | `globalBunfigPath()` unit cases                                                                                    |
-| registry scope without token in git                    | `.npmrc` has `@tennis-hq:registry`, no `_authToken`                                                                |
+| no committed loopback registry or token                | `.npmrc` (if present) and root `publishConfig` reject `127.0.0.1` / `localhost` and `_authToken`                   |
 
 ### `tests/pm_policy_workspaces.test.ts`
 

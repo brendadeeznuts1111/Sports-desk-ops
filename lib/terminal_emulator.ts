@@ -30,9 +30,12 @@ import {
   type BatchedRankingResult,
 } from "./customer_rankings.ts";
 import {
+  describeAnsiTheme,
   formatOsc8Hyperlink,
   getCanonicalCustomerUrl,
   getCanonicalAgentUrl,
+  parseAnsiMarkdownCliOptions,
+  renderAnsiMarkdown,
 } from "./canonical_osc8_links.ts";
 import { formatHalfPointLine } from "../design/domain-branded-types.ts";
 import { padDisplay } from "./cli_inspect.ts";
@@ -141,7 +144,9 @@ export interface AnsiSegment {
   readonly bg?: string | undefined;
   readonly bold?: boolean | undefined;
   readonly dim?: boolean | undefined;
+  readonly italic?: boolean | undefined;
   readonly underline?: boolean | undefined;
+  readonly strikethrough?: boolean | undefined;
   readonly linkUrl?: string | undefined;
 }
 
@@ -874,6 +879,22 @@ const ANSI_BG_MAP: Record<number, string> = {
   102: "rgba(34, 197, 94, 0.3)",
 };
 
+function ansi256ToCss(index: number): string | undefined {
+  if (!Number.isInteger(index) || index < 0 || index > 255) return undefined;
+  if (index < 8) return ANSI_COLOR_MAP[30 + index];
+  if (index < 16) return ANSI_COLOR_MAP[90 + (index - 8)];
+  if (index < 232) {
+    const cube = index - 16;
+    const rIdx = Math.floor(cube / 36);
+    const gIdx = Math.floor((cube % 36) / 6);
+    const bIdx = cube % 6;
+    const chan = (v: number): number => (v === 0 ? 0 : 55 + v * 40);
+    return `rgb(${chan(rIdx)}, ${chan(gIdx)}, ${chan(bIdx)})`;
+  }
+  const gray = 8 + (index - 232) * 10;
+  return `rgb(${gray}, ${gray}, ${gray})`;
+}
+
 /**
  * Parses raw terminal text with ANSI SGR escape codes and OSC 8 hyperlinks into structured segments.
  */
@@ -881,45 +902,41 @@ const ANSI_BG_MAP: Record<number, string> = {
 export function parseAnsiSegments(raw: string): AnsiSegment[] {
   const segments: AnsiSegment[] = [];
   const tokenRegex =
-    /\x1b]8;[^\x1b\\]*(?:\x1b\\|\x07)([^\x1b]*)\x1b]8;;\x1b\\|\x1b\[([0-9;]*)m/g;
+    /\x1b]8;[a-zA-Z0-9;=]*;([^\x1b\x07\\]*)(?:\x1b\\|\x07)|\x1b\[([0-9;]*)m/g;
 
   let lastIndex = 0;
   let currentColor: string | undefined;
   let currentBg: string | undefined;
   let currentBold = false;
   let currentDim = false;
+  let currentItalic = false;
   let currentUnderline = false;
+  let currentStrikethrough = false;
   let currentLink: string | undefined;
+
+  const pushText = (text: string): void => {
+    if (text.length === 0) return;
+    segments.push({
+      text,
+      color: currentLink ? (currentColor ?? "#38bdf8") : currentColor,
+      bg: currentBg,
+      bold: currentBold,
+      dim: currentDim,
+      ...(currentItalic ? { italic: true } : {}),
+      underline: currentLink ? true : currentUnderline,
+      ...(currentStrikethrough ? { strikethrough: true } : {}),
+      linkUrl: currentLink,
+    });
+  };
 
   let match: RegExpExecArray | null;
   while ((match = tokenRegex.exec(raw)) !== null) {
     if (match.index > lastIndex) {
-      const text = raw.slice(lastIndex, match.index);
-      if (text.length > 0) {
-        segments.push({
-          text,
-          color: currentColor,
-          bg: currentBg,
-          bold: currentBold,
-          dim: currentDim,
-          underline: currentUnderline,
-          linkUrl: currentLink,
-        });
-      }
+      pushText(raw.slice(lastIndex, match.index));
     }
 
     if (match[1] !== undefined) {
-      const wholeMatch = match[0];
-      const urlMatch = /^\x1b]8;([^\x1b\\]*)(?:\x1b\\|\x07)/.exec(wholeMatch);
-      currentLink = urlMatch?.[1] ? urlMatch[1].replace(/^;/, "") : undefined;
-
-      segments.push({
-        text: match[1],
-        color: "#38bdf8",
-        underline: true,
-        linkUrl: currentLink,
-      });
-      currentLink = undefined;
+      currentLink = match[1].length > 0 ? match[1] : undefined;
     } else if (match[2] !== undefined) {
       const paramStr = match[2];
       const codes =
@@ -936,7 +953,9 @@ export function parseAnsiSegments(raw: string): AnsiSegment[] {
           currentBg = undefined;
           currentBold = false;
           currentDim = false;
+          currentItalic = false;
           currentUnderline = false;
+          currentStrikethrough = false;
         } else if (code === 39) {
           currentColor = undefined;
         } else if (code === 49) {
@@ -945,13 +964,35 @@ export function parseAnsiSegments(raw: string): AnsiSegment[] {
           currentBold = true;
         } else if (code === 2) {
           currentDim = true;
+        } else if (code === 3) {
+          currentItalic = true;
         } else if (code === 4) {
           currentUnderline = true;
+        } else if (code === 9) {
+          currentStrikethrough = true;
         } else if (code === 22) {
           currentBold = false;
           currentDim = false;
+        } else if (code === 23) {
+          currentItalic = false;
         } else if (code === 24) {
           currentUnderline = false;
+        } else if (code === 29) {
+          currentStrikethrough = false;
+        } else if (
+          code === 38 &&
+          codes[i + 1] === 5 &&
+          codes[i + 2] !== undefined
+        ) {
+          currentColor = ansi256ToCss(codes[i + 2]!);
+          i += 2;
+        } else if (
+          code === 48 &&
+          codes[i + 1] === 5 &&
+          codes[i + 2] !== undefined
+        ) {
+          currentBg = ansi256ToCss(codes[i + 2]!);
+          i += 2;
         } else if (
           code === 38 &&
           codes[i + 1] === 2 &&
@@ -990,18 +1031,7 @@ export function parseAnsiSegments(raw: string): AnsiSegment[] {
   }
 
   if (lastIndex < raw.length) {
-    const text = raw.slice(lastIndex);
-    if (text.length > 0) {
-      segments.push({
-        text,
-        color: currentColor,
-        bg: currentBg,
-        bold: currentBold,
-        dim: currentDim,
-        underline: currentUnderline,
-        linkUrl: currentLink,
-      });
-    }
+    pushText(raw.slice(lastIndex));
   }
 
   return segments;
@@ -1029,7 +1059,14 @@ export function ansiToHtml(raw: string): string {
       if (seg.bg) styles.push(`background-color: ${seg.bg}`);
       if (seg.bold) styles.push("font-weight: 700");
       if (seg.dim) styles.push("opacity: 0.75");
-      if (seg.underline) styles.push("text-decoration: underline");
+      if (seg.italic) styles.push("font-style: italic");
+      if (seg.underline && seg.strikethrough) {
+        styles.push("text-decoration: underline line-through");
+      } else if (seg.underline) {
+        styles.push("text-decoration: underline");
+      } else if (seg.strikethrough) {
+        styles.push("text-decoration: line-through");
+      }
 
       const styleAttr =
         styles.length > 0 ? ` style="${styles.join("; ")}"` : "";
@@ -1974,20 +2011,69 @@ async function executeTerminalQueryInner(
     }
   }
 
-  // Quick Command: Bun.markdown Native Terminal Renderer
+  // Quick Command: Bun.markdown Native Terminal Renderer (Bun.markdown.ansi + AnsiTheme & tier badges)
   if (canonicalCmd === "markdown") {
+    const themeOptions = parseAnsiMarkdownCliOptions(cmdArgs);
+    const nonFlagTokens: string[] = [];
+    let hasAnsiThemeFlag = false;
+    for (let i = 0; i < cmdArgs.length; i++) {
+      const a = cmdArgs[i]!;
+      if (a === "--theme" || a === "--columns") {
+        hasAnsiThemeFlag = true;
+        i++;
+        continue;
+      }
+      if (
+        a === "--ansi" ||
+        a.startsWith("--theme=") ||
+        a.startsWith("--columns=") ||
+        a === "--colors" ||
+        a === "--color" ||
+        a === "--no-colors" ||
+        a === "--no-color" ||
+        a === "--hyperlinks" ||
+        a === "--no-hyperlinks" ||
+        a === "--light" ||
+        a === "--dark" ||
+        a === "--no-light" ||
+        a === "--kitty-graphics" ||
+        a === "--kitty" ||
+        a === "--no-kitty-graphics" ||
+        a === "--no-kitty" ||
+        a === "--linkify-symbols" ||
+        a === "--no-linkify-symbols"
+      ) {
+        hasAnsiThemeFlag = true;
+        continue;
+      }
+      nonFlagTokens.push(a);
+    }
+
     const input =
-      cmdArgs.join(" ") ||
-      "# SportsDesk Markdown\n\n- Native **Bun.markdown**\n- Linear time parsing";
+      nonFlagTokens.join(" ") ||
+      "# SportsDesk Markdown\n\n- Native `Bun.markdown.ansi` with `AnsiTheme`\n- Clickable OSC 8 links: [GP301](https://fantasy402.com/manager.html?customer=GP301) · [BRT106](https://fantasy402.com/manager.html?customer=BRT106)\n- Linear time parsing";
     try {
       let mdText = input;
-      if (input.endsWith(".md")) {
+      const isFileTarget = nonFlagTokens.length === 1 && input.endsWith(".md");
+      if (isFileTarget) {
         const f = Bun.file(input);
         if (await f.exists()) {
           mdText = await f.text();
         }
       }
-      const rendered = renderWagerMarkdownTerminal(mdText);
+      const useNativeAnsiTheme =
+        hasAnsiThemeFlag || isFileTarget || nonFlagTokens.length === 0;
+      const renderStart = performance.now();
+      const rendered = useNativeAnsiTheme
+        ? renderAnsiMarkdown(mdText, {
+            ...themeOptions,
+            ...(nonFlagTokens.length === 0 &&
+            themeOptions.linkifySymbols === undefined
+              ? { linkifySymbols: true }
+              : {}),
+          }) +
+          `\n\x1b[2m⚡ Rendered via Bun.markdown.ansi in ${(performance.now() - renderStart).toFixed(2)}ms (AnsiTheme: ${describeAnsiTheme(themeOptions)})\x1b[0m`
+        : renderWagerMarkdownTerminal(mdText);
       return {
         command: trimmed,
         stdout: rendered,

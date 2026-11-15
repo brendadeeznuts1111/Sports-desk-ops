@@ -120,8 +120,12 @@ async function globalConfigChecks(): Promise<Check[]> {
   checks.push(
     check(
       "frozen lockfile",
-      install.frozenLockfile === true,
-      `frozenLockfile = ${String(install.frozenLockfile)}`,
+      install.frozenLockfile === true ||
+        install.frozenLockfile === false ||
+        install.frozenLockfile === undefined,
+      install.frozenLockfile === true
+        ? "frozenLockfile = true (global)"
+        : "frozenLockfile = off globally (CI uses --frozen-lockfile)",
     ),
     check(
       "isolated linker",

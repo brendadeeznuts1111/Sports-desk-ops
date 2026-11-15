@@ -44,7 +44,7 @@ jobs:
           bun-version: "1.4.4"
 
       - name: Install deps (frozen)
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --no-env-file
 
       - name: Probe R2 and alert on degraded keys
         env:

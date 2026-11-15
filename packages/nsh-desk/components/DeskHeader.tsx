@@ -19,6 +19,7 @@ import {
 
 const PLANE_TABS: readonly SegmentedTabItem<DeskPlaneId>[] = [
   { id: "markets", label: "Markets" },
+  { id: "terminal", label: "Trading Desk" },
   { id: "board", label: "Board" },
   { id: "surveillance", label: "Surveillance" },
   { id: "forensics", label: "Forensics" },
@@ -123,6 +124,15 @@ export function DeskHeader(props: DeskHeaderProps): JSX.Element {
           <DeskToolbarSeparator />
 
           <DeskMenu label="Workspace" testID="workspace-menu">
+            <DeskMenuItem
+              testID="menu-trading-desk"
+              label="Trading Desk (read-only)"
+              shortcut="mod+3"
+              onSelect={() => {
+                animateUserLayoutChange();
+                store.setActivePlane("terminal");
+              }}
+            />
             <DeskMenuItem
               testID="menu-sweep-endpoints"
               label="Sweep all :4020 endpoints"

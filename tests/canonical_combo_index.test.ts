@@ -21,7 +21,7 @@ describe("canonical_combo_index", () => {
     const poly = JSON.parse(
       readFileSync(join(FIX, "canonical-combo-polymarket.json"), "utf8"),
     );
-    const a = canonicalComboFromWire("internal", internal.wire)!;
+    const a = canonicalComboFromWire("desk", internal.wire)!;
     const b = canonicalComboFromWire("polymarket", poly.wire)!;
     expect(a.canonicalComboId).toBe(b.canonicalComboId);
     expect(a.canonicalComboId).toContain("NCAAF");
@@ -36,13 +36,13 @@ describe("canonical_combo_index", () => {
     const poly = JSON.parse(
       readFileSync(join(FIX, "canonical-combo-polymarket.json"), "utf8"),
     );
-    const pi = canonicalComboFromWire("internal", internal.wire)!;
+    const pi = canonicalComboFromWire("desk", internal.wire)!;
     const pp = canonicalComboFromWire("polymarket", poly.wire)!;
     expect(pi.canonicalComboId).toBe(pp.canonicalComboId);
 
     store.insertObservation({
       canonicalComboId: pi.canonicalComboId,
-      venue: "internal",
+      venue: "desk",
       venueRef: internal.venueRef,
       validTime: internal.validTime,
       legs: pi.input.legs,

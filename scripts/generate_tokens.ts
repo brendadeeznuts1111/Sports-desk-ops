@@ -80,23 +80,41 @@ try {
   console.error(`[gen:tokens] ${e instanceof Error ? e.message : e}`);
   process.exit(1);
 }
-const { surfaces, ingestion, routes, ui } = ssot;
+const { surfaces, ingestion, routes, ui, sla } = ssot;
 
-const UI_ROLES = new Set<UiRole>(["surface", "border", "text"]);
+const UI_ROLES = new Set<UiRole>([
+  "surface",
+  "border",
+  "border_hairline",
+  "border_interactive",
+  "focus",
+  "text",
+]);
 for (const t of ui) {
   if (!UI_ROLES.has(t.role) || Bun.color(t.hex, "number") === null) {
     console.error(
-      `[gen:tokens] Error: ui token ${t.token_name} needs role surface|border|text and a Bun.color-parseable hex (got role=${t.role}, hex=${t.hex})`,
+      `[gen:tokens] Error: ui token ${t.token_name} needs valid role and Bun.color-parseable hex (got role=${t.role}, hex=${t.hex})`,
     );
     process.exit(1);
   }
 }
+
+const slaCssTokens = sla.flatMap((s) => [
+  { token_name: s.token_name, hex: s.fg_hex },
+  { token_name: `${s.token_name}-bg`, hex: s.bg_hex },
+  { token_name: `${s.token_name}-border`, hex: s.border_hex },
+]);
+
+const legacyAliases: readonly [string, string][] = ingestion
+  .filter((c) => c.legacy_token_name !== undefined)
+  .map((c) => [c.legacy_token_name!, c.token_name]);
 
 console.log(`[gen:tokens] Loaded tokens.toml (v${ssot.meta.version}):`);
 console.log(` - Surfaces : ${surfaces.length}`);
 console.log(` - Ingestion: ${ingestion.length}`);
 console.log(` - Routes   : ${routes.length}`);
 console.log(` - UI       : ${ui.length}`);
+console.log(` - SLA      : ${sla.length} (${slaCssTokens.length} CSS tokens)`);
 
 // ============================================================================
 // 1. GENERATE DOMAIN-BRANDED-TYPES.TS (SECTION 7)
@@ -114,7 +132,13 @@ console.log(`[gen:tokens] Emitted updated domain-branded-types.ts`);
 // ============================================================================
 // 2. GENERATE CSS DECLARATIONS & SYNCHRONIZE DASHBOARDS
 // ============================================================================
-const allTokens = [...surfaces, ...ui, ...ingestion, ...routes];
+const allTokens = [
+  ...surfaces,
+  ...ui,
+  ...slaCssTokens,
+  ...ingestion,
+  ...routes,
+];
 
 function generateHoudiniPropertyCss(): string {
   let css =
@@ -142,6 +166,9 @@ function generateRootVariablesCss(): string {
     "      /* Generated from tokens.toml (v" + ssot.meta.version + ") */\n";
   for (const t of allTokens) {
     css += `      ${t.token_name}: ${t.hex};\n`;
+  }
+  for (const [legacyToken, targetToken] of legacyAliases) {
+    css += `      ${legacyToken}: var(${targetToken});\n`;
   }
   return css;
 }
@@ -194,17 +221,26 @@ function generateStandaloneDashboardTokensCss(): string {
   for (const t of allTokens) {
     css += `  ${t.token_name}: ${t.hex};\n`;
   }
+  for (const [legacyToken, targetToken] of legacyAliases) {
+    css += `  ${legacyToken}: var(${targetToken});\n`;
+  }
   css += `
   /* Semantic dashboard aliases mapped to canonical tokens.toml variables */
   --bg: var(--sd-surface-bg);
   --bg-cli: var(--sd-surface-cli);
   --card: var(--sd-surface-card);
+  --card-elevated: var(--sd-surface-elevated);
   --card-hover: var(--sd-surface-hover);
+  --card-raised: var(--sd-surface-raised);
+  --card-selected: var(--sd-surface-selected);
   --border: var(--sd-surface-border);
+  --border-strong: var(--sd-border-strong);
+  --focus-ring: var(--sd-focus-ring);
   --text: var(--sd-text-primary);
+  --text-secondary: var(--sd-text-secondary);
   --muted: var(--sd-text-muted);
   --accent: var(--sd-tier-rec-bias);
-  --emerald: var(--sd-theme-emerald);
+  --emerald: var(--sd-tier-gateway);
   --amber: var(--sd-tier-steam);
   --danger: var(--sd-tier-alert);
   --purple: var(--sd-route-sharp);

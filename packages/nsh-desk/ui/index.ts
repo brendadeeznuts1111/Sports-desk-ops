@@ -49,6 +49,7 @@ export {
   createCalmRange,
   DayRangeBar,
   DepthChartCanvas,
+  DualTrajectoryCanvas,
   LiveDot,
   MarketChartCanvas,
   OrderToastBanner,
@@ -59,6 +60,8 @@ export {
   type DayRangeBarProps,
   type DepthChartCanvasProps,
   type DepthLevelItem,
+  type DualTrajectoryCanvasProps,
+  type DualTrajectoryPoint,
   type LiveDotProps,
   type MarketChartCanvasProps,
   type MarketChartPoint,
@@ -73,6 +76,7 @@ export {
 } from "./StockPrimitives";
 export {
   Badge,
+  ProvenanceChannelBadge,
   SectionHeader,
   Separator,
   StateNotice,
@@ -80,6 +84,8 @@ export {
   type BadgeProps,
   type BadgeTone,
   type NoticeKind,
+  type ProvenanceChannelBadgeProps,
+  type ProvenanceChannelCode,
   type SurfaceProps,
   type SurfaceVariant,
 } from "./Surface";

@@ -1,0 +1,4444 @@
+{
+  "s": {
+    "1": {
+      "4": {
+        "9430": {
+          "185442391": [
+            ["Great Britain", "", "", 3434274, "", "", ""],
+            ["China", "", "", 3434273, "", "", ""],
+            1795669200,
+            null,
+            null
+          ]
+        },
+        "47321": {
+          "208263261": [
+            ["South Korea", "", "", 2475975, "", "", ""],
+            ["Japan", "", "", 2475974, "", "", ""],
+            1794564000,
+            null,
+            null
+          ],
+          "208397381": [
+            ["Chinese Taipei", "", "", 3617388, "", "", ""],
+            ["Australia", "", "", 2475867, "", "", ""],
+            1794538800,
+            null,
+            null
+          ]
+        }
+      },
+      "6": {
+        "8": {
+          "199290241": [
+            [
+              "Texas Rangers",
+              "TEX Rangers",
+              "texas-rangers",
+              28,
+              "",
+              "72-75",
+              46
+            ],
+            [
+              "Arizona Diamondbacks",
+              "ARI D-backs",
+              "arizona-diamondbacks",
+              33,
+              "",
+              "78-69",
+              18
+            ],
+            1789177200,
+            { "name": "M Gore - L", "id": 4554 },
+            { "name": "M Kelly - R", "id": 119 }
+          ],
+          "199297311": [
+            [
+              "Minnesota Twins",
+              "MIN Twins",
+              "minnesota-twins",
+              715,
+              "",
+              "71-82",
+              34
+            ],
+            [
+              "Los Angeles Angels",
+              "LA Angels",
+              "los-angeles-angels",
+              30,
+              "",
+              "59-94",
+              30
+            ],
+            1789781880,
+            { "name": "C Prielipp - L", "id": 4747 },
+            { "name": "G. Rodriguez -R", "id": 4788 }
+          ],
+          "199302631": [
+            [
+              "San Diego Padres",
+              "SD Padres",
+              "san-diego-padres",
+              378,
+              "",
+              "82-68",
+              41
+            ],
+            ["Colorado Rockies", "COL Rockies", "", 13, "", "55-95", 26],
+            1789519200,
+            { "name": "W Buehler - R", "id": 4556 },
+            { "name": "K Freeland - L", "id": 1300 }
+          ],
+          "199304011": [
+            [
+              "Arizona Diamondbacks",
+              "ARI D-backs",
+              "arizona-diamondbacks",
+              33,
+              "",
+              "78-68",
+              18
+            ],
+            [
+              "Kansas City Royals",
+              "KC Royals",
+              "kansas-city-royals",
+              10,
+              "",
+              "64-82",
+              29
+            ],
+            1789002000,
+            { "name": "Z Gallen - R", "id": 740 },
+            { "name": "Daniel Lynch IV -L", "id": 4902 }
+          ],
+          "199304171": [
+            [
+              "Miami Marlins",
+              "MIA Marlins",
+              "miami-marlins",
+              18,
+              "",
+              "74-77",
+              32
+            ],
+            [
+              "Arizona Diamondbacks",
+              "ARI D-backs",
+              "arizona-diamondbacks",
+              33,
+              "",
+              "80-71",
+              18
+            ],
+            1789522800,
+            { "name": "J Junk - R", "id": 4252 },
+            { "name": "M Soroka - R", "id": 4565 }
+          ],
+          "199305121": [
+            [
+              "New York Yankees",
+              "NY Yankees",
+              "new-york-yankees",
+              24,
+              "",
+              "88-64",
+              36
+            ],
+            [
+              "Arizona Diamondbacks",
+              "ARI D-backs",
+              "arizona-diamondbacks",
+              33,
+              "",
+              "80-73",
+              18
+            ],
+            1789782000,
+            { "name": "G. Cole - R", "id": 94 },
+            { "name": "E Rodriguez - L", "id": 4716 }
+          ],
+          "199305551": [
+            [
+              "Washington Nationals",
+              "WAS Nationals",
+              "washington-nationals",
+              1,
+              "",
+              "67-76",
+              48
+            ],
+            [
+              "Los Angeles Dodgers",
+              "LA Dodgers",
+              "los-angeles-dodgers",
+              17,
+              "",
+              "84-57",
+              31
+            ],
+            1788657000,
+            { "name": "C Cavalli - R", "id": 2342 },
+            { "name": "T Glasnow - R", "id": 3034 }
+          ],
+          "199306131": [
+            [
+              "Cincinnati Reds",
+              "CIN Reds",
+              "cincinnati-reds",
+              12,
+              "",
+              "69-75",
+              24
+            ],
+            [
+              "Los Angeles Dodgers",
+              "LA Dodgers",
+              "los-angeles-dodgers",
+              17,
+              "",
+              "87-57",
+              31
+            ],
+            1788919800,
+            { "name": "N Lodolo - L", "id": 1776 },
+            { "name": "Tarik Skubal -L", "id": 4889 }
+          ],
+          "199306421": [
+            [
+              "San Francisco Giants",
+              "SF Giants",
+              "san-francisco-giants",
+              4,
+              "",
+              "64-89",
+              42
+            ],
+            [
+              "Los Angeles Dodgers",
+              "LA Dodgers",
+              "los-angeles-dodgers",
+              17,
+              "",
+              "93-60",
+              31
+            ],
+            1789784100,
+            { "name": "Cesar Perdomo -L", "id": 4932 },
+            { "name": "T Glasnow - R", "id": 3034 }
+          ],
+          "199308211": [
+            [
+              "Washington Nationals",
+              "WAS Nationals",
+              "washington-nationals",
+              1,
+              "",
+              "67-79",
+              48
+            ],
+            [
+              "San Diego Padres",
+              "SD Padres",
+              "san-diego-padres",
+              378,
+              "",
+              "76-68",
+              41
+            ],
+            1788918000,
+            { "name": "Riley Cornelio -R", "id": 4934 },
+            { "name": "Casey Mize -R", "id": 4894 }
+          ],
+          "200142281": [
+            [" Athletics", "", "athletics", 29, "", "54-86", 38],
+            [
+              "Seattle Mariners",
+              "SEA Mariners",
+              "seattle-mariners",
+              37,
+              "",
+              "66-74",
+              43
+            ],
+            1788486000,
+            { "name": "J Perkins - R", "id": 4329 },
+            { "name": "Kade Anderson -L", "id": 4914 }
+          ],
+          "200810841": [
+            [
+              "St. Louis Cardinals",
+              "STL Cardinals",
+              "st-louis-cardinals",
+              795125,
+              "",
+              "72-73",
+              44
+            ],
+            [
+              "San Francisco Giants",
+              "SF Giants",
+              "san-francisco-giants",
+              4,
+              "",
+              "60-85",
+              42
+            ],
+            1788918300,
+            { "name": "Q Matthews - L", "id": 4887 },
+            { "name": "L Roupp - R", "id": 3642 }
+          ],
+          "201968961": [
+            [
+              "Miami Marlins",
+              "MIA Marlins",
+              "miami-marlins",
+              18,
+              "",
+              "76-77",
+              32
+            ],
+            [
+              "San Diego Padres",
+              "SD Padres",
+              "san-diego-padres",
+              378,
+              "",
+              "84-69",
+              41
+            ],
+            1789782000,
+            { "name": "T Phillips - R", "id": 4466 },
+            { "name": "N Pivetta - R", "id": 3826 }
+          ],
+          "203073771": [
+            [
+              "Houston Astros",
+              "HOU Astros",
+              "houston-astros",
+              19,
+              "",
+              "79-80",
+              28
+            ],
+            [" Athletics", "", "athletics", 29, "", "63-96", 38],
+            1790386800,
+            { "name": "H Brown - R", "id": 2372 },
+            { "name": "J Lopez - L", "id": 3995 }
+          ]
+        }
+      }
+    },
+    "2": {
+      "1": {
+        "76": {
+          "51815565": [
+            ["Hapoel Jerusalem", "", "", 9421, "", "", 14130],
+            ["Maccabi Tel Aviv", "", "", 163546, "", "", 14219],
+            1794682500,
+            null,
+            null
+          ],
+          "51819777": [
+            ["Maccabi Ashdod BC", "", "", 682275, "", "", 68746],
+            ["Ironi Kiryat Ata", "", "", 950835, "", "", ""],
+            1794762000,
+            null,
+            null
+          ],
+          "51820043": [
+            ["Maccabi Ironi Ness Ziona", "", "", 898329, "", "", ""],
+            ["Maccabi Ironi Ramat Gan", "", "", 2387239, "", "", ""],
+            1794766500,
+            null,
+            null
+          ],
+          "51823425": [
+            ["Hapoel Eilat", "", "", 8750, "", "", 17597],
+            ["Hapoel Galil Elyon", "", "", 1657980, "", "", 17590],
+            1794852300,
+            null,
+            null
+          ],
+          "51823775": [
+            ["Hapoel Beer Sheva", "", "", 290098, "", "", 17589],
+            ["Maccabi Rishon Lezion", "", "", 8751, "", "", ""],
+            1794852900,
+            null,
+            null
+          ],
+          "208739421": [
+            ["Bnei Herzeliya", "", "", 162031, "", "", 17586],
+            ["Hapoel Tel Aviv", "", "", 162028, "", "", 14131],
+            1794673800,
+            null,
+            null
+          ],
+          "208751881": [
+            ["Hapoel Jerusalem", "", "", 9421, "", "", 14130],
+            ["Maccabi Tel Aviv", "", "", 163546, "", "", 14219],
+            1794682500,
+            null,
+            null
+          ]
+        },
+        "3610": {
+          "51808835": [
+            ["Hapoel Hevel Modiin BC", "", "", 1399513, "", "", ""],
+            ["Elitzur Barak Netanya", "", "", 1760274, "", "", ""],
+            1794567600,
+            null,
+            null
+          ],
+          "51808837": [
+            ["Elitzur Yavne", "", "", 202267, "", "", 17596],
+            ["Maccabi Petah Tikva", "", "", 3334681, "", "", ""],
+            1794567600,
+            null,
+            null
+          ],
+          "51808849": [
+            ["Maccabi Raanana", "", "", 1400158, "", "", 17604],
+            ["Maccabi Rehovot", "", "", 175439, "", "", 17606],
+            1794567600,
+            null,
+            null
+          ],
+          "51819773": [
+            ["Eliztur Shomron", "", "", 1968038, "", "", ""],
+            ["Maccabi Kiryat Motzkin", "", "", 214017, "", "", ""],
+            1794762000,
+            null,
+            null
+          ],
+          "51823935": [
+            ["Migdal Haemek", "", "", 3468974, "", "", ""],
+            ["AS Ramat Hasharon", "", "", 1399461, "", "", 17600],
+            1794681000,
+            null,
+            null
+          ],
+          "51829497": [
+            ["Otef Darom Bc", "", "", 2879239, "", "", ""],
+            ["Maccabi Raanana", "", "", 1400158, "", "", 17604],
+            1794933000,
+            null,
+            null
+          ],
+          "51829535": [
+            ["Maccabi Rehovot", "", "", 175439, "", "", 17606],
+            ["Hapoel Hevel Modiin BC", "", "", 1399513, "", "", ""],
+            1794933900,
+            null,
+            null
+          ],
+          "51829589": [
+            ["AS Ramat Hasharon", "", "", 1399461, "", "", 17600],
+            ["Elitzur Yavne", "", "", 202267, "", "", 17596],
+            1794934800,
+            null,
+            null
+          ],
+          "51829655": [
+            ["Elitzur Barak Netanya", "", "", 1760274, "", "", ""],
+            ["Maccabi Kiryat Gat", "", "", 203846, "", "", ""],
+            1794935700,
+            null,
+            null
+          ],
+          "208583421": [
+            ["Elitzur Yavne", "", "", 202267, "", "", 17596],
+            ["Maccabi Petah Tikva Elitzur", "", "", 3323719, "", "", 68747],
+            1794567600,
+            null,
+            null
+          ],
+          "208745031": [
+            ["Elitzur Ashkelon", "", "", 1399512, "", "", ""],
+            ["Otef Darom Bc", "", "", 2879239, "", "", ""],
+            1794678300,
+            null,
+            null
+          ],
+          "208749901": [
+            ["Hapoel Migdal Haemek", "", "", 175438, "", "", 17609],
+            ["AS Ramat Hasharon", "", "", 1399461, "", "", 17600],
+            1794681000,
+            null,
+            null
+          ],
+          "208749931": [
+            ["Maccabi Kiryat Gat", "", "", 203846, "", "", ""],
+            ["Ironi Nahariya", "", "", 1650944, "", "", 17605],
+            1794681000,
+            null,
+            null
+          ],
+          "208762061": [
+            ["Hapoel Hevel Modiin BC", "", "", 1399513, "", "", ""],
+            ["Elitzur Barak Netanya", "", "", 1760274, "", "", ""],
+            1794567600,
+            null,
+            null
+          ],
+          "208762071": [
+            ["Maccabi Raanana", "", "", 1400158, "", "", 17604],
+            ["Maccabi Rehovot", "", "", 175439, "", "", 17606],
+            1794567600,
+            null,
+            null
+          ]
+        },
+        "24025": {
+          "204925281": [
+            ["Elitzur Ramla W", "", "", 1657700, "", "", 14158],
+            ["Hapoel Lev Jerusalem W", "", "", 2487107, "", "", 17611],
+            1792425600,
+            null,
+            null
+          ],
+          "207457111": [
+            ["Elitzur Ramla W", "", "", 1657700, "", "", 14158],
+            ["Hapoel Rishon Lezion W", "", "", 1658394, "", "", ""],
+            1793638800,
+            null,
+            null
+          ]
+        }
+      },
+      "2": {
+        "3590": {
+          "208632811": [
+            ["Avanti Brugge 2015", "", "", 2828201, "", "", 76165],
+            ["Port Of Antwerp Giants 2", "", "", 1937246, "", "", 76164],
+            1794600000,
+            null,
+            null
+          ],
+          "208632841": [
+            ["Horticult Kontich Wolves", "", "", 1662940, "", "", 76176],
+            ["United Woluwe Basket", "", "", 2815892, "", "", 76171],
+            1794600000,
+            null,
+            null
+          ],
+          "208754841": [
+            ["Basket Skt Ieper", "", "", 2864506, "", "", 76166],
+            ["Basket Willebroek", "", "", 3288815, "", "", 76167],
+            1794684600,
+            null,
+            null
+          ],
+          "208754861": [
+            ["Neufchateau", "", "", 175415, "", "", ""],
+            ["Croonen Lommel", "", "", 1656340, "", "", 76168],
+            1794684600,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    "3": {
+      "4": {
+        "5": {
+          "51786015": [
+            [
+              "Fresno State",
+              "",
+              "fresno-state-bulldogs",
+              101359,
+              "Mountain West",
+              "5-3",
+              180
+            ],
+            [
+              "Texas State",
+              "",
+              "texas-state-bobcats",
+              101378,
+              "SBC",
+              "4-4",
+              331
+            ],
+            1794690000,
+            null,
+            null
+          ],
+          "51787055": [
+            [
+              "Utah State",
+              "",
+              "utah-state-aggies",
+              592,
+              "Mountain West",
+              "3-5",
+              348
+            ],
+            [
+              "San Diego State",
+              "",
+              "san-diego-state-aztecs",
+              101363,
+              "Mountain West",
+              "4-5",
+              298
+            ],
+            1794709800,
+            null,
+            null
+          ]
+        }
+      },
+      "6": {
+        "4": {
+          "51224723": [
+            ["Chicago Bears", "CHI Bears", "", 4875, "NFC North", "0-0-0", 86],
+            ["Detroit Lions", "DET Lions", "", 4881, "", "0-0-0", 91],
+            1795716000,
+            null,
+            null
+          ],
+          "51227199": [
+            [
+              "Green Bay Packers",
+              "GB Packers",
+              "",
+              4893,
+              "NFC North",
+              "0-0-0",
+              92
+            ],
+            ["Chicago Bears", "CHI Bears", "", 4875, "NFC North", "0-0-0", 86],
+            1798221600,
+            null,
+            null
+          ],
+          "51227203": [
+            ["Buffalo Bills", "BUF Bills", "", 4873, "AFC East", "0-0-0", 84],
+            [
+              "Denver Broncos",
+              "DEN Broncos",
+              "",
+              4901,
+              "AFC West",
+              "0-0-0",
+              90
+            ],
+            1798234200,
+            null,
+            null
+          ],
+          "51227205": [
+            ["Los Angeles Rams", "LA Rams", "", 4891, "NFC West", "0-0-0", 99],
+            [
+              "Seattle Seahawks",
+              "SEA Seahawks",
+              "",
+              4892,
+              "NFC West",
+              "0-0-0",
+              109
+            ],
+            1798247700,
+            null,
+            null
+          ],
+          "189007771": [
+            [
+              "New England Patriots",
+              "NE Patriots",
+              "",
+              4871,
+              "AFC East",
+              "5-4-0",
+              102
+            ],
+            ["Detroit Lions", "DET Lions", "", 4881, "", "6-2-0", 91],
+            1794753000,
+            null,
+            null
+          ],
+          "196379251": [
+            [
+              "Indianapolis Colts",
+              "IND Colts",
+              "",
+              4890,
+              "AFC South",
+              "0-0-0",
+              94
+            ],
+            [
+              "Cleveland Browns",
+              "CLE Browns",
+              "",
+              4889,
+              "AFC North",
+              "0-0-0",
+              88
+            ],
+            1798999200,
+            null,
+            null
+          ],
+          "196379401": [
+            [
+              "Seattle Seahawks",
+              "SEA Seahawks",
+              "",
+              4892,
+              "NFC West",
+              "0-0-0",
+              109
+            ],
+            [
+              "Carolina Panthers",
+              "CAR Panthers",
+              "",
+              4894,
+              "NFC South",
+              "0-0-0",
+              85
+            ],
+            1798999200,
+            null,
+            null
+          ],
+          "196379501": [
+            [
+              "New York Giants",
+              "NY Giants",
+              "",
+              4896,
+              "NFC East",
+              "0-0-0",
+              104
+            ],
+            [
+              "Dallas Cowboys",
+              "DAL Cowboys",
+              "",
+              4897,
+              "NFC East",
+              "0-0-0",
+              89
+            ],
+            1798999200,
+            null,
+            null
+          ],
+          "196379821": [
+            [
+              "Pittsburgh Steelers",
+              "PIT Steelers",
+              "",
+              4888,
+              "AFC North",
+              "0-0-0",
+              107
+            ],
+            [
+              "Tennessee Titans",
+              "TEN Titans",
+              "",
+              4883,
+              "AFC South",
+              "0-0-0",
+              111
+            ],
+            1798999200,
+            null,
+            null
+          ],
+          "196379951": [
+            ["Buffalo Bills", "BUF Bills", "", 4873, "AFC East", "0-0-0", 84],
+            [
+              "Miami Dolphins",
+              "MIA Dolphins",
+              "",
+              4885,
+              "AFC East",
+              "0-0-0",
+              100
+            ],
+            1798999200,
+            null,
+            null
+          ],
+          "196380181": [
+            [
+              "Minnesota Vikings",
+              "MIN Vikings",
+              "",
+              4899,
+              "NFC North",
+              "0-0-0",
+              101
+            ],
+            ["New York Jets", "NY Jets", "", 4872, "AFC East", "0-0-0", 105],
+            1798999200,
+            null,
+            null
+          ],
+          "196380711": [
+            [
+              "Houston Texans",
+              "HOU Texans",
+              "",
+              4877,
+              "AFC South",
+              "0-0-0",
+              93
+            ],
+            [
+              "Green Bay Packers",
+              "GB Packers",
+              "",
+              4893,
+              "NFC North",
+              "0-0-0",
+              92
+            ],
+            1799111700,
+            null,
+            null
+          ],
+          "196380961": [
+            [
+              "New Orleans Saints",
+              "NO Saints",
+              "",
+              4898,
+              "NFC South",
+              "0-0-0",
+              103
+            ],
+            [
+              "Atlanta Falcons",
+              "ATL Falcons",
+              "",
+              4874,
+              "NFC South",
+              "0-0-0",
+              82
+            ],
+            1798999200,
+            null,
+            null
+          ],
+          "197763631": [
+            [
+              "Tennessee Titans",
+              "TEN Titans",
+              "",
+              4883,
+              "AFC South",
+              "0-0-0",
+              111
+            ],
+            ["Detroit Lions", "DET Lions", "", 4881, "", "0-0-0", 91],
+            1797184800,
+            null,
+            null
+          ],
+          "197763871": [
+            [
+              "Washington Commanders",
+              "WSH Commanders",
+              "",
+              4879,
+              "NFC East",
+              "2-5-1",
+              112
+            ],
+            [
+              "New York Giants",
+              "NY Giants",
+              "",
+              4896,
+              "NFC East",
+              "5-2-1",
+              104
+            ],
+            1794532500,
+            null,
+            null
+          ],
+          "197764251": [
+            [
+              "Los Angeles Chargers",
+              "LA Chargers",
+              "",
+              4900,
+              "AFC West",
+              "0-0-0",
+              98
+            ],
+            [
+              "Tampa Bay Buccaneers",
+              "TB Buccaneers",
+              "",
+              4884,
+              "",
+              "0-0-0",
+              110
+            ],
+            1796580000,
+            null,
+            null
+          ],
+          "197767301": [
+            [
+              "New Orleans Saints",
+              "NO Saints",
+              "",
+              4898,
+              "NFC South",
+              "0-0-0",
+              103
+            ],
+            [
+              "Cincinnati Bengals",
+              "CIN Bengals",
+              "",
+              4887,
+              "AFC North",
+              "0-0-0",
+              87
+            ],
+            1795975200,
+            null,
+            null
+          ],
+          "197768991": [
+            ["Buffalo Bills", "BUF Bills", "", 4873, "AFC East", "6-1-0", 84],
+            ["New York Jets", "NY Jets", "", 4872, "AFC East", "2-7-0", 105],
+            1794765600,
+            null,
+            null
+          ],
+          "197769011": [
+            [
+              "Jacksonville Jaguars",
+              "JAX Jaguars",
+              "",
+              4876,
+              "AFC South",
+              "6-2-0",
+              95
+            ],
+            [
+              "Tennessee Titans",
+              "TEN Titans",
+              "",
+              4883,
+              "AFC South",
+              "1-7-0",
+              111
+            ],
+            1794765600,
+            null,
+            null
+          ],
+          "197769041": [
+            [
+              "Carolina Panthers",
+              "CAR Panthers",
+              "",
+              4894,
+              "NFC South",
+              "3-5-0",
+              85
+            ],
+            [
+              "New Orleans Saints",
+              "NO Saints",
+              "",
+              4898,
+              "NFC South",
+              "3-5-0",
+              103
+            ],
+            1794765600,
+            null,
+            null
+          ],
+          "197769051": [
+            [
+              "Houston Texans",
+              "HOU Texans",
+              "",
+              4877,
+              "AFC South",
+              "2-5-0",
+              93
+            ],
+            [
+              "Cleveland Browns",
+              "CLE Browns",
+              "",
+              4889,
+              "AFC North",
+              "5-4-0",
+              88
+            ],
+            1794765600,
+            null,
+            null
+          ],
+          "197769061": [
+            [
+              "Miami Dolphins",
+              "MIA Dolphins",
+              "",
+              4885,
+              "AFC East",
+              "1-7-0",
+              100
+            ],
+            [
+              "Indianapolis Colts",
+              "IND Colts",
+              "",
+              4890,
+              "AFC South",
+              "2-7-0",
+              94
+            ],
+            1794765600,
+            null,
+            null
+          ],
+          "197769071": [
+            [
+              "Minnesota Vikings",
+              "MIN Vikings",
+              "",
+              4899,
+              "NFC North",
+              "6-2-0",
+              101
+            ],
+            [
+              "Green Bay Packers",
+              "GB Packers",
+              "",
+              4893,
+              "NFC North",
+              "6-3-0",
+              92
+            ],
+            1794765600,
+            null,
+            null
+          ],
+          "197769081": [
+            [
+              "Kansas City Chiefs",
+              "KC Chiefs",
+              "",
+              4870,
+              "AFC West",
+              "6-2-0",
+              96
+            ],
+            [
+              "Atlanta Falcons",
+              "ATL Falcons",
+              "",
+              4874,
+              "NFC South",
+              "3-6-0",
+              82
+            ],
+            1794765600,
+            null,
+            null
+          ],
+          "197769101": [
+            ["Los Angeles Rams", "LA Rams", "", 4891, "NFC West", "5-4-0", 99],
+            [
+              "Arizona Cardinals",
+              "ARI Cardinals",
+              "",
+              4880,
+              "NFC West",
+              "3-6-0",
+              81
+            ],
+            1794776700,
+            null,
+            null
+          ],
+          "197769111": [
+            [
+              "Seattle Seahawks",
+              "SEA Seahawks",
+              "",
+              4892,
+              "NFC West",
+              "5-4-0",
+              109
+            ],
+            [
+              "Las Vegas Raiders",
+              "LV Raiders",
+              "",
+              4882,
+              "AFC West",
+              "4-5-0",
+              97
+            ],
+            1794776700,
+            null,
+            null
+          ],
+          "197769121": [
+            [
+              "San Francisco 49ers",
+              "SF 49ers",
+              "",
+              4895,
+              "NFC West",
+              "7-1-0",
+              108
+            ],
+            [
+              "Dallas Cowboys",
+              "DAL Cowboys",
+              "",
+              4897,
+              "NFC East",
+              "4-5-0",
+              89
+            ],
+            1794777900,
+            null,
+            null
+          ],
+          "197769141": [
+            [
+              "Pittsburgh Steelers",
+              "PIT Steelers",
+              "",
+              4888,
+              "AFC North",
+              "6-2-0",
+              107
+            ],
+            [
+              "Cincinnati Bengals",
+              "CIN Bengals",
+              "",
+              4887,
+              "AFC North",
+              "6-2-0",
+              87
+            ],
+            1794792000,
+            null,
+            null
+          ],
+          "197769151": [
+            [
+              "Los Angeles Chargers",
+              "LA Chargers",
+              "",
+              4900,
+              "AFC West",
+              "0-8-0",
+              98
+            ],
+            [
+              "Baltimore Ravens",
+              "BAL Ravens",
+              "",
+              4886,
+              "AFC North",
+              "4-5-0",
+              83
+            ],
+            1794878100,
+            null,
+            null
+          ],
+          "197769161": [
+            [
+              "Indianapolis Colts",
+              "IND Colts",
+              "",
+              4890,
+              "AFC South",
+              "2-7-0",
+              94
+            ],
+            [
+              "Houston Texans",
+              "HOU Texans",
+              "",
+              4877,
+              "AFC South",
+              "3-5-0",
+              93
+            ],
+            1795137300,
+            null,
+            null
+          ],
+          "197769171": [
+            [
+              "Jacksonville Jaguars",
+              "JAX Jaguars",
+              "",
+              4876,
+              "AFC South",
+              "6-2-0",
+              95
+            ],
+            [
+              "New York Giants",
+              "NY Giants",
+              "",
+              4896,
+              "NFC East",
+              "5-2-1",
+              104
+            ],
+            1795382700,
+            null,
+            null
+          ],
+          "197769181": [
+            [
+              "Miami Dolphins",
+              "MIA Dolphins",
+              "",
+              4885,
+              "AFC East",
+              "0-0-0",
+              100
+            ],
+            ["Buffalo Bills", "BUF Bills", "", 4873, "AFC East", "0-0-0", 84],
+            1795370400,
+            null,
+            null
+          ],
+          "197769201": [
+            [
+              "New Orleans Saints",
+              "NO Saints",
+              "",
+              4898,
+              "NFC South",
+              "0-0-0",
+              103
+            ],
+            ["Chicago Bears", "CHI Bears", "", 4875, "NFC North", "0-0-0", 86],
+            1795370400,
+            null,
+            null
+          ],
+          "197769211": [
+            [
+              "Arizona Cardinals",
+              "ARI Cardinals",
+              "",
+              4880,
+              "NFC West",
+              "0-0-0",
+              81
+            ],
+            [
+              "Kansas City Chiefs",
+              "KC Chiefs",
+              "",
+              4870,
+              "AFC West",
+              "0-0-0",
+              96
+            ],
+            1795370400,
+            null,
+            null
+          ],
+          "197769221": [
+            [
+              "Tampa Bay Buccaneers",
+              "TB Buccaneers",
+              "",
+              4884,
+              "",
+              "0-0-0",
+              110
+            ],
+            ["Detroit Lions", "DET Lions", "", 4881, "", "0-0-0", 91],
+            1795370400,
+            null,
+            null
+          ],
+          "197769231": [
+            [
+              "Baltimore Ravens",
+              "BAL Ravens",
+              "",
+              4886,
+              "AFC North",
+              "0-0-0",
+              83
+            ],
+            [
+              "Carolina Panthers",
+              "CAR Panthers",
+              "",
+              4894,
+              "NFC South",
+              "0-0-0",
+              85
+            ],
+            1795370400,
+            null,
+            null
+          ],
+          "197769241": [
+            [
+              "Tennessee Titans",
+              "TEN Titans",
+              "",
+              4883,
+              "AFC South",
+              "0-0-0",
+              111
+            ],
+            [
+              "Dallas Cowboys",
+              "DAL Cowboys",
+              "",
+              4897,
+              "NFC East",
+              "0-0-0",
+              89
+            ],
+            1795370400,
+            null,
+            null
+          ],
+          "197769251": [
+            ["New York Jets", "NY Jets", "", 4872, "AFC East", "0-0-0", 105],
+            [
+              "Los Angeles Chargers",
+              "LA Chargers",
+              "",
+              4900,
+              "AFC West",
+              "0-0-0",
+              98
+            ],
+            1795381500,
+            null,
+            null
+          ],
+          "197769261": [
+            [
+              "Pittsburgh Steelers",
+              "PIT Steelers",
+              "",
+              4888,
+              "AFC North",
+              "6-2-0",
+              107
+            ],
+            [
+              "Philadelphia Eagles",
+              "PHI Eagles",
+              "",
+              4878,
+              "NFC East",
+              "2-7-0",
+              106
+            ],
+            1795370400,
+            null,
+            null
+          ],
+          "197769271": [
+            [
+              "Las Vegas Raiders",
+              "LV Raiders",
+              "",
+              4882,
+              "AFC West",
+              "0-0-0",
+              97
+            ],
+            [
+              "Denver Broncos",
+              "DEN Broncos",
+              "",
+              4901,
+              "AFC West",
+              "0-0-0",
+              90
+            ],
+            1795382700,
+            null,
+            null
+          ],
+          "197769291": [
+            [
+              "Cincinnati Bengals",
+              "CIN Bengals",
+              "",
+              4887,
+              "AFC North",
+              "0-0-0",
+              87
+            ],
+            [
+              "Washington Commanders",
+              "WSH Commanders",
+              "",
+              4879,
+              "NFC East",
+              "0-0-0",
+              112
+            ],
+            1795482900,
+            null,
+            null
+          ],
+          "197769311": [
+            [
+              "Baltimore Ravens",
+              "BAL Ravens",
+              "",
+              4886,
+              "AFC North",
+              "0-0-0",
+              83
+            ],
+            [
+              "Houston Texans",
+              "HOU Texans",
+              "",
+              4877,
+              "AFC South",
+              "0-0-0",
+              93
+            ],
+            1795975200,
+            null,
+            null
+          ],
+          "197769321": [
+            [
+              "Atlanta Falcons",
+              "ATL Falcons",
+              "",
+              4874,
+              "NFC South",
+              "0-0-0",
+              82
+            ],
+            [
+              "Minnesota Vikings",
+              "MIN Vikings",
+              "",
+              4899,
+              "NFC North",
+              "0-0-0",
+              101
+            ],
+            1795975200,
+            null,
+            null
+          ],
+          "197769331": [
+            [
+              "New York Giants",
+              "NY Giants",
+              "",
+              4896,
+              "NFC East",
+              "0-0-0",
+              104
+            ],
+            [
+              "Indianapolis Colts",
+              "IND Colts",
+              "",
+              4890,
+              "AFC South",
+              "0-0-0",
+              94
+            ],
+            1795975200,
+            null,
+            null
+          ],
+          "197769341": [
+            [
+              "Las Vegas Raiders",
+              "LV Raiders",
+              "",
+              4882,
+              "AFC West",
+              "0-0-0",
+              97
+            ],
+            [
+              "Cleveland Browns",
+              "CLE Browns",
+              "",
+              4889,
+              "AFC North",
+              "0-0-0",
+              88
+            ],
+            1795975200,
+            null,
+            null
+          ],
+          "197769351": [
+            ["New York Jets", "NY Jets", "", 4872, "AFC East", "0-0-0", 105],
+            [
+              "Miami Dolphins",
+              "MIA Dolphins",
+              "",
+              4885,
+              "AFC East",
+              "0-0-0",
+              100
+            ],
+            1795975200,
+            null,
+            null
+          ],
+          "197769361": [
+            [
+              "Tennessee Titans",
+              "TEN Titans",
+              "",
+              4883,
+              "AFC South",
+              "0-0-0",
+              111
+            ],
+            [
+              "Jacksonville Jaguars",
+              "JAX Jaguars",
+              "",
+              4876,
+              "AFC South",
+              "0-0-0",
+              95
+            ],
+            1795986300,
+            null,
+            null
+          ],
+          "197769371": [
+            [
+              "Seattle Seahawks",
+              "SEA Seahawks",
+              "",
+              4892,
+              "NFC West",
+              "0-0-0",
+              109
+            ],
+            [
+              "San Francisco 49ers",
+              "SF 49ers",
+              "",
+              4895,
+              "NFC West",
+              "0-0-0",
+              108
+            ],
+            1795987500,
+            null,
+            null
+          ],
+          "197769381": [
+            [
+              "Washington Commanders",
+              "WSH Commanders",
+              "",
+              4879,
+              "NFC East",
+              "0-0-0",
+              112
+            ],
+            [
+              "Arizona Cardinals",
+              "ARI Cardinals",
+              "",
+              4880,
+              "NFC West",
+              "0-0-0",
+              81
+            ],
+            1795987500,
+            null,
+            null
+          ],
+          "197769401": [
+            [
+              "New England Patriots",
+              "NE Patriots",
+              "",
+              4871,
+              "AFC East",
+              "0-0-0",
+              102
+            ],
+            [
+              "Los Angeles Chargers",
+              "LA Chargers",
+              "",
+              4900,
+              "AFC West",
+              "0-0-0",
+              98
+            ],
+            1796001600,
+            null,
+            null
+          ],
+          "197769411": [
+            [
+              "Carolina Panthers",
+              "CAR Panthers",
+              "",
+              4894,
+              "NFC South",
+              "0-0-0",
+              85
+            ],
+            [
+              "Tampa Bay Buccaneers",
+              "TB Buccaneers",
+              "",
+              4884,
+              "",
+              "0-0-0",
+              110
+            ],
+            1796087700,
+            null,
+            null
+          ],
+          "197769421": [
+            [
+              "Kansas City Chiefs",
+              "KC Chiefs",
+              "",
+              4870,
+              "AFC West",
+              "0-0-0",
+              96
+            ],
+            ["Los Angeles Rams", "LA Rams", "", 4891, "NFC West", "0-0-0", 99],
+            1796346900,
+            null,
+            null
+          ],
+          "197769441": [
+            [
+              "San Francisco 49ers",
+              "SF 49ers",
+              "",
+              4895,
+              "NFC West",
+              "0-0-0",
+              108
+            ],
+            [
+              "New York Giants",
+              "NY Giants",
+              "",
+              4896,
+              "NFC East",
+              "0-0-0",
+              104
+            ],
+            1796580000,
+            null,
+            null
+          ],
+          "197769451": [
+            [
+              "Green Bay Packers",
+              "GB Packers",
+              "",
+              4893,
+              "NFC North",
+              "0-0-0",
+              92
+            ],
+            [
+              "New Orleans Saints",
+              "NO Saints",
+              "",
+              4898,
+              "NFC South",
+              "0-0-0",
+              103
+            ],
+            1796580000,
+            null,
+            null
+          ],
+          "197769461": [
+            ["Detroit Lions", "DET Lions", "", 4881, "", "0-0-0", 91],
+            [
+              "Atlanta Falcons",
+              "ATL Falcons",
+              "",
+              4874,
+              "NFC South",
+              "0-0-0",
+              82
+            ],
+            1796580000,
+            null,
+            null
+          ],
+          "197769471": [
+            [
+              "Cincinnati Bengals",
+              "CIN Bengals",
+              "",
+              4887,
+              "AFC North",
+              "0-0-0",
+              87
+            ],
+            [
+              "Cleveland Browns",
+              "CLE Browns",
+              "",
+              4889,
+              "AFC North",
+              "0-0-0",
+              88
+            ],
+            1796580000,
+            null,
+            null
+          ],
+          "197769481": [
+            [
+              "Washington Commanders",
+              "WSH Commanders",
+              "",
+              4879,
+              "NFC East",
+              "0-0-0",
+              112
+            ],
+            [
+              "Tennessee Titans",
+              "TEN Titans",
+              "",
+              4883,
+              "AFC South",
+              "0-0-0",
+              111
+            ],
+            1796580000,
+            null,
+            null
+          ],
+          "197769491": [
+            [
+              "Jacksonville Jaguars",
+              "JAX Jaguars",
+              "",
+              4876,
+              "AFC South",
+              "0-0-0",
+              95
+            ],
+            ["Chicago Bears", "CHI Bears", "", 4875, "NFC North", "0-0-0", 86],
+            1796580000,
+            null,
+            null
+          ],
+          "197769511": [
+            [
+              "Miami Dolphins",
+              "MIA Dolphins",
+              "",
+              4885,
+              "AFC East",
+              "0-0-0",
+              100
+            ],
+            [
+              "Denver Broncos",
+              "DEN Broncos",
+              "",
+              4901,
+              "AFC West",
+              "0-0-0",
+              90
+            ],
+            1796591100,
+            null,
+            null
+          ],
+          "197769521": [
+            [
+              "Philadelphia Eagles",
+              "PHI Eagles",
+              "",
+              4878,
+              "NFC East",
+              "0-0-0",
+              106
+            ],
+            [
+              "Arizona Cardinals",
+              "ARI Cardinals",
+              "",
+              4880,
+              "NFC West",
+              "0-0-0",
+              81
+            ],
+            1796591100,
+            null,
+            null
+          ],
+          "197769541": [
+            [
+              "Carolina Panthers",
+              "CAR Panthers",
+              "",
+              4894,
+              "NFC South",
+              "0-0-0",
+              85
+            ],
+            [
+              "Minnesota Vikings",
+              "MIN Vikings",
+              "",
+              4899,
+              "NFC North",
+              "0-0-0",
+              101
+            ],
+            1796592300,
+            null,
+            null
+          ],
+          "197769561": [
+            ["Buffalo Bills", "BUF Bills", "", 4873, "AFC East", "0-0-0", 84],
+            [
+              "New England Patriots",
+              "NE Patriots",
+              "",
+              4871,
+              "AFC East",
+              "0-0-0",
+              102
+            ],
+            1796592300,
+            null,
+            null
+          ],
+          "197769571": [
+            [
+              "Houston Texans",
+              "HOU Texans",
+              "",
+              4877,
+              "AFC South",
+              "0-0-0",
+              93
+            ],
+            [
+              "Pittsburgh Steelers",
+              "PIT Steelers",
+              "",
+              4888,
+              "AFC North",
+              "0-0-0",
+              107
+            ],
+            1796606400,
+            null,
+            null
+          ],
+          "197769581": [
+            [
+              "Dallas Cowboys",
+              "DAL Cowboys",
+              "",
+              4897,
+              "NFC East",
+              "0-0-0",
+              89
+            ],
+            [
+              "Seattle Seahawks",
+              "SEA Seahawks",
+              "",
+              4892,
+              "NFC West",
+              "0-0-0",
+              109
+            ],
+            1796692500,
+            null,
+            null
+          ],
+          "197769591": [
+            [
+              "Minnesota Vikings",
+              "MIN Vikings",
+              "",
+              4899,
+              "NFC North",
+              "0-0-0",
+              101
+            ],
+            [
+              "New England Patriots",
+              "NE Patriots",
+              "",
+              4871,
+              "AFC East",
+              "0-0-0",
+              102
+            ],
+            1796951700,
+            null,
+            null
+          ],
+          "197769611": [
+            [
+              "Tampa Bay Buccaneers",
+              "TB Buccaneers",
+              "",
+              4884,
+              "",
+              "0-0-0",
+              110
+            ],
+            [
+              "Baltimore Ravens",
+              "BAL Ravens",
+              "",
+              4886,
+              "AFC North",
+              "0-0-0",
+              83
+            ],
+            1797184800,
+            null,
+            null
+          ],
+          "197769621": [
+            [
+              "Denver Broncos",
+              "DEN Broncos",
+              "",
+              4901,
+              "AFC West",
+              "0-0-0",
+              90
+            ],
+            ["New York Jets", "NY Jets", "", 4872, "AFC East", "0-0-0", 105],
+            1797184800,
+            null,
+            null
+          ],
+          "197769641": [
+            [
+              "Atlanta Falcons",
+              "ATL Falcons",
+              "",
+              4874,
+              "NFC South",
+              "0-0-0",
+              82
+            ],
+            [
+              "Cleveland Browns",
+              "CLE Browns",
+              "",
+              4889,
+              "AFC North",
+              "0-0-0",
+              88
+            ],
+            1797184800,
+            null,
+            null
+          ],
+          "197769671": [
+            [
+              "Indianapolis Colts",
+              "IND Colts",
+              "",
+              4890,
+              "AFC South",
+              "0-0-0",
+              94
+            ],
+            [
+              "Philadelphia Eagles",
+              "PHI Eagles",
+              "",
+              4878,
+              "NFC East",
+              "0-0-0",
+              106
+            ],
+            1797184800,
+            null,
+            null
+          ],
+          "197769691": [
+            ["Chicago Bears", "CHI Bears", "", 4875, "NFC North", "0-0-0", 86],
+            [
+              "Miami Dolphins",
+              "MIA Dolphins",
+              "",
+              4885,
+              "AFC East",
+              "0-0-0",
+              100
+            ],
+            1797184800,
+            null,
+            null
+          ],
+          "197769701": [
+            [
+              "Houston Texans",
+              "HOU Texans",
+              "",
+              4877,
+              "AFC South",
+              "0-0-0",
+              93
+            ],
+            [
+              "Washington Commanders",
+              "WSH Commanders",
+              "",
+              4879,
+              "NFC East",
+              "0-0-0",
+              112
+            ],
+            1797184800,
+            null,
+            null
+          ],
+          "197769721": [
+            [
+              "Los Angeles Chargers",
+              "LA Chargers",
+              "",
+              4900,
+              "AFC West",
+              "0-0-0",
+              98
+            ],
+            [
+              "Las Vegas Raiders",
+              "LV Raiders",
+              "",
+              4882,
+              "AFC West",
+              "0-0-0",
+              97
+            ],
+            1797195900,
+            null,
+            null
+          ],
+          "197769731": [
+            [
+              "New York Giants",
+              "NY Giants",
+              "",
+              4896,
+              "NFC East",
+              "0-0-0",
+              104
+            ],
+            [
+              "Seattle Seahawks",
+              "SEA Seahawks",
+              "",
+              4892,
+              "NFC West",
+              "0-0-0",
+              109
+            ],
+            1797197100,
+            null,
+            null
+          ],
+          "197769741": [
+            [
+              "Kansas City Chiefs",
+              "KC Chiefs",
+              "",
+              4870,
+              "AFC West",
+              "0-0-0",
+              96
+            ],
+            [
+              "Cincinnati Bengals",
+              "CIN Bengals",
+              "",
+              4887,
+              "AFC North",
+              "0-0-0",
+              87
+            ],
+            1797197100,
+            null,
+            null
+          ],
+          "197769751": [
+            ["Los Angeles Rams", "LA Rams", "", 4891, "NFC West", "0-0-0", 99],
+            [
+              "San Francisco 49ers",
+              "SF 49ers",
+              "",
+              4895,
+              "NFC West",
+              "0-0-0",
+              108
+            ],
+            1797197100,
+            null,
+            null
+          ],
+          "197769761": [
+            ["Buffalo Bills", "BUF Bills", "", 4873, "AFC East", "0-0-0", 84],
+            [
+              "Green Bay Packers",
+              "GB Packers",
+              "",
+              4893,
+              "NFC North",
+              "0-0-0",
+              92
+            ],
+            1797211200,
+            null,
+            null
+          ],
+          "197769801": [
+            [
+              "Pittsburgh Steelers",
+              "PIT Steelers",
+              "",
+              4888,
+              "AFC North",
+              "0-0-0",
+              107
+            ],
+            [
+              "Jacksonville Jaguars",
+              "JAX Jaguars",
+              "",
+              4876,
+              "AFC South",
+              "0-0-0",
+              95
+            ],
+            1797297300,
+            null,
+            null
+          ],
+          "197769831": [
+            [
+              "San Francisco 49ers",
+              "SF 49ers",
+              "",
+              4895,
+              "NFC West",
+              "0-0-0",
+              108
+            ],
+            [
+              "Los Angeles Chargers",
+              "LA Chargers",
+              "",
+              4900,
+              "AFC West",
+              "0-0-0",
+              98
+            ],
+            1797556500,
+            null,
+            null
+          ],
+          "197769851": [
+            [
+              "Seattle Seahawks",
+              "SEA Seahawks",
+              "",
+              4892,
+              "NFC West",
+              "0-0-0",
+              109
+            ],
+            [
+              "Philadelphia Eagles",
+              "PHI Eagles",
+              "",
+              4878,
+              "NFC East",
+              "0-0-0",
+              106
+            ],
+            1797717600,
+            null,
+            null
+          ],
+          "197769861": [
+            ["Chicago Bears", "CHI Bears", "", 4875, "NFC North", "0-0-0", 86],
+            ["Buffalo Bills", "BUF Bills", "", 4873, "AFC East", "0-0-0", 84],
+            1797729600,
+            null,
+            null
+          ],
+          "197769871": [
+            [
+              "Cincinnati Bengals",
+              "CIN Bengals",
+              "",
+              4887,
+              "AFC North",
+              "0-0-0",
+              87
+            ],
+            [
+              "Carolina Panthers",
+              "CAR Panthers",
+              "",
+              4894,
+              "NFC South",
+              "0-0-0",
+              85
+            ],
+            1797789600,
+            null,
+            null
+          ],
+          "197769891": [
+            [
+              "Cleveland Browns",
+              "CLE Browns",
+              "",
+              4889,
+              "AFC North",
+              "0-0-0",
+              88
+            ],
+            [
+              "New York Giants",
+              "NY Giants",
+              "",
+              4896,
+              "NFC East",
+              "0-0-0",
+              104
+            ],
+            1797789600,
+            null,
+            null
+          ],
+          "197769901": [
+            [
+              "Miami Dolphins",
+              "MIA Dolphins",
+              "",
+              4885,
+              "AFC East",
+              "0-0-0",
+              100
+            ],
+            [
+              "Green Bay Packers",
+              "GB Packers",
+              "",
+              4893,
+              "NFC North",
+              "0-0-0",
+              92
+            ],
+            1797789600,
+            null,
+            null
+          ],
+          "197769911": [
+            [
+              "Atlanta Falcons",
+              "ATL Falcons",
+              "",
+              4874,
+              "NFC South",
+              "0-0-0",
+              82
+            ],
+            [
+              "Washington Commanders",
+              "WSH Commanders",
+              "",
+              4879,
+              "NFC East",
+              "0-0-0",
+              112
+            ],
+            1797789600,
+            null,
+            null
+          ],
+          "197769921": [
+            [
+              "Indianapolis Colts",
+              "IND Colts",
+              "",
+              4890,
+              "AFC South",
+              "0-0-0",
+              94
+            ],
+            [
+              "Tennessee Titans",
+              "TEN Titans",
+              "",
+              4883,
+              "AFC South",
+              "0-0-0",
+              111
+            ],
+            1797789600,
+            null,
+            null
+          ],
+          "197769931": [
+            [
+              "Jacksonville Jaguars",
+              "JAX Jaguars",
+              "",
+              4876,
+              "AFC South",
+              "0-0-0",
+              95
+            ],
+            [
+              "Houston Texans",
+              "HOU Texans",
+              "",
+              4877,
+              "AFC South",
+              "0-0-0",
+              93
+            ],
+            1797789600,
+            null,
+            null
+          ],
+          "197769941": [
+            [
+              "New Orleans Saints",
+              "NO Saints",
+              "",
+              4898,
+              "NFC South",
+              "0-0-0",
+              103
+            ],
+            [
+              "Tampa Bay Buccaneers",
+              "TB Buccaneers",
+              "",
+              4884,
+              "",
+              "0-0-0",
+              110
+            ],
+            1797789600,
+            null,
+            null
+          ],
+          "197769961": [
+            ["New York Jets", "NY Jets", "", 4872, "AFC East", "0-0-0", 105],
+            [
+              "Arizona Cardinals",
+              "ARI Cardinals",
+              "",
+              4880,
+              "NFC West",
+              "0-0-0",
+              81
+            ],
+            1797800700,
+            null,
+            null
+          ],
+          "197770001": [
+            [
+              "Dallas Cowboys",
+              "DAL Cowboys",
+              "",
+              4897,
+              "NFC East",
+              "0-0-0",
+              89
+            ],
+            ["Los Angeles Rams", "LA Rams", "", 4891, "NFC West", "0-0-0", 99],
+            1797801900,
+            null,
+            null
+          ],
+          "197770011": [
+            [
+              "Denver Broncos",
+              "DEN Broncos",
+              "",
+              4901,
+              "AFC West",
+              "0-0-0",
+              90
+            ],
+            [
+              "Las Vegas Raiders",
+              "LV Raiders",
+              "",
+              4882,
+              "AFC West",
+              "0-0-0",
+              97
+            ],
+            1797801900,
+            null,
+            null
+          ],
+          "197770021": [
+            ["Detroit Lions", "DET Lions", "", 4881, "", "0-0-0", 91],
+            [
+              "Minnesota Vikings",
+              "MIN Vikings",
+              "",
+              4899,
+              "NFC North",
+              "0-0-0",
+              101
+            ],
+            1797816000,
+            null,
+            null
+          ],
+          "197770041": [
+            [
+              "Tampa Bay Buccaneers",
+              "TB Buccaneers",
+              "",
+              4884,
+              "",
+              "0-0-0",
+              110
+            ],
+            [
+              "Atlanta Falcons",
+              "ATL Falcons",
+              "",
+              4874,
+              "NFC South",
+              "0-0-0",
+              82
+            ],
+            1798394400,
+            null,
+            null
+          ],
+          "197770421": [
+            [
+              "Washington Commanders",
+              "WSH Commanders",
+              "",
+              4879,
+              "NFC East",
+              "0-0-0",
+              112
+            ],
+            [
+              "Jacksonville Jaguars",
+              "JAX Jaguars",
+              "",
+              4876,
+              "AFC South",
+              "0-0-0",
+              95
+            ],
+            1798912800,
+            null,
+            null
+          ],
+          "197770471": [
+            [
+              "Philadelphia Eagles",
+              "PHI Eagles",
+              "",
+              4878,
+              "NFC East",
+              "0-0-0",
+              106
+            ],
+            [
+              "San Francisco 49ers",
+              "SF 49ers",
+              "",
+              4895,
+              "NFC West",
+              "0-0-0",
+              108
+            ],
+            1799025600,
+            null,
+            null
+          ],
+          "197770481": [
+            ["Detroit Lions", "DET Lions", "", 4881, "", "0-0-0", 91],
+            ["Chicago Bears", "CHI Bears", "", 4875, "NFC North", "0-0-0", 86],
+            1799011500,
+            null,
+            null
+          ],
+          "197770491": [
+            [
+              "Denver Broncos",
+              "DEN Broncos",
+              "",
+              4901,
+              "AFC West",
+              "0-0-0",
+              90
+            ],
+            [
+              "New England Patriots",
+              "NE Patriots",
+              "",
+              4871,
+              "AFC East",
+              "0-0-0",
+              102
+            ],
+            1798999200,
+            null,
+            null
+          ],
+          "197770521": [
+            [
+              "Las Vegas Raiders",
+              "LV Raiders",
+              "",
+              4882,
+              "AFC West",
+              "0-0-0",
+              97
+            ],
+            [
+              "Arizona Cardinals",
+              "ARI Cardinals",
+              "",
+              4880,
+              "NFC West",
+              "0-0-0",
+              81
+            ],
+            1799010300,
+            null,
+            null
+          ],
+          "197770561": [
+            [
+              "Carolina Panthers",
+              "CAR Panthers",
+              "",
+              4894,
+              "NFC South",
+              "0-0-0",
+              85
+            ],
+            [
+              "Pittsburgh Steelers",
+              "PIT Steelers",
+              "",
+              4888,
+              "AFC North",
+              "0-0-0",
+              107
+            ],
+            1798394400,
+            null,
+            null
+          ],
+          "197770571": [
+            [
+              "New England Patriots",
+              "NE Patriots",
+              "",
+              4871,
+              "AFC East",
+              "0-0-0",
+              102
+            ],
+            ["New York Jets", "NY Jets", "", 4872, "AFC East", "0-0-0", 105],
+            1798394400,
+            null,
+            null
+          ],
+          "197770581": [
+            [
+              "Los Angeles Chargers",
+              "LA Chargers",
+              "",
+              4900,
+              "AFC West",
+              "0-0-0",
+              98
+            ],
+            [
+              "Miami Dolphins",
+              "MIA Dolphins",
+              "",
+              4885,
+              "AFC East",
+              "0-0-0",
+              100
+            ],
+            1798394400,
+            null,
+            null
+          ],
+          "197770591": [
+            [
+              "Cleveland Browns",
+              "CLE Browns",
+              "",
+              4889,
+              "AFC North",
+              "0-0-0",
+              88
+            ],
+            [
+              "Baltimore Ravens",
+              "BAL Ravens",
+              "",
+              4886,
+              "AFC North",
+              "0-0-0",
+              83
+            ],
+            1798394400,
+            null,
+            null
+          ],
+          "197770621": [
+            [
+              "Cincinnati Bengals",
+              "CIN Bengals",
+              "",
+              4887,
+              "AFC North",
+              "0-0-0",
+              87
+            ],
+            [
+              "Indianapolis Colts",
+              "IND Colts",
+              "",
+              4890,
+              "AFC South",
+              "0-0-0",
+              94
+            ],
+            1798394400,
+            null,
+            null
+          ],
+          "197770631": [
+            [
+              "Arizona Cardinals",
+              "ARI Cardinals",
+              "",
+              4880,
+              "NFC West",
+              "0-0-0",
+              81
+            ],
+            [
+              "New Orleans Saints",
+              "NO Saints",
+              "",
+              4898,
+              "NFC South",
+              "0-0-0",
+              103
+            ],
+            1798394400,
+            null,
+            null
+          ],
+          "197770641": [
+            [
+              "Washington Commanders",
+              "WSH Commanders",
+              "",
+              4879,
+              "NFC East",
+              "0-0-0",
+              112
+            ],
+            [
+              "Minnesota Vikings",
+              "MIN Vikings",
+              "",
+              4899,
+              "NFC North",
+              "0-0-0",
+              101
+            ],
+            1798394400,
+            null,
+            null
+          ],
+          "197770661": [
+            [
+              "Tennessee Titans",
+              "TEN Titans",
+              "",
+              4883,
+              "AFC South",
+              "0-0-0",
+              111
+            ],
+            [
+              "Las Vegas Raiders",
+              "LV Raiders",
+              "",
+              4882,
+              "AFC West",
+              "0-0-0",
+              97
+            ],
+            1798405500,
+            null,
+            null
+          ],
+          "197770671": [
+            [
+              "San Francisco 49ers",
+              "SF 49ers",
+              "",
+              4895,
+              "NFC West",
+              "0-0-0",
+              108
+            ],
+            [
+              "Kansas City Chiefs",
+              "KC Chiefs",
+              "",
+              4870,
+              "AFC West",
+              "0-0-0",
+              96
+            ],
+            1798406700,
+            null,
+            null
+          ],
+          "197770681": [
+            [
+              "New York Giants",
+              "NY Giants",
+              "",
+              4896,
+              "NFC East",
+              "1-1-0",
+              104
+            ],
+            ["Detroit Lions", "DET Lions", "", 4881, "", "1-1-0", 91],
+            1798506900,
+            null,
+            null
+          ],
+          "197770691": [
+            [
+              "Jacksonville Jaguars",
+              "JAX Jaguars",
+              "",
+              4876,
+              "AFC South",
+              "0-0-0",
+              95
+            ],
+            [
+              "Dallas Cowboys",
+              "DAL Cowboys",
+              "",
+              4897,
+              "NFC East",
+              "0-0-0",
+              89
+            ],
+            1798420800,
+            null,
+            null
+          ],
+          "197770711": [
+            [
+              "Baltimore Ravens",
+              "BAL Ravens",
+              "",
+              4886,
+              "AFC North",
+              "0-0-0",
+              83
+            ],
+            [
+              "Cincinnati Bengals",
+              "CIN Bengals",
+              "",
+              4887,
+              "AFC North",
+              "0-0-0",
+              87
+            ],
+            1798766100,
+            null,
+            null
+          ],
+          "197770721": [
+            ["Los Angeles Rams", "LA Rams", "", 4891, "NFC West", "0-0-0", 99],
+            [
+              "Tampa Bay Buccaneers",
+              "TB Buccaneers",
+              "",
+              4884,
+              "",
+              "0-0-0",
+              110
+            ],
+            1798912800,
+            null,
+            null
+          ],
+          "197770861": [
+            [
+              "New England Patriots",
+              "NE Patriots",
+              "",
+              4871,
+              "AFC East",
+              "0-0-0",
+              102
+            ],
+            [
+              "Kansas City Chiefs",
+              "KC Chiefs",
+              "",
+              4870,
+              "AFC West",
+              "0-0-0",
+              96
+            ],
+            1797902100,
+            null,
+            null
+          ],
+          "197770961": [
+            [
+              "Kansas City Chiefs",
+              "KC Chiefs",
+              "",
+              4870,
+              "AFC West",
+              "0-0-0",
+              96
+            ],
+            [
+              "Los Angeles Chargers",
+              "LA Chargers",
+              "",
+              4900,
+              "AFC West",
+              "0-0-0",
+              98
+            ],
+            1798912800,
+            null,
+            null
+          ],
+          "197962691": [
+            [
+              "Baltimore Ravens",
+              "BAL Ravens",
+              "",
+              4886,
+              "AFC North",
+              "0-0-0",
+              83
+            ],
+            [
+              "Pittsburgh Steelers",
+              "PIT Steelers",
+              "",
+              4888,
+              "AFC North",
+              "0-0-0",
+              107
+            ],
+            1797789600,
+            null,
+            null
+          ],
+          "197962751": [
+            [
+              "New Orleans Saints",
+              "NO Saints",
+              "",
+              4898,
+              "NFC South",
+              "0-0-0",
+              103
+            ],
+            [
+              "Carolina Panthers",
+              "CAR Panthers",
+              "",
+              4894,
+              "NFC South",
+              "0-0-0",
+              85
+            ],
+            1797184800,
+            null,
+            null
+          ]
+        },
+        "5": {
+          "197684281": [
+            ["Michigan", "", "michigan-wolverines", 644, "BIG 10", "5-4", 235],
+            ["Oregon", "", "oregon-ducks", 101365, "BIG 10", "6-3", 278],
+            1794688200,
+            null,
+            null
+          ],
+          "207777471": [
+            ["USC", "", "usc-trojans", 3304800, "BIG 10", "7-2", 346],
+            ["Indiana", "", "indiana-hoosiers", 579, "BIG 10", "8-1", 201],
+            1794688200,
+            null,
+            null
+          ],
+          "207889071": [
+            ["Texas", "", "texas-longhorns", 629, "SEC", "7-2", 327],
+            ["LSU", "", "lsu-tigers", 627, "SEC", "6-3", 222],
+            1794702600,
+            null,
+            null
+          ],
+          "207914441": [
+            [
+              "Illinois",
+              "",
+              "illinois-fighting-illini",
+              3304836,
+              "BIG 10",
+              "6-3",
+              198
+            ],
+            ["UCLA", "", "ucla-bruins", 5700, "BIG 10", "9-0", 343],
+            1794621600,
+            null,
+            null
+          ],
+          "207915381": [
+            [
+              "Oregon State",
+              "Oregon St",
+              "oregon-state-beavers",
+              570,
+              "PAC 12",
+              "5-4",
+              279
+            ],
+            [
+              "Boise State",
+              "Boise St",
+              "boise-state-broncos",
+              5698,
+              "Mountain West",
+              "8-1",
+              132
+            ],
+            1794697200,
+            null,
+            null
+          ],
+          "207915901": [
+            ["Florida", "", "florida-gators", 645, "SEC", "5-4", 174],
+            ["Kentucky", "", "kentucky-wildcats", 636, "SEC", "7-2", 212],
+            1794698100,
+            null,
+            null
+          ],
+          "207916631": [
+            [
+              "Northwestern",
+              "",
+              "northwestern-wildcats",
+              101389,
+              "BIG 10",
+              "6-3",
+              269
+            ],
+            [
+              "Ohio State",
+              "Ohio St",
+              "ohio-state-buckeyes",
+              578,
+              "BIG 10",
+              "6-3",
+              273
+            ],
+            1794675600,
+            null,
+            null
+          ],
+          "207917921": [
+            ["Missouri", "", "missouri-tigers", 101417, "SEC", "6-3", 241],
+            ["Georgia", "", "georgia-bulldogs", 635, "SEC", "8-1", 184],
+            1794688200,
+            null,
+            null
+          ],
+          "207918601": [
+            [
+              "Texas Tech",
+              "",
+              "texas-tech-red-raiders",
+              101404,
+              "BIG 12",
+              "8-1",
+              332
+            ],
+            [
+              "Oklahoma State",
+              "Oklahoma St",
+              "oklahoma-state-cowboys",
+              643,
+              "BIG 12",
+              "6-3",
+              275
+            ],
+            1794709800,
+            null,
+            null
+          ],
+          "207918731": [
+            ["Utah", "", "utah-utes", 99476, "BIG 12", "9-0", 347],
+            ["Arizona", "", "arizona-wildcats", 101355, "BIG 12", "7-2", 121],
+            1794702600,
+            null,
+            null
+          ],
+          "208048981": [
+            ["Louisville", "", "louisville-cardinals", 608, "ACC", "6-3", 221],
+            [
+              "North Carolina",
+              "N Carolina",
+              "north-carolina-tar-heels",
+              621,
+              "ACC",
+              "5-4",
+              258
+            ],
+            1794700800,
+            null,
+            null
+          ],
+          "208049451": [
+            ["Baylor", "", "baylor-bears", 101386, "BIG 12", "6-3", 130],
+            ["BYU", "", "byu-cougars", 3306666, "BIG 12", "7-2", 140],
+            1794688200,
+            null,
+            null
+          ],
+          "208064911": [
+            [
+              "Wake Forest",
+              "",
+              "wake-forest-demon-deacons",
+              99488,
+              "ACC",
+              "8-1",
+              360
+            ],
+            ["SMU", "", "smu-mustangs", 101388, "ACC", "7-2", 300],
+            1794675600,
+            null,
+            null
+          ],
+          "208175861": [
+            [
+              "South Carolina",
+              "S Carolina",
+              "south-carolina-gamecocks",
+              640,
+              "SEC",
+              "6-3",
+              302
+            ],
+            ["Arkansas", "", "arkansas-razorbacks", 99474, "SEC", "3-6", 123],
+            1794703500,
+            null,
+            null
+          ],
+          "208180661": [
+            [
+              "Minnesota",
+              "",
+              "minnesota-golden-gophers",
+              581,
+              "BIG 10",
+              "5-4",
+              238
+            ],
+            [
+              "Penn State",
+              "Penn St",
+              "penn-state-nittany-lions",
+              607,
+              "BIG 10",
+              "5-4",
+              280
+            ],
+            1794700800,
+            null,
+            null
+          ],
+          "208189871": [
+            ["Memphis", "", "memphis-tigers", 583, "AAC", "7-2", 229],
+            [
+              "South Florida",
+              "S Florida",
+              "south-florida-bulls",
+              574,
+              "AAC",
+              "6-3",
+              312
+            ],
+            1794531900,
+            null,
+            null
+          ],
+          "208190731": [
+            [
+              "Florida State",
+              "Florida St",
+              "florida-state-seminoles",
+              4483,
+              "ACC",
+              "4-5",
+              178
+            ],
+            [
+              "Pittsburgh",
+              "",
+              "pittsburgh-panthers",
+              1348706,
+              "ACC",
+              "6-3",
+              282
+            ],
+            1794614400,
+            null,
+            null
+          ],
+          "208190981": [
+            ["Tennessee", "", "tennessee-volunteers", 4487, "SEC", "7-2", 324],
+            ["Texas A&M", "", "texas-a-m-aggies", 271872, "SEC", "4-5", 328],
+            1794686400,
+            null,
+            null
+          ],
+          "208191591": [
+            [
+              "UL Lafayette",
+              "",
+              "louisiana-ragin-cajuns",
+              3301997,
+              "SBC",
+              "6-3",
+              219
+            ],
+            ["UL Monroe", "", "ul-monroe-warhawks", 3304840, "SBC", "2-7", 344],
+            1794535200,
+            null,
+            null
+          ],
+          "208193331": [
+            ["Houston", "", "houston-cougars", 638, "BIG 12", "7-2", 193],
+            ["Colorado", "", "colorado-buffaloes", 596, "BIG 12", "3-6", 154],
+            1794626100,
+            null,
+            null
+          ],
+          "208194651": [
+            ["Mississippi", "", "ole-miss-rebels", 623, "SEC", "6-3", 277],
+            ["Oklahoma", "", "oklahoma-sooners", 619, "SEC", "5-4", 274],
+            1794690900,
+            null,
+            null
+          ],
+          "208195571": [
+            ["Duke", "", "duke-blue-devils", 101400, "ACC", "7-2", 165],
+            [
+              "Miami Florida",
+              "",
+              "miami-hurricanes",
+              2336252,
+              "ACC",
+              "8-1",
+              233
+            ],
+            1794675600,
+            null,
+            null
+          ],
+          "208195981": [
+            ["Auburn", "", "auburn-tigers", 633, "SEC", "5-4", 127],
+            [
+              "Mississippi State",
+              "",
+              "mississippi-state-bulldogs",
+              101402,
+              "SEC",
+              "4-5",
+              239
+            ],
+            1794675600,
+            null,
+            null
+          ],
+          "208197511": [
+            ["Purdue", "", "purdue-boilermakers", 609, "BIG 10", "3-6", 287],
+            ["Iowa", "", "iowa-hawkeyes", 600, "BIG 10", "7-2", 203],
+            1794702600,
+            null,
+            null
+          ],
+          "208198321": [
+            ["Nebraska", "", "nebraska-cornhuskers", 611, "BIG 10", "5-4", 250],
+            [
+              "Rutgers",
+              "",
+              "rutgers-scarlet-knights",
+              589,
+              "BIG 10",
+              "2-7",
+              292
+            ],
+            1794677400,
+            null,
+            null
+          ],
+          "208198541": [
+            ["Washington", "", "washington-huskies", 588, "BIG 10", "5-4", 361],
+            [
+              "Michigan State",
+              "Michigan St",
+              "michigan-state-spartans",
+              598,
+              "BIG 10",
+              "3-6",
+              236
+            ],
+            1794690900,
+            null,
+            null
+          ],
+          "208198651": [
+            [
+              "Wisconsin",
+              "",
+              "wisconsin-badgers",
+              2170531,
+              "BIG 10",
+              "6-3",
+              371
+            ],
+            ["Maryland", "", "maryland-terrapins", 628, "BIG 10", "3-6", 226],
+            1794675600,
+            null,
+            null
+          ],
+          "208199721": [
+            ["Syracuse", "", "syracuse-orange", 99468, "ACC", "4-5", 320],
+            ["NC State", "", "nc-state-wolfpack", 3309736, "ACC", "4-5", 261],
+            1794675600,
+            null,
+            null
+          ],
+          "208199841": [
+            [
+              "Georgia Tech",
+              "",
+              "georgia-tech-yellow-jackets",
+              4488,
+              "ACC",
+              "2-7",
+              187
+            ],
+            ["Clemson", "", "clemson-tigers", 604, "ACC", "6-3", 151],
+            1794677400,
+            null,
+            null
+          ],
+          "208199881": [
+            ["Stanford", "", "stanford-cardinal", 577, "ACC", "4-5", 313],
+            [
+              "Virginia Tech",
+              "VA Tech",
+              "virginia-tech-hokies",
+              4486,
+              "ACC",
+              "6-3",
+              357
+            ],
+            1794702600,
+            null,
+            null
+          ],
+          "208200321": [
+            [
+              "California",
+              "",
+              "california-golden-bears",
+              620,
+              "ACC",
+              "3-6",
+              141
+            ],
+            ["Virginia", "", "virginia-cavaliers", 101409, "ACC", "4-5", 356],
+            1794688200,
+            null,
+            null
+          ],
+          "208200421": [
+            [
+              "Boston College",
+              "",
+              "boston-college-eagles",
+              594,
+              "ACC",
+              "4-5",
+              133
+            ],
+            [
+              "Notre Dame",
+              "",
+              "notre-dame-fighting-irish",
+              631,
+              "",
+              "8-1",
+              271
+            ],
+            1794688200,
+            null,
+            null
+          ],
+          "208203151": [
+            [
+              "Arizona State",
+              "Arizona St",
+              "arizona-state-sun-devils",
+              585,
+              "BIG 12",
+              "5-4",
+              122
+            ],
+            [
+              "Central Florida",
+              "C Florida",
+              "ucf-knights",
+              613,
+              "",
+              "5-4",
+              342
+            ],
+            1794688200,
+            null,
+            null
+          ],
+          "208203921": [
+            ["Kansas", "", "kansas-jayhawks", 101384, "BIG 12", "3-6", 208],
+            [
+              "West Virginia",
+              "W Virginia",
+              "west-virginia-mountaineers",
+              4485,
+              "BIG 12",
+              "5-4",
+              369
+            ],
+            1794695400,
+            null,
+            null
+          ],
+          "208203971": [
+            [
+              "Kansas State",
+              "",
+              "kansas-state-wildcats",
+              101376,
+              "BIG 12",
+              "4-5",
+              209
+            ],
+            ["TCU", "", "tcu-horned-frogs", 101371, "BIG 12", "4-5", 322],
+            1794682800,
+            null,
+            null
+          ],
+          "208204251": [
+            [
+              "Cincinnati",
+              "",
+              "cincinnati-bearcats",
+              99486,
+              "BIG 12",
+              "5-4",
+              150
+            ],
+            [
+              "Iowa State",
+              "",
+              "iowa-state-cyclones",
+              101369,
+              "BIG 12",
+              "4-5",
+              204
+            ],
+            1794675600,
+            null,
+            null
+          ],
+          "208226201": [
+            [
+              "Fresno State",
+              "",
+              "fresno-state-bulldogs",
+              101359,
+              "Mountain West",
+              "5-3",
+              180
+            ],
+            [
+              "Texas State",
+              "",
+              "texas-state-bobcats",
+              101378,
+              "SBC",
+              "4-4",
+              331
+            ],
+            1794690000,
+            null,
+            null
+          ],
+          "208226981": [
+            [
+              "Utah State",
+              "",
+              "utah-state-aggies",
+              592,
+              "Mountain West",
+              "4-5",
+              348
+            ],
+            [
+              "San Diego State",
+              "",
+              "san-diego-state-aztecs",
+              101363,
+              "Mountain West",
+              "4-5",
+              298
+            ],
+            1794709800,
+            null,
+            null
+          ],
+          "208227171": [
+            [
+              "Colorado State",
+              "Colorado St",
+              "colorado-state-rams",
+              571,
+              "",
+              "3-6",
+              155
+            ],
+            [
+              "Washington State",
+              "",
+              "washington-state-cougars",
+              101357,
+              "PAC 12",
+              "1-8",
+              362
+            ],
+            1794713400,
+            null,
+            null
+          ],
+          "208229491": [
+            [
+              "Florida Atlantic",
+              "Florida Atl",
+              "florida-atlantic-owls",
+              591,
+              "AAC",
+              "6-3",
+              176
+            ],
+            [
+              "Tulsa",
+              "Tulsa",
+              "tulsa-golden-hurricane",
+              642,
+              "AAC",
+              "5-4",
+              338
+            ],
+            1794688200,
+            null,
+            null
+          ],
+          "208229651": [
+            [
+              "North Texas",
+              "",
+              "north-texas-mean-green",
+              101394,
+              "AAC",
+              "7-2",
+              268
+            ],
+            ["UTSA", "", "utsa-roadrunners", 1274115, "AAC", "7-2", 352],
+            1794708000,
+            null,
+            null
+          ],
+          "208230491": [
+            ["UAB", "", "uab-blazers", 3342100, "AAC", "5-4", 339],
+            ["Temple", "", "temple-owls", 630, "AAC", "2-7", 323],
+            1794679200,
+            null,
+            null
+          ],
+          "208239191": [
+            [
+              "James Madison",
+              "",
+              "james-madison-dukes",
+              101397,
+              "SBC",
+              "8-2",
+              207
+            ],
+            ["Connecticut", "", "uconn-huskies", 99478, "", "4-5", 157],
+            1794675600,
+            null,
+            null
+          ],
+          "208239811": [
+            [
+              "Appalachian State",
+              "Appalachian St",
+              "app-state-mountaineers",
+              634,
+              "SBC",
+              "5-4",
+              120
+            ],
+            [
+              "Marshall",
+              "",
+              "marshall-thundering-herd",
+              602,
+              "SBC",
+              "5-4",
+              225
+            ],
+            1794697200,
+            null,
+            null
+          ],
+          "208239921": [
+            ["Troy", "", "troy-trojans", 5697, "SBC", "4-5", 336],
+            [
+              "South Alabama",
+              "S Alabama",
+              "south-alabama-jaguars",
+              622,
+              "SBC",
+              "4-5",
+              301
+            ],
+            1794700800,
+            null,
+            null
+          ],
+          "208239951": [
+            [
+              "Georgia Southern",
+              "GA Southern",
+              "georgia-southern-eagles",
+              632,
+              "SBC",
+              "5-4",
+              185
+            ],
+            [
+              "Georgia State",
+              "",
+              "georgia-state-panthers",
+              2307639,
+              "SBC",
+              "5-4",
+              186
+            ],
+            1794688200,
+            null,
+            null
+          ],
+          "208240151": [
+            [
+              "East Carolina",
+              "",
+              "east-carolina-pirates",
+              101398,
+              "AAC",
+              "5-4",
+              167
+            ],
+            ["Charlotte", "", "charlotte-49ers", 586, "AAC", "1-8", 148],
+            1794679200,
+            null,
+            null
+          ],
+          "208241141": [
+            [
+              "Arkansas State",
+              "Arkansas St",
+              "arkansas-state-red-wolves",
+              3225,
+              "SBC",
+              "4-5",
+              125
+            ],
+            [
+              "Coastal Carolina",
+              "Co Carolina",
+              "coastal-carolina-chanticleers",
+              605,
+              "SBC",
+              "3-6",
+              152
+            ],
+            1794679200,
+            null,
+            null
+          ],
+          "208241251": [
+            ["Tulane", "", "tulane-green-wave", 101367, "AAC", "4-5", 337],
+            ["Rice", "", "rice-owls", 576, "AAC", "1-8", 289],
+            1794682800,
+            null,
+            null
+          ],
+          "208241481": [
+            [
+              "Wyoming",
+              "",
+              "wyoming-cowboys",
+              599,
+              "Mountain West",
+              "6-3",
+              373
+            ],
+            ["UTEP", "", "utep-miners", 618, "CUSA", "1-8", 350],
+            1794711600,
+            null,
+            null
+          ],
+          "208241571": [
+            [
+              "New Mexico State",
+              "New Mexico St",
+              "new-mexico-state-aggies",
+              584,
+              "CUSA",
+              "3-6",
+              254
+            ],
+            [
+              "Missouri State",
+              "",
+              "missouri-state-bears",
+              101416,
+              "CUSA",
+              "3-6",
+              242
+            ],
+            1794686400,
+            null,
+            null
+          ],
+          "208241611": [
+            [
+              "Kennesaw State",
+              "",
+              "kennesaw-state-owls",
+              244716,
+              "CUSA",
+              "3-6",
+              210
+            ],
+            [
+              "Sam Houston St",
+              "",
+              "sam-houston-bearkats",
+              3306664,
+              "CUSA",
+              "1-8",
+              296
+            ],
+            1794682800,
+            null,
+            null
+          ],
+          "208241761": [
+            [
+              "North Dakota State",
+              "",
+              "north-dakota-state-bison",
+              253257,
+              "",
+              "7-2",
+              263
+            ],
+            [
+              "Hawaii",
+              "",
+              "hawai-i-rainbow-warriors",
+              572,
+              "Mountain West",
+              "3-6",
+              191
+            ],
+            1794715200,
+            null,
+            null
+          ],
+          "208241961": [
+            ["UNLV", "", "unlv-rebels", 101361, "Mountain West", "5-4", 345],
+            [
+              "New Mexico",
+              "",
+              "new-mexico-lobos",
+              101373,
+              "Mountain West",
+              "8-1",
+              253
+            ],
+            1794702600,
+            null,
+            null
+          ],
+          "208241971": [
+            [
+              "Southern Miss",
+              "",
+              "southern-miss-golden-eagles",
+              3224,
+              "SBC",
+              "3-6",
+              310
+            ],
+            [
+              "Louisiana Tech",
+              "",
+              "louisiana-tech-bulldogs",
+              101390,
+              "CUSA",
+              "7-2",
+              220
+            ],
+            1794693600,
+            null,
+            null
+          ],
+          "208242361": [
+            [
+              "Middle Tennessee State",
+              "",
+              "middle-tennessee-blue-raiders",
+              1274114,
+              "CUSA",
+              "5-4",
+              237
+            ],
+            ["Liberty", "", "liberty-flames", 101385, "CUSA", "8-1", 216],
+            1794688200,
+            null,
+            null
+          ],
+          "208242591": [
+            [
+              "Jacksonville State",
+              "",
+              "jacksonville-state-gamecocks",
+              107377,
+              "CUSA",
+              "7-2",
+              206
+            ],
+            [
+              "Western Kentucky",
+              "",
+              "western-kentucky-hilltoppers",
+              101392,
+              "CUSA",
+              "3-6",
+              366
+            ],
+            1794688200,
+            null,
+            null
+          ],
+          "208242601": [
+            [
+              "Nevada",
+              "",
+              "nevada-wolf-pack",
+              614,
+              "Mountain West",
+              "3-6",
+              251
+            ],
+            [
+              "No Illinois",
+              "",
+              "northern-illinois-huskies",
+              3306847,
+              "MAC",
+              "0-9",
+              266
+            ],
+            1794688200,
+            null,
+            null
+          ],
+          "208245151": [
+            [
+              "Florida International",
+              "",
+              "florida-international-panthers",
+              111678,
+              "CUSA",
+              "4-5",
+              177
+            ],
+            ["Delaware", "", "delaware-blue-hens", 107376, "CUSA", "4-5", 162],
+            1794686400,
+            null,
+            null
+          ],
+          "208247701": [
+            [
+              "San Jose State",
+              "San Jose St",
+              "san-jose-state-spartans",
+              575,
+              "Mountain West",
+              "5-5",
+              299
+            ],
+            ["Air Force", "", "air-force-falcons", 3304766, "", "7-2", 114],
+            1794700800,
+            null,
+            null
+          ]
+        },
+        "18787": {
+          "208520931": [
+            [
+              "Southern Utah",
+              "",
+              "southern-utah-thunderbirds",
+              101364,
+              "",
+              "4-6",
+              311
+            ],
+            [
+              "Portland State",
+              "Portland St",
+              "portland-state-vikings",
+              93632,
+              "",
+              "2-8",
+              283
+            ],
+            1794625200,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    "4": {
+      "4": {
+        "1037": {
+          "51827469": [
+            ["IFK Helsinki", "", "", 110739, "", "", 16419],
+            ["Tappara", "", "", 106267, "", "", 16425],
+            1794587400,
+            null,
+            null
+          ],
+          "51827473": [
+            ["Ilves", "", "", 106268, "", "", ""],
+            ["SaiPa", "", "", 106280, "", "", 16424],
+            1794587400,
+            null,
+            null
+          ],
+          "51827475": [
+            ["Jokerit", "", "", 3021454, "", "", ""],
+            ["TPS Turku", "", "", 110737, "", "", 16422],
+            1794587400,
+            null,
+            null
+          ],
+          "51827477": [
+            ["Mikkelin Jukurit", "", "", 692192, "", "", 16430],
+            ["Hameenlinna", "", "", 110736, "", "", 16420],
+            1794587400,
+            null,
+            null
+          ],
+          "51827479": [
+            ["JYP Jyvaskyla", "", "", 111879, "", "", 16421],
+            ["KooKoo", "", "", 106279, "", "", 16428],
+            1794587400,
+            null,
+            null
+          ],
+          "51827483": [
+            ["K-Espoo", "", "", 2801303, "", "", 16427],
+            ["KalPa", "", "", 106269, "", "", 16434],
+            1794587400,
+            null,
+            null
+          ],
+          "51827485": [
+            ["Assat", "", "", 111555, "", "", 16432],
+            ["Pelicans", "", "", 106278, "", "", 16429],
+            1794591000,
+            null,
+            null
+          ]
+        },
+        "3056": {
+          "208067201": [
+            ["Yokohama Grits", "", "", 1380299, "", "", 16802],
+            ["Anyang Halla", "", "", 106147, "", "", 16798],
+            1794639600,
+            null,
+            null
+          ]
+        },
+        "3143": {
+          "51814579": [
+            ["SC Kolin", "", "", 1463401, "", "", ""],
+            ["HC Slavia Praha", "", "", 112807, "", "", ""],
+            1794664800,
+            null,
+            null
+          ],
+          "51814819": [
+            ["AZ Havirov", "", "", 3548263, "", "", ""],
+            ["Zlin", "", "", 2327329, "", "", ""],
+            1794668400,
+            null,
+            null
+          ],
+          "51814879": [
+            ["HC Banik Sokolov", "", "", 1463402, "", "", ""],
+            ["Chomutov", "", "", 3548125, "", "", ""],
+            1794672000,
+            null,
+            null
+          ],
+          "51814885": [
+            ["Vsetin", "", "", 145448, "", "", ""],
+            ["HC Frydek Mistek", "", "", 1463404, "", "", ""],
+            1794672000,
+            null,
+            null
+          ],
+          "51814887": [
+            ["HC ZUBR Prerov", "", "", 357586, "", "", ""],
+            ["HC Tabor", "", "", 3548224, "", "", ""],
+            1794672000,
+            null,
+            null
+          ],
+          "51819553": [
+            ["HC Pardubice B", "", "", 3573705, "", "", ""],
+            ["HC Stadion Litomerice", "", "", 1463405, "", "", ""],
+            1794758400,
+            null,
+            null
+          ]
+        }
+      },
+      "6": {
+        "3447": {
+          "51815023": [
+            ["San Jose Barracuda", "", "", 158200, "", "", 16707],
+            ["Coachella Valley Firebirds", "", "", 1970773, "", "", 16689],
+            1794538800,
+            null,
+            null
+          ],
+          "51815025": [
+            ["Calgary Wranglers", "", "", 1970772, "", "", 16684],
+            ["Henderson Silver Knights", "", "", 1440871, "", "", 16693],
+            1794538800,
+            null,
+            null
+          ],
+          "51819607": [
+            ["WB Scranton Penguins", "", "", 194713, "", "", 16714],
+            ["Hershey Bears", "", "", 158184, "", "", 16694],
+            1794614400,
+            null,
+            null
+          ],
+          "51819609": [
+            ["Toronto Marlies", "", "", 157965, "", "", 16711],
+            ["Syracuse Crunch", "", "", 152789, "", "", 16709],
+            1794614400,
+            null,
+            null
+          ],
+          "51819613": [
+            ["Laval Rocket", "", "", 152786, "", "", 16696],
+            ["Rochester Americans", "", "", 152790, "", "", 16704],
+            1794614700,
+            null,
+            null
+          ],
+          "51819615": [
+            ["Springfield Thunderbirds", "", "", 158186, "", "", 16708],
+            ["Providence Bruins", "", "", 158187, "", "", 16703],
+            1794614700,
+            null,
+            null
+          ],
+          "51819617": [
+            ["Hamilton Hammers", "", "", 3568285, "", "", ""],
+            ["Lehigh Valley Phantoms", "", "", 158185, "", "", 16697],
+            1794614700,
+            null,
+            null
+          ],
+          "51819619": [
+            ["Grand Rapids Griffins", "", "", 152792, "", "", 16691],
+            ["Iowa Wild", "", "", 158193, "", "", 16695],
+            1794618000,
+            null,
+            null
+          ],
+          "51819623": [
+            ["Milwaukee Admirals", "", "", 158192, "", "", 16699],
+            ["Rockford IceHogs", "", "", 157977, "", "", 16705],
+            1794618000,
+            null,
+            null
+          ],
+          "51819625": [
+            ["San Diego Gulls", "", "", 158198, "", "", 16706],
+            ["Bakersfield Condors", "", "", 152781, "", "", 16681],
+            1794625800,
+            null,
+            null
+          ],
+          "51819639": [
+            ["Cleveland Monsters", "", "", 157978, "", "", 16688],
+            ["Belleville Senators", "", "", 152785, "", "", 16682],
+            1794690000,
+            null,
+            null
+          ],
+          "51823157": [
+            ["Texas Stars", "", "", 152784, "", "", 16710],
+            ["Tucson Roadrunners", "", "", 158199, "", "", 16712],
+            1794708000,
+            null,
+            null
+          ],
+          "51823159": [
+            ["Abbotsford Canucks", "", "", 1676600, "", "", 16679],
+            ["Ontario Reign", "", "", 158194, "", "", 16701],
+            1794708000,
+            null,
+            null
+          ],
+          "208552771": [
+            ["Calgary Wranglers", "", "", 1970772, "", "", 16684],
+            ["Henderson Silver Knights", "", "", 1440871, "", "", 16693],
+            1794538800,
+            null,
+            null
+          ],
+          "208606991": [
+            ["San Jose Barracuda", "", "", 158200, "", "", 16707],
+            ["Coachella Valley Firebirds", "", "", 1970773, "", "", 16689],
+            1794538800,
+            null,
+            null
+          ],
+          "208628671": [
+            ["Milwaukee Admirals", "", "", 158192, "", "", 16699],
+            ["Rockford IceHogs", "", "", 157977, "", "", 16705],
+            1794618000,
+            null,
+            null
+          ],
+          "208628681": [
+            ["Grand Rapids Griffins", "", "", 152792, "", "", 16691],
+            ["Iowa Wild", "", "", 158193, "", "", 16695],
+            1794618000,
+            null,
+            null
+          ],
+          "208663191": [
+            ["Cleveland Monsters", "", "", 157978, "", "", 16688],
+            ["Belleville Senators", "", "", 152785, "", "", 16682],
+            1794690000,
+            null,
+            null
+          ],
+          "208666501": [
+            ["WB Scranton Penguins", "", "", 194713, "", "", 16714],
+            ["Hershey Bears", "", "", 158184, "", "", 16694],
+            1794614400,
+            null,
+            null
+          ],
+          "208666511": [
+            ["Hamilton Hammers", "", "", 3568285, "", "", ""],
+            ["Lehigh Valley Phantoms", "", "", 158185, "", "", 16697],
+            1794614700,
+            null,
+            null
+          ],
+          "208666561": [
+            ["Abbotsford Canucks", "", "", 1676600, "", "", 16679],
+            ["Ontario Reign", "", "", 158194, "", "", 16701],
+            1794708000,
+            null,
+            null
+          ],
+          "208666571": [
+            ["Springfield Thunderbirds", "", "", 158186, "", "", 16708],
+            ["Providence Bruins", "", "", 158187, "", "", 16703],
+            1794614700,
+            null,
+            null
+          ],
+          "208666581": [
+            ["Toronto Marlies", "", "", 157965, "", "", 16711],
+            ["Syracuse Crunch", "", "", 152789, "", "", 16709],
+            1794614400,
+            null,
+            null
+          ],
+          "208666591": [
+            ["Laval Rocket", "", "", 152786, "", "", 16696],
+            ["Rochester Americans", "", "", 152790, "", "", 16704],
+            1794614700,
+            null,
+            null
+          ],
+          "208670171": [
+            ["Texas Stars", "", "", 152784, "", "", 16710],
+            ["Tucson Roadrunners", "", "", 158199, "", "", 16712],
+            1794708000,
+            null,
+            null
+          ],
+          "208678301": [
+            ["San Diego Gulls", "", "", 158198, "", "", 16706],
+            ["Bakersfield Condors", "", "", 152781, "", "", 16681],
+            1794625800,
+            null,
+            null
+          ],
+          "208694291": [
+            ["Laval Rocket", "", "", 152786, "", "", 16696],
+            ["Rochester Americans", "", "", 152790, "", "", 16704],
+            1794693900,
+            null,
+            null
+          ]
+        },
+        "10982": {
+          "208675581": [
+            ["Trois-Rivi\u00e8res Lions", "", "", 1733600, "", "", ""],
+            ["Savannah Ghost Pirates", "", "", 1982259, "", "", 16741],
+            1794528000,
+            null,
+            null
+          ],
+          "208729511": [
+            ["Atlanta Gladiators", "", "", 1095618, "", "", 16724],
+            ["Greenville Swamp Rabbits", "", "", 1095610, "", "", 16729],
+            1794528300,
+            null,
+            null
+          ]
+        },
+        "50691": {
+          "208375471": [
+            ["Michigan State", "", "", 3316474, "", "", 17965],
+            ["Notre Dame", "", "", 3305658, "", "", 17975],
+            1794528000,
+            null,
+            null
+          ],
+          "208375681": [
+            ["Bentley", "", "", 3319044, "", "", 17939],
+            ["Air Force", "", "", 3316095, "", "", 17931],
+            1794535500,
+            null,
+            null
+          ],
+          "208376041": [
+            ["Northeastern", "", "", 3322187, "", "", 17973],
+            ["Connecticut", "", "", 3309583, "", "", 17948],
+            1794614400,
+            null,
+            null
+          ],
+          "208376341": [
+            ["Holy Cross", "", "", 3325149, "", "", 17954],
+            ["Niagara Purple Eagles", "", "", 3346552, "", "", ""],
+            1794614400,
+            null,
+            null
+          ],
+          "208376431": [
+            ["Penn State Nittany Lions", "", "", 3268187, "", "", ""],
+            ["Michigan", "", "", 2641801, "", "", 17964],
+            1794614400,
+            null,
+            null
+          ],
+          "208376591": [
+            ["Maine Black Bears", "", "", 3322102, "", "", ""],
+            ["Vermont", "", "", 3314932, "", "", 17991],
+            1794614400,
+            null,
+            null
+          ],
+          "208376711": [
+            ["Colgate", "", "", 3319045, "", "", 17946],
+            ["yale", "", "", 3361696, "", "", 17994],
+            1794614400,
+            null,
+            null
+          ],
+          "208377051": [
+            ["Colorado College", "", "", 3306670, "", "", 17947],
+            ["Western Michigan", "", "", 3020876, "", "", 17992],
+            1794614400,
+            null,
+            null
+          ],
+          "208377611": [
+            ["Cornell", "", "", 3334945, "", "", 17949],
+            ["Brown", "", "", 3370354, "", "", 17943],
+            1794614400,
+            null,
+            null
+          ],
+          "208377711": [
+            ["Boston College", "", "", 2641802, "", "", 17940],
+            ["Massachusetts", "", "", 3322186, "", "", 17959],
+            1794614400,
+            null,
+            null
+          ],
+          "208377831": [
+            ["Union College", "", "", 3349889, "", "", ""],
+            ["UMass Lowell", "", "", 3307171, "", "", ""],
+            1794615300,
+            null,
+            null
+          ],
+          "208378381": [
+            ["Rensselaer Engineers", "", "", 3318618, "", "", ""],
+            ["New Hampshire", "", "", 3316475, "", "", 17970],
+            1794614400,
+            null,
+            null
+          ],
+          "208379301": [
+            ["Dartmouth", "", "", 3355447, "", "", 17950],
+            ["Quinnipiac", "", "", 3308898, "", "", 17981],
+            1794614400,
+            null,
+            null
+          ],
+          "208380041": [
+            ["Omaha", "", "", 3316500, "", "", 17977],
+            ["Miami", "", "", 3318619, "", "", 17963],
+            1794614700,
+            null,
+            null
+          ],
+          "208380191": [
+            ["Bowling Green Falcons", "", "", 3345465, "", "", ""],
+            ["Northern Michigan", "", "", 3314930, "", "", 17974],
+            1794614400,
+            null,
+            null
+          ],
+          "208380591": [
+            ["Lake Superior State", "", "", 3398133, "", "", 17955],
+            ["Michigan Tech", "", "", 3308739, "", "", 17966],
+            1794614820,
+            null,
+            null
+          ],
+          "208381801": [
+            ["North Dakota", "", "", 3306955, "", "", 17972],
+            ["St. Thomas", "", "", 3306954, "", "", 17989],
+            1794618000,
+            null,
+            null
+          ],
+          "208382431": [
+            ["Minnesota Duluth", "", "", 3316503, "", "", 17968],
+            ["St. Cloud State", "", "", 3310554, "", "", 17986],
+            1794618000,
+            null,
+            null
+          ],
+          "208382571": [
+            ["Alaska Anchorage", "", "", 3335721, "", "", 17933],
+            ["Minnesota", "", "", 3311016, "", "", 17967],
+            1794618000,
+            null,
+            null
+          ],
+          "208382651": [
+            ["Ohio State", "", "", 3314929, "", "", 17976],
+            ["Wisconsin", "", "", 3308741, "", "", 17993],
+            1794618000,
+            null,
+            null
+          ],
+          "208386541": [
+            ["Minnesota State", "", "", 3316501, "", "", 17969],
+            ["Bemidji State", "", "", 3316502, "", "", 17938],
+            1794618420,
+            null,
+            null
+          ],
+          "208386751": [
+            ["Ferris State", "", "", 3316479, "", "", 17952],
+            ["Augustana Vikings", "", "", 3316504, "", "", ""],
+            1794618420,
+            null,
+            null
+          ],
+          "208387081": [
+            ["Lindenwood Lions", "", "", 3308740, "", "", ""],
+            ["Denver", "", "", 2641799, "", "", 17951],
+            1794621600,
+            null,
+            null
+          ],
+          "208494701": [
+            ["Merrimack", "", "", 3306667, "", "", 17962],
+            ["Providence", "", "", 3310466, "", "", 17980],
+            1794614400,
+            null,
+            null
+          ],
+          "208495041": [
+            ["Sacred Heart", "", "", 3351068, "", "", 17985],
+            ["Army West Point Black Knights", "", "", 3330814, "", "", ""],
+            1794614400,
+            null,
+            null
+          ],
+          "208521081": [
+            ["Michigan State", "", "", 3316474, "", "", 17965],
+            ["Notre Dame", "", "", 3305658, "", "", 17975],
+            1794614400,
+            null,
+            null
+          ],
+          "208522891": [
+            ["Bentley", "", "", 3319044, "", "", 17939],
+            ["Air Force", "", "", 3316095, "", "", 17931],
+            1794621900,
+            null,
+            null
+          ],
+          "208609611": [
+            ["Harvard Crimson", "", "", 3331728, "", "", ""],
+            ["Princeton", "", "", 3370353, "", "", 17979],
+            1794614400,
+            null,
+            null
+          ]
+        }
+      }
+    }
+  },
+  "db": {},
+  "kb": {},
+  "x": []
+}

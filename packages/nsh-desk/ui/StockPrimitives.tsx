@@ -1049,3 +1049,262 @@ export function OrderToastBanner(props: OrderToastBannerProps): JSX.Element {
     </If>
   );
 }
+
+export interface DualTrajectoryPoint {
+  readonly label: string;
+  readonly primary: number;
+  readonly secondary: number;
+}
+
+export interface DualTrajectoryCanvasProps {
+  points: readonly DualTrajectoryPoint[];
+  primaryLabel: string;
+  secondaryLabel: string;
+  unitSuffix?: string;
+  baseline?: number;
+  accessibilityLabel?: string;
+}
+
+/**
+ * Scrubbable dual-series `<Canvas>` trajectory chart used in the Trading Desk
+ * `Point Chart` (Away vs Home score/momentum curve) and `Historic Odds`
+ * (Book Implied % vs Polymarket Fair % curve).
+ */
+export function DualTrajectoryCanvas(
+  props: DualTrajectoryCanvasProps,
+): JSX.Element {
+  const scrubIdx = signal<number | null>(null);
+  const canvasWidth = signal(0);
+  const calmBounds = createCalmRange(0.28);
+
+  const resolveIndex = (x: number): number | null => {
+    const pts = props.points;
+    const w = canvasWidth();
+    if (pts.length === 0 || w <= 64) return null;
+    const left = 10;
+    const right = w - 48;
+    const clamped = Math.max(left, Math.min(right, x));
+    const ratio = (clamped - left) / Math.max(1, right - left);
+    return Math.max(
+      0,
+      Math.min(pts.length - 1, Math.round(ratio * (pts.length - 1))),
+    );
+  };
+
+  const pan = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (e) => scrubIdx.set(resolveIndex(e.locationX)),
+    onPanResponderMove: (e) => scrubIdx.set(resolveIndex(e.locationX)),
+    onPanResponderRelease: () => scrubIdx.set(null),
+    onPanResponderTerminate: () => scrubIdx.set(null),
+  });
+
+  const activePoint = () => {
+    const idx = scrubIdx();
+    const pts = props.points;
+    if (pts.length === 0) return null;
+    if (idx !== null && pts[idx]) return pts[idx]!;
+    return pts[pts.length - 1]!;
+  };
+
+  const suffix = () => props.unitSuffix ?? "";
+
+  return (
+    <View class="gap-1">
+      <If when={activePoint()}>
+        {(pt) => (
+          <View class="flex-row flex-wrap items-center justify-between gap-2 px-0.5">
+            <View class="flex-row items-center gap-2">
+              <Text class="font-mono text-xs tabular-nums text-muted-foreground">
+                {pt().label}
+              </Text>
+              <Text class="font-mono text-xs font-semibold tabular-nums text-positive">
+                {`${props.primaryLabel} ${pt().primary.toFixed(1)}${suffix()}`}
+              </Text>
+              <Text class="font-mono text-xs font-semibold tabular-nums text-warning">
+                {`${props.secondaryLabel} ${pt().secondary.toFixed(1)}${suffix()}`}
+              </Text>
+            </View>
+            <If when={scrubIdx() !== null}>
+              <Text class="font-mono text-xs tabular-nums text-muted-foreground">
+                Scrub
+              </Text>
+            </If>
+          </View>
+        )}
+      </If>
+
+      <View
+        {...pan.panHandlers}
+        panActivation={{ activeOffsetX: 6, failOffsetY: 8 }}
+        onLayout={({ bounds }) => canvasWidth.set(bounds.size.width)}
+        class="h-32 overflow-hidden rounded-(--radius) border border-border bg-card"
+      >
+        <Canvas
+          class="flex-1"
+          accessibilityLabel={
+            props.accessibilityLabel ??
+            `${props.primaryLabel} vs ${props.secondaryLabel} trajectory chart`
+          }
+          draw={(cx, size) => {
+            const pts = props.points;
+            const w = size.width;
+            const h = size.height;
+            if (pts.length < 2 || w <= 72 || h <= 48) return;
+
+            const left = 10;
+            const right = w - 48;
+            const top = 10;
+            const bottom = h - 18;
+
+            let rawLo =
+              props.baseline !== undefined ? props.baseline : pts[0]!.primary;
+            let rawHi = rawLo;
+            for (let i = 0; i < pts.length; i++) {
+              const p = pts[i]!;
+              if (p.primary < rawLo) rawLo = p.primary;
+              if (p.primary > rawHi) rawHi = p.primary;
+              if (p.secondary < rawLo) rawLo = p.secondary;
+              if (p.secondary > rawHi) rawHi = p.secondary;
+            }
+            const pad = Math.max(0.8, (rawHi - rawLo) * 0.14);
+            const targetLo =
+              props.baseline === 0 && rawLo >= 0 ? 0 : rawLo - pad;
+            const [lo, hi] = calmBounds.step(targetLo, rawHi + pad);
+            const span = Math.max(0.5, hi - lo);
+
+            const xOf = (idx: number) =>
+              left + (idx / (pts.length - 1)) * (right - left);
+            const yOf = (val: number) =>
+              top + (1 - (val - lo) / span) * (bottom - top);
+
+            cx.font = "500 12px system-ui";
+            cx.fontVariantNumeric = "tabular-nums";
+            cx.textAlign = "right";
+            cx.textBaseline = "middle";
+
+            for (let g = 0; g <= 2; g++) {
+              const frac = g / 2;
+              const gy = top + frac * (bottom - top);
+              const gVal = hi - frac * span;
+              cx.save();
+              cx.strokeStyle = token("border");
+              cx.globalAlpha = 0.55;
+              cx.lineWidth = 1;
+              cx.beginPath();
+              cx.moveTo(left, gy);
+              cx.lineTo(right, gy);
+              cx.stroke();
+              cx.restore();
+
+              const tickNum = Math.round(gVal) === 0 ? 0 : Math.round(gVal);
+              cx.fillStyle = token("muted-foreground");
+              cx.fillText(`${tickNum}${suffix()}`, w - 5, gy);
+            }
+
+            if (props.baseline !== undefined) {
+              const baseY = yOf(props.baseline);
+              if (baseY >= top && baseY <= bottom) {
+                cx.save();
+                cx.strokeStyle = token("muted-foreground");
+                cx.globalAlpha = 0.6;
+                cx.setLineDash([3, 3]);
+                cx.lineWidth = 1;
+                cx.beginPath();
+                cx.moveTo(left, baseY);
+                cx.lineTo(right, baseY);
+                cx.stroke();
+                cx.restore();
+              }
+            }
+
+            const primaryColor = token("positive");
+            const secondaryColor = token("chart-3");
+
+            // Primary area fill
+            cx.save();
+            cx.beginPath();
+            for (let i = 0; i < pts.length; i++) {
+              const px = xOf(i);
+              const py = yOf(pts[i]!.primary);
+              if (i === 0) cx.moveTo(px, py);
+              else cx.lineTo(px, py);
+            }
+            cx.lineTo(xOf(pts.length - 1), bottom);
+            cx.lineTo(xOf(0), bottom);
+            cx.closePath();
+            cx.fillStyle = primaryColor;
+            cx.globalAlpha = 0.14;
+            cx.fill();
+            cx.restore();
+
+            // Primary stroke
+            cx.save();
+            cx.beginPath();
+            for (let i = 0; i < pts.length; i++) {
+              const px = xOf(i);
+              const py = yOf(pts[i]!.primary);
+              if (i === 0) cx.moveTo(px, py);
+              else cx.lineTo(px, py);
+            }
+            cx.strokeStyle = primaryColor;
+            cx.lineWidth = 1.85;
+            cx.lineJoin = "round";
+            cx.stroke();
+            cx.restore();
+
+            // Secondary stroke
+            cx.save();
+            cx.beginPath();
+            for (let i = 0; i < pts.length; i++) {
+              const px = xOf(i);
+              const py = yOf(pts[i]!.secondary);
+              if (i === 0) cx.moveTo(px, py);
+              else cx.lineTo(px, py);
+            }
+            cx.strokeStyle = secondaryColor;
+            cx.lineWidth = 1.6;
+            cx.lineJoin = "round";
+            cx.stroke();
+            cx.restore();
+
+            // Bottom start/end labels
+            cx.fillStyle = token("muted-foreground");
+            cx.textAlign = "left";
+            cx.textBaseline = "bottom";
+            cx.fillText(pts[0]!.label, left, h - 2);
+            cx.textAlign = "right";
+            cx.fillText(pts[pts.length - 1]!.label, right, h - 2);
+
+            const sIdx = scrubIdx() ?? pts.length - 1;
+            const cur = pts[sIdx];
+            if (cur) {
+              const sx = xOf(sIdx);
+              cx.save();
+              cx.strokeStyle = token("foreground");
+              cx.globalAlpha = scrubIdx() !== null ? 0.5 : 0.22;
+              cx.setLineDash([2, 2]);
+              cx.lineWidth = 1;
+              cx.beginPath();
+              cx.moveTo(sx, top);
+              cx.lineTo(sx, bottom);
+              cx.stroke();
+              cx.restore();
+
+              cx.fillStyle = primaryColor;
+              cx.beginPath();
+              cx.arc(sx, yOf(cur.primary), 3, 0, Math.PI * 2);
+              cx.fill();
+
+              cx.fillStyle = secondaryColor;
+              cx.beginPath();
+              cx.arc(sx, yOf(cur.secondary), 3, 0, Math.PI * 2);
+              cx.fill();
+            }
+          }}
+        />
+      </View>
+    </View>
+  );
+}

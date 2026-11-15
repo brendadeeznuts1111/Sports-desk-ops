@@ -1,0 +1,140 @@
+# packages/ui/src/config/wagers.toml
+# ==============================================================================
+# Live Wagers Tab — Filter Vocabulary, CLV Ramp & Table Bounds (SSOT)
+# Format:       TOML 1.0 (inlined & tree-shaken at bundle time by Bun)
+# Schema:       sportsdesk-wagers-tab/v1
+# Validated by: scripts/validate_dashboard_config.ts (bun run validate:dashboard)
+# Consumed by:  packages/ui/src/config/wagers.ts -> panels/LiveWagersTabPanel.tsx
+#
+# Date contract: quoted ISO-8601 strings ONLY. Unquoted TOML datetimes parse to
+# Temporal.* objects and crash browser bundles at module load.
+#
+# Deliberate omission: stake emphasis is NOT duplicated here. The row highlight
+# reads `thresholds.high_risk_wager_usd` from dashboard.toml, so the desk keeps
+# one risk number that cannot drift between the KPI strip and the table.
+# ==============================================================================
+
+[meta]
+schema = "sportsdesk-wagers-tab/v1"
+version = "1.0.0"
+generated_at = "2026-11-14T00:00:00Z" # quoted — unquoted fails the Temporal guard
+auto_execute = false # Signal Honesty invariant: directives require human review
+
+# ------------------------------------------------------------------------------
+# CLV Edge Ramp & Slice Bounds
+# `clv_hot_cents` must exceed `clv_warm_cents` (validator invariant).
+# ------------------------------------------------------------------------------
+[thresholds]
+clv_hot_cents = 10 # CLV at/above this is a beat-the-line move worth red
+clv_warm_cents = 3 # lower bound of the amber ramp
+slice_leader_limit = 4 # customers listed in the active-slice edge leaderboard
+
+# ------------------------------------------------------------------------------
+# Table Bounds & Defaults
+# `policy_tag` is a REQUIRED_PROBE: it must appear in the bundle, proving the
+# TOML was inlined rather than fetched at runtime.
+# ------------------------------------------------------------------------------
+[table]
+max_rows = 300 # hard render bound; the feed may carry more rows than this
+policy_tag = "wagers-policy/v1" # rendered in the table header
+default_sort_field = "alertTier" # timestamp | riskUsd | toWinUsd | clvCents | alertTier
+default_sort_dir = "desc"
+
+# ------------------------------------------------------------------------------
+# Alert Classification Vocabulary
+# `severity` orders the table sort AND the pill order; ids match the WagerTier
+# values the feed emits, labels are presentation only.
+# ------------------------------------------------------------------------------
+[[alert_tiers]]
+id = "CRITICAL"
+label = "🚨 Critical"
+severity = 4
+
+[[alert_tiers]]
+id = "STEAM"
+label = "⚡ Steam"
+severity = 3
+
+[[alert_tiers]]
+id = "LATENCY"
+label = "⚠️ Latency"
+severity = 2
+
+[[alert_tiers]]
+id = "RECREATIONAL"
+label = "✅ Recreational"
+severity = 1
+
+# ------------------------------------------------------------------------------
+# Filter Pills — Sports, Bet Types, Period Slices
+# The first entry of each list is the neutral "all" filter; extra values observed
+# in the feed are appended dynamically by the panel.
+# ------------------------------------------------------------------------------
+[[sport_filters]]
+id = "ALL"
+label = "All Sports"
+
+[[sport_filters]]
+id = "NFL"
+label = "🏈 NFL"
+
+[[sport_filters]]
+id = "CFB"
+label = "🎓 CFB"
+
+[[sport_filters]]
+id = "NBA"
+label = "🏀 NBA"
+
+[[sport_filters]]
+id = "NCAAB"
+label = "🏀 NCAAB"
+
+[[sport_filters]]
+id = "SOCCER"
+label = "⚽ Soccer"
+
+[[bet_type_filters]]
+id = "ALL"
+label = "All Bet Types"
+
+[[bet_type_filters]]
+id = "Spread"
+label = "Spread"
+
+[[bet_type_filters]]
+id = "Total"
+label = "Total"
+
+[[bet_type_filters]]
+id = "Moneyline"
+label = "Moneyline"
+
+[[bet_type_filters]]
+id = "Parlay"
+label = "Parlay"
+
+# Period slices are search-term presets; an empty id means "clear the search".
+[[period_filters]]
+id = ""
+label = "All Periods"
+
+[[period_filters]]
+id = "1H"
+label = "⏱️ 1st Half (1H)"
+
+[[period_filters]]
+id = "2H"
+label = "⏱️ 2nd Half (2H)"
+
+[[period_filters]]
+id = "In-Play"
+label = "📡 Live / GSLive"
+
+# ------------------------------------------------------------------------------
+# Tree-Shake Sentinel
+# Defined here, NEVER imported by any module. If this marker ever appears in
+# dist/dashboard/*.js, static TOML tree-shaking regressed and leaked [unused].
+# ------------------------------------------------------------------------------
+[unused]
+dead_marker = "wagers-dead-table-sentinel"

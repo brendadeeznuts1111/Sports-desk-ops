@@ -20,6 +20,10 @@ import {
 } from "./portal_period_taxonomy.ts";
 import { sportCategoryFor } from "./sport_taxonomy.ts";
 import type { BunInspectOptions } from "./cli_inspect.ts";
+import {
+  buildManagerWagersByFigureDatePayload,
+  type ManagerWagersByFigureDatePayload,
+} from "./f402_probe.ts";
 
 export interface FigureDateWager {
   readonly TicketNumber: number | string;
@@ -968,4 +972,777 @@ export function enrichTicketWithBuyPoints(
     },
   };
   return enriched;
+}
+
+// ============================================================================
+// Pre/Post-Bet Line-Movement Window & Slice Customer P&L Leaderboard
+// ============================================================================
+
+export interface WagerLineWindow {
+  readonly ticketNumber: string;
+  readonly customerId: CustomerIdentifier;
+  readonly eventId: string;
+  readonly portalPeriod: PortalPeriodCode | null;
+  readonly marketType: EnrichedWager["marketType"];
+  readonly acceptedDateTime: string;
+  readonly boardLineBefore: number | null;
+  readonly boardLineAtBet: number | null;
+  readonly ticketLineAtBet: number | null;
+  readonly buyPoints: number;
+  readonly boardLineAfter: number | null;
+  readonly closingBoardLine: number | null;
+  readonly priceBefore: AmericanOdds | null;
+  readonly priceAtBet: AmericanOdds | null;
+  readonly priceAfter: AmericanOdds | null;
+  readonly closingPrice: AmericanOdds | null;
+  /** Positive means the board line moved in the bettor's favor on the next distinct line observation. */
+  readonly immediateLineMoveDelta: number | null;
+  /** Positive means the bettor beat the closing (last observed) board line in the market group. */
+  readonly closingLineMoveDelta: number | null;
+  /** True when the wager preceded a favorable board move (>= 0.5 pt) or beat the closing line (>= 0.5 pt). */
+  readonly beatLineMove: boolean;
+  /** Number of wagers observed in the same (eventId, portalPeriod, marketType) market group. */
+  readonly marketObservationCount: number;
+  /** 1-based chronological sequence index within the market group. */
+  readonly sequenceIndex: number;
+}
+
+function rawBoardLineOf(w: EnrichedWager): number | null {
+  return w.selection.origLine ?? w.selection.line ?? null;
+}
+
+function projectBoardLineToTargetFrame(
+  source: EnrichedWager,
+  target: EnrichedWager,
+): number | null {
+  const rawSourceLine = rawBoardLineOf(source);
+  if (rawSourceLine === null) return null;
+  if (target.marketType === "total") {
+    return rawSourceLine;
+  }
+  if (target.marketType === "spread") {
+    const srcTeam = canonicalTeamToken(source.selection.chosenTeam);
+    const tgtTeam = canonicalTeamToken(target.selection.chosenTeam);
+    if (!srcTeam || !tgtTeam || srcTeam === tgtTeam) {
+      return rawSourceLine;
+    }
+    return rawSourceLine === 0 ? 0 : -rawSourceLine;
+  }
+  return rawSourceLine;
+}
+
+function computeLineMoveAdvantage(
+  wager: EnrichedWager,
+  boardLineAtBet: number | null,
+  referenceBoardLine: number | null,
+): number | null {
+  if (boardLineAtBet === null || referenceBoardLine === null) return null;
+  if (wager.marketType === "spread") {
+    // In the bettor's team spread convention (e.g. -3.5 -> -4.5 or +4.5 -> +3.5),
+    // boardLineAtBet - referenceBoardLine > 0 means the market steamed toward the bettor's side.
+    return Number((boardLineAtBet - referenceBoardLine).toFixed(2));
+  }
+  if (wager.marketType === "total") {
+    if (wager.selection.overUnder === "U") {
+      return Number((boardLineAtBet - referenceBoardLine).toFixed(2));
+    }
+    // Over (default): lower total at placement than reference total is positive CLV
+    return Number((referenceBoardLine - boardLineAtBet).toFixed(2));
+  }
+  return null;
+}
+
+/**
+ * Reconstructs the pre-bet, at-bet, post-bet, and closing board-line trajectory for each wager
+ * by grouping wagers on `(eventId, portalPeriod, marketType)` ordered by `acceptedDateTime`.
+ *
+ * Uses `origLine ?? line` as the board line so point-buying (`buyPoints > 0`) is never
+ * misclassified as a market line move.
+ */
+export function computeWagerLineWindows(
+  wagers: readonly EnrichedWager[],
+): Map<string, WagerLineWindow> {
+  const groups = new Map<string, EnrichedWager[]>();
+
+  for (const w of wagers) {
+    if (
+      !w.eventId ||
+      w.eventId === "UNSETTLED" ||
+      w.eventId.endsWith("-UNRESOLVED")
+    ) {
+      continue;
+    }
+    const periodKey = w.portalPeriod ?? w.periodNumber ?? 0;
+    const groupKey = `${w.eventId}|${periodKey}|${w.marketType}`;
+    let bucket = groups.get(groupKey);
+    if (!bucket) {
+      bucket = [];
+      groups.set(groupKey, bucket);
+    }
+    bucket.push(w);
+  }
+
+  const out = new Map<string, WagerLineWindow>();
+
+  for (const bucket of groups.values()) {
+    const ordered = [...bucket].sort((a, b) => {
+      const cmp = a.acceptedDateTime.localeCompare(b.acceptedDateTime);
+      if (cmp !== 0) return cmp;
+      return a.ticketNumber.localeCompare(b.ticketNumber);
+    });
+
+    const count = ordered.length;
+    const lastWager = ordered[count - 1]!;
+
+    for (let i = 0; i < count; i++) {
+      const current = ordered[i]!;
+      const boardLineAtBet = rawBoardLineOf(current);
+      const ticketLineAtBet = current.selection.line;
+
+      let prevWager: EnrichedWager | null = null;
+      for (let p = i - 1; p >= 0; p--) {
+        const cand = ordered[p]!;
+        const projected = projectBoardLineToTargetFrame(cand, current);
+        if (
+          projected !== boardLineAtBet ||
+          cand.selection.price !== current.selection.price
+        ) {
+          prevWager = cand;
+          break;
+        }
+      }
+      if (!prevWager && i > 0) {
+        prevWager = ordered[i - 1]!;
+      }
+
+      let nextWager: EnrichedWager | null = null;
+      for (let n = i + 1; n < count; n++) {
+        const cand = ordered[n]!;
+        const projected = projectBoardLineToTargetFrame(cand, current);
+        if (
+          projected !== boardLineAtBet ||
+          cand.selection.price !== current.selection.price
+        ) {
+          nextWager = cand;
+          break;
+        }
+      }
+      if (!nextWager && i + 1 < count) {
+        nextWager = ordered[i + 1]!;
+      }
+
+      const boardLineBefore = prevWager
+        ? projectBoardLineToTargetFrame(prevWager, current)
+        : null;
+      const boardLineAfter = nextWager
+        ? projectBoardLineToTargetFrame(nextWager, current)
+        : null;
+      const closingBoardLine = projectBoardLineToTargetFrame(
+        lastWager,
+        current,
+      );
+
+      const immediateLineMoveDelta = computeLineMoveAdvantage(
+        current,
+        boardLineAtBet,
+        boardLineAfter,
+      );
+      const closingLineMoveDelta = computeLineMoveAdvantage(
+        current,
+        boardLineAtBet,
+        closingBoardLine,
+      );
+
+      const beatLineMove =
+        (immediateLineMoveDelta !== null && immediateLineMoveDelta >= 0.5) ||
+        (closingLineMoveDelta !== null && closingLineMoveDelta >= 0.5);
+
+      out.set(current.ticketNumber, {
+        ticketNumber: current.ticketNumber,
+        customerId: current.customerId,
+        eventId: current.eventId,
+        portalPeriod: current.portalPeriod,
+        marketType: current.marketType,
+        acceptedDateTime: current.acceptedDateTime,
+        boardLineBefore,
+        boardLineAtBet,
+        ticketLineAtBet,
+        buyPoints: current.buyPoints,
+        boardLineAfter,
+        closingBoardLine,
+        priceBefore: prevWager ? prevWager.selection.price : null,
+        priceAtBet: current.selection.price,
+        priceAfter: nextWager ? nextWager.selection.price : null,
+        closingPrice: lastWager.selection.price,
+        immediateLineMoveDelta,
+        closingLineMoveDelta,
+        beatLineMove,
+        marketObservationCount: count,
+        sequenceIndex: i + 1,
+      });
+    }
+  }
+
+  return out;
+}
+
+export type WagerPeriodSliceToken =
+  | PortalPeriodCode
+  | "FG"
+  | "GAME"
+  | "1H"
+  | "H1"
+  | "2H"
+  | "H2"
+  | "1Q"
+  | "Q1"
+  | "2Q"
+  | "Q2"
+  | "3Q"
+  | "Q3"
+  | "4Q"
+  | "Q4";
+
+export interface WagerSliceFilter {
+  readonly sport?: string;
+  readonly subSport?: string;
+  readonly portalPeriod?: WagerPeriodSliceToken;
+  readonly isLive?: boolean;
+  readonly gsLiveOnly?: boolean;
+  readonly marketType?: EnrichedWager["marketType"];
+  readonly customerId?: string;
+  readonly agentLogin?: string;
+}
+
+function resolvePeriodTokenToCode(
+  token: WagerPeriodSliceToken,
+): PortalPeriodCode | null {
+  if (typeof token === "number") return token;
+  const up = token.trim().toUpperCase();
+  if (up === "FG" || up === "GAME") return 0;
+  if (up === "1H" || up === "H1") return 1;
+  if (up === "2H" || up === "H2") return 2;
+  if (up === "1Q" || up === "Q1") return 3;
+  if (up === "2Q" || up === "Q2") return 4;
+  if (up === "3Q" || up === "Q3") return 5;
+  if (up === "4Q" || up === "Q4") return 6;
+  return null;
+}
+
+export function isGsLiveTicketWriter(writer: string): boolean {
+  return /EZL|LIVEBETTINGCWS|GSLIVE/i.test(writer);
+}
+
+/**
+ * Evaluates whether an EnrichedWager matches a slice filter (e.g. College Basketball 1st Halves
+ * `{ subSport: "NCAAB", portalPeriod: "1H" }` or Live NCAA Basketball `{ subSport: "NCAAB", isLive: true }`).
+ */
+export function matchesWagerSlice(
+  wager: EnrichedWager,
+  filter: WagerSliceFilter = {},
+): boolean {
+  if (filter.sport !== undefined && filter.sport.trim() !== "") {
+    if (wager.sport.toUpperCase() !== filter.sport.trim().toUpperCase()) {
+      return false;
+    }
+  }
+  if (filter.subSport !== undefined && filter.subSport.trim() !== "") {
+    const targetSub = filter.subSport.trim().toUpperCase();
+    const wagerSub = wager.subSport.toUpperCase();
+    const isCollegeBasketballAlias =
+      (targetSub === "NCAAB" || targetSub === "CBB") &&
+      (wagerSub.includes("NCAAB") ||
+        wagerSub.includes("COLLEGE") ||
+        wagerSub.includes("NCAA"));
+    if (!wagerSub.includes(targetSub) && !isCollegeBasketballAlias) {
+      return false;
+    }
+  }
+  if (filter.portalPeriod !== undefined) {
+    const targetCode = resolvePeriodTokenToCode(filter.portalPeriod);
+    const wagerCode = wager.portalPeriod ?? wager.periodNumber;
+    if (targetCode !== null && wagerCode !== targetCode) {
+      return false;
+    }
+  }
+  if (filter.isLive !== undefined && wager.isLive !== filter.isLive) {
+    return false;
+  }
+  if (filter.gsLiveOnly === true) {
+    if (!wager.isLive && !isGsLiveTicketWriter(wager.ticketWriter)) {
+      return false;
+    }
+  }
+  if (
+    filter.marketType !== undefined &&
+    wager.marketType !== filter.marketType
+  ) {
+    return false;
+  }
+  if (filter.customerId !== undefined && filter.customerId.trim() !== "") {
+    if (
+      wager.customerId.toUpperCase() !== filter.customerId.trim().toUpperCase()
+    ) {
+      return false;
+    }
+  }
+  if (filter.agentLogin !== undefined && filter.agentLogin.trim() !== "") {
+    if (
+      wager.agentLogin.toUpperCase() !== filter.agentLogin.trim().toUpperCase()
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export interface CustomerSliceSummary {
+  readonly rank: number;
+  readonly customerId: CustomerIdentifier;
+  readonly agentLogin: AgentIdentifier;
+  readonly wagerCount: number;
+  readonly settledCount: number;
+  readonly wins: number;
+  readonly losses: number;
+  readonly pushes: number;
+  readonly winRatePct: number;
+  readonly totalRiskCents: Cents;
+  /** Positive when the customer is beating the house (amountWonCents - amountLostCents > 0). */
+  readonly customerNetPnlCents: Cents;
+  /** Book hold percentage (-customerNetPnlCents / totalRiskCents * 100); negative means the customer is beating the book. */
+  readonly bookHoldPct: number;
+  /** Customer ROI percentage (+customerNetPnlCents / totalRiskCents * 100). */
+  readonly roiPct: number;
+  readonly lateSteamCount: number;
+  readonly pointBuyCount: number;
+  readonly beatLineMoveCount: number;
+  readonly avgClosingLineDelta: number | null;
+}
+
+/**
+ * Filters enriched wagers by slice (e.g. NCAAB 1st Halves or Live GSLive NCAAB), reconstructs
+ * pre/post-bet line windows across the corpus, and ranks customers by net P&L (who is beating the desk).
+ */
+export function rankCustomersBySlice(
+  wagers: readonly EnrichedWager[],
+  filter: WagerSliceFilter = {},
+): CustomerSliceSummary[] {
+  const lineWindows = computeWagerLineWindows(wagers);
+  const matching = wagers.filter((w) => matchesWagerSlice(w, filter));
+
+  interface MutableCustomerBucket {
+    customerId: CustomerIdentifier;
+    agentLogin: AgentIdentifier;
+    wagerCount: number;
+    settledCount: number;
+    wins: number;
+    losses: number;
+    pushes: number;
+    totalRiskCents: number;
+    customerNetPnlCents: number;
+    lateSteamCount: number;
+    pointBuyCount: number;
+    beatLineMoveCount: number;
+    closingDeltaSum: number;
+    closingDeltaCount: number;
+  }
+
+  const byCustomer = new Map<string, MutableCustomerBucket>();
+
+  for (const w of matching) {
+    let bucket = byCustomer.get(w.customerId);
+    if (!bucket) {
+      bucket = {
+        customerId: w.customerId,
+        agentLogin: w.agentLogin,
+        wagerCount: 0,
+        settledCount: 0,
+        wins: 0,
+        losses: 0,
+        pushes: 0,
+        totalRiskCents: 0,
+        customerNetPnlCents: 0,
+        lateSteamCount: 0,
+        pointBuyCount: 0,
+        beatLineMoveCount: 0,
+        closingDeltaSum: 0,
+        closingDeltaCount: 0,
+      };
+      byCustomer.set(w.customerId, bucket);
+    }
+
+    bucket.wagerCount++;
+    bucket.totalRiskCents += Number(w.settlement.amountWageredCents);
+    bucket.customerNetPnlCents += Number(w.settlement.netPnlCents);
+    if (w.isLateSteam) bucket.lateSteamCount++;
+    if (w.buyPoints > 0) bucket.pointBuyCount++;
+
+    if (w.settlement.isSettled) {
+      bucket.settledCount++;
+      const out = w.settlement.outcome.toUpperCase();
+      if (out === "W" || out === "WIN") {
+        bucket.wins++;
+      } else if (out === "L" || out === "LOSS") {
+        bucket.losses++;
+      } else {
+        bucket.pushes++;
+      }
+    }
+
+    const win = lineWindows.get(w.ticketNumber);
+    if (win) {
+      if (win.beatLineMove) bucket.beatLineMoveCount++;
+      if (win.closingLineMoveDelta !== null) {
+        bucket.closingDeltaSum += win.closingLineMoveDelta;
+        bucket.closingDeltaCount++;
+      }
+    }
+  }
+
+  const sorted = [...byCustomer.values()].sort((a, b) => {
+    if (b.customerNetPnlCents !== a.customerNetPnlCents) {
+      return b.customerNetPnlCents - a.customerNetPnlCents;
+    }
+    if (b.totalRiskCents !== a.totalRiskCents) {
+      return b.totalRiskCents - a.totalRiskCents;
+    }
+    return a.customerId.localeCompare(b.customerId);
+  });
+
+  return sorted.map((b, idx) => {
+    const gradedDecisions = b.wins + b.losses;
+    const winRatePct =
+      gradedDecisions > 0
+        ? Number(((b.wins / gradedDecisions) * 100).toFixed(2))
+        : 0;
+    const roiPct =
+      b.totalRiskCents > 0
+        ? Number(((b.customerNetPnlCents / b.totalRiskCents) * 100).toFixed(2))
+        : 0;
+    const bookHoldPct =
+      b.totalRiskCents > 0
+        ? Number(((-b.customerNetPnlCents / b.totalRiskCents) * 100).toFixed(2))
+        : 0;
+    const avgClosingLineDelta =
+      b.closingDeltaCount > 0
+        ? Number((b.closingDeltaSum / b.closingDeltaCount).toFixed(2))
+        : null;
+
+    return {
+      rank: idx + 1,
+      customerId: b.customerId,
+      agentLogin: b.agentLogin,
+      wagerCount: b.wagerCount,
+      settledCount: b.settledCount,
+      wins: b.wins,
+      losses: b.losses,
+      pushes: b.pushes,
+      winRatePct,
+      totalRiskCents: parseAsCents(b.totalRiskCents, true),
+      customerNetPnlCents: parseAsCents(b.customerNetPnlCents, true),
+      bookHoldPct,
+      roiPct,
+      lateSteamCount: b.lateSteamCount,
+      pointBuyCount: b.pointBuyCount,
+      beatLineMoveCount: b.beatLineMoveCount,
+      avgClosingLineDelta,
+    };
+  });
+}
+
+// ============================================================================
+// Manager `getPerformancePlayer` Daily P&L Series -> `figureDate` Drill-Down
+// ============================================================================
+
+export interface RawPerformancePlayerRow {
+  readonly Date: string;
+  readonly Won: number;
+  readonly Lost: number;
+  readonly [key: string]: unknown;
+}
+
+export interface ParsedPerformancePlayerDay {
+  /** Raw portal label, e.g. `"11/12/2026 Thursday"`. */
+  readonly rawDateLabel: string;
+  /** Canonical `YYYY-MM-DD` figureDate for `/cloud/api/Report/getWagersByFigureDate`, e.g. `"2026-11-12"`. */
+  readonly figureDate: string;
+  /** Day-of-week label extracted from `Date`, e.g. `"Thursday"`. */
+  readonly dayOfWeek: string;
+  readonly wonCents: Cents;
+  readonly lostCents: Cents;
+  /** Customer net P&L in cents (`wonCents - lostCents`); positive means customer beat the house. */
+  readonly customerNetCents: Cents;
+  readonly wonUsd: number;
+  readonly lostUsd: number;
+  readonly customerNetUsd: number;
+  readonly isActive: boolean;
+}
+
+export interface PerformancePlayerSummary {
+  readonly totalDays: number;
+  readonly activeDays: number;
+  readonly winningDays: number;
+  readonly losingDays: number;
+  readonly breakEvenActiveDays: number;
+  readonly dailyWinRatePct: number;
+  readonly totalWonCents: Cents;
+  readonly totalLostCents: Cents;
+  readonly customerNetCents: Cents;
+  readonly totalWonUsd: number;
+  readonly totalLostUsd: number;
+  readonly customerNetUsd: number;
+  /** Active `YYYY-MM-DD` figureDates (newest first) ready for `getWagersByFigureDate` drill-down. */
+  readonly activeFigureDates: readonly string[];
+  readonly days: readonly ParsedPerformancePlayerDay[];
+}
+
+/**
+ * Converts a `getPerformancePlayer` `Date` field (`"11/12/2026 Thursday"` or `"2026-11-12"`)
+ * into `{ figureDate: "YYYY-MM-DD", dayOfWeek }`.
+ */
+export function parsePerformancePlayerDateLabel(rawDate: string): {
+  readonly figureDate: string;
+  readonly dayOfWeek: string;
+} {
+  const trimmed = rawDate.trim();
+  const [dateToken = "", ...rest] = trimmed.split(/\s+/);
+  const dayOfWeek = rest.join(" ").trim();
+  const mdyMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dateToken);
+  if (mdyMatch) {
+    const mm = mdyMatch[1]!.padStart(2, "0");
+    const dd = mdyMatch[2]!.padStart(2, "0");
+    const yyyy = mdyMatch[3]!;
+    return { figureDate: `${yyyy}-${mm}-${dd}`, dayOfWeek };
+  }
+  const isoMatch = /^(\d{4}-\d{2}-\d{2})/.exec(dateToken);
+  if (isoMatch) {
+    return { figureDate: isoMatch[1]!, dayOfWeek };
+  }
+  return { figureDate: dateToken, dayOfWeek };
+}
+
+/**
+ * Summarizes the 31-day `/cloud/api/Manager/getPerformancePlayer` response array
+ * (`[{ Date: "11/12/2026 Thursday", Won: 1500000, Lost: 1150000 }, ...]`) and extracts
+ * active `figureDate` keys for `/cloud/api/Report/getWagersByFigureDate` ticket drill-down.
+ */
+export function summarizePerformancePlayer(
+  rows: readonly RawPerformancePlayerRow[],
+): PerformancePlayerSummary {
+  const days: ParsedPerformancePlayerDay[] = [];
+  let activeDays = 0;
+  let winningDays = 0;
+  let losingDays = 0;
+  let breakEvenActiveDays = 0;
+  let totalWonCents = 0;
+  let totalLostCents = 0;
+  const activeFigureDates: string[] = [];
+
+  for (const row of rows) {
+    const rawDateLabel = String(row.Date ?? "").trim();
+    const { figureDate, dayOfWeek } =
+      parsePerformancePlayerDateLabel(rawDateLabel);
+    const won = Math.round(Number(row.Won ?? 0));
+    const lost = Math.round(Number(row.Lost ?? 0));
+    const net = won - lost;
+    const isActive = won !== 0 || lost !== 0;
+
+    totalWonCents += won;
+    totalLostCents += lost;
+
+    if (isActive) {
+      activeDays++;
+      if (figureDate) activeFigureDates.push(figureDate);
+      if (net > 0) winningDays++;
+      else if (net < 0) losingDays++;
+      else breakEvenActiveDays++;
+    }
+
+    days.push({
+      rawDateLabel,
+      figureDate,
+      dayOfWeek,
+      wonCents: parseAsCents(won, true),
+      lostCents: parseAsCents(lost, true),
+      customerNetCents: parseAsCents(net, true),
+      wonUsd: Number((won / 100).toFixed(2)),
+      lostUsd: Number((lost / 100).toFixed(2)),
+      customerNetUsd: Number((net / 100).toFixed(2)),
+      isActive,
+    });
+  }
+
+  const customerNetCents = totalWonCents - totalLostCents;
+  const decidedDays = winningDays + losingDays;
+  const dailyWinRatePct =
+    decidedDays > 0
+      ? Number(((winningDays / decidedDays) * 100).toFixed(2))
+      : 0;
+
+  return {
+    totalDays: days.length,
+    activeDays,
+    winningDays,
+    losingDays,
+    breakEvenActiveDays,
+    dailyWinRatePct,
+    totalWonCents: parseAsCents(totalWonCents, true),
+    totalLostCents: parseAsCents(totalLostCents, true),
+    customerNetCents: parseAsCents(customerNetCents, true),
+    totalWonUsd: Number((totalWonCents / 100).toFixed(2)),
+    totalLostUsd: Number((totalLostCents / 100).toFixed(2)),
+    customerNetUsd: Number((customerNetCents / 100).toFixed(2)),
+    activeFigureDates,
+    days,
+  };
+}
+
+export interface ActiveFigureDateDrilldownInput {
+  readonly agentID: string;
+  readonly agentOwner?: string;
+  readonly customerID: string;
+  /** Portal query anchor date (`YYYY-MM-DD`, e.g. `"2026-11-13"`). Defaults to the newest row's `figureDate`. */
+  readonly date?: string;
+  readonly graded?: number;
+  readonly sort?: number;
+  readonly typeSort?: number;
+  readonly week?: number;
+  readonly RRO?: number;
+}
+
+/**
+ * Given a 31-day `/cloud/api/Manager/getPerformancePlayer` array, emits the ordered
+ * `/cloud/api/Report/getWagersByFigureDate` JSON request payloads (`ManagerWagersByFigureDatePayload[]`)
+ * for every active `figureDate` (`Won > 0 || Lost > 0`), skipping zero-activity days.
+ */
+export function buildActiveFigureDateDrilldownPayloads(
+  rows: readonly RawPerformancePlayerRow[],
+  input: ActiveFigureDateDrilldownInput,
+): readonly ManagerWagersByFigureDatePayload[] {
+  const summary = summarizePerformancePlayer(rows);
+  const defaultAnchorDate =
+    input.date ??
+    summary.days[0]?.figureDate ??
+    summary.activeFigureDates[0] ??
+    "1970-01-01";
+  return summary.activeFigureDates.map((figureDate) =>
+    buildManagerWagersByFigureDatePayload({
+      agentID: input.agentID,
+      agentOwner: input.agentOwner ?? input.agentID,
+      customerID: input.customerID,
+      date: defaultAnchorDate,
+      figureDate,
+      graded: input.graded ?? 0,
+      sort: input.sort ?? 1,
+      typeSort: input.typeSort ?? 2,
+      week: input.week ?? 0,
+      RRO: input.RRO ?? 1,
+    }),
+  );
+}
+
+export interface PerformanceCarryOverReconciliation {
+  /** Target carryover in cents from `getInfoPlayer` (`INFO.data.CarryOverAmount`). */
+  readonly targetCarryOverCents: Cents;
+  readonly targetCarryOverUsd: number;
+  /** True when `previousBalanceUsd` is omitted or `CarryOverAmount === Math.round(previousBalanceUsd * 100)`. */
+  readonly previousBalanceParityMatched: boolean;
+  /** `CarryOverAmount - Math.round(previousBalanceUsd * 100)` in cents (`0` when matched, `null` when `previousBalanceUsd` omitted). */
+  readonly previousBalanceParityDeltaCents: number | null;
+  /** True when a contiguous prefix from the oldest active figureDate sums to `targetCarryOverCents`. */
+  readonly prefixSumMatched: boolean;
+  /** True when BOTH `previousBalanceParityMatched` AND `prefixSumMatched` hold. */
+  readonly matched: boolean;
+  /** Oldest active figureDate in the carryover window (e.g. `"2026-11-01"`), or `null` if unmatched. */
+  readonly windowStartFigureDate: string | null;
+  /** Last active figureDate in the carryover window (e.g. `"2026-11-09"`), or `null` if unmatched. */
+  readonly windowEndFigureDate: string | null;
+  /** Active figureDates included in the carryover window (chronological order). */
+  readonly carryOverFigureDates: readonly string[];
+  /** Active figureDates after the carryover cutoff (e.g. current figure week `["2026-11-10", "2026-11-12"]`). */
+  readonly postCarryOverFigureDates: readonly string[];
+  /** Customer net P&L in cents accumulated after the carryover cutoff (`customerNetCents - targetCarryOverCents`). */
+  readonly postCarryOverNetCents: Cents;
+  readonly postCarryOverNetUsd: number;
+}
+
+/**
+ * Reconciles a customer's `/cloud/api/Manager/getPerformancePlayer` daily P&L series against
+ * `getInfoPlayer` `CarryOverAmount` (cents) and optional `thisWeek.PreviousBalance` (whole USD).
+ *
+ * Scans active days in chronological order (oldest -> newest) to locate the cutoff date where
+ * cumulative customer net P&L equals `CarryOverAmount`, and verifies `CarryOverAmount === PreviousBalance * 100`
+ * when `previousBalanceUsd` is provided.
+ */
+export function reconcilePerformanceWithCarryOver(
+  rows: readonly RawPerformancePlayerRow[],
+  carryOverAmountCents: number,
+  previousBalanceUsd?: number | null,
+): PerformanceCarryOverReconciliation {
+  const summary = summarizePerformancePlayer(rows);
+  const targetCents = Math.round(carryOverAmountCents);
+  const previousBalanceParityDeltaCents =
+    typeof previousBalanceUsd === "number" &&
+    Number.isFinite(previousBalanceUsd)
+      ? targetCents - Math.round(previousBalanceUsd * 100)
+      : null;
+  // Vacuously true when `previousBalanceUsd` is omitted (`undefined` / `null`): caller opted into prefix-sum check only.
+  // Pass `previousBalanceUsd` explicitly to enforce the dual invariant (`CarryOverAmount === PreviousBalance * 100` AND prefix sum).
+  const previousBalanceParityMatched =
+    previousBalanceParityDeltaCents === null ||
+    previousBalanceParityDeltaCents === 0;
+  const activeChronological = [...summary.days]
+    .filter((d) => d.isActive)
+    .sort((a, b) => a.figureDate.localeCompare(b.figureDate));
+
+  let runningNetCents = 0;
+  let matchIndex = -1;
+  for (let i = 0; i < activeChronological.length; i++) {
+    runningNetCents += activeChronological[i]!.customerNetCents;
+    if (runningNetCents === targetCents) {
+      matchIndex = i;
+      break;
+    }
+  }
+
+  if (matchIndex === -1) {
+    const postNet = summary.customerNetCents - targetCents;
+    return {
+      targetCarryOverCents: parseAsCents(targetCents, true),
+      targetCarryOverUsd: Number((targetCents / 100).toFixed(2)),
+      previousBalanceParityMatched,
+      previousBalanceParityDeltaCents,
+      prefixSumMatched: false,
+      matched: false,
+      windowStartFigureDate: null,
+      windowEndFigureDate: null,
+      carryOverFigureDates: [],
+      postCarryOverFigureDates: activeChronological.map((d) => d.figureDate),
+      postCarryOverNetCents: parseAsCents(postNet, true),
+      postCarryOverNetUsd: Number((postNet / 100).toFixed(2)),
+    };
+  }
+
+  const carryOverDays = activeChronological.slice(0, matchIndex + 1);
+  const postDays = activeChronological.slice(matchIndex + 1);
+  let postNetCents = 0;
+  for (const d of postDays) {
+    postNetCents += d.customerNetCents;
+  }
+
+  return {
+    targetCarryOverCents: parseAsCents(targetCents, true),
+    targetCarryOverUsd: Number((targetCents / 100).toFixed(2)),
+    previousBalanceParityMatched,
+    previousBalanceParityDeltaCents,
+    prefixSumMatched: true,
+    matched: previousBalanceParityMatched,
+    windowStartFigureDate: carryOverDays[0]?.figureDate ?? null,
+    windowEndFigureDate:
+      carryOverDays[carryOverDays.length - 1]?.figureDate ?? null,
+    carryOverFigureDates: carryOverDays.map((d) => d.figureDate),
+    postCarryOverFigureDates: postDays.map((d) => d.figureDate),
+    postCarryOverNetCents: parseAsCents(postNetCents, true),
+    postCarryOverNetUsd: Number((postNetCents / 100).toFixed(2)),
+  };
 }
