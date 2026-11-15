@@ -356,7 +356,7 @@ If a private registry is ever needed, configure it **outside** the repo. Bun rec
 # machine-level bunfig (~/.bunfig.toml); repo files stay registry-free
 [install]
 registry = { url = "https://registry.myorg.com/", token = "$npm_token" }  # global default
-# registry = "https://username:password@registry.myorg.com/"              # userinfo form
+# registry = "https://<username>:<password>@registry.myorg.com/"          # userinfo form
 # registry = "https://registry.npmjs.org"                                 # bare url
 
 [install.scopes]

@@ -117,6 +117,8 @@ jobs:
           if [ "$rc" -ne 0 ]; then echo "::error::bun fmt failed (exit $rc)"; exit "$rc"; fi
       - name: Install dependencies
         run: bun install --frozen-lockfile --no-env-file
+      - name: Build workspace contracts dist
+        run: bun run --filter '@sportsdesk-ops/contracts' build
       # Baseline green on 2026-11-14: 0 vulnerabilities (180 packages) after
       # `bun audit fix` bumped @hono/node-server to 2.1.6 and overrides carried
       # got to 11.8.5 and ws to 5.2.5 (both were pinned by @ganchrowsci/gs-sdk's
@@ -198,6 +200,8 @@ jobs:
       - name: Install dependencies
         timeout-minutes: 5
         run: bun install --frozen-lockfile --no-env-file
+      - name: Build workspace contracts dist
+        run: bun run --filter '@sportsdesk-ops/contracts' build
       - name: "Pinned CDN asset drift (live origins; scheduled/unattended runs)"
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         timeout-minutes: 4
