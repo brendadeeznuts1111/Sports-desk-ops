@@ -236,6 +236,26 @@ flags).
   files (137 of them `zod-not-guard-calls`). Reintroducing it means restoring the copy, the
   baseline and a decision about that debt, not just re-adding a step.
 
+### PR bodies, commit messages, and closing keywords
+
+GitHub's auto-close parser reads closing keywords **literally — inside backticks, inside fenced
+code, in commit messages, and with the negation ignored**. The keywords are `close`, `closes`,
+`closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves`, `resolved`, each followed by an issue
+reference (`#248`, `GH-248`, or the issue URL).
+
+So a sentence _explaining that you are not closing an issue_ closes it. That happened twice on
+2026-11-15, both times writing `deliberately not Fixes #248` — the second time after the first had
+already been noticed. The second one is a documentation failure, not a parser surprise.
+
+- **Safe:** mention the number alone — `#248` with no keyword anywhere near it.
+- **Unsafe:** any closing keyword followed by a `#N` reference, however it is quoted or formatted.
+  Backticks do not protect it; a code fence does not protect it.
+- If you must discuss the mechanism, describe it without putting the keyword next to a reference:
+  "the closing keyword", "auto-close", "a `Fixes`-style reference".
+- To close deliberately, write it once on its own line: `Closes #248`.
+- **Check issue state after merging.** A premature close is silent, and reopening loses the
+  ordering a reader would expect from the thread.
+
 ### Data-handling budgets
 
 - Live captures `data/live-bets.json` and `data/live-wagers.json` stay **untracked**; `positions:cron`
