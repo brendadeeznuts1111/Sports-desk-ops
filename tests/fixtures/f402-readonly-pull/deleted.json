@@ -1,0 +1,13 @@
+{
+  "LIST": [
+    {
+      "DocumentNumber": 11,
+      "CustomerID": "CUST1",
+      "TranDateTime": "2026-11-02 09:00:00",
+      "TranCode": "C",
+      "Amount": 2500,
+      "Description": "Deleted deposit",
+      "LastUpdateLoginID": "ROOT1"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "LIST": [
+    {
+      "AgentId": "ROOT1",
+      "MasterAgentID": "",
+      "Level": 0,
+      "AgentType": "M",
+      "Login": "ROOT1",
+      "Password": "should-not-survive"
+    },
+    {
+      "AgentId": "SUB1",
+      "MasterAgentID": "ROOT1",
+      "Level": 1,
+      "AgentType": "A",
+      "Login": "SUB1"
+    },
+    {
+      "AgentId": "ORPHAN1",
+      "MasterAgentID": "MISSING",
+      "Level": 2,
+      "AgentType": "A",
+      "Login": "ORPHAN1"
+    }
+  ]
+}

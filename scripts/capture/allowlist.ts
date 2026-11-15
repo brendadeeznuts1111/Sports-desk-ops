@@ -6,6 +6,11 @@
  * real agent: an off-allowlist call could move money or delete a wager.
  */
 
+/**
+ * Ops the evidence-capture CLI may exercise with `--ops all`.
+ * Kept as the original eight so `capture:f402 --ops all` does not start a
+ * book-wide pull.
+ */
 export const READ_ONLY_OPS = [
   "getWebLog",
   "getInfoPlayer",
@@ -18,6 +23,26 @@ export const READ_ONLY_OPS = [
 ] as const;
 
 export type ReadOnlyOp = (typeof READ_ONLY_OPS)[number];
+
+/**
+ * Read-only Manager ops used by the Fantasy402 bulk puller.
+ * `getWebLog` is in both lists; the rest are puller-only.
+ * Writes and unknown operations must never be added here.
+ */
+export const PULL_READ_ONLY_OPS = [
+  "getHeriarchy",
+  "getListAgenstByAgent",
+  "getPlayers",
+  "getCustomerAdmin",
+  "getTransactionList",
+  "getDeletedTransactionHistory",
+  "getWebLog",
+] as const;
+
+export type PullReadOnlyOp = (typeof PULL_READ_ONLY_OPS)[number];
+
+/** Capture CLI ops plus puller ops. The only Manager operations a read-only tool may send. */
+export type AllowedReadOp = ReadOnlyOp | PullReadOnlyOp;
 
 /**
  * Operations the spec declares (or the wire implies) that change state. Kept
@@ -33,6 +58,17 @@ export const MUTATION_OPS = [
   "updateCustomerNotes",
   "delete-wager",
   "gameAdmin",
+  "insertTransaction",
+  "deleteTransaction",
+  "changeCarry",
+  "write",
+  "writeDetail",
+  "writeErr",
+  "renewToken",
+  "PendingDelete",
+  "updateWager",
+  "createdAgent",
+  "createdCustomerByLogin",
 ] as const;
 
 export type MutationOp = (typeof MUTATION_OPS)[number];
@@ -63,8 +99,15 @@ function describeRefusal(code: AllowlistErrorCode, operation: string): string {
 }
 
 const READ_ONLY_SET: ReadonlySet<string> = new Set(READ_ONLY_OPS);
+const PULL_READ_ONLY_SET: ReadonlySet<string> = new Set(PULL_READ_ONLY_OPS);
 const MUTATION_SET: ReadonlySet<string> = new Set(MUTATION_OPS);
-const ALL_KNOWN_OPS: readonly string[] = [...READ_ONLY_OPS, ...MUTATION_OPS];
+const ALL_KNOWN_OPS: readonly string[] = [
+  ...new Set<string>([
+    ...READ_ONLY_OPS,
+    ...PULL_READ_ONLY_OPS,
+    ...MUTATION_OPS,
+  ]),
+];
 
 /**
  * Normalize a CLI token, spec path or operationId to a bare operation name.
@@ -87,9 +130,20 @@ export function normalizeOperationName(value: string): string {
   return trimmed;
 }
 
-/** True when the token names an allowlisted read-only operation. */
+/** True when the token names a capture-CLI allowlisted read-only operation. */
 export function isReadOnlyOp(name: string): name is ReadOnlyOp {
   return READ_ONLY_SET.has(normalizeOperationName(name));
+}
+
+/** True when the token names a puller allowlisted read-only operation. */
+export function isPullReadOnlyOp(name: string): name is PullReadOnlyOp {
+  return PULL_READ_ONLY_SET.has(normalizeOperationName(name));
+}
+
+/** True when the token names any allowlisted read (capture CLI or puller). */
+export function isAllowedReadOp(name: string): name is AllowedReadOp {
+  const normalized = normalizeOperationName(name);
+  return READ_ONLY_SET.has(normalized) || PULL_READ_ONLY_SET.has(normalized);
 }
 
 /** True when the token names an operation that mutates state. */
@@ -101,14 +155,44 @@ export function isMutationOp(name: string): boolean {
  * Assert that `pathOrName` may be captured. Throws `AllowlistError` otherwise —
  * callers map that to exit code 2, never a silent skip.
  */
-export function assertReadOnly(pathOrName: string): ReadOnlyOp {
-  const name = normalizeOperationName(pathOrName);
-  if (isReadOnlyOp(name)) return name;
+function refuseIfBlocked(name: string): never {
   if (MUTATION_SET.has(name)) throw new AllowlistError("mutation", name);
-  if (name === "authenticateCustomer" || name === "verifySession") {
+  if (
+    name === "authenticateCustomer" ||
+    name === "authenticateCustomerforAgent" ||
+    name === "OTPLoginWithCode" ||
+    name === "verifySession"
+  ) {
     throw new AllowlistError("auth-exchange", name);
   }
   throw new AllowlistError("unknown-op", name);
+}
+
+/**
+ * Assert that `pathOrName` may be captured by the evidence-capture CLI
+ * (`READ_ONLY_OPS` only). Throws `AllowlistError` otherwise.
+ */
+export function assertReadOnly(pathOrName: string): ReadOnlyOp {
+  const name = normalizeOperationName(pathOrName);
+  if (isReadOnlyOp(name)) return name;
+  refuseIfBlocked(name);
+}
+
+/**
+ * Assert that `pathOrName` may be sent by any read-only tool (capture CLI or
+ * the Fantasy402 puller). Writes, auth exchanges, and unknown ops are refused.
+ */
+export function assertAllowedRead(pathOrName: string): AllowedReadOp {
+  const name = normalizeOperationName(pathOrName);
+  if (isAllowedReadOp(name)) return name;
+  refuseIfBlocked(name);
+}
+
+/** Assert that `pathOrName` is one of the puller's seven read operations. */
+export function assertPullReadOnly(pathOrName: string): PullReadOnlyOp {
+  const name = normalizeOperationName(pathOrName);
+  if (isPullReadOnlyOp(name)) return name;
+  refuseIfBlocked(name);
 }
 
 /**

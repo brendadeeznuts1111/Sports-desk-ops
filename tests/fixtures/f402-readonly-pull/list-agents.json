@@ -1,0 +1,34 @@
+{
+  "GENERAL": [
+    {
+      "AgentID": "ROOT1",
+      "Login": "ROOT1",
+      "SeqNumber": 1,
+      "Level": 0,
+      "AgentType": "M"
+    },
+    {
+      "AgentID": "SUB1",
+      "Login": "SUB1",
+      "SeqNumber": 2,
+      "Level": 1,
+      "AgentType": "A"
+    }
+  ],
+  "PLAYERS": [
+    {
+      "customerID": "CUST1",
+      "Login": "cust1",
+      "NameFirst": "A",
+      "Agent": "SUB1",
+      "Password": "plaintext-password"
+    },
+    {
+      "customerID": "CUST2",
+      "Login": "cust2",
+      "NameFirst": "B",
+      "Agent": "SUB1",
+      "Password": "another-secret"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "LIST": [
+    {
+      "DocumentNumber": 10,
+      "TranCode": "D",
+      "TranType": "A",
+      "Amount": 5000,
+      "Balance": 95000,
+      "Description": "Placed wager",
+      "TranDateTime": "2026-11-01 12:00:00",
+      "EnteredBy": "system",
+      "GradeNum": 7,
+      "Password": "nope"
+    }
+  ],
+  "SL": "OK"
+}

@@ -1,0 +1,11 @@
+{
+  "LIST": [
+    {
+      "AccessDateTime": "2026-11-01T15:04:05",
+      "IPAddress": "203.0.113.50",
+      "LoginID": "CUST1",
+      "Operation": "API LOG | Ticket: 99",
+      "Data": "wager accepted by: CUST1"
+    }
+  ]
+}
