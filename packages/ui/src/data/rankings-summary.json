@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "sourceArtifact": "f402-customer-decision-rankings.json",
+  "sourceSha256": "2a8168c3c8849fdcac607965002f96079e576084db5343ebd005a12520c9ed42",
+  "population": {
+    "rule": "graded wager rows are restricted to CustomerIDs present in the summary book (agentID=BILLY666, 610 offices, captured 2026-10-31..2026-11-14); rows from outside that downline are excluded from every count, baseline and z-score in this artifact",
+    "summaryCustomerCount": 6228,
+    "gradedRowsBefore": 70869,
+    "gradedRowsAfter": 57633,
+    "droppedRows": 13236,
+    "droppedCustomers": 2181
+  }
+}
