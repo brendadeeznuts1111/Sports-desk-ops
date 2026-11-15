@@ -106,7 +106,7 @@ Observed: the 2026-10-28 Manager HAR session is cookie-based and sent no Authori
 
 Static daemon admin token: Authorization: Bearer &lt;SPORTSDESK_ADMIN_TOKEN>, compared with crypto.timingSafeEqual (services/sportsdesk_webview_server.ts, adminRejection). The daemon answers 503 when SPORTSDESK_ADMIN_TOKEN is unset and 401 otherwise.
 
-Implementation-verified: the local daemon compares `Authorization: Bearer <token>` against `SPORTSDESK_ADMIN_TOKEN` in constant time (`services/sportsdesk_webview_server.ts:257-276`), protects `/api/watchlist` and `/api/telegram/*` (`services/sportsdesk_webview_server.ts:3237-3246`) and returns 503 when the token is not configured.
+Implementation-verified: the local daemon compares `Authorization: Bearer <token>` against `SPORTSDESK_ADMIN_TOKEN` in constant time (`services/sportsdesk_webview_server.ts:257-276`), protects `/api/watchlist` and `/api/telegram/*` (`services/sportsdesk_webview_server.ts:3239-3248`) and returns 503 when the token is not configured.
 
 ### Session lifecycle
 
@@ -1353,7 +1353,7 @@ Parses one XML body with Bun.XML.parse and returns the compact tree (services/sp
 
 ### `GET /api/scoreboard`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:3191-3203` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:3193-3205` · response not captured
 
 **Transcribed portal scoreboard (games, scores, status)**
 
@@ -1448,7 +1448,7 @@ Returns the 18 portal categories plus counts for the loaded wagers and the score
 
 ### `GET /api/sports/catalog`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:2952-3026` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:2954-3028` · response not captured
 
 **Sub-sports and period menus with their types**
 
@@ -1537,7 +1537,7 @@ Returns {success, entries} from the activity log; `limit` defaults to 50 and cla
 
 ### `POST /api/telegram/alert`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:3520-3554` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:3522-3556` · response not captured
 
 **Dispatch an instant Telegram alert**
 

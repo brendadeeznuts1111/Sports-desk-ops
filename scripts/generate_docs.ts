@@ -1214,7 +1214,7 @@ const SCHEME_NOTES: Readonly<Record<string, string>> = {
   fantasy402cookie:
     "Observed: the 2026-10-28 Manager HAR session is cookie-based and sent no Authorization header (`docs/runbooks/operational_guardrails_runbook.md:153`). The 2026-10-31 captures record an `authorization` key with a **redacted** value, so whether the current session also sends a bearer token is **unverified — check this**. No login/`Set-Cookie` exchange was captured, so the cookie name, lifetime, renewal window and scope are **unverified**. Do not assume a JWT lifetime — the earlier “~20–25 minute” claim had no source and was removed.",
   daemonbearer:
-    "Implementation-verified: the local daemon compares `Authorization: Bearer <token>` against `SPORTSDESK_ADMIN_TOKEN` in constant time (`services/sportsdesk_webview_server.ts:257-276`), protects `/api/watchlist` and `/api/telegram/*` (`services/sportsdesk_webview_server.ts:3237-3246`) and returns 503 when the token is not configured.",
+    "Implementation-verified: the local daemon compares `Authorization: Bearer <token>` against `SPORTSDESK_ADMIN_TOKEN` in constant time (`services/sportsdesk_webview_server.ts:257-276`), protects `/api/watchlist` and `/api/telegram/*` (`services/sportsdesk_webview_server.ts:3239-3248`) and returns 503 when the token is not configured.",
   bearerAuth:
     "Unverified — declared only for tier C operations; no bearer token exchange was ever captured.",
 };
