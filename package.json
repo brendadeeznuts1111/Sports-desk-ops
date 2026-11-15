@@ -257,6 +257,7 @@
     "capture:evidence": "bun run scripts/evidence_capture.ts --mode mock",
     "capture:f402": "bun run scripts/capture/f402_probe.ts",
     "f402:pull": "bun run scripts/f402_readonly_pull.ts",
+    "f402:analyze": "bun run scripts/f402_analyze.ts",
     "hierarchy:probe": "bun run scripts/capture/f402_hierarchy_probe.ts",
     "hierarchy:replay": "bun run scripts/capture/f402_hierarchy_replay.ts",
     "secrets:f402": "bun run scripts/secrets_f402.ts",
