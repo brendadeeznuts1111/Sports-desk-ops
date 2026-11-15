@@ -1,4 +1,5 @@
 import type React from "react";
+import { DASHBOARD_FRESHNESS } from "../config/dashboard.ts";
 import { styles } from "../dashboard_styles.ts";
 import {
   type CustomerCohortKpiTone,
@@ -163,6 +164,7 @@ export function CustomersTabPanel({
           observedAt: "",
         }
       : (cohortsReport?.provenance ?? PENDING_COHORTS_PROVENANCE),
+    { staleAfterMinutes: DASHBOARD_FRESHNESS.stale_after_minutes },
   );
 
   return (

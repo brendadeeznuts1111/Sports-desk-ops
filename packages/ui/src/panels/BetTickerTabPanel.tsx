@@ -1,6 +1,7 @@
 import type React from "react";
 import { useMemo, useState } from "react";
 import { styles } from "../dashboard_styles.ts";
+import { DASHBOARD_FRESHNESS } from "../config/dashboard.ts";
 import { formatProvenanceBadge } from "../hydration.ts";
 import { getLocalAgentHref, getLocalCustomerHref } from "../links.ts";
 import type { BetTickerApiResponse } from "../types.ts";
@@ -72,7 +73,11 @@ export function BetTickerTabPanel({
     });
   }, [data, writerFilter, typeFilter, search, showSentinelTwins]);
 
-  const provenanceBadge = data ? formatProvenanceBadge(data.provenance) : null;
+  const provenanceBadge = data
+    ? formatProvenanceBadge(data.provenance, {
+        staleAfterMinutes: DASHBOARD_FRESHNESS.stale_after_minutes,
+      })
+    : null;
   const bridge = data?.bridge3aR2;
   const pending = data?.pendingGames;
   const health = data?.captureHealth;
