@@ -25,10 +25,13 @@ on:
   # check runs are never created, and the PR is stuck at "Expected — waiting for status to be
   # reported" forever (#248: a `.mailmap`-only PR could not merge). A path list can never be
   # complete — every new root-level file re-opens the hole — so PRs always trigger.
-  # The cost is handled per job instead: `code-mode` asks scripts/ci/changed-code.sh whether the
-  # change can affect code. The required jobs always run; that is the point of the check.
+  #
+  # No `branches:` filter either (#261, same bug one dimension over): a PR targeting a feature
+  # branch triggered nothing, and retargeting it to main does not fire `pull_request` at all — only
+  # `opened`/`synchronize`/`reopened` do — so a main-targeted PR could sit with zero check runs.
+  # Any trigger-level filter that can leave a main-targeted PR unverified is the defect; the
+  # expensive work is gated per job instead (`code-mode` below), so a cheap check always exists.
   pull_request:
-    branches: [main]
   # Freshness cadence: the value artifacts cannot be rebuilt in CI (live inputs), but a daily run
   # still fails if the generator inputs drifted or a release tag is unregistered.
   schedule:
@@ -162,8 +165,12 @@ jobs:
   code-mode:
     # Property-based + mutation gate for the Code Mode profile tools. Unlike the PR ratchet this
     # runs the full sequential gate on both PRs and main: mutation survivors are the regression.
+    #
+    # PRs into a branch other than main (stacked PRs) skip it. The trigger is no longer filtered by
+    # branch (#261), so the one expensive job gates itself on the base rather than costing ~90s on
+    # every stacked push; `market-index` and `verify-changed` still run there, so the PR has checks.
     if: |
-      github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' && github.base_ref == 'main') ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
