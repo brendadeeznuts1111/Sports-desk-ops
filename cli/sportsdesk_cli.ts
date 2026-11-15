@@ -1719,7 +1719,6 @@ export async function handleWireCommand(args: string[]): Promise<void> {
     const custId = getArgValue(args, ["-c", "--customer"], "CB112_1");
     const asJson = args.includes("--json");
     const asRaw = args.includes("--raw");
-    const asRedact = args.includes("--redact");
     console.log(`[Wire Read-Back] Fetching getInfoPlayer for ${custId}...`);
     try {
       const res = await fetchPlayerInfo({ customerIdentifier: custId });
@@ -1738,10 +1737,12 @@ export async function handleWireCommand(args: string[]): Promise<void> {
         return;
       }
       if (asRaw) {
-        const payload = asRedact
-          ? redactGetInfoPlayer(probe.envelope)
-          : probe.envelope;
-        console.log(JSON.stringify(payload, null, 2));
+        // A live payload is the one place a plaintext `Password`/`Passwordt` can reach stdout,
+        // so raw output is always redacted. There is deliberately no unredacted flag: adding one
+        // is a separate decision with its own review.
+        console.log(
+          JSON.stringify(redactGetInfoPlayer(probe.envelope), null, 2),
+        );
       } else if (asJson) {
         const audit = auditPlayerRiskPosture(probe.envelope);
         console.log(JSON.stringify({ summary: probe.summary, audit }, null, 2));
@@ -1785,7 +1786,8 @@ Subcommands:
   mutate   Execute updateByColumn mutation (-c <CUST_ID> -a <AGENT_ID> --col <COL> --val <VAL>)
   vig      Execute vigSetupInsert (+15c/+20c) (-c <CUST_ID> -s <SPORT> --spread 15 --derivative 20)
   weblog   Query getWebLog IP Tracker (-m A|B|C|I -c <CUST_ID> --ip <IP>)
-  info     Fetch getInfoPlayer read-back (-c <CUST_ID>)
+  info     Fetch getInfoPlayer read-back (-c <CUST_ID> [--raw] [--json])
+           --raw prints the redacted envelope; --json prints the summary + risk audit
   gslive   Emit GSLive 7-param deep-link & live sidecar JSON (-c <CUST_ID> --date YYYY-MM-DD [--state canceled] [--window 1-31])
 `);
 }
