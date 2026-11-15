@@ -10,6 +10,7 @@ import {
   computeMinimumSampleSizePower80,
   computeWagerClvEvMetrics,
   computeWilson95,
+  collectNonCccHockeyEvents,
   indexSummariesByCustomerId,
   renderCcc88412DecisionInstrumentMarkdown,
   shrinkRateBetaBinomial,
@@ -311,7 +312,57 @@ describe("lib/f402_ccc88412_decision_instrument", () => {
     expect(sha1).toBe(sha2);
   });
 
+  test("H7 event corpus excludes CCC88412 and counts same-ticket M+S pairs", () => {
+    const rows = [
+      {
+        CustomerID: "CCC88412",
+        TicketNumber: "1",
+        Description: "Hockey #10 A -110 - For Game",
+        WagerType: "M",
+      },
+      {
+        CustomerID: "CCC88412",
+        TicketNumber: "1",
+        Description: "Hockey #10 B -110 - For Game",
+        WagerType: "S",
+      },
+      {
+        CustomerID: "X1",
+        TicketNumber: "2",
+        Description: "Hockey #11 C -110 - For Game",
+        WagerType: "M",
+      },
+      {
+        CustomerID: "X1",
+        TicketNumber: "2",
+        Description: "Hockey #11 D -110 - For Game",
+        WagerType: "S",
+      },
+      {
+        CustomerID: "X2",
+        TicketNumber: "3",
+        Description: "Hockey #12 E -110 - For Game",
+        WagerType: "M",
+      },
+      {
+        CustomerID: "X3",
+        TicketNumber: "4",
+        Description: "Football #1 F -110 - For Game",
+        WagerType: "M",
+      },
+    ] as const satisfies readonly GradedWagerRawRow[];
+
+    const corpus = collectNonCccHockeyEvents(rows);
+    // CCC88412 is a Hockey account but never an event in its own baseline.
+    expect(corpus.accounts.has("CCC88412")).toBe(true);
+    expect(corpus.byTicketRotation.size).toBe(2);
+    expect(corpus.sameTicketPairsK).toBe(1);
+  });
+
   test("H7 non-CCC Hockey counts match the pinned corpus (2,519 events, 12 pairs)", () => {
+    // CI-skipped by design: the corpus is gitignored. A committed fixture cannot reproduce the
+    // 2,519-event number; it can only exercise the counting rule, which the fixture test above
+    // does in CI. Run locally with `scratch/graded/` staged to assert the number itself.
     const root = process.cwd();
     const allSummaryPath = resolve(
       root,

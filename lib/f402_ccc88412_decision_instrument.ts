@@ -1508,6 +1508,63 @@ export function indexSummariesByCustomerId(
   return index;
 }
 
+export interface NonCccHockeyEventCorpus {
+  /** Hockey accounts, including CCC88412. */
+  readonly accounts: ReadonlySet<string>;
+  /** Events keyed `customerId|ticket|rotation`; CCC88412 is excluded. */
+  readonly byTicketRotation: ReadonlyMap<string, readonly GradedWagerRawRow[]>;
+  /** Events keyed `customerId|timestamp|rotation`; CCC88412 is excluded. */
+  readonly byTimestampRotation: ReadonlyMap<
+    string,
+    readonly GradedWagerRawRow[]
+  >;
+  /** Events with 2+ rows on one ticket carrying both an M and an S leg. */
+  readonly sameTicketPairsK: number;
+}
+
+/**
+ * Collect the non-CCC88412 Hockey events the H7 peer baseline is computed over.
+ *
+ * `accounts` includes CCC88412 (it is a Hockey account); the event maps and pair count exclude
+ * it. Keeping the exclusion in one function is what lets a small fixture assert it in CI, where
+ * the full graded corpus is not available.
+ */
+export function collectNonCccHockeyEvents(
+  rows: readonly GradedWagerRawRow[],
+): NonCccHockeyEventCorpus {
+  const accounts = new Set<string>();
+  const byTicketRotation = new Map<string, GradedWagerRawRow[]>();
+  const byTimestampRotation = new Map<string, GradedWagerRawRow[]>();
+  for (const r of rows) {
+    if (
+      !String(r.Description ?? "")
+        .trim()
+        .startsWith("Hockey")
+    )
+      continue;
+    const customerId = String(r.CustomerID ?? "").trim();
+    accounts.add(customerId);
+    if (customerId === "CCC88412") continue;
+    const t = String(r.TicketNumber ?? "").trim();
+    const ts = String(r.AcceptedDateTime ?? "").trim();
+    const rot =
+      String(r.Description ?? "").match(/Hockey\s+#(\d+)/i)?.[1] ?? "";
+    if (!rot) continue;
+    const kT = `${customerId}|${t}|${rot}`;
+    const kTs = `${customerId}|${ts}|${rot}`;
+    byTicketRotation.set(kT, [...(byTicketRotation.get(kT) ?? []), r]);
+    byTimestampRotation.set(kTs, [...(byTimestampRotation.get(kTs) ?? []), r]);
+  }
+  let sameTicketPairsK = 0;
+  for (const arr of byTicketRotation.values()) {
+    if (arr.length < 2) continue;
+    const hasMl = arr.some((r) => String(r.WagerType ?? "").trim() === "M");
+    const hasPl = arr.some((r) => String(r.WagerType ?? "").trim() === "S");
+    if (hasMl && hasPl) sameTicketPairsK++;
+  }
+  return { accounts, byTicketRotation, byTimestampRotation, sameTicketPairsK };
+}
+
 export function buildCcc88412DecisionInstrument(
   input: BuildCcc88412InstrumentInput,
 ): Ccc88412DecisionInstrument {
@@ -3156,33 +3213,11 @@ export function buildCcc88412DecisionInstrument(
       .trim()
       .startsWith("Hockey"),
   );
-  const hockeyGradedAccounts = new Set<string>();
-  const nonCccHockeyEvents = new Map<string, GradedWagerRawRow[]>();
-  const nonCccHockeyTsEvents = new Map<string, GradedWagerRawRow[]>();
-  for (const r of hockeyGradedRows) {
-    const customerId = String(r.CustomerID ?? "").trim();
-    hockeyGradedAccounts.add(customerId);
-    if (customerId === "CCC88412") continue;
-    const t = String(r.TicketNumber ?? "").trim();
-    const ts = String(r.AcceptedDateTime ?? "").trim();
-    const rot =
-      String(r.Description ?? "").match(/Hockey\s+#(\d+)/i)?.[1] ?? "";
-    if (!rot) continue;
-    const kT = `${customerId}|${t}|${rot}`;
-    const kTs = `${customerId}|${ts}|${rot}`;
-    nonCccHockeyEvents.set(kT, [...(nonCccHockeyEvents.get(kT) ?? []), r]);
-    nonCccHockeyTsEvents.set(kTs, [
-      ...(nonCccHockeyTsEvents.get(kTs) ?? []),
-      r,
-    ]);
-  }
-  let nonCccSameTicketPairsK = 0;
-  for (const arr of nonCccHockeyEvents.values()) {
-    if (arr.length < 2) continue;
-    const hasMl = arr.some((r) => String(r.WagerType ?? "").trim() === "M");
-    const hasPl = arr.some((r) => String(r.WagerType ?? "").trim() === "S");
-    if (hasMl && hasPl) nonCccSameTicketPairsK++;
-  }
+  const hockeyCorpus = collectNonCccHockeyEvents(hockeyGradedRows);
+  const hockeyGradedAccounts = hockeyCorpus.accounts;
+  const nonCccHockeyEvents = hockeyCorpus.byTicketRotation;
+  const nonCccHockeyTsEvents = hockeyCorpus.byTimestampRotation;
+  const nonCccSameTicketPairsK = hockeyCorpus.sameTicketPairsK;
   let nonCccDistinctTicketSameSecondPairsK = 0;
   for (const arr of nonCccHockeyTsEvents.values()) {
     if (arr.length < 2) continue;
