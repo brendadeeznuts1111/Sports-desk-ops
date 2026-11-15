@@ -14,9 +14,41 @@
  */
 
 import {
+  asLineHundredths,
+  asSettledCents,
+  parseAsBasisPoints,
+  parseAsCents,
+  parseAsEpochMs,
+  type AmericanOdds,
+  type BasisPoints,
+  type Brand,
+  type Cents,
+  type EpochMs,
+  type LineHundredths,
+  type SettledCents,
+} from "../design/domain-branded-types.ts";
+import {
+  computeF402EffectiveLine,
+  extractF402RotationNumber,
   getF402TicketGroupKey,
+  parseLineHundredths,
   type F402CustomerReportPendingRow,
 } from "./combo_identity.ts";
+import {
+  evaluateDeskRisk,
+  INVALID_AMERICAN_ODDS,
+  recordDeskRiskEvaluation,
+  scrubDeskIpLiterals,
+  tokenizeCustomerId,
+  tokenizeTicketId,
+  ZERO_CENTS,
+  type CustomerDesk,
+  type DeskPosition,
+  type DeskPositionLeg,
+  type DeskRiskProvenance,
+  type DeskRiskTelemetrySnapshot,
+  type RiskEvaluation,
+} from "./desk-parser.ts";
 import {
   agentLoginKey,
   detectAgentLoginCollisions,
@@ -30,10 +62,23 @@ import {
   type ListAgentsByAgentGeneralWireRow,
 } from "./f402_list_agents_by_agent.ts";
 
-declare const brand: unique symbol;
-
-/** Nominal wrapper: a plain string is not accepted where a canonical key is required. */
-type Brand<T, B extends string> = T & { readonly [brand]: B };
+export {
+  asLineHundredths,
+  asSettledCents,
+  parseAsBasisPoints,
+  parseAsCents,
+  parseAsEpochMs,
+  parseLineHundredths,
+};
+export type {
+  AmericanOdds,
+  BasisPoints,
+  Brand,
+  Cents,
+  EpochMs,
+  LineHundredths,
+  SettledCents,
+};
 
 /**
  * Canonical agent identity — trimmed and upper-cased exactly like the portal's
@@ -198,6 +243,8 @@ export type PendingRow = F402CustomerReportPendingRow & {
   readonly LogoTeam2?: string | null | undefined;
   readonly Outcome?: string | undefined;
   readonly AcceptedDateTime?: string | undefined;
+  readonly FinalMoney?: number | string | undefined;
+  readonly Price?: number | string | undefined;
 };
 
 function text(value: unknown): string {
@@ -564,26 +611,74 @@ export interface BuildArtifactOptions {
   readonly sourceKind?: LiveArtifactSourceKind;
 }
 
+function compareAscii(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function dedupeLastByCompositeKey(rows: readonly PendingRow[]): PendingRow[] {
+  const n = rows.length;
+  if (n === 0) return [];
+  const order = new Int32Array(n);
+  for (let i = 0; i < n; i++) order[i] = i;
+  order.sort((a, b) => {
+    const rowA = rows[a]!;
+    const rowB = rows[b]!;
+    const cmpT = compareAscii(text(rowA.TicketNumber), text(rowB.TicketNumber));
+    if (cmpT !== 0) return cmpT;
+    const cmpW = compareAscii(text(rowA.WagerNumber), text(rowB.WagerNumber));
+    if (cmpW !== 0) return cmpW;
+    return a - b;
+  });
+  const hasSameCompositeNext = (k: number): boolean => {
+    if (k + 1 >= n) return false;
+    const curRow = rows[order[k]!]!;
+    const nextRow = rows[order[k + 1]!]!;
+    return (
+      text(curRow.TicketNumber) === text(nextRow.TicketNumber) &&
+      text(curRow.WagerNumber) === text(nextRow.WagerNumber)
+    );
+  };
+  let keepCount = 0;
+  for (let k = 0; k < n; k++) {
+    if (!hasSameCompositeNext(k)) keepCount++;
+  }
+  const deduped = Array<PendingRow>(keepCount);
+  let writeIdx = 0;
+  for (let k = 0; k < n; k++) {
+    if (!hasSameCompositeNext(k)) {
+      deduped[writeIdx++] = rows[order[k]!]!;
+    }
+  }
+  return deduped;
+}
+
 /**
  * Builds the committed artifact from captured rows. Dedupes by `TicketNumber-WagerNumber`
- * (the portal's own composite key) and refuses to emit a row that still carries PII.
+ * (the portal's own composite key) via zero-Map sorted-run scan and refuses to emit a row
+ * that still carries PII.
  */
 export function buildArtifact(
   rows: readonly PendingRow[],
   options: BuildArtifactOptions,
 ): LiveBetsArtifact {
-  const byTicket = new Map<string, PendingRow>();
-  for (const row of rows) {
-    byTicket.set(`${text(row.TicketNumber)}-${text(row.WagerNumber)}`, row);
+  const dedupedRows = dedupeLastByCompositeKey(rows);
+  const cleaned = dedupedRows.map(stripPII);
+  let piiMask = 0;
+  for (let i = 0; i < cleaned.length; i++) {
+    const record = cleaned[i] as Record<string, unknown>;
+    for (let j = 0; j < PII_KEYS.length; j++) {
+      if (PII_KEYS[j]! in record) {
+        piiMask |= 1 << j;
+      }
+    }
   }
-
-  const cleaned = [...byTicket.values()].map(stripPII);
-  const leftover = cleaned.flatMap((row) =>
-    PII_KEYS.filter((key) => key in (row as Record<string, unknown>)),
-  );
-  if (leftover.length > 0) {
+  if (piiMask !== 0) {
+    const leftover: string[] = [];
+    for (let j = 0; j < PII_KEYS.length; j++) {
+      if ((piiMask & (1 << j)) !== 0) leftover.push(PII_KEYS[j]!);
+    }
     throw new Error(
-      `refusing to build artifact: PII keys survived stripping: ${[...new Set(leftover)].join(", ")}`,
+      `refusing to build artifact: PII keys survived stripping: ${leftover.join(", ")}`,
     );
   }
 
@@ -785,4 +880,494 @@ export function summarizeGames(
     dataSource,
     capturedAt,
   };
+}
+
+const MAX_SAFE_CENTS_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+const MIN_SAFE_CENTS_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
+const INTEGER_STR_RE = /^[+-]?\d+$/;
+
+function coerceIntegerCentsBigInt(
+  raw: unknown,
+): { readonly ok: true; readonly value: bigint } | { readonly ok: false } {
+  if (typeof raw === "number") {
+    if (!Number.isSafeInteger(raw)) return { ok: false };
+    return { ok: true, value: BigInt(raw) };
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!INTEGER_STR_RE.test(trimmed)) return { ok: false };
+    const value = BigInt(trimmed);
+    if (value < MIN_SAFE_CENTS_BIGINT || value > MAX_SAFE_CENTS_BIGINT) {
+      return { ok: false };
+    }
+    return { ok: true, value };
+  }
+  return { ok: false };
+}
+
+function parseAmericanOddsStrictBigInt(
+  raw: unknown,
+): { readonly ok: true; readonly odds: AmericanOdds } | { readonly ok: false } {
+  let nBig: bigint;
+  if (typeof raw === "number") {
+    if (!Number.isSafeInteger(raw)) return { ok: false };
+    nBig = BigInt(raw);
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!INTEGER_STR_RE.test(trimmed)) return { ok: false };
+    nBig = BigInt(trimmed);
+  } else {
+    return { ok: false };
+  }
+  if (nBig > -100n && nBig < 100n) return { ok: false };
+  if (nBig < MIN_SAFE_CENTS_BIGINT || nBig > MAX_SAFE_CENTS_BIGINT) {
+    return { ok: false };
+  }
+  return { ok: true, odds: Number(nBig) as AmericanOdds };
+}
+
+function deriveAmericanOddsBigInt(
+  stakeCents: bigint,
+  toWinCents: bigint,
+): { readonly ok: boolean; readonly odds: AmericanOdds } {
+  if (stakeCents <= 0n || toWinCents <= 0n) {
+    return { ok: false, odds: INVALID_AMERICAN_ODDS };
+  }
+  let oddsBig: bigint;
+  if (toWinCents >= stakeCents) {
+    oddsBig = (toWinCents * 100n + stakeCents / 2n) / stakeCents;
+    if (oddsBig < 100n) oddsBig = 100n;
+  } else {
+    oddsBig = -((stakeCents * 100n + toWinCents / 2n) / toWinCents);
+    if (oddsBig > -100n) oddsBig = -100n;
+  }
+  if (oddsBig < MIN_SAFE_CENTS_BIGINT || oddsBig > MAX_SAFE_CENTS_BIGINT) {
+    return { ok: false, odds: INVALID_AMERICAN_ODDS };
+  }
+  return { ok: true, odds: Number(oddsBig) as AmericanOdds };
+}
+
+function normalizeDeskWagerStatus(raw: unknown): string {
+  const s = text(raw).toUpperCase();
+  if (s === "" || s === "P" || s === "PENDING") return "pending";
+  if (s === "W" || s === "WON") return "won";
+  if (s === "L" || s === "LOST") return "lost";
+  if (s === "X" || s === "V" || s === "C" || s === "SETTLED") return "settled";
+  return s.toLowerCase();
+}
+
+export interface DeduplicatedParentTicket {
+  readonly ticketKey: TicketKey;
+  readonly ticketNumber: string;
+  readonly wagerNumber: string;
+  readonly customerKey: CustomerKey;
+  readonly totalPicks: number;
+  readonly observedLegs: number;
+  /** Legs the ticket declares but the capture did not carry; never assumed resolved. */
+  readonly missingPicks: number;
+  readonly status: string;
+  readonly wagerType: string;
+  readonly stakeCents: Cents;
+  readonly toWinCents: Cents;
+  readonly settledCents: SettledCents;
+  readonly priceOdds: AmericanOdds;
+  readonly unresolvedGapCents: bigint;
+  readonly hasCoercionError: boolean;
+  readonly legs: readonly DeskPositionLeg[];
+}
+
+/**
+ * Zero-Map / zero-Set sorted-run parlay deduplicator keyed by
+ * `(TicketNumber, WagerNumber, totalPicks)`. Checks `unresolvedGapCents === 0n`
+ * across all leg rows in each contiguous run and preserves structured `DeskPositionLeg`
+ * rotation + `LineHundredths` effective-line math. A run carrying fewer leg rows than
+ * `totalPicks` reports `missingPicks > 0` and is flagged, so a partial capture degrades
+ * the desk-risk evaluation instead of reading as a complete ticket.
+ */
+export function dedupeParentPendingTickets(
+  rows: readonly PendingRow[],
+): DeduplicatedParentTicket[] {
+  const n = rows.length;
+  if (n === 0) return [];
+
+  const order = new Int32Array(n);
+  for (let i = 0; i < n; i++) order[i] = i;
+
+  order.sort((a, b) => {
+    const rowA = rows[a]!;
+    const rowB = rows[b]!;
+    const cmpTicket = compareAscii(
+      text(rowA.TicketNumber),
+      text(rowB.TicketNumber),
+    );
+    if (cmpTicket !== 0) return cmpTicket;
+    const cmpWager = compareAscii(
+      text(rowA.WagerNumber),
+      text(rowB.WagerNumber),
+    );
+    if (cmpWager !== 0) return cmpWager;
+    const picksA = intOrNull(rowA.totalPicks) ?? 1;
+    const picksB = intOrNull(rowB.totalPicks) ?? 1;
+    if (picksA !== picksB) return picksA - picksB;
+    return a - b;
+  });
+
+  const sameParentGroup = (
+    row: PendingRow,
+    ticketNumber: string,
+    wagerNumber: string,
+    totalPicks: number,
+  ): boolean =>
+    text(row.TicketNumber) === ticketNumber &&
+    text(row.WagerNumber) === wagerNumber &&
+    Math.max(1, intOrNull(row.totalPicks) ?? 1) === totalPicks;
+
+  let groupCount = 0;
+  for (let scanStart = 0; scanStart < n;) {
+    const firstRow = rows[order[scanStart]!]!;
+    const ticketNumber = text(firstRow.TicketNumber);
+    const wagerNumber = text(firstRow.WagerNumber);
+    const totalPicks = Math.max(1, intOrNull(firstRow.totalPicks) ?? 1);
+    let scanEnd = scanStart + 1;
+    while (
+      scanEnd < n &&
+      sameParentGroup(
+        rows[order[scanEnd]!]!,
+        ticketNumber,
+        wagerNumber,
+        totalPicks,
+      )
+    ) {
+      scanEnd++;
+    }
+    groupCount++;
+    scanStart = scanEnd;
+  }
+
+  const result = Array<DeduplicatedParentTicket>(groupCount);
+  let groupIdx = 0;
+  let runStart = 0;
+  while (runStart < n) {
+    const firstRow = rows[order[runStart]!]!;
+    const ticketNumber = text(firstRow.TicketNumber);
+    const wagerNumber = text(firstRow.WagerNumber);
+    const totalPicks = Math.max(1, intOrNull(firstRow.totalPicks) ?? 1);
+
+    let runEnd = runStart + 1;
+    while (
+      runEnd < n &&
+      sameParentGroup(
+        rows[order[runEnd]!]!,
+        ticketNumber,
+        wagerNumber,
+        totalPicks,
+      )
+    ) {
+      runEnd++;
+    }
+
+    const observedLegs = runEnd - runStart;
+    const legs = Array<DeskPositionLeg>(observedLegs);
+    let minStakeBig = 0n;
+    let maxStakeBig = 0n;
+    let stakeInitialized = false;
+    let stakeCoercionError = false;
+    let toWinBig = 0n;
+    let toWinCoercionError = false;
+    let oddsCoercionError = false;
+    let legLineCoercionError = false;
+    let priceOdds: AmericanOdds = INVALID_AMERICAN_ODDS;
+    let priceResolved = false;
+
+    for (let k = runStart; k < runEnd; k++) {
+      const row = rows[order[k]!]!;
+      const stakeRes = coerceIntegerCentsBigInt(row.AmountWagered);
+      if (!stakeRes.ok) {
+        stakeCoercionError = true;
+      } else {
+        if (!stakeInitialized) {
+          minStakeBig = stakeRes.value;
+          maxStakeBig = stakeRes.value;
+          stakeInitialized = true;
+        } else {
+          if (stakeRes.value < minStakeBig) minStakeBig = stakeRes.value;
+          if (stakeRes.value > maxStakeBig) maxStakeBig = stakeRes.value;
+        }
+      }
+
+      if (k === runStart) {
+        const toWinRes = coerceIntegerCentsBigInt(row.ToWinAmount);
+        if (!toWinRes.ok) {
+          toWinCoercionError = true;
+        } else {
+          toWinBig = toWinRes.value;
+        }
+
+        const explicitOddsRaw = row.FinalMoney ?? row.Price;
+        if (explicitOddsRaw !== undefined && explicitOddsRaw !== "") {
+          const parsedOdds = parseAmericanOddsStrictBigInt(explicitOddsRaw);
+          if (parsedOdds.ok) {
+            priceOdds = parsedOdds.odds;
+            priceResolved = true;
+          } else {
+            oddsCoercionError = true;
+          }
+        }
+      }
+
+      const rot = extractF402RotationNumber(row);
+      let effSide = "UNKNOWN";
+      let effLine: LineHundredths | null = null;
+      try {
+        const eff = computeF402EffectiveLine(row);
+        effSide = eff.side;
+        effLine = eff.effectiveLineHundredths;
+      } catch {
+        // signal-honesty: intentional-line-coercion-flag
+        legLineCoercionError = true;
+      }
+
+      const team1 = text(row.Team1ID);
+      const team2 = text(row.Team2ID);
+      const market =
+        team1 !== "" && team2 !== ""
+          ? `${team1} vs ${team2}`
+          : text(row.Description) || text(row.SportSubType) || "UNKNOWN";
+      const chosen = text(row.ChosenTeamID);
+      const side = chosen !== "" ? `${chosen} ${effSide}`.trim() : effSide;
+
+      legs[k - runStart] = {
+        legIndex: k - runStart,
+        market,
+        side,
+        rawRotNum: rot.rawRotNum,
+        canonicalRotNum: rot.canonicalRotNum,
+        isAltSpreadRotation: rot.isAltSpreadRotation,
+        effectiveLineHundredths: effLine,
+      };
+    }
+
+    const unresolvedGapCents = stakeInitialized
+      ? maxStakeBig - minStakeBig
+      : 0n;
+    const representativeStake = stakeInitialized ? minStakeBig : 0n;
+    const missingPicks = Math.max(0, totalPicks - observedLegs);
+
+    if (!priceResolved && !oddsCoercionError) {
+      if (!stakeCoercionError && !toWinCoercionError && stakeInitialized) {
+        const derived = deriveAmericanOddsBigInt(representativeStake, toWinBig);
+        priceOdds = derived.odds;
+        if (!derived.ok) oddsCoercionError = true;
+      } else {
+        oddsCoercionError = true;
+      }
+    }
+
+    const stakeCents: Cents =
+      !stakeCoercionError &&
+      stakeInitialized &&
+      representativeStake >= MIN_SAFE_CENTS_BIGINT &&
+      representativeStake <= MAX_SAFE_CENTS_BIGINT
+        ? (Number(representativeStake) as Cents)
+        : ZERO_CENTS;
+    const toWinCents: Cents =
+      !toWinCoercionError &&
+      toWinBig >= MIN_SAFE_CENTS_BIGINT &&
+      toWinBig <= MAX_SAFE_CENTS_BIGINT
+        ? (Number(toWinBig) as Cents)
+        : ZERO_CENTS;
+
+    const status = normalizeDeskWagerStatus(
+      firstRow.WagerStatus ?? firstRow.Outcome,
+    );
+    const settledCents =
+      status === "won"
+        ? asSettledCents(toWinCents)
+        : status === "lost"
+          ? asSettledCents(-stakeCents)
+          : asSettledCents(0);
+
+    const hasCoercionError =
+      stakeCoercionError ||
+      toWinCoercionError ||
+      oddsCoercionError ||
+      legLineCoercionError ||
+      unresolvedGapCents !== 0n ||
+      missingPicks > 0 ||
+      observedLegs > totalPicks;
+
+    result[groupIdx++] = {
+      ticketKey: ticketKeyOf(firstRow),
+      ticketNumber,
+      wagerNumber,
+      customerKey: customerKeyOf(firstRow.customerID ?? firstRow.CustomerID),
+      totalPicks,
+      observedLegs,
+      missingPicks,
+      status,
+      wagerType: text(firstRow.WagerType),
+      stakeCents,
+      toWinCents,
+      settledCents,
+      priceOdds,
+      unresolvedGapCents,
+      hasCoercionError,
+      legs,
+    };
+
+    runStart = runEnd;
+  }
+
+  return result;
+}
+
+export interface BridgePendingToDeskOptions {
+  readonly customerId?: string | undefined;
+  readonly customerName?: string | undefined;
+  readonly tier?: string | undefined;
+  readonly maxStakeCents: Cents;
+  readonly currency?: string | undefined;
+  readonly hasValidMaxStake?: boolean | undefined;
+}
+
+/**
+ * Maps deduplicated parent pending tickets onto `CustomerDesk` so `evaluateDeskRisk`
+ * evaluates parent ticket stake exposure once per `(TicketNumber, WagerNumber, totalPicks)`
+ * and retains structured leg metadata instead of flattening into an unkeyed `side` string.
+ */
+export function bridgePendingRowsToDesk(
+  rows: readonly PendingRow[],
+  options: BridgePendingToDeskOptions,
+): {
+  readonly desk: CustomerDesk;
+  readonly parentTickets: readonly DeduplicatedParentTicket[];
+  readonly unresolvedGapCentsTotal: bigint;
+} {
+  const parentTickets = dedupeParentPendingTickets(rows);
+  let unresolvedGapCentsTotal = 0n;
+  const hasValidMaxStake =
+    options.hasValidMaxStake ??
+    (Number.isSafeInteger(options.maxStakeCents) && options.maxStakeCents >= 0);
+
+  const positions: DeskPosition[] = parentTickets.map((ticket) => {
+    unresolvedGapCentsTotal += ticket.unresolvedGapCents;
+    const isSingle = ticket.totalPicks <= 1 && ticket.legs.length === 1;
+    const singleLeg = isSingle ? ticket.legs[0]! : null;
+    let exposureBps = parseAsBasisPoints(0, true);
+    if (hasValidMaxStake && options.maxStakeCents > 0) {
+      const stakeBig = BigInt(ticket.stakeCents);
+      const maxBig = BigInt(options.maxStakeCents);
+      const bpsBig =
+        stakeBig >= 0n
+          ? (stakeBig * 10_000n + maxBig / 2n) / maxBig
+          : -((-stakeBig * 10_000n + maxBig / 2n) / maxBig);
+      const safeBps =
+        bpsBig > MAX_SAFE_CENTS_BIGINT
+          ? Number.MAX_SAFE_INTEGER
+          : bpsBig < MIN_SAFE_CENTS_BIGINT
+            ? Number.MIN_SAFE_INTEGER
+            : Number(bpsBig);
+      exposureBps = parseAsBasisPoints(safeBps, true);
+    }
+
+    return {
+      id: ticket.ticketKey,
+      market:
+        singleLeg !== null
+          ? singleLeg.market
+          : `COMPOSITE:${ticket.totalPicks}-LEG`,
+      side:
+        singleLeg !== null ? singleLeg.side : `PARLAY(${ticket.totalPicks})`,
+      stake: ticket.stakeCents,
+      price: ticket.priceOdds,
+      status: ticket.status,
+      day: null,
+      hasCoercionError: ticket.hasCoercionError,
+      totalPicks: ticket.totalPicks,
+      legs: ticket.legs,
+      effectiveLineHundredths:
+        singleLeg !== null ? singleLeg.effectiveLineHundredths : null,
+      exposureBps,
+      settledCents: ticket.settledCents,
+    };
+  });
+
+  const inferredCustomerId =
+    options.customerId ?? (parentTickets[0]?.customerKey || "DESK");
+
+  const desk: CustomerDesk = {
+    customer: {
+      id: inferredCustomerId,
+      name: options.customerName ?? "",
+      tier: options.tier ?? "standard",
+    },
+    limits: {
+      max_stake: options.maxStakeCents,
+      currency: options.currency ?? "USD",
+      hasValidMaxStake,
+    },
+    positions,
+    diagnostics: [],
+  };
+
+  return { desk, parentTickets, unresolvedGapCentsTotal };
+}
+
+/**
+ * End-to-end risk bridge: deduplicates parent tickets, runs `evaluateDeskRisk`,
+ * records provenance + `pendingAtMax` / `degradedPending` telemetry in `desk-parser.ts`
+ * and `audit_log.ts`, and returns the complete result.
+ */
+export function evaluatePendingExposureRisk(
+  rows: readonly PendingRow[],
+  options: BridgePendingToDeskOptions,
+  provenance: DeskRiskProvenance = {
+    sourceKind: "none",
+    dataWindowMaxEpochMs: null,
+    r2PublishedAtEpochMs: null,
+  },
+): {
+  readonly desk: CustomerDesk;
+  readonly parentTickets: readonly DeduplicatedParentTicket[];
+  readonly evaluation: RiskEvaluation;
+  readonly telemetry: DeskRiskTelemetrySnapshot;
+  readonly unresolvedGapCentsTotal: bigint;
+} {
+  const bridged = bridgePendingRowsToDesk(rows, options);
+  const { evaluation, telemetry } = recordDeskRiskEvaluation(
+    bridged.desk,
+    provenance,
+    bridged.unresolvedGapCentsTotal,
+  );
+  return {
+    ...bridged,
+    evaluation,
+    telemetry,
+  };
+}
+
+export { evaluateDeskRisk };
+
+/**
+ * Sanitizes `LiveBetGame` arrays before sending to non-loopback / untrusted peers:
+ * tokenizes `customerID`, `ticketNumber`, `ticketKey` and scrubs raw IP literals.
+ * Returns `games` verbatim on trusted loopback peers.
+ *
+ * Scope: agent keys and ids are internal hierarchy identifiers under the desk's PII policy
+ * (`DESK_FORBIDDEN_KEYS` gates customerID/login/IP, not agentID), so they pass through
+ * unchanged. Tokenizing them would break agent links for remote peers and is a separate
+ * policy decision; this boundary is stated here so it is not mistaken for an omission.
+ */
+export function sanitizeLiveBetGamesForPeer<T extends LiveBetGame>(
+  games: readonly T[],
+  trustedPeer: boolean,
+): readonly T[] {
+  if (trustedPeer) return games;
+  return games.map((game) => ({
+    ...game,
+    customerID: tokenizeCustomerId(game.customerID) as CustomerKey,
+    ticketNumber: tokenizeTicketId(game.ticketNumber),
+    ticketKey: tokenizeTicketId(game.ticketKey) as TicketKey,
+    description: scrubDeskIpLiterals(game.description),
+  }));
 }

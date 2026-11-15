@@ -2,7 +2,6 @@
 /**
  * @file sportsdesk_webview_server.ts
  * @description Native Bun (v1.4+) Webview Automation Server & Telegram Mini App Gateway.
- *
  * Implements native Bun HTTP server semantics:
  *  - Native port cascade: relies on Bun's BUN_PORT -> PORT -> NODE_PORT -> 3000 cascade
  *    (SportsDesk defaults to PORT=4020 via auto-loaded .env, overridable via options).
@@ -10,11 +9,11 @@
  *  - Unix domain socket support via `unix` option or `BUN_SOCKET` environment variable
  *    (removes TCP port exposure for local Nginx upstream proxying).
  *  - High-throughput Response.json() and lazy Response(Bun.file()) static file handle serving.
- *  - Standardized CORS and CSP frame-ancestors for Telegram Mini App embedding (no X-Frame-Options).
- *  - Robust error boundary handling via Bun.serve `error(err)` returning structured 500 JSON.
+ *  - Standardized CORS and CSP frame-ancestors for Telegram Mini App embedding (no X-Frame-Options) and structured 500 JSON errors.
  */
 
 import type { TrackerState } from "../lib/tracker_dashboard.ts";
+import { writeAuditEntry } from "../lib/audit_log.ts";
 import crypto from "node:crypto";
 import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -82,6 +81,7 @@ import {
   type ScoreboardFile,
 } from "../lib/scoreboard.ts";
 import {
+  sanitizeLiveBetGamesForPeer,
   summarizeGames,
   type AgentScope,
   type LiveBetGame,
@@ -237,12 +237,8 @@ export function peerIsTrusted(
 }
 
 /**
- * Guards endpoints that carry customer or agent-identifying data.
- *
- * Loopback is allowed so the local scoreboard keeps working without a token. Any other peer
- * must present `SPORTSDESK_ADMIN_TOKEN`: a phone on the same Wi-Fi must not be able to read
- * customer ids from a dev server bound to 0.0.0.0. Behind a proxy the peer address is the
- * proxy's, which `peerIsTrusted` refuses unless the deployment said otherwise.
+ * Guards endpoints that carry customer or agent-identifying data. Loopback is allowed; any other
+ * peer must present SPORTSDESK_ADMIN_TOKEN (behind a proxy unless trusted by ingress config).
  */
 function piiRejection(
   req: Request,
@@ -250,7 +246,11 @@ function piiRejection(
   ingress: Ingress,
 ): { status: 401 | 403 | 503; error: string } | null {
   if (peerIsTrusted(address, ingress)) return null;
-  return adminRejection(req);
+  const rejected = adminRejection(req);
+  if (rejected !== null) {
+    recordPiiRejectionAudit(req, rejected, ingress);
+  }
+  return rejected;
 }
 
 /** `null` when the bearer token matches SPORTSDESK_ADMIN_TOKEN; otherwise the rejection status and reason. */
@@ -1468,16 +1468,16 @@ export function startServer(options?: ServerOptions) {
           readDb: () => deskLive.readLivePendingArtifact(),
           scoreboard,
         });
-        return respondLiveBetsV2(req, resolved, cors);
+        return respondLiveBetsV2(req, resolved, cors, server, ingress);
       }
 
+      // Sanitize non-loopback live-bets payloads.
+      //
       if (
         pathname === "/api/v1/live-bets" ||
         pathname === "/live-bets/summary" ||
         pathname === "/api/live-bets/summary"
       ) {
-        //
-        //
         const rejected = piiRejection(
           req,
           server.requestIP(req)?.address,
@@ -1565,7 +1565,7 @@ export function startServer(options?: ServerOptions) {
         return Response.json(
           {
             ...served.body,
-            games: withScores,
+            games: peerGames(req, server, ingress, withScores),
             agents,
             pendingCount: summary.totalPending,
             summary,
@@ -4527,33 +4527,55 @@ async function buildLogoMetaResponse(
   );
 }
 
+function peerGames<T extends LiveBetGame>(
+  req: Request,
+  server: Bun.Server<undefined>,
+  ingress: Ingress,
+  games: readonly T[],
+): readonly T[] {
+  return sanitizeLiveBetGamesForPeer(
+    games,
+    peerIsTrusted(server.requestIP(req)?.address, ingress),
+  );
+}
+
 function respondLiveBetsV2(
   req: Request,
   resolved: import("../src/contracts/live_bets.v2.ts").LiveBetsV2Response,
   cors: Record<string, string>,
+  server: Bun.Server<undefined>,
+  ingress: Ingress,
 ): Response {
+  const trustedPeer = peerIsTrusted(server.requestIP(req)?.address, ingress);
+  const safeResolved = trustedPeer
+    ? resolved
+    : {
+        ...resolved,
+        games: sanitizeLiveBetGamesForPeer(resolved.games, false),
+      };
   const headers: Record<string, string> = {
     ...cors,
     "Cache-Control": "no-store",
   };
-  if (resolved.provenance.hash !== null) {
-    const etag = `"${resolved.provenance.hash.slice(0, 24)}-${resolved.fallbackUsed ? 1 : 0}-${resolved.warnings.length}"`;
+  const peerBit = trustedPeer ? 1 : 0;
+  if (safeResolved.provenance.hash !== null) {
+    const etag = `"${safeResolved.provenance.hash.slice(0, 24)}-${safeResolved.fallbackUsed ? 1 : 0}-${safeResolved.warnings.length}-${peerBit}"`;
     headers["ETag"] = etag;
     if (req.headers.get("if-none-match") === etag) {
       return new Response(null, { status: 304, headers });
     }
   }
   if (negotiateEncoding(req.headers.get("accept-encoding")) === null) {
-    return Response.json(resolved, { headers });
+    return Response.json(safeResolved, { headers });
   }
   const versionKey =
-    resolved.provenance.hash !== null
-      ? `v2-live-bets|${resolved.dataSource}|${resolved.fallbackUsed ? 1 : 0}|${resolved.warnings.join("\n")}|${resolved.provenance.hash}`
-      : `v2-live-bets-dyn|${resolved.provenance.generatedAt}|${resolved.pendingCount}`;
+    safeResolved.provenance.hash !== null
+      ? `v2-live-bets|${safeResolved.dataSource}|${safeResolved.fallbackUsed ? 1 : 0}|${safeResolved.warnings.join("\n")}|${peerBit}|${safeResolved.provenance.hash}`
+      : `v2-live-bets-dyn|${safeResolved.provenance.generatedAt}|${safeResolved.pendingCount}|${peerBit}`;
   return encodedResponse(req, {
     version: versionKey,
     contentType: "application/json; charset=utf-8",
-    produce: () => new TextEncoder().encode(JSON.stringify(resolved)),
+    produce: () => new TextEncoder().encode(JSON.stringify(safeResolved)),
     headers,
   });
 }
@@ -4641,4 +4663,47 @@ function withMcpEndpoint(
     }
     return innerFetch(req);
   };
+}
+
+function recordPiiRejectionAudit(
+  req: Request,
+  rejected: { status: 401 | 403 | 503; error: string },
+  ingress: Ingress,
+): void {
+  if (rejected.status !== 401 && rejected.status !== 503) return;
+  let pathname = "/unknown";
+  try {
+    pathname = new URL(req.url).pathname;
+  } catch {
+    // signal-honesty: intentional-invalid-audit-url-fallback
+    pathname = "/invalid-url";
+  }
+  const upgrade = req.headers.get("upgrade")?.toLowerCase() ?? "";
+  const isWs =
+    upgrade === "websocket" ||
+    req.headers.has("sec-websocket-protocol") ||
+    req.headers.has("sec-websocket-key");
+  // Never log raw token values, cookies, query strings, or peer IP addresses.
+  const headerPresent =
+    req.headers.has("authorization") ||
+    req.headers.has("sec-websocket-protocol");
+  try {
+    writeAuditEntry({
+      ts: new Date().toISOString(),
+      category: "auth",
+      action: "pii_rejection",
+      success: false,
+      target: pathname,
+      details: {
+        status: rejected.status,
+        surface: isWs ? "ws_upgrade" : "http",
+        method: req.method,
+        headerPresent,
+        proxied: ingress.proxied,
+        reason: rejected.error,
+      },
+    });
+  } catch {
+    // signal-honesty: intentional-audit-fs-isolation
+  }
 }
