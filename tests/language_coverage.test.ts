@@ -46,6 +46,7 @@ const COVERAGE: Readonly<Record<string, string>> = {
   npmrc: "config",
   gitignore: "config",
   gitattributes: "git attributes (bun.lock text/binary order)",
+  mailmap: "display-only author mapping",
   "git-blame-ignore-revs": "config",
   "bun-version": "runtime pin",
   gitkeep: "placeholder",
