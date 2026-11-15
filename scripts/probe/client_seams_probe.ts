@@ -210,6 +210,6 @@ try {
   );
   process.exit(4);
 } finally {
-  view.close();
-  lock.release();
+  await view.close();
+  await lock.release();
 }

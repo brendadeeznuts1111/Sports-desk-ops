@@ -261,7 +261,7 @@ export function startStandaloneMcpServer(
     port: resolvedPort,
     async stop(closeActiveConnections = true): Promise<void> {
       await mcpHandler.closeAll();
-      server.stop(closeActiveConnections);
+      await server.stop(closeActiveConnections);
     },
   };
 }

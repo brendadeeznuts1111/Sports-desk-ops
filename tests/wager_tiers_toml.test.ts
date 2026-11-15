@@ -184,7 +184,7 @@ describe("Declarative Wager Tiers TOML Config (Bun.TOML v3)", () => {
   });
 
   it("throws when config file does not exist", async () => {
-    expect(
+    await expect(
       loadTomlConfig("config/non_existent_tiers_file.toml"),
     ).rejects.toThrow("Config file not found");
   });

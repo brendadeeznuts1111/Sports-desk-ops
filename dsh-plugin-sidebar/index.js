@@ -394,7 +394,9 @@ export function apply(ctx, config) {
           if (value === undefined || value.byteLength === 0) continue;
           const writable = res.write(value);
           if (!writable && typeof res.once === "function") {
-            await new Promise((resolve) => res.once("drain", resolve));
+            await new Promise((resolve) => {
+              res.once("drain", resolve);
+            });
           }
         }
         res.end();

@@ -270,7 +270,9 @@ export class KalshiClient {
       this.active += 1;
       return;
     }
-    await new Promise<void>((resolve) => this.waiters.push(resolve));
+    await new Promise<void>((resolve) => {
+      this.waiters.push(resolve);
+    });
     this.active += 1;
   }
 

@@ -33,7 +33,7 @@ export async function serveSafe(
       if (probeRes.status === 400) {
         const text = await probeRes.text();
         if (text.includes("explicit proxy server")) {
-          server.stop(true);
+          await server.stop(true);
           continue;
         }
       }

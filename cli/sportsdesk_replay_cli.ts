@@ -266,11 +266,11 @@ async function main(): Promise<number> {
         await Bun.write(outPath, md);
         console.log(`Wrote markdown: ${outPath}`);
       } else {
-        Bun.stdout.write(renderSportsdeskPatternAnsi(md));
-        Bun.stdout.write("\n");
+        await Bun.stdout.write(renderSportsdeskPatternAnsi(md));
+        await Bun.stdout.write("\n");
       }
     } else {
-      Bun.stdout.write(formatSportsdeskReplayTradesTable(result.trades));
+      await Bun.stdout.write(formatSportsdeskReplayTradesTable(result.trades));
     }
   }
 

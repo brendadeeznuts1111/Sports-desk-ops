@@ -153,12 +153,17 @@ export async function syncReportsDirectory(dirPath: string): Promise<void> {
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  if (args.includes("--info")) {
-    getR2ConfigInfo();
-  } else if (args.includes("--verify")) {
-    verifyR2Connection();
-  } else {
-    const target = args[0] || "reports";
-    syncReportsDirectory(target);
+  try {
+    if (args.includes("--info")) {
+      getR2ConfigInfo();
+    } else if (args.includes("--verify")) {
+      await verifyR2Connection();
+    } else {
+      const target = args[0] || "reports";
+      await syncReportsDirectory(target);
+    }
+  } catch (err) {
+    console.error(err);
+    process.exit(1);
   }
 }

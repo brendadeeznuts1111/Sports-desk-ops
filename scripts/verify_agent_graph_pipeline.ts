@@ -386,4 +386,7 @@ function printAndExit(): void {
   process.exit(failed.length === 0 ? 0 : 1);
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

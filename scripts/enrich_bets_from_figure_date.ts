@@ -312,7 +312,7 @@ export async function runEnrichment(options: CliOptions): Promise<{
         if (samples.length < maxSamples) {
           samples.push(enriched);
         }
-        if (outWriter) outWriter.write(JSON.stringify(enriched) + "\n");
+        if (outWriter) await outWriter.write(JSON.stringify(enriched) + "\n");
       } else {
         unmatchedRows++;
         const periodClassification = classifyPortalPeriod({
@@ -321,7 +321,7 @@ export async function runEnrichment(options: CliOptions): Promise<{
         });
         // Output pending un-enriched row with consistent schema flag
         if (outWriter) {
-          outWriter.write(
+          await outWriter.write(
             JSON.stringify({
               ticketNumber: String(tickerRow.WagerNumber),
               liveWagerNumber: tickerRow.WagerNumber,

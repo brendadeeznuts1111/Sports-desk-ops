@@ -653,9 +653,9 @@ async function main(): Promise<number> {
           `capture:f402: sign in in the ${backend} window, then press Enter (profile: ${profile})`,
         );
         process.stdin.resume();
-        await new Promise<void>((resolve) =>
-          process.stdin.once("data", () => resolve()),
-        );
+        await new Promise<void>((resolve) => {
+          process.stdin.once("data", () => resolve());
+        });
         authMode = "interactive";
       }
       if (sniffRequests) {

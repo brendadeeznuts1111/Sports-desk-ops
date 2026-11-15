@@ -456,21 +456,27 @@ export class TerminalSession implements AsyncDisposable {
       timestamp: this._startedAt,
     });
 
-    proc.exited.then((code) => {
-      this._cleanupTimeout();
-      this._exitCode = code;
-      this._exitedAt = Date.now();
-      const final = this._decoder.decode();
-      if (final) {
-        this._raw += final;
-      }
-      this._emitAudit({
-        type: "exit",
-        exitCode: code,
-        durationMs: this._exitedAt - this._startedAt,
-        timestamp: this._exitedAt,
-      });
-    });
+    proc.exited.then(
+      (code) => {
+        this._cleanupTimeout();
+        this._exitCode = code;
+        this._exitedAt = Date.now();
+        const final = this._decoder.decode();
+        if (final) {
+          this._raw += final;
+        }
+        this._emitAudit({
+          type: "exit",
+          exitCode: code,
+          durationMs: this._exitedAt - this._startedAt,
+          timestamp: this._exitedAt,
+        });
+      },
+      () => {
+        this._cleanupTimeout();
+        this._exitedAt = Date.now();
+      },
+    );
 
     if (this._options.timeoutMs && this._options.timeoutMs > 0) {
       this._timeoutTimer = setTimeout(() => {
@@ -631,16 +637,22 @@ export class TerminalSession implements AsyncDisposable {
       this._listeners.push(onDataListener);
 
       if (this._proc) {
-        this._proc.exited.then(() => {
-          if (!matcher(this.text) && !matcher(this.raw)) {
+        this._proc.exited.then(
+          () => {
+            if (!matcher(this.text) && !matcher(this.raw)) {
+              cleanup();
+              reject(
+                new Error(
+                  `Process exited (code ${this._exitCode}) without matching expected output`,
+                ),
+              );
+            }
+          },
+          (err) => {
             cleanup();
-            reject(
-              new Error(
-                `Process exited (code ${this._exitCode}) without matching expected output`,
-              ),
-            );
-          }
-        });
+            reject(err instanceof Error ? err : new Error(String(err)));
+          },
+        );
       }
     });
   }
