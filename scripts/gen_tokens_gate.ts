@@ -3,7 +3,6 @@
  * Zero-drift gate driven by GEN_TOKEN_EMISSION_TARGETS (explicit phases).
  */
 import { randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -26,22 +25,24 @@ const gitEnv = {
 };
 
 function git(args: string[]): { ok: boolean; stdout: string } {
-  const r = spawnSync("git", args, {
+  const r = Bun.spawnSync(["git", ...args], {
     cwd: rootDir,
-    encoding: "utf-8",
+    stdout: "pipe",
+    stderr: "pipe",
     env: gitEnv,
   });
-  return { ok: r.status === 0, stdout: (r.stdout ?? "").trim() };
+  return { ok: r.exitCode === 0, stdout: r.stdout.toString().trim() };
 }
 
 function run(cmd: string, args: string[]): number {
-  const r = spawnSync(cmd, args, {
+  const r = Bun.spawnSync([cmd, ...args], {
     cwd: rootDir,
-    stdio: "inherit",
-    encoding: "utf-8",
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
     env: cmd === "git" ? gitEnv : Bun.env,
   });
-  return r.status ?? 1;
+  return r.exitCode ?? 1;
 }
 
 function pathsForReset(kind: "git-checkout-head" | "rm-before-gen"): string[] {
@@ -69,9 +70,11 @@ function main(): number {
     console.error(
       "::error::generated token outputs are dirty — commit or stash before running gen:tokens:gate",
     );
-    spawnSync("git", ["diff", "--stat", "--", ...allPaths], {
+    Bun.spawnSync(["git", "diff", "--stat", "--", ...allPaths], {
       cwd: rootDir,
-      stdio: "inherit",
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
     });
     return 1;
   }
@@ -98,13 +101,14 @@ function main(): number {
     [GEN_TOKENS_GATE_ENV]: "1",
     [GEN_TOKENS_GATE_RUN_ID_ENV]: gateRunId,
   };
-  const gen = spawnSync("bun", ["run", "gen:tokens"], {
+  const gen = Bun.spawnSync(["bun", "run", "gen:tokens"], {
     cwd: rootDir,
-    stdio: "inherit",
-    encoding: "utf-8",
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
     env: genEnv,
   });
-  if ((gen.status ?? 1) !== 0) {
+  if ((gen.exitCode ?? 1) !== 0) {
     console.error(
       "::error::gen:tokens exited non-zero — fix scripts/generate_tokens.ts or tokens.toml (drift check skipped)",
     );
@@ -137,9 +141,11 @@ function main(): number {
       console.error(
         `::error::${target.repoPath} does not match gen:tokens output — run \`bun run gen:tokens\` and commit (do not hand-edit generated files)`,
       );
-      spawnSync("git", ["diff", "--", target.repoPath], {
+      Bun.spawnSync(["git", "diff", "--", target.repoPath], {
         cwd: rootDir,
-        stdio: "inherit",
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
       });
       failed = 1;
     }

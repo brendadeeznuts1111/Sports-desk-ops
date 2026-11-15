@@ -17,7 +17,6 @@
  * Stdlib only (bun + node builtins); no third-party dependencies.
  */
 
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -1639,26 +1638,29 @@ function renderGeneratedFile(
   const tempDir = mkdtempSync(join(tmpdir(), "sportsdesk-docs-gen-"));
   try {
     const renderedPath = join(tempDir, "generated");
-    const withOut = spawnSync(
-      bun,
-      ["run", scriptRelativePath, "--out", renderedPath],
-      { cwd: root, encoding: "utf8", timeout },
+    const withOut = Bun.spawnSync(
+      [bun, "run", scriptRelativePath, "--out", renderedPath],
+      { cwd: root, stdout: "pipe", stderr: "pipe", timeout },
     );
-    if (withOut.status === 0 && existsSync(renderedPath)) {
+    if (withOut.exitCode === 0 && existsSync(renderedPath)) {
       return { bytes: readFileSync(renderedPath), failure: undefined };
     }
-    const inPlace = spawnSync(bun, ["run", scriptRelativePath], {
+    const inPlace = Bun.spawnSync([bun, "run", scriptRelativePath], {
       cwd: root,
-      encoding: "utf8",
+      stdout: "pipe",
+      stderr: "pipe",
       timeout,
     });
     try {
-      if (inPlace.status !== 0) {
-        const stderr = typeof inPlace.stderr === "string" ? inPlace.stderr : "";
-        const stdout = typeof inPlace.stdout === "string" ? inPlace.stdout : "";
+      if (inPlace.exitCode !== 0) {
+        const stderr = inPlace.stderr.toString();
+        const stdout = inPlace.stdout.toString();
+        const exit = inPlace.exitedDueToTimeout
+          ? "timeout"
+          : String(inPlace.exitCode);
         return {
           bytes: undefined,
-          failure: `${scriptRelativePath} exited ${String(inPlace.status)}: ${truncate((stderr || stdout).trim() || "no output")}`,
+          failure: `${scriptRelativePath} exited ${exit}: ${truncate((stderr || stdout).trim() || "no output")}`,
         };
       }
       if (!existsSync(committedPath)) {

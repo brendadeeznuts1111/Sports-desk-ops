@@ -5,7 +5,6 @@
  *   bun run graph:agent:view
  */
 import { join } from "node:path";
-import { spawn } from "node:child_process";
 
 import {
   defaultAgentGraphViewPaths,
@@ -28,7 +27,11 @@ console.error(
 );
 
 if (Bun.env.GRAPH_VIEW_NO_OPEN !== "1") {
-  spawn("open", [url], { stdio: "ignore", detached: true }).unref();
+  Bun.spawn(["open", url], {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  }).unref();
 }
 
 console.error("[graph:agent:view] Ctrl+C to stop");

@@ -19,7 +19,6 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import {
   formatCronScheduleLine,
   previewCronSchedule,
@@ -1372,21 +1371,25 @@ export async function writeGraphLiveFeedOnce(
         "[GraphPoller] WARNING: publishing a FIXTURE feed to the public R2 edge.",
       );
     }
-    const res = spawnSync(
-      process.execPath,
-      [path.join(repoRoot, "scripts", "publish_r2_graph.mjs")],
+    const res = Bun.spawnSync(
+      [
+        process.execPath,
+        path.join(repoRoot, "scripts", "publish_r2_graph.mjs"),
+      ],
       {
         cwd: repoRoot,
-        stdio: "inherit",
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
       },
     );
-    if (res.status === 0) {
+    if (res.exitCode === 0) {
       console.log(
         `[GraphPoller] ✓ Published live feed & graph.html to Cloudflare R2 edge @ ${payload.lastUpdatedCdt}`,
       );
     } else {
       console.error(
-        `[GraphPoller] ✗ R2 publish failed (status ${String(res.status)}; signal ${String(res.signal)})`,
+        `[GraphPoller] ✗ R2 publish failed (status ${String(res.exitCode)}; signal ${String(res.signalCode)})`,
       );
     }
   }

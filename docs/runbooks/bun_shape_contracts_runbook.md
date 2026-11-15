@@ -103,7 +103,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/sleep)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/evidence_capture.ts`, `cli/sportsdesk_bet_flags_cli.ts`
+- **Here:** `scripts/evidence_capture.ts`, `lib/bun_terminal.ts`
 - **Evidence:** `surface:sleep`, `probe:proc.timing`
 
 #### Bun.sleepSync

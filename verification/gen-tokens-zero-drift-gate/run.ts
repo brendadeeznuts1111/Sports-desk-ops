@@ -3,7 +3,6 @@
  * Run TLC via pstack /statechart on GenTokensGate.tla and render chart.svg (blueprint Pele).
  * Exit code matches TLC: expect 1 while checkout reset allows silent skip (documented finding).
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -75,16 +74,26 @@ function runStatechart(): number {
   }
 
   emptyDir(outScratch);
-  const r = spawnSync(
-    statechart,
-    [spec, "--config", config, "--view", view, "--out", outScratch],
-    { env, stdio: "inherit", encoding: "utf-8" },
-  );
-  if (r.error) {
-    console.error(r.error.message);
+  let r: ReturnType<typeof Bun.spawnSync>;
+  try {
+    r = Bun.spawnSync(
+      [
+        statechart,
+        spec,
+        "--config",
+        config,
+        "--view",
+        view,
+        "--out",
+        outScratch,
+      ],
+      { env, stdin: "inherit", stdout: "inherit", stderr: "inherit" },
+    );
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
     return 2;
   }
-  if (r.signal) return r.status === null ? 143 : 130;
+  if (r.signalCode) return r.exitCode === null ? 143 : 130;
 
   const scratchReport = path.join(outScratch, "report.md");
   const scratchChart = path.join(outScratch, "chart.mmd");
@@ -95,7 +104,7 @@ function runStatechart(): number {
     fs.copyFileSync(scratchChart, chartMmd);
   }
 
-  return r.status ?? 2;
+  return r.exitCode ?? 2;
 }
 
 function renderChart(): void {
