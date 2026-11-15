@@ -16,8 +16,15 @@ import {
   mergeTape,
   nextTabIndex,
   normalizeTickerRow,
+  describeLiveWagersTickerSource,
+  graphHostEdgeIsDaemon,
+  graphStreamPollingFallbackTitle,
+  liveWagerToTickPreview,
+  resolveGraphFeedPollUrl,
+  resolveGraphHostEdge,
   resolveLiveMode,
   resolvePollerState,
+  pollerRefreshHint,
   summarizeBridgeFrame,
   summarizePendingBets,
   summarizePositions,
@@ -305,6 +312,125 @@ describe("resolveLiveMode", () => {
     expect(
       resolveLiveMode({ wsState: "connecting", feedAgeMs: 1_000 }),
     ).toMatchObject({ label: "WS CONNECTING", tone: "cyan" });
+  });
+});
+
+describe("resolveGraphHostEdge", () => {
+  test("token implies daemon even off loopback", () => {
+    expect(
+      resolveGraphHostEdge({ hasAdminToken: true, loopback: false }),
+    ).toEqual({ kind: "daemon" });
+  });
+
+  test("public Pages is static; loopback uses HEAD result", () => {
+    expect(
+      resolveGraphHostEdge({ hasAdminToken: false, loopback: false }),
+    ).toEqual({ kind: "static_pages" });
+    expect(
+      resolveGraphHostEdge({
+        hasAdminToken: false,
+        loopback: true,
+        feedHeadOk: true,
+      }),
+    ).toEqual({ kind: "daemon" });
+    expect(
+      resolveGraphHostEdge({
+        hasAdminToken: false,
+        loopback: true,
+        feedHeadOk: false,
+      }),
+    ).toEqual({ kind: "static_pages" });
+    expect(
+      resolveGraphHostEdge({
+        hasAdminToken: false,
+        loopback: true,
+        fetchAvailable: false,
+      }),
+    ).toEqual({ kind: "static_pages" });
+  });
+});
+
+describe("resolveGraphFeedPollUrl", () => {
+  test("daemon reachability selects the API route", () => {
+    expect(resolveGraphFeedPollUrl({ daemonFeedReachable: true })).toBe(
+      "/api/graph-feed",
+    );
+    expect(resolveGraphFeedPollUrl({ daemonFeedReachable: false })).toBe(
+      "./graph-live-feed.json",
+    );
+    expect(resolveGraphFeedPollUrl()).toBe("./graph-live-feed.json");
+    expect(resolveGraphFeedPollUrl({ hostEdge: { kind: "daemon" } })).toBe(
+      "/api/graph-feed",
+    );
+    expect(
+      resolveGraphFeedPollUrl({ hostEdge: { kind: "static_pages" } }),
+    ).toBe("./graph-live-feed.json");
+  });
+});
+
+describe("liveWagerToTickPreview", () => {
+  test("maps identity fields without inventing money", () => {
+    const preview = liveWagerToTickPreview({
+      insertedAt: "2026-11-04T20:00:00.000Z",
+      login: "BGD101",
+      agentLogin: "BIGDAD",
+      ticketWriter: "GSLIVE",
+      wagerNumber: 12345,
+      legs: [{ raw: "Football - Chiefs -3" }],
+    });
+    expect(preview).toMatchObject({
+      login: "BGD101",
+      ticketWriter: "GSLIVE",
+      wagerNumber: "12345",
+      shortDesc: "Football - Chiefs -3",
+    });
+  });
+});
+
+describe("describeLiveWagersTickerSource", () => {
+  test("names the API route and servedFrom", () => {
+    expect(
+      describeLiveWagersTickerSource({
+        servedFrom: "live",
+        live: { status: "live" },
+      }),
+    ).toContain("/api/live-wagers");
+    expect(
+      describeLiveWagersTickerSource({
+        servedFrom: "live",
+        live: { status: "live" },
+      }),
+    ).toContain("live");
+  });
+});
+
+describe("graphStreamPollingFallbackTitle", () => {
+  test("names the poll path that matches the host edge", () => {
+    expect(graphStreamPollingFallbackTitle({ kind: "daemon" })).toContain(
+      "/api/graph-feed",
+    );
+    expect(graphStreamPollingFallbackTitle({ kind: "static_pages" })).toContain(
+      "graph-live-feed.json",
+    );
+    expect(graphHostEdgeIsDaemon({ kind: "daemon" })).toBe(true);
+    expect(graphHostEdgeIsDaemon({ kind: "static_pages" })).toBe(false);
+  });
+});
+
+describe("pollerRefreshHint", () => {
+  test("is empty for fresh non-fixture feeds", () => {
+    expect(pollerRefreshHint({ feedDataMode: "LIVE", feedAgeMs: 60_000 })).toBe(
+      "",
+    );
+  });
+
+  test("advises refresh for FIXTURE or very stale feeds", () => {
+    expect(
+      pollerRefreshHint({ feedDataMode: "FIXTURE", feedAgeMs: 1_000 }),
+    ).toContain("graph:poll");
+    expect(
+      pollerRefreshHint({ feedDataMode: "LIVE", feedAgeMs: 400_000 }),
+    ).toContain("graph:poll");
   });
 });
 

@@ -2770,6 +2770,7 @@ export function startServer(options?: ServerOptions) {
           asOfFrom: "artifact" as const,
         };
         const liveStatus = resolved.body.live;
+        const servedFrom = resolved.body.servedFrom;
 
         const writer = (url.searchParams.get("writer") ?? "")
           .trim()
@@ -2814,12 +2815,13 @@ export function startServer(options?: ServerOptions) {
         return encodedResponse(req, {
           // Every input to the bytes is in the version: the query, which file won, what was
           // skipped, and whether it has gone stale.
-          version: `live-wagers|${fileSelection.chosen?.path ?? "none"}|${fileSelection.chosen?.version ?? "none"}|${artifact.provenance.source}|${fresh.stale}|${JSON.stringify(skipped)}|${writer}|${type}|${JSON.stringify(liveStatus)}`,
+          version: `live-wagers|${String(servedFrom ?? "unknown")}|${fileSelection.chosen?.path ?? "none"}|${fileSelection.chosen?.version ?? "none"}|${artifact.provenance.source}|${fresh.stale}|${JSON.stringify(skipped)}|${writer}|${type}|${JSON.stringify(liveStatus)}`,
           contentType: "application/json; charset=utf-8",
           produce: () =>
             new TextEncoder().encode(
               JSON.stringify({
                 success: true,
+                ...(typeof servedFrom === "string" ? { servedFrom } : {}),
                 summary: summarizeLiveWagers(filtered),
                 all: summarizeLiveWagers(wagers),
                 writer: writer === "" ? null : writer,
