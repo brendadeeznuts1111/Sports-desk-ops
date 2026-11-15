@@ -11,6 +11,12 @@ import {
   type WagerRow,
   type WeblogRow,
 } from "./f402_analyze_ingest.ts";
+import {
+  resolvedLinkThresholds,
+  type AnalyzeConfig,
+  type LinkEvidenceTypeName,
+  type LinkThresholdName,
+} from "./f402_analyze_config.ts";
 
 export const LINK_DISCLAIMER =
   "Links are evidence-scored guesses, not confirmed identities.";
@@ -53,7 +59,10 @@ export type EvidenceType =
   | "shared_parlay_legs"
   | "stake_fingerprint"
   | "steam_chase"
-  | "sport_market_mix";
+  | "sport_market_mix"
+  | "clv_beat"
+  | "middling_arb"
+  | "login_then_bet";
 
 export interface EvidenceItem {
   readonly type: EvidenceType;
@@ -108,6 +117,29 @@ export interface LinkReport {
 }
 
 export type IpHasher = (ip: string) => string;
+
+export interface LinkOptions {
+  readonly hashIp: IpHasher;
+  readonly config?: AnalyzeConfig;
+  readonly minEdgeScore?: number;
+}
+
+export type LinkThresholds = { readonly [K in LinkThresholdName]: number };
+
+function thresholdsFrom(options: LinkOptions): LinkThresholds {
+  const resolved = resolvedLinkThresholds(options.config);
+  if (options.minEdgeScore !== undefined) {
+    return { ...resolved, minEdgeScore: options.minEdgeScore };
+  }
+  return resolved;
+}
+
+function evidenceWeight(
+  type: EvidenceType,
+  config: AnalyzeConfig | undefined,
+): number {
+  return config?.weights.link[type as LinkEvidenceTypeName] ?? 1;
+}
 
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -223,6 +255,7 @@ function collectSharedIp(
   projection: PullProjection,
   bag: Map<string, EvidenceItem[]>,
   hashIp: IpHasher,
+  th: LinkThresholds,
 ): void {
   const byIp = new Map<string, Map<string, number[]>>();
   for (const row of projection.weblog) {
@@ -252,7 +285,7 @@ function collectSharedIp(
         const prox = overlapOrProximity(
           accounts.get(a) ?? [],
           accounts.get(b) ?? [],
-          SHARED_IP_WINDOW_MS,
+          th.sharedIpWindowMs,
         );
         const overlapFactor = prox.overlap ? 1 : prox.hit ? 0.6 : 0.15;
         const score = clamp01(0.85 * rarity * overlapFactor * infraPenalty);
@@ -283,6 +316,7 @@ function collectSharedIp(
 function collectDeviceTiming(
   projection: PullProjection,
   bag: Map<string, EvidenceItem[]>,
+  th: LinkThresholds,
 ): void {
   const events: { accountId: string; ms: number; fp: string }[] = [];
   const fpCounts = new Map<string, Set<string>>();
@@ -303,7 +337,7 @@ function collectDeviceTiming(
     for (let j = i + 1; j < events.length; j += 1) {
       const right = events[j]!;
       const dt = right.ms - left.ms;
-      if (dt > DEVICE_WINDOW_MS) break;
+      if (dt > th.deviceWindowMs) break;
       if (right.fp !== left.fp || right.accountId === left.accountId) continue;
       const key = `${pairKey(left.accountId, right.accountId)}\u0000${left.fp}`;
       if (seen.has(key)) continue;
@@ -311,7 +345,7 @@ function collectDeviceTiming(
       const users = fpCounts.get(left.fp)?.size ?? 2;
       const rarity = ipRarity(users, Math.max(projection.accounts.length, 2));
       const score = clamp01(
-        0.55 * Math.max(rarity, 0.25) * timeDecay(dt, DEVICE_WINDOW_MS),
+        0.55 * Math.max(rarity, 0.25) * timeDecay(dt, th.deviceWindowMs),
       );
       addEvidence(bag, left.accountId, right.accountId, {
         type: "same_device_timing",
@@ -363,6 +397,7 @@ function greedyPairs(
 function collectTransfers(
   projection: PullProjection,
   bag: Map<string, EvidenceItem[]>,
+  th: LinkThresholds,
 ): void {
   const credits: CashEvent[] = [];
   const debits: CashEvent[] = [];
@@ -377,10 +412,10 @@ function collectTransfers(
     if (row.tranType === "T") credits.push(event);
     else debits.push(event);
   }
-  greedyPairs(debits, credits, TRANSFER_WINDOW_MS, (debit, credit, dt) => {
+  greedyPairs(debits, credits, th.transferWindowMs, (debit, credit, dt) => {
     addEvidence(bag, debit.accountId, credit.accountId, {
       type: "transfer",
-      score: clamp01(0.95 * timeDecay(dt, TRANSFER_WINDOW_MS)),
+      score: clamp01(0.95 * timeDecay(dt, th.transferWindowMs)),
       detail: `T/U pair of ${debit.amountCents} cents ${Math.round(dt / 60000)}m apart`,
       atIso: isoOf(Math.min(debit.ms, credit.ms)),
       amountCents: debit.amountCents,
@@ -391,6 +426,7 @@ function collectTransfers(
 function collectCashMatches(
   projection: PullProjection,
   bag: Map<string, EvidenceItem[]>,
+  th: LinkThresholds,
 ): void {
   const deposits: CashEvent[] = [];
   const withdrawals: CashEvent[] = [];
@@ -405,10 +441,10 @@ function collectCashMatches(
     if (row.tranType === "E") deposits.push(event);
     else withdrawals.push(event);
   }
-  greedyPairs(deposits, withdrawals, CASH_MATCH_WINDOW_MS, (dep, wd, dt) => {
+  greedyPairs(deposits, withdrawals, th.cashMatchWindowMs, (dep, wd, dt) => {
     addEvidence(bag, dep.accountId, wd.accountId, {
       type: "matching_deposit_withdrawal",
-      score: clamp01(0.7 * timeDecay(dt, CASH_MATCH_WINDOW_MS)),
+      score: clamp01(0.7 * timeDecay(dt, th.cashMatchWindowMs)),
       detail: `deposit and withdrawal of ${dep.amountCents} cents ${Math.round(dt / 60000)}m apart`,
       atIso: isoOf(Math.min(dep.ms, wd.ms)),
       amountCents: dep.amountCents,
@@ -475,6 +511,7 @@ export function jaccard(
 function collectSharedParlay(
   projection: PullProjection,
   bag: Map<string, EvidenceItem[]>,
+  th: LinkThresholds,
 ): void {
   const tickets = [...groupWagersByTicket(projection.wagers).entries()]
     .map(([ticket, rows]) => {
@@ -502,13 +539,13 @@ function collectSharedParlay(
       const right = tickets[j]!;
       if (left.accountId === right.accountId) continue;
       const dt = Math.abs(left.ms - right.ms);
-      if (dt > PARLAY_WINDOW_MS) continue;
+      if (dt > th.parlayWindowMs) continue;
       const jac = jaccard(left.legs, right.legs);
-      if (jac < PARLAY_JACCARD_MIN) continue;
+      if (jac < th.parlayJaccardMin) continue;
       const sig = sigOf(left.legs);
       const rarity = ipRarity(signatureCounts.get(sig) ?? 2, total);
       const score = clamp01(
-        0.9 * jac * Math.max(rarity, 0.3) * timeDecay(dt, PARLAY_WINDOW_MS),
+        0.9 * jac * Math.max(rarity, 0.3) * timeDecay(dt, th.parlayWindowMs),
       );
       addEvidence(bag, left.accountId, right.accountId, {
         type: "shared_parlay_legs",
@@ -606,6 +643,7 @@ function collectStakeFingerprint(
 function collectSteam(
   projection: PullProjection,
   bag: Map<string, EvidenceItem[]>,
+  th: LinkThresholds,
 ): void {
   const byLine = new Map<string, WagerRow[]>();
   for (const row of projection.wagers) {
@@ -628,7 +666,7 @@ function collectSteam(
       const start = sorted[i]!;
       const window: WagerRow[] = [start];
       for (let j = i + 1; j < sorted.length; j += 1) {
-        if (sorted[j]!.acceptedMs - start.acceptedMs > STEAM_WINDOW_MS) break;
+        if (sorted[j]!.acceptedMs - start.acceptedMs > th.steamWindowMs) break;
         window.push(sorted[j]!);
       }
       const ids = [...new Set(window.map((row) => row.accountId))];
@@ -651,7 +689,7 @@ function collectSteam(
       const rarity = ipRarity(ids.length, total);
       const burst = timeDecay(
         window[window.length - 1]!.acceptedMs - start.acceptedMs,
-        STEAM_WINDOW_MS,
+        th.steamWindowMs,
       );
       const score = clamp01(
         (moved ? 0.9 : 0.7) * Math.max(rarity, 0.35) * burst,
@@ -726,12 +764,276 @@ function collectSportMarketMix(
   }
 }
 
-function buildEdges(bag: Map<string, EvidenceItem[]>): AccountEdge[] {
+function numericLine(value: string | null): number | null {
+  if (value === null || value.trim() === "") return null;
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Bettor beat the adjusted/close line when orig vs adj is present. */
+export function beatClosingLine(wager: WagerRow): boolean | null {
+  const orig = numericLine(wager.origLine);
+  const adj = numericLine(wager.adjLine);
+  if (orig === null || adj === null || orig === adj) return null;
+  const market = wager.market;
+  const leg = wager.legs[0];
+  if (market === "total") {
+    const token = (leg?.line ?? "").toUpperCase();
+    const ou = token.startsWith("U") ? "U" : "O";
+    return ou === "O" ? orig < adj : orig > adj;
+  }
+  // Spread or money: a more favorable number for the bettor is algebraically larger
+  // (e.g. orig -3 vs adj -3.5, or orig +150 vs adj +130).
+  return orig > adj;
+}
+
+function collectClvBeat(
+  projection: PullProjection,
+  bag: Map<string, EvidenceItem[]>,
+  th: LinkThresholds,
+): void {
+  const byAccount = new Map<string, WagerRow[]>();
+  for (const row of projection.wagers) {
+    if (beatClosingLine(row) !== true) continue;
+    if (row.accountId === "") continue;
+    const list = byAccount.get(row.accountId) ?? [];
+    list.push(row);
+    byAccount.set(row.accountId, list);
+  }
+  const ids = [...byAccount.keys()].sort();
+  const minShared = Math.max(1, Math.trunc(th.clvMinSharedEvents));
+  for (let i = 0; i < ids.length; i += 1) {
+    for (let j = i + 1; j < ids.length; j += 1) {
+      const left = ids[i]!;
+      const right = ids[j]!;
+      const leftKeys = new Set(
+        (byAccount.get(left) ?? []).map(
+          (row) => row.legs[0]?.eventKey ?? row.sport,
+        ),
+      );
+      const shared = (byAccount.get(right) ?? []).filter((row) =>
+        leftKeys.has(row.legs[0]?.eventKey ?? row.sport),
+      );
+      if (shared.length < minShared) continue;
+      const rarity = 1 / Math.max(shared.length + 1, 2);
+      const score = clamp01(
+        0.55 + 0.15 * Math.min(shared.length, 4) * Math.max(rarity, 0.2),
+      );
+      addEvidence(bag, left, right, {
+        type: "clv_beat",
+        score,
+        detail: `both beat the close on ${shared.length} shared event(s)`,
+        atIso: isoOf(shared[0]!.acceptedMs),
+      });
+    }
+  }
+}
+
+function impliedMoneyProb(line: number): number | null {
+  if (!Number.isFinite(line) || line === 0) return null;
+  if (line < 0) return -line / (-line + 100);
+  return 100 / (line + 100);
+}
+
+function collectMiddlingArb(
+  projection: PullProjection,
+  bag: Map<string, EvidenceItem[]>,
+  th: LinkThresholds,
+): void {
+  const byEvent = new Map<string, WagerRow[]>();
+  for (const row of projection.wagers) {
+    const key = row.legs[0]?.eventKey ?? "";
+    if (key === "") continue;
+    const list = byEvent.get(key) ?? [];
+    list.push(row);
+    byEvent.set(key, list);
+  }
+  const windowMs = th.middleWindowMs;
+  for (const [eventKey, rows] of byEvent) {
+    for (let i = 0; i < rows.length; i += 1) {
+      for (let j = i + 1; j < rows.length; j += 1) {
+        const a = rows[i]!;
+        const b = rows[j]!;
+        if (a.accountId === b.accountId) continue;
+        const dt = Math.abs(a.acceptedMs - b.acceptedMs);
+        if (!Number.isFinite(dt) || dt > windowMs) continue;
+        const aLeg = a.legs[0];
+        const bLeg = b.legs[0];
+        if (aLeg === undefined || bLeg === undefined) continue;
+        let kind: "middle" | "arb" | null = null;
+        if (a.market === "spread" && b.market === "spread") {
+          if (aLeg.chosen === bLeg.chosen && aLeg.chosen !== "") continue;
+          const la = numericLine(aLeg.line || a.origLine);
+          const lb = numericLine(bLeg.line || b.origLine);
+          if (la === null || lb === null) continue;
+          const opposite =
+            aLeg.chosen !== "" &&
+            bLeg.chosen !== "" &&
+            aLeg.chosen.toLowerCase() !== bLeg.chosen.toLowerCase();
+          if (opposite && la + lb > 0) kind = "middle";
+        } else if (a.market === "money" && b.market === "money") {
+          if (
+            aLeg.chosen !== "" &&
+            bLeg.chosen !== "" &&
+            aLeg.chosen.toLowerCase() === bLeg.chosen.toLowerCase()
+          ) {
+            continue;
+          }
+          const pa = impliedMoneyProb(
+            numericLine(aLeg.line || a.origLine) ?? Number.NaN,
+          );
+          const pb = impliedMoneyProb(
+            numericLine(bLeg.line || b.origLine) ?? Number.NaN,
+          );
+          if (pa !== null && pb !== null && pa + pb < 1) kind = "arb";
+        } else if (a.market === "total" && b.market === "total") {
+          const aOu = aLeg.line.toUpperCase().startsWith("U") ? "U" : "O";
+          const bOu = bLeg.line.toUpperCase().startsWith("U") ? "U" : "O";
+          if (aOu === bOu) continue;
+          const la = numericLine(a.origLine ?? aLeg.line.split(":")[1] ?? null);
+          const lb = numericLine(b.origLine ?? bLeg.line.split(":")[1] ?? null);
+          if (la !== null && lb !== null && la !== lb) kind = "middle";
+        }
+        if (kind === null) continue;
+        const score = clamp01(
+          (kind === "middle" ? 0.85 : 0.8) * timeDecay(dt, windowMs),
+        );
+        addEvidence(bag, a.accountId, b.accountId, {
+          type: "middling_arb",
+          score,
+          detail: `${kind} on ${eventKey} ${Math.round(dt / 60000)}m apart`,
+          atIso: isoOf(Math.min(a.acceptedMs, b.acceptedMs)),
+        });
+      }
+    }
+  }
+}
+
+function latencyBucket(ms: number): string {
+  if (ms < 10_000) return "0-10s";
+  if (ms < 30_000) return "10-30s";
+  if (ms < 60_000) return "30-60s";
+  if (ms < 5 * 60_000) return "1-5m";
+  if (ms < 15 * 60_000) return "5-15m";
+  if (ms < 60 * 60_000) return "15-60m";
+  return "60m+";
+}
+
+function collectLoginThenBet(
+  projection: PullProjection,
+  bag: Map<string, EvidenceItem[]>,
+  th: LinkThresholds,
+): void {
+  const loginsByAccount = new Map<string, number[]>();
+  for (const row of projection.weblog) {
+    if (row.actionKind !== "login" && row.actionKind !== "token") continue;
+    const accountId = resolveAccountId(row.loginId, projection.accounts);
+    if (accountId === null || accountId === "") continue;
+    const list = loginsByAccount.get(accountId) ?? [];
+    list.push(row.accessMs);
+    loginsByAccount.set(accountId, list);
+  }
+  for (const list of loginsByAccount.values()) list.sort((a, b) => a - b);
+
+  const counts = new Map<string, Record<string, number>>();
+  const pairCounts = new Map<string, number>();
+  for (const wager of projection.wagers) {
+    if (!Number.isFinite(wager.acceptedMs) || wager.accountId === "") continue;
+    const times = loginsByAccount.get(wager.accountId);
+    if (times === undefined) continue;
+    let loginMs: number | null = null;
+    for (let i = times.length - 1; i >= 0; i -= 1) {
+      const candidate = times[i]!;
+      const dt = wager.acceptedMs - candidate;
+      if (dt < 0) continue;
+      if (dt > th.loginBetWindowMs) break;
+      loginMs = candidate;
+      break;
+    }
+    if (loginMs === null) continue;
+    const dt = wager.acceptedMs - loginMs;
+    const bucket = latencyBucket(dt);
+    const bags = counts.get(wager.accountId) ?? {};
+    bags[bucket] = (bags[bucket] ?? 0) + 1;
+    counts.set(wager.accountId, bags);
+    pairCounts.set(wager.accountId, (pairCounts.get(wager.accountId) ?? 0) + 1);
+  }
+
+  const minPairs = Math.max(1, Math.trunc(th.loginBetMinPairs));
+  const ids = [...counts.keys()]
+    .filter((id) => (pairCounts.get(id) ?? 0) >= minPairs)
+    .sort();
+  const buckets = [
+    "0-10s",
+    "10-30s",
+    "30-60s",
+    "1-5m",
+    "5-15m",
+    "15-60m",
+    "60m+",
+  ];
+  const cosine = (
+    a: Record<string, number>,
+    b: Record<string, number>,
+  ): number => {
+    let dot = 0;
+    let na = 0;
+    let nb = 0;
+    for (const key of buckets) {
+      const x = a[key] ?? 0;
+      const y = b[key] ?? 0;
+      dot += x * y;
+      na += x * x;
+      nb += y * y;
+    }
+    if (na === 0 || nb === 0) return 0;
+    return dot / Math.sqrt(na * nb);
+  };
+  for (let i = 0; i < ids.length; i += 1) {
+    for (let j = i + 1; j < ids.length; j += 1) {
+      const left = ids[i]!;
+      const right = ids[j]!;
+      const sim = cosine(counts.get(left)!, counts.get(right)!);
+      if (sim < 0.85) continue;
+      const rarity = ipRarity(2, Math.max(projection.accounts.length, 2));
+      const score = clamp01(0.35 * sim * Math.max(rarity, 0.3));
+      addEvidence(bag, left, right, {
+        type: "login_then_bet",
+        score,
+        detail: `similar login-to-bet latency (cosine ${sim.toFixed(2)}, n=${pairCounts.get(left)}/${pairCounts.get(right)})`,
+        atIso: null,
+      });
+    }
+  }
+}
+
+function applyEvidenceWeights(
+  bag: Map<string, EvidenceItem[]>,
+  config: AnalyzeConfig | undefined,
+): Map<string, EvidenceItem[]> {
+  if (config === undefined) return bag;
+  const out = new Map<string, EvidenceItem[]>();
+  for (const [key, evidence] of bag) {
+    out.set(
+      key,
+      evidence.map((item) => ({
+        ...item,
+        score: clamp01(item.score * evidenceWeight(item.type, config)),
+      })),
+    );
+  }
+  return out;
+}
+
+function buildEdges(
+  bag: Map<string, EvidenceItem[]>,
+  minEdgeScore: number = EDGE_SCORE_MIN,
+): AccountEdge[] {
   const edges: AccountEdge[] = [];
   for (const [key, evidence] of bag) {
     const [left, right] = key.split("\u0000") as [string, string];
     const score = combineEvidenceScores(evidence.map((item) => item.score));
-    if (score < EDGE_SCORE_MIN) continue;
+    if (score < minEdgeScore) continue;
     const ends = endpoints(left, right);
     edges.push({
       a: ends.a,
@@ -803,7 +1105,7 @@ function clustersFromEdges(edges: readonly AccountEdge[]): AccountCluster[] {
 
 export function linkAccounts(
   projection: PullProjection,
-  options: { readonly hashIp: IpHasher },
+  options: LinkOptions,
 ): LinkReport {
   if (
     projection.accounts.length === 0 &&
@@ -817,16 +1119,22 @@ export function linkAccounts(
     );
   }
   const bag = new Map<string, EvidenceItem[]>();
-  collectSharedIp(projection, bag, options.hashIp);
-  collectDeviceTiming(projection, bag);
-  collectTransfers(projection, bag);
-  collectCashMatches(projection, bag);
+  const th = thresholdsFrom(options);
+  collectSharedIp(projection, bag, options.hashIp, th);
+  collectDeviceTiming(projection, bag, th);
+  collectTransfers(projection, bag, th);
+  collectCashMatches(projection, bag, th);
   collectEnteredBy(projection, bag);
-  collectSharedParlay(projection, bag);
+  collectSharedParlay(projection, bag, th);
   collectStakeFingerprint(projection, bag);
-  collectSteam(projection, bag);
+  collectSteam(projection, bag, th);
   collectSportMarketMix(projection, bag);
-  const edges = buildEdges(bag);
+  collectClvBeat(projection, bag, th);
+  collectMiddlingArb(projection, bag, th);
+  collectLoginThenBet(projection, bag, th);
+  const weighted = applyEvidenceWeights(bag, options.config);
+  const minEdgeScore = th.minEdgeScore;
+  const edges = buildEdges(weighted, minEdgeScore);
   const clusters = clustersFromEdges(edges);
   const weblogBetLinks: WeblogBetLink[] = [];
   for (const row of projection.weblog) {
@@ -850,11 +1158,11 @@ export function linkAccounts(
     clusters,
     weblogBetLinks,
     thresholds: {
-      minEdgeScore: EDGE_SCORE_MIN,
-      sharedIpWindowMs: SHARED_IP_WINDOW_MS,
-      deviceWindowMs: DEVICE_WINDOW_MS,
-      transferWindowMs: TRANSFER_WINDOW_MS,
-      cashMatchWindowMs: CASH_MATCH_WINDOW_MS,
+      minEdgeScore,
+      sharedIpWindowMs: th.sharedIpWindowMs,
+      deviceWindowMs: th.deviceWindowMs,
+      transferWindowMs: th.transferWindowMs,
+      cashMatchWindowMs: th.cashMatchWindowMs,
     },
   };
 }

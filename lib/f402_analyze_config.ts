@@ -1,0 +1,166 @@
+/**
+ * Per-signal weight and threshold overrides for analyze. Unknown keys fail
+ * loudly; omitted keys keep the stock defaults so existing tests stay put.
+ */
+
+import { readFileSync } from "node:fs";
+
+import { F402AnalyzeError } from "./f402_analyze_ingest.ts";
+
+export const LINK_EVIDENCE_TYPES = [
+  "shared_ip",
+  "same_device_timing",
+  "transfer",
+  "same_entered_by",
+  "matching_deposit_withdrawal",
+  "shared_parlay_legs",
+  "stake_fingerprint",
+  "steam_chase",
+  "sport_market_mix",
+  "clv_beat",
+  "middling_arb",
+  "login_then_bet",
+] as const;
+
+export type LinkEvidenceTypeName = (typeof LINK_EVIDENCE_TYPES)[number];
+
+export const PREDICT_SIGNAL_NAMES = [
+  "balance_trend",
+  "activity_cadence",
+  "activity_gaps",
+  "deposit_withdrawal_rhythm",
+  "credit_limit_drawdown",
+  "agent_moves",
+] as const;
+
+export type ConfigPredictSignalName = (typeof PREDICT_SIGNAL_NAMES)[number];
+
+export const DEFAULT_LINK_THRESHOLDS = {
+  minEdgeScore: 0.2,
+  ringMinEdgeScore: 0.2,
+  sharedIpWindowMs: 2 * 60 * 60_000,
+  deviceWindowMs: 15 * 60_000,
+  transferWindowMs: 2 * 60 * 60_000,
+  cashMatchWindowMs: 24 * 60 * 60_000,
+  parlayWindowMs: 60 * 60_000,
+  steamWindowMs: 5 * 60_000,
+  parlayJaccardMin: 0.8,
+  middleWindowMs: 24 * 60 * 60_000,
+  loginBetWindowMs: 2 * 60 * 60_000,
+  loginBetMinPairs: 3,
+  clvMinSharedEvents: 2,
+} as const;
+
+export type LinkThresholdName = keyof typeof DEFAULT_LINK_THRESHOLDS;
+
+export interface AnalyzeConfig {
+  readonly weights: {
+    readonly link: Readonly<Partial<Record<LinkEvidenceTypeName, number>>>;
+    readonly predict: Readonly<
+      Partial<Record<ConfigPredictSignalName, number>>
+    >;
+  };
+  readonly thresholds: Readonly<Partial<Record<LinkThresholdName, number>>>;
+}
+
+export const EMPTY_ANALYZE_CONFIG: AnalyzeConfig = {
+  weights: { link: {}, predict: {} },
+  thresholds: {},
+};
+
+const PREDICT_NAMES = new Set<string>(PREDICT_SIGNAL_NAMES);
+const LINK_NAMES = new Set<string>(LINK_EVIDENCE_TYPES);
+const THRESHOLD_NAMES = new Set<string>(Object.keys(DEFAULT_LINK_THRESHOLDS));
+const ROOT_KEYS = new Set(["weights", "thresholds"]);
+const WEIGHT_ROOT_KEYS = new Set(["link", "predict"]);
+
+function fail(message: string): never {
+  throw new F402AnalyzeError("config", "config", message);
+}
+
+function asObject(value: unknown, path: string): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    fail(`${path} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function asFiniteNumber(value: unknown, path: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    fail(`${path} must be a finite number`);
+  }
+  return value;
+}
+
+function parseWeightMap<K extends string>(
+  raw: unknown,
+  path: string,
+  allowed: ReadonlySet<string>,
+): Partial<Record<K, number>> {
+  if (raw === undefined) return {};
+  const obj = asObject(raw, path);
+  const out: Partial<Record<K, number>> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (!allowed.has(key)) fail(`unknown weight ${path}.${key}`);
+    const n = asFiniteNumber(value, `${path}.${key}`);
+    if (n < 0 || n > 1) fail(`${path}.${key} must be between 0 and 1`);
+    out[key as K] = n;
+  }
+  return out;
+}
+
+/** Validate and normalize a config object (already parsed JSON). */
+export function parseAnalyzeConfig(raw: unknown): AnalyzeConfig {
+  const obj = asObject(raw, "config");
+  for (const key of Object.keys(obj)) {
+    if (!ROOT_KEYS.has(key)) fail(`unknown config key "${key}"`);
+  }
+  const weightsRaw = obj.weights;
+  let link: Partial<Record<LinkEvidenceTypeName, number>> = {};
+  let predict: Partial<Record<ConfigPredictSignalName, number>> = {};
+  if (weightsRaw !== undefined) {
+    const weights = asObject(weightsRaw, "weights");
+    for (const key of Object.keys(weights)) {
+      if (!WEIGHT_ROOT_KEYS.has(key)) fail(`unknown weights key "${key}"`);
+    }
+    link = parseWeightMap(weights.link, "weights.link", LINK_NAMES);
+    predict = parseWeightMap(weights.predict, "weights.predict", PREDICT_NAMES);
+  }
+  const thresholds: Partial<Record<LinkThresholdName, number>> = {};
+  if (obj.thresholds !== undefined) {
+    const rawThresholds = asObject(obj.thresholds, "thresholds");
+    for (const [key, value] of Object.entries(rawThresholds)) {
+      if (!THRESHOLD_NAMES.has(key)) fail(`unknown threshold "${key}"`);
+      const n = asFiniteNumber(value, `thresholds.${key}`);
+      if (n < 0) fail(`thresholds.${key} must be >= 0`);
+      thresholds[key as LinkThresholdName] = n;
+    }
+  }
+  return { weights: { link, predict }, thresholds };
+}
+
+export function loadAnalyzeConfig(path: string): AnalyzeConfig {
+  const trimmed = path.trim();
+  if (trimmed === "") fail("missing --config path");
+  let text: string;
+  try {
+    text = readFileSync(trimmed, "utf8");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    fail(`cannot read --config ${trimmed}: ${message}`);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text) as unknown;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    fail(`--config is not valid JSON: ${message}`);
+  }
+  return parseAnalyzeConfig(parsed);
+}
+
+export function resolvedLinkThresholds(config: AnalyzeConfig | undefined): {
+  readonly [K in LinkThresholdName]: number;
+} {
+  return { ...DEFAULT_LINK_THRESHOLDS, ...config?.thresholds };
+}

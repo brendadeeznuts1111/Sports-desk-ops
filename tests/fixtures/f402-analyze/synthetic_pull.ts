@@ -9,6 +9,10 @@ export interface SynthPlayer {
   readonly Agent: string;
   readonly Password?: string;
   readonly CreditLimit?: number;
+  readonly WagerLimit?: number;
+  readonly CurrentBalance?: number;
+  readonly Active?: string;
+  readonly ReadOnlyFlag?: string;
 }
 
 export interface SynthLedgerRow {
@@ -33,6 +37,15 @@ export interface SynthWeblogRow {
 export interface SynthSnapshot {
   readonly id: string;
   readonly players: readonly SynthPlayer[];
+  readonly customerAdmin?: readonly {
+    readonly CustomerID: string;
+    readonly CreditLimit?: number;
+    readonly WagerLimit?: number;
+    readonly CurrentBalance?: number;
+    readonly Active?: string;
+    readonly ReadOnlyFlag?: string;
+    readonly Password?: string;
+  }[];
 }
 
 export interface SynthPullSpec {
@@ -95,6 +108,12 @@ export function writeSyntheticPull(root: string, spec: SynthPullSpec): string {
         PLAYERS: snap.players,
       },
     );
+    if (snap.customerAdmin !== undefined) {
+      writeJson(
+        join(root, "snapshots", snap.id, "census", "getCustomerAdmin.json"),
+        { LIST: snap.customerAdmin },
+      );
+    }
   }
   if (spec.customerAdmin !== undefined) {
     writeJson(join(root, "census", "getCustomerAdmin.json"), {
@@ -712,6 +731,296 @@ export function plantedBehaviourPull(): SynthPullSpec {
     graded: { "2026-11-01": [...steam, ...parlays, joinWager] },
     figureDate: {
       JOIN1: { "2026-11-01": [joinWager] },
+    },
+  };
+}
+
+/** Timeline, CLV, middling, and login-latency rings plus decoys. */
+export function plantedEnhancePull(): SynthPullSpec {
+  const t1 = "2026-11-08T14:00:00.000Z";
+  const t1b = "2026-11-08T14:00:20.000Z";
+  const t2 = "2026-11-08T15:00:00.000Z";
+  const t2b = "2026-11-08T15:00:22.000Z";
+  const t3 = "2026-11-08T16:00:00.000Z";
+  const t3b = "2026-11-08T16:00:18.000Z";
+  const mid = "2026-11-08T17:00:00.000Z";
+  const mid2 = "2026-11-08T17:04:00.000Z";
+  const clvA = "2026-11-08T18:00:00.000Z";
+  const clvB = "2026-11-08T19:00:00.000Z";
+  const late = "2026-11-08T14:10:00.000Z";
+
+  const earlyPlayers = [
+    {
+      customerID: "MOVE1",
+      Login: "move1",
+      NameFirst: "M",
+      Agent: "SUB1",
+      CreditLimit: 50,
+      WagerLimit: 10,
+      CurrentBalance: 40,
+      Active: "Y",
+    },
+    { customerID: "CLV1", Login: "clv1", NameFirst: "C1", Agent: "SUB1" },
+    { customerID: "CLV2", Login: "clv2", NameFirst: "C2", Agent: "SUB1" },
+    { customerID: "CLV3", Login: "clv3", NameFirst: "C3", Agent: "SUB2" },
+    { customerID: "MID1", Login: "mid1", NameFirst: "M1", Agent: "SUB1" },
+    { customerID: "MID2", Login: "mid2", NameFirst: "M2", Agent: "SUB2" },
+    { customerID: "LAT1", Login: "lat1", NameFirst: "L1", Agent: "SUB1" },
+    { customerID: "LAT2", Login: "lat2", NameFirst: "L2", Agent: "SUB1" },
+    { customerID: "LAT3", Login: "lat3", NameFirst: "L3", Agent: "SUB3" },
+  ];
+  const laterPlayers = earlyPlayers.map((p) =>
+    p.customerID === "MOVE1"
+      ? {
+          ...p,
+          Agent: "SUB2",
+          CreditLimit: 20,
+          WagerLimit: 5,
+          CurrentBalance: 5,
+          Active: "N",
+        }
+      : p,
+  );
+
+  const clvWager = (
+    customer: string,
+    ticket: string,
+    event: { team1: string; team2: string },
+    when: string,
+    orig: number,
+    adj: number,
+  ) => ({
+    CustomerID: customer,
+    TicketNumber: ticket,
+    AmountWagered: 11000,
+    AcceptedDateTime: when,
+    SportType: "NBA",
+    WagerType: "S",
+    Team1ID: event.team1,
+    Team2ID: event.team2,
+    ChosenTeamID: event.team1,
+    PeriodDescription: "Game",
+    OrigSpread: orig,
+    AdjSpread: adj,
+  });
+
+  const ev1 = { team1: "BOS", team2: "NYK" };
+  const ev2 = { team1: "MIA", team2: "CHI" };
+  const ev3 = { team1: "DAL", team2: "PHX" };
+
+  return {
+    snapshots: [
+      { id: "2026-11-01", players: earlyPlayers },
+      { id: "2026-11-08", players: laterPlayers },
+    ],
+    ledger: {
+      MOVE1: [
+        {
+          DocumentNumber: 1,
+          TranCode: "C",
+          TranType: "A",
+          Amount: 1000,
+          Balance: 4000,
+          Description: "open",
+          TranDateTime: "2026-11-01T12:00:00.000Z",
+        },
+      ],
+    },
+    weblog: {
+      "2026-11-08": [
+        {
+          AccessDateTime: t1,
+          IPAddress: "198.51.100.10",
+          LoginID: "lat1",
+          Operation: "Login successful",
+        },
+        {
+          AccessDateTime: t2,
+          IPAddress: "198.51.100.10",
+          LoginID: "lat1",
+          Operation: "Login successful",
+        },
+        {
+          AccessDateTime: t3,
+          IPAddress: "198.51.100.10",
+          LoginID: "lat1",
+          Operation: "Login successful",
+        },
+        {
+          AccessDateTime: t1,
+          IPAddress: "198.51.100.11",
+          LoginID: "lat2",
+          Operation: "Login successful Token",
+        },
+        {
+          AccessDateTime: t2,
+          IPAddress: "198.51.100.11",
+          LoginID: "lat2",
+          Operation: "Login successful",
+        },
+        {
+          AccessDateTime: t3,
+          IPAddress: "198.51.100.11",
+          LoginID: "lat2",
+          Operation: "Login successful",
+        },
+        {
+          AccessDateTime: t1,
+          IPAddress: "198.51.100.12",
+          LoginID: "lat3",
+          Operation: "Login successful",
+        },
+        {
+          AccessDateTime: t2,
+          IPAddress: "198.51.100.12",
+          LoginID: "lat3",
+          Operation: "Login successful",
+        },
+        {
+          AccessDateTime: t3,
+          IPAddress: "198.51.100.12",
+          LoginID: "lat3",
+          Operation: "Login successful",
+        },
+      ],
+    },
+    graded: {
+      "2026-11-08": [
+        clvWager("CLV1", "9001", ev1, clvA, -3, -3.5),
+        clvWager("CLV1", "9002", ev2, clvB, -2.5, -3),
+        clvWager("CLV2", "9003", ev1, clvA, -3, -3.5),
+        clvWager("CLV2", "9004", ev2, clvB, -2.5, -3),
+        clvWager("CLV3", "9005", ev3, clvA, -3, -3),
+        {
+          CustomerID: "MID1",
+          TicketNumber: "9101",
+          AmountWagered: 15000,
+          AcceptedDateTime: mid,
+          SportType: "NBA",
+          WagerType: "S",
+          Team1ID: "LAL",
+          Team2ID: "GSW",
+          ChosenTeamID: "GSW",
+          PeriodDescription: "Game",
+          OrigSpread: 3,
+          AdjSpread: 3,
+        },
+        {
+          CustomerID: "MID2",
+          TicketNumber: "9102",
+          AmountWagered: 15000,
+          AcceptedDateTime: mid2,
+          SportType: "NBA",
+          WagerType: "S",
+          Team1ID: "LAL",
+          Team2ID: "GSW",
+          ChosenTeamID: "LAL",
+          PeriodDescription: "Game",
+          OrigSpread: -2.5,
+          AdjSpread: -2.5,
+        },
+        {
+          CustomerID: "LAT1",
+          TicketNumber: "9201",
+          AmountWagered: 5000,
+          AcceptedDateTime: t1b,
+          SportType: "NBA",
+          Team1ID: "ORL",
+          Team2ID: "ATL",
+          ChosenTeamID: "ORL",
+          PeriodDescription: "Game",
+          OrigSpread: -1,
+          AdjSpread: -1,
+        },
+        {
+          CustomerID: "LAT1",
+          TicketNumber: "9202",
+          AmountWagered: 5000,
+          AcceptedDateTime: t2b,
+          SportType: "NBA",
+          Team1ID: "ORL",
+          Team2ID: "ATL",
+          ChosenTeamID: "ORL",
+          PeriodDescription: "Game",
+        },
+        {
+          CustomerID: "LAT1",
+          TicketNumber: "9203",
+          AmountWagered: 5000,
+          AcceptedDateTime: t3b,
+          SportType: "NBA",
+          Team1ID: "ORL",
+          Team2ID: "ATL",
+          ChosenTeamID: "ORL",
+          PeriodDescription: "Game",
+        },
+        {
+          CustomerID: "LAT2",
+          TicketNumber: "9204",
+          AmountWagered: 5000,
+          AcceptedDateTime: t1b,
+          SportType: "NBA",
+          Team1ID: "SAC",
+          Team2ID: "POR",
+          ChosenTeamID: "SAC",
+          PeriodDescription: "Game",
+        },
+        {
+          CustomerID: "LAT2",
+          TicketNumber: "9205",
+          AmountWagered: 5000,
+          AcceptedDateTime: t2b,
+          SportType: "NBA",
+          Team1ID: "SAC",
+          Team2ID: "POR",
+          ChosenTeamID: "SAC",
+          PeriodDescription: "Game",
+        },
+        {
+          CustomerID: "LAT2",
+          TicketNumber: "9206",
+          AmountWagered: 5000,
+          AcceptedDateTime: t3b,
+          SportType: "NBA",
+          Team1ID: "SAC",
+          Team2ID: "POR",
+          ChosenTeamID: "SAC",
+          PeriodDescription: "Game",
+        },
+        {
+          CustomerID: "LAT3",
+          TicketNumber: "9207",
+          AmountWagered: 25,
+          AcceptedDateTime: late,
+          SportType: "NBA",
+          Team1ID: "MIN",
+          Team2ID: "OKC",
+          ChosenTeamID: "MIN",
+          PeriodDescription: "Game",
+        },
+        {
+          CustomerID: "LAT3",
+          TicketNumber: "9208",
+          AmountWagered: 25,
+          AcceptedDateTime: "2026-11-08T15:10:00.000Z",
+          SportType: "NBA",
+          Team1ID: "MIN",
+          Team2ID: "OKC",
+          ChosenTeamID: "MIN",
+          PeriodDescription: "Game",
+        },
+        {
+          CustomerID: "LAT3",
+          TicketNumber: "9209",
+          AmountWagered: 25,
+          AcceptedDateTime: "2026-11-08T16:10:00.000Z",
+          SportType: "NBA",
+          Team1ID: "MIN",
+          Team2ID: "OKC",
+          ChosenTeamID: "MIN",
+          PeriodDescription: "Game",
+        },
+      ],
     },
   };
 }

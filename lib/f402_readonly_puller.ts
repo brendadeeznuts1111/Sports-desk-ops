@@ -654,6 +654,68 @@ export function eachUtcDateInclusive(from: string, to: string): string[] {
   return days;
 }
 
+export async function mapPool<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    throw new F402PullerError(
+      "config",
+      "options",
+      "--concurrency must be an integer >= 1",
+    );
+  }
+  const out: R[] = Array.from({ length: items.length });
+  if (concurrency === 1 || items.length <= 1) {
+    for (let i = 0; i < items.length; i += 1) {
+      out[i] = await fn(items[i]!, i);
+    }
+    return out;
+  }
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    async () => {
+      while (true) {
+        const index = next;
+        next += 1;
+        if (index >= items.length) return;
+        out[index] = await fn(items[index]!, index);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return out;
+}
+
+export function filterCustomerIds(
+  customerIds: readonly string[],
+  accounts: readonly string[],
+): string[] {
+  if (accounts.length === 0) return [...customerIds];
+  const allow = new Set(accounts.map((id) => id.toLowerCase()));
+  return customerIds.filter((id) => allow.has(id.toLowerCase()));
+}
+
+export function downlineAgentIds(
+  general: readonly { readonly agentId: string }[],
+  rootAgentId: string,
+): string[] {
+  const root = rootAgentId.trim().toLowerCase();
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const row of general) {
+    const id = row.agentId.trim();
+    if (id === "" || id.toLowerCase() === root) continue;
+    const key = id.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(id);
+  }
+  return out;
+}
+
 export interface SessionProvider {
   read(): F402Session | null;
   ensure(
@@ -748,7 +810,14 @@ export interface CensusResult {
   readonly customerIds: readonly string[];
 }
 
-export async function runCensus(ctx: RunContext): Promise<CensusResult> {
+export async function runCensus(
+  ctx: RunContext,
+  options: {
+    readonly recurseDownline?: boolean;
+    readonly agents?: readonly string[];
+    readonly accounts?: readonly string[];
+  } = {},
+): Promise<CensusResult> {
   const hierarchyRaw = await ctx.client.post("getHeriarchy", {
     agentID: ctx.agentId,
   });
@@ -770,19 +839,56 @@ export async function runCensus(ctx: RunContext): Promise<CensusResult> {
   const players = normalizeAgentTreePlayerRows(list.PLAYERS);
   const playerSummary = summarizeListAgentsByAgentPlayers(list.PLAYERS);
   const treeSummary = summarizeListAgentsByAgent(list);
-  const customerIds = players
-    .map((row) => row.customerId)
-    .filter((id) => id !== "");
+  const playerRows = [...players];
+  if (options.recurseDownline === true) {
+    const general = list.GENERAL.map((row) => ({
+      agentId: String(row.AgentID ?? row.Login ?? "").trim(),
+      agentType: String(row.AgentType ?? "A").trim() || "A",
+    }));
+    let targets = downlineAgentIds(general, ctx.agentId);
+    if (options.agents !== undefined && options.agents.length > 0) {
+      const allow = new Set(options.agents.map((id) => id.toLowerCase()));
+      targets = targets.filter((id) => allow.has(id.toLowerCase()));
+    }
+    for (const agentId of targets) {
+      const row = general.find((item) => item.agentId === agentId);
+      const childRaw = await ctx.client.post("getListAgenstByAgent", {
+        agentID: agentId,
+        agentType: row?.agentType || "A",
+        ...(ctx.agentOwner ? { agentOwner: ctx.agentOwner } : {}),
+      });
+      const child = parseListAgentsByAgentEnvelope(childRaw);
+      const redactedChild = redactListAgentsByAgentEnvelope(child);
+      writeRawJson(
+        ctx.outDir,
+        `census/list-agents/${agentId}.json`,
+        redactedChild,
+      );
+      playerRows.push(...normalizeAgentTreePlayerRows(child.PLAYERS));
+    }
+  }
+  const seenCustomers = new Set<string>();
+  const customerIds: string[] = [];
+  for (const row of playerRows) {
+    if (row.customerId === "" || seenCustomers.has(row.customerId)) continue;
+    seenCustomers.add(row.customerId);
+    customerIds.push(row.customerId);
+  }
+  const filteredIds = filterCustomerIds(customerIds, options.accounts ?? []);
+  const playerCount =
+    options.accounts !== undefined && options.accounts.length > 0
+      ? filteredIds.length
+      : playerSummary.playerCount + (playerRows.length - players.length);
 
   const result: CensusResult = {
     agentCount: hierarchySummary.agentCount,
-    playerCount: playerSummary.playerCount,
+    playerCount,
     maxLevel: hierarchySummary.maxLevel,
     roots: hierarchySummary.roots,
     orphans: hierarchySummary.orphans,
     countsByLevel: hierarchySummary.countsByLevel,
     countsByType: hierarchySummary.countsByType,
-    customerIds,
+    customerIds: filteredIds,
   };
   writeSummaryJson(ctx.outDir, "census-summary.json", {
     agentCount: result.agentCount,
@@ -799,7 +905,7 @@ export async function runCensus(ctx: RunContext): Promise<CensusResult> {
     ...(previous ?? emptyCheckpoint(ctx.agentId, nowIso(ctx.clock))),
     phase: "census",
     agentId: ctx.agentId,
-    customerIds,
+    customerIds: filteredIds,
     census: {
       agentCount: result.agentCount,
       playerCount: result.playerCount,
@@ -899,12 +1005,20 @@ export interface TransactionsResult {
 
 export async function runTransactions(
   ctx: RunContext,
-  options: { readonly start?: string; readonly resume?: boolean } = {},
+  options: {
+    readonly start?: string;
+    readonly resume?: boolean;
+    readonly accounts?: readonly string[];
+    readonly concurrency?: number;
+  } = {},
 ): Promise<TransactionsResult> {
   const previous =
     loadCheckpoint(ctx.outDir) ??
     emptyCheckpoint(ctx.agentId, nowIso(ctx.clock));
-  const customerIds = previous.customerIds;
+  const customerIds = filterCustomerIds(
+    previous.customerIds,
+    options.accounts ?? [],
+  );
   if (customerIds.length === 0) {
     throw new F402PullerError(
       "config",
@@ -922,11 +1036,15 @@ export async function runTransactions(
     ...(ctx.agentId ? { agentID: ctx.agentId } : {}),
     ...(ctx.agentOwner ? { agentOwner: ctx.agentOwner } : {}),
   };
-  for (const customerId of customerIds) {
+  const pending = customerIds.filter((customerId) => {
     if (done.has(customerId)) {
       skipped += 1;
-      continue;
+      return false;
     }
+    return true;
+  });
+  const concurrency = options.concurrency ?? 1;
+  await mapPool(pending, concurrency, async (customerId) => {
     const listRaw = await ctx.client.post("getTransactionList", {
       ...common,
       acc: customerId,
@@ -950,7 +1068,8 @@ export async function runTransactions(
       completedCustomers: [...done],
       updatedAtIso: nowIso(ctx.clock),
     });
-  }
+    return customerId;
+  });
   writeSummaryJson(ctx.outDir, "transactions-summary.json", {
     attempted: customerIds.length,
     completed,
@@ -1081,6 +1200,8 @@ export async function runWagers(
     readonly to: string;
     readonly resume?: boolean;
     readonly includeFigureDate?: boolean;
+    readonly accounts?: readonly string[];
+    readonly concurrency?: number;
   },
 ): Promise<WagersResult> {
   const dates = eachUtcDateInclusive(options.from, options.to);
@@ -1173,7 +1294,11 @@ export async function runWagers(
   let figureDateCompleted = 0;
   let figureDateSkipped = 0;
   if (includeFigureDate) {
-    const customerIds = previous.customerIds;
+    const customerIds = filterCustomerIds(
+      previous.customerIds,
+      options.accounts ?? [],
+    );
+    const jobs: { customerId: string; date: string; key: string }[] = [];
     for (const customerId of customerIds) {
       for (const date of dates) {
         const key = `${customerId}|${date}`;
@@ -1182,40 +1307,45 @@ export async function runWagers(
           figureDateSkipped += 1;
           continue;
         }
-        const payload = buildManagerWagersByFigureDatePayload({
-          agentID: ctx.agentId,
-          agentOwner: ctx.agentOwner || ctx.agentId,
-          customerID: customerId,
-          date,
-          figureDate: date,
-        });
-        const raw = await ctx.client.post(
-          "getWagersByFigureDate",
-          stringFields(payload as unknown as Record<string, string | number>),
-        );
-        try {
-          parseFigureDateWagersPayload(raw);
-        } catch {
-          // Persist the raw body even if the envelope is unexpected.
-        }
-        writeRawJson(
-          ctx.outDir,
-          `wagers/figure-date/${customerId}/${date}.json`,
-          raw,
-        );
-        figureDone.add(key);
-        figureDateCompleted += 1;
-        saveCheckpoint(ctx.outDir, {
-          ...previous,
-          phase: "wagers",
-          wagersPendingDone: true,
-          wagersTickerDone: true,
-          completedGradedDates: [...gradedDone],
-          completedFigureDateKeys: [...figureDone],
-          updatedAtIso: nowIso(ctx.clock),
-        });
+        jobs.push({ customerId, date, key });
       }
     }
+    const concurrency = options.concurrency ?? 1;
+    await mapPool(jobs, concurrency, async (job) => {
+      const payload = buildManagerWagersByFigureDatePayload({
+        agentID: ctx.agentId,
+        agentOwner: ctx.agentOwner || ctx.agentId,
+        customerID: job.customerId,
+        date: job.date,
+        figureDate: job.date,
+      });
+      const raw = await ctx.client.post(
+        "getWagersByFigureDate",
+        stringFields(payload as unknown as Record<string, string | number>),
+      );
+      try {
+        parseFigureDateWagersPayload(raw);
+      } catch {
+        // Persist the raw body even if the envelope is unexpected.
+      }
+      writeRawJson(
+        ctx.outDir,
+        `wagers/figure-date/${job.customerId}/${job.date}.json`,
+        raw,
+      );
+      figureDone.add(job.key);
+      figureDateCompleted += 1;
+      saveCheckpoint(ctx.outDir, {
+        ...previous,
+        phase: "wagers",
+        wagersPendingDone: true,
+        wagersTickerDone: true,
+        completedGradedDates: [...gradedDone],
+        completedFigureDateKeys: [...figureDone],
+        updatedAtIso: nowIso(ctx.clock),
+      });
+      return job.key;
+    });
   }
 
   writeSummaryJson(ctx.outDir, "wagers-summary.json", {

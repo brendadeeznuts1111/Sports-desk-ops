@@ -9,8 +9,10 @@ import {
   type PullProjection,
 } from "./f402_analyze_ingest.ts";
 import {
+  PREDICT_SIGNAL_WEIGHTS,
   predictAccount,
   type AccountPrediction,
+  type PredictSignalName,
 } from "./f402_analyze_predict.ts";
 
 export const CALIBRATION_MIN_SAMPLE = 30;
@@ -35,6 +37,14 @@ export interface BacktestRow {
   readonly reasons: readonly string[];
 }
 
+export interface AblationRow {
+  readonly signal: string;
+  readonly brier: number;
+  readonly deltaBrier: number;
+  readonly windowCount: number;
+  readonly lowSample: boolean;
+}
+
 export interface CalibrationReport {
   readonly horizonDays: number;
   readonly windowCount: number;
@@ -45,6 +55,7 @@ export interface CalibrationReport {
   readonly predictedMean: number;
   readonly bins: readonly CalibrationBin[];
   readonly rows: readonly BacktestRow[];
+  readonly ablation: readonly AblationRow[];
 }
 
 export function brierScore(
@@ -232,6 +243,7 @@ export function sliceProjection(
       agentChanged: agents.length === 0 ? null : new Set(agents).size > 1,
     };
   });
+  const snapshotIds = projection.snapshotIds.filter((id) => snapshotOk(id));
   return {
     ...projection,
     accounts,
@@ -244,9 +256,13 @@ export function sliceProjection(
     wagers: projection.wagers.filter(
       (row) => row.acceptedMs <= asOfMs || !Number.isFinite(row.acceptedMs),
     ),
-    snapshotIds: projection.snapshotIds.filter((id) => snapshotOk(id)),
-    censusSnapshotCount: projection.snapshotIds.filter((id) => snapshotOk(id))
-      .length,
+    censusSnapshots: (projection.censusSnapshots ?? []).filter((row) => {
+      if (snapshotOk(row.snapshotId)) return true;
+      const ms = Date.parse(row.takenAtIso);
+      return Number.isFinite(ms) && ms <= asOfMs;
+    }),
+    snapshotIds,
+    censusSnapshotCount: snapshotIds.length,
   };
 }
 
@@ -255,12 +271,21 @@ function predictedProbability(prediction: AccountPrediction): number {
   return Number((0.6 * prediction.score + 0.4 * hazard).toFixed(4));
 }
 
+export function leaveOneOutWeights(
+  weights: Readonly<Record<PredictSignalName, number>>,
+  dropped: PredictSignalName,
+): Record<PredictSignalName, number> {
+  return { ...weights, [dropped]: 0 };
+}
+
 export function backtestPredict(
   projection: PullProjection,
   options: {
     readonly horizonDays?: number;
     readonly nowMs?: number;
     readonly minSample?: number;
+    readonly weights?: Readonly<Partial<Record<PredictSignalName, number>>>;
+    readonly ablation?: boolean;
   } = {},
 ): CalibrationReport {
   if (projection.accounts.length === 0) {
@@ -286,7 +311,12 @@ export function backtestPredict(
       ) {
         continue;
       }
-      const prediction = predictAccount(sliced, account.accountId, asOfMs);
+      const prediction = predictAccount(
+        sliced,
+        account.accountId,
+        asOfMs,
+        options.weights === undefined ? {} : { weights: options.weights },
+      );
       const outcome = outcomeInHorizon(
         projection,
         account.accountId,
@@ -316,7 +346,7 @@ export function backtestPredict(
     predicted.length === 0
       ? 0
       : predicted.reduce((s, v) => s + v, 0) / predicted.length;
-  return {
+  const report: CalibrationReport = {
     horizonDays,
     windowCount: rows.length,
     brier: Number(brier.toFixed(6)),
@@ -326,5 +356,31 @@ export function backtestPredict(
     predictedMean: Number(predictedMean.toFixed(4)),
     bins,
     rows,
+    ablation: [],
   };
+  if (options.ablation === false) return report;
+  const baseWeights = {
+    ...PREDICT_SIGNAL_WEIGHTS,
+    ...options.weights,
+  };
+  const ablation: AblationRow[] = [];
+  for (const signal of Object.keys(
+    PREDICT_SIGNAL_WEIGHTS,
+  ) as PredictSignalName[]) {
+    const ablated = backtestPredict(projection, {
+      horizonDays,
+      nowMs,
+      minSample,
+      weights: leaveOneOutWeights(baseWeights, signal),
+      ablation: false,
+    });
+    ablation.push({
+      signal,
+      brier: ablated.brier,
+      deltaBrier: Number((ablated.brier - report.brier).toFixed(6)),
+      windowCount: ablated.windowCount,
+      lowSample: ablated.lowSample,
+    });
+  }
+  return { ...report, ablation };
 }

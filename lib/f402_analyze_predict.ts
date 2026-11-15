@@ -177,12 +177,23 @@ function waitingWindow(
   };
 }
 
-function unavailable(name: PredictSignalName, reason: string): SignalResult {
+function signalWeight(
+  name: PredictSignalName,
+  weights: Readonly<Partial<Record<PredictSignalName, number>>> | undefined,
+): number {
+  return weights?.[name] ?? PREDICT_SIGNAL_WEIGHTS[name];
+}
+
+function unavailable(
+  name: PredictSignalName,
+  reason: string,
+  weights?: Readonly<Partial<Record<PredictSignalName, number>>>,
+): SignalResult {
   return {
     name,
     available: false,
     value: null,
-    weight: PREDICT_SIGNAL_WEIGHTS[name],
+    weight: signalWeight(name, weights),
     contribution: 0,
     reason,
   };
@@ -192,9 +203,10 @@ function availableSignal(
   name: PredictSignalName,
   value: number,
   reason: string,
+  weights?: Readonly<Partial<Record<PredictSignalName, number>>>,
 ): SignalResult {
   const clamped = clamp01(value);
-  const weight = PREDICT_SIGNAL_WEIGHTS[name];
+  const weight = signalWeight(name, weights);
   return {
     name,
     available: true,
@@ -209,7 +221,11 @@ export function predictAccount(
   projection: PullProjection,
   accountId: string,
   nowMs: number,
+  options: {
+    readonly weights?: Readonly<Partial<Record<PredictSignalName, number>>>;
+  } = {},
 ): AccountPrediction {
+  const weights = options.weights;
   const account = projection.accounts.find(
     (row) => row.accountId === accountId,
   );
@@ -251,6 +267,7 @@ export function predictAccount(
       ? unavailable(
           "balance_trend",
           "Need at least two getTransactionList rows with a running Balance.",
+          weights,
         )
       : availableSignal(
           "balance_trend",
@@ -258,6 +275,7 @@ export function predictAccount(
             -slope / Math.max(Math.abs(liveBalances[0]?.y ?? 0) * 0.05, 1000),
           ),
           `Balance slope ${slope.toFixed(0)} cents/day (negative is drawdown).`,
+          weights,
         );
 
   let cadenceSignal: SignalResult;
@@ -265,6 +283,7 @@ export function predictAccount(
     cadenceSignal = unavailable(
       "activity_cadence",
       "Need at least three dated events to compare recent vs typical pace.",
+      weights,
     );
   } else {
     const recent = median(
@@ -276,18 +295,20 @@ export function predictAccount(
       "activity_cadence",
       clamp01((ratio - 1) / 2),
       `Recent median gap ${(recent / 86_400_000).toFixed(1)}d vs typical ${(typical / 86_400_000).toFixed(1)}d.`,
+      weights,
     );
   }
 
   let gapSignal: SignalResult;
   if (lastMs === null) {
-    gapSignal = unavailable("activity_gaps", "No dated activity.");
+    gapSignal = unavailable("activity_gaps", "No dated activity.", weights);
   } else {
     const elapsedDays = Math.max(0, (nowMs - lastMs) / 86_400_000);
     gapSignal = availableSignal(
       "activity_gaps",
       1 - Math.exp(-elapsedDays / (2 * Math.max(typicalGapDays, 0.5))),
       `Last event ${elapsedDays.toFixed(1)}d ago; typical gap ${typicalGapDays.toFixed(1)}d.`,
+      weights,
     );
   }
 
@@ -300,6 +321,7 @@ export function predictAccount(
     cashSignal = unavailable(
       "deposit_withdrawal_rhythm",
       "No deposit (E) or withdrawal (I) rows.",
+      weights,
     );
   } else {
     const lastCash = cash[cash.length - 1]!;
@@ -309,6 +331,7 @@ export function predictAccount(
       "deposit_withdrawal_rhythm",
       1 - Math.exp(-elapsed / (2 * Math.max(tau, 0.5))),
       `Last ${lastCash.kindLabel.toLowerCase()} ${elapsed.toFixed(1)}d ago; typical cash interval ${tau.toFixed(1)}d.`,
+      weights,
     );
   }
 
@@ -319,11 +342,13 @@ export function predictAccount(
     drawdownSignal = unavailable(
       "credit_limit_drawdown",
       "CreditLimit was not present on the ingested census or getCustomerAdmin snapshot.",
+      weights,
     );
   } else if (latestBalance === null) {
     drawdownSignal = unavailable(
       "credit_limit_drawdown",
       "CreditLimit is known but no running Balance is available.",
+      weights,
     );
   } else {
     const used = account.creditLimitCents - latestBalance;
@@ -332,6 +357,7 @@ export function predictAccount(
       "credit_limit_drawdown",
       clamp01(ratio),
       `Balance ${latestBalance} cents against CreditLimit ${account.creditLimitCents} cents.`,
+      weights,
     );
   }
 
@@ -340,6 +366,7 @@ export function predictAccount(
     moveSignal = unavailable(
       "agent_moves",
       "Needs at least two census snapshots to compare AgentID / Agent.",
+      weights,
     );
   } else if (account.agentChanged) {
     const agents = Object.entries(account.agentBySnapshot)
@@ -349,12 +376,14 @@ export function predictAccount(
       "agent_moves",
       1,
       `Agent changed (${agents}).`,
+      weights,
     );
   } else {
     moveSignal = availableSignal(
       "agent_moves",
       0,
       "Agent was stable across the ingested census snapshots.",
+      weights,
     );
   }
 
@@ -400,14 +429,24 @@ export function predictAccount(
 
 export function predictAccounts(
   projection: PullProjection,
-  options: { readonly nowMs?: number } = {},
+  options: {
+    readonly nowMs?: number;
+    readonly weights?: Readonly<Partial<Record<PredictSignalName, number>>>;
+  } = {},
 ): PredictReport {
   if (projection.accounts.length === 0) {
     throw new F402AnalyzeError("empty", "predict", "no accounts to score");
   }
   const nowMs = options.nowMs ?? Date.now();
   const accounts = projection.accounts
-    .map((row) => predictAccount(projection, row.accountId, nowMs))
+    .map((row) =>
+      predictAccount(
+        projection,
+        row.accountId,
+        nowMs,
+        options.weights === undefined ? {} : { weights: options.weights },
+      ),
+    )
     .sort(
       (a, b) => b.score - a.score || a.accountId.localeCompare(b.accountId),
     );

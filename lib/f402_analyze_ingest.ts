@@ -239,6 +239,9 @@ export interface CensusAccountSnapshot {
   readonly agent: string;
   readonly nameFirst: string;
   readonly creditLimitCents: number | null;
+  readonly wagerLimitCents: number | null;
+  readonly balanceCents: number | null;
+  readonly status: string;
 }
 
 export interface AnalyzedAccount {
@@ -328,6 +331,7 @@ export interface PullProjection {
   readonly ledger: readonly LedgerRow[];
   readonly weblog: readonly WeblogRow[];
   readonly wagers: readonly WagerRow[];
+  readonly censusSnapshots: readonly CensusAccountSnapshot[];
   readonly snapshotIds: readonly string[];
   readonly censusSnapshotCount: number;
 }
@@ -369,6 +373,81 @@ function parseCreditLimitCents(raw: unknown): number | null {
   return null;
 }
 
+function parseLimitCents(raw: unknown): number | null {
+  return parseCreditLimitCents(raw);
+}
+
+export function normalizeAccountStatus(raw: Record<string, unknown>): string {
+  const readOnly = raw.ReadOnlyFlag ?? raw.readOnlyFlag;
+  if (readOnly === 1 || readOnly === true || String(readOnly).trim() === "1") {
+    return "readonly";
+  }
+  const active = raw.Active ?? raw.Status ?? raw.status;
+  if (active === undefined || active === null || String(active).trim() === "") {
+    return "";
+  }
+  const text = String(active).trim().toLowerCase();
+  if (["n", "0", "no", "false", "inactive", "disabled"].includes(text)) {
+    return "inactive";
+  }
+  if (["y", "1", "yes", "true", "active", "enabled"].includes(text)) {
+    return "active";
+  }
+  return String(active).trim();
+}
+
+function extrasFromRaw(raw: Record<string, unknown>): {
+  creditLimitCents: number | null;
+  wagerLimitCents: number | null;
+  balanceCents: number | null;
+  status: string;
+} {
+  return {
+    creditLimitCents: parseLimitCents(raw.CreditLimit),
+    wagerLimitCents: parseLimitCents(raw.WagerLimit),
+    balanceCents: parseLimitCents(
+      raw.CurrentBalance ?? raw.AvailableBalance ?? raw.Balance,
+    ),
+    status: normalizeAccountStatus(raw),
+  };
+}
+
+function loadCustomerAdminMap(path: string): Map<
+  string,
+  {
+    creditLimitCents: number | null;
+    wagerLimitCents: number | null;
+    balanceCents: number | null;
+    status: string;
+  }
+> {
+  const out = new Map<
+    string,
+    {
+      creditLimitCents: number | null;
+      wagerLimitCents: number | null;
+      balanceCents: number | null;
+      status: string;
+    }
+  >();
+  if (!existsSync(path)) return out;
+  try {
+    const envelope = parseCustomerAdminListEnvelope(
+      redactSecrets(readJson(path)),
+    );
+    for (const row of envelope.LIST) {
+      const id =
+        trimCustomerAdminField(row.CustomerID) ||
+        trimCustomerAdminField(row.Login);
+      if (id === "") continue;
+      out.set(id, extrasFromRaw(row as Record<string, unknown>));
+    }
+  } catch {
+    // Optional enrichment; a malformed extra file must not fail ingest.
+  }
+  return out;
+}
+
 function loadListAgents(path: string): {
   readonly players: ReturnType<typeof normalizeAgentTreePlayerRows>;
   readonly creditById: Map<string, number>;
@@ -393,13 +472,22 @@ function discoverSnapshots(inDir: string): {
   readonly takenAtIso: string;
   readonly listPath: string;
   readonly hierarchyPath: string | null;
+  readonly adminPath: string | null;
 }[] {
   const found: {
     snapshotId: string;
     takenAtIso: string;
     listPath: string;
     hierarchyPath: string | null;
+    adminPath: string | null;
   }[] = [];
+  const pickAdmin = (dir: string): string | null => {
+    const nested = join(dir, "census", "getCustomerAdmin.json");
+    const flat = join(dir, "getCustomerAdmin.json");
+    if (existsSync(nested)) return nested;
+    if (existsSync(flat)) return flat;
+    return null;
+  };
   const primary = join(inDir, "census", "getListAgenstByAgent.json");
   if (existsSync(primary)) {
     const checkpoint = loadCheckpoint(inDir);
@@ -413,6 +501,7 @@ function discoverSnapshots(inDir: string): {
       hierarchyPath: existsSync(join(inDir, "census", "getHeriarchy.json"))
         ? join(inDir, "census", "getHeriarchy.json")
         : null,
+      adminPath: pickAdmin(inDir),
     });
   }
   const snapRoot = join(inDir, "snapshots");
@@ -434,6 +523,7 @@ function discoverSnapshots(inDir: string): {
         : existsSync(hierFlat)
           ? hierFlat
           : null,
+      adminPath: pickAdmin(dir),
     });
   }
   return found;
@@ -847,6 +937,7 @@ export function ingestPullDirectory(inDir: string): PullProjection {
   }
   const snapshots = discoverSnapshots(inDir);
   const credit = loadCreditLimits(inDir);
+  const censusSnapshots: CensusAccountSnapshot[] = [];
   const byId = new Map<
     string,
     {
@@ -867,6 +958,19 @@ export function ingestPullDirectory(inDir: string): PullProjection {
     if (snap.hierarchyPath !== null) {
       parseHierarchyList(readJson(snap.hierarchyPath));
     }
+    const admin =
+      snap.adminPath !== null
+        ? loadCustomerAdminMap(snap.adminPath)
+        : new Map();
+    const rawEnvelope = parseListAgentsByAgentEnvelope(
+      redactSecrets(readJson(snap.listPath)),
+    );
+    const extrasById = new Map<string, ReturnType<typeof extrasFromRaw>>();
+    for (const raw of rawEnvelope.PLAYERS) {
+      const id = String(raw.customerID ?? raw.Login ?? "").trim();
+      if (id === "") continue;
+      extrasById.set(id, extrasFromRaw(raw as Record<string, unknown>));
+    }
     for (const player of players) {
       const existing = byId.get(player.customerId);
       if (existing === undefined) {
@@ -878,14 +982,33 @@ export function ingestPullDirectory(inDir: string): PullProjection {
           snapshots: [snap.snapshotId],
           creditLimitCents: credit.get(player.customerId) ?? null,
         });
-        continue;
+      } else {
+        existing.agentBySnapshot[snap.snapshotId] = player.agent;
+        existing.snapshots.push(snap.snapshotId);
+        if (existing.login === "") existing.login = player.login;
+        if (existing.creditLimitCents === null) {
+          existing.creditLimitCents = credit.get(player.customerId) ?? null;
+        }
       }
-      existing.agentBySnapshot[snap.snapshotId] = player.agent;
-      existing.snapshots.push(snap.snapshotId);
-      if (existing.login === "") existing.login = player.login;
-      if (existing.creditLimitCents === null) {
-        existing.creditLimitCents = credit.get(player.customerId) ?? null;
-      }
+      const extras = extrasById.get(player.customerId);
+      const adminRow = admin.get(player.customerId);
+      censusSnapshots.push({
+        snapshotId: snap.snapshotId,
+        takenAtIso: snap.takenAtIso,
+        accountId: player.customerId,
+        login: player.login,
+        agent: player.agent,
+        nameFirst: player.nameFirst,
+        creditLimitCents:
+          extras?.creditLimitCents ??
+          adminRow?.creditLimitCents ??
+          credit.get(player.customerId) ??
+          null,
+        wagerLimitCents:
+          extras?.wagerLimitCents ?? adminRow?.wagerLimitCents ?? null,
+        balanceCents: extras?.balanceCents ?? adminRow?.balanceCents ?? null,
+        status: extras?.status || adminRow?.status || "",
+      });
     }
   }
 
@@ -934,6 +1057,7 @@ export function ingestPullDirectory(inDir: string): PullProjection {
     ledger,
     weblog,
     wagers,
+    censusSnapshots,
     snapshotIds: snapshots.map((s) => s.snapshotId),
     censusSnapshotCount: snapshots.length,
   };

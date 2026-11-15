@@ -36,6 +36,15 @@ import {
   runWeblog,
   type F402PullPhase,
 } from "../lib/f402_readonly_puller.ts";
+import {
+  applySinceToRange,
+  parseConcurrency,
+  parseIdList,
+  parseIsoDate,
+  parseRateAndInterval,
+  planPull,
+  resolveResume,
+} from "../lib/f402_pull_plan.ts";
 
 const PHASES: readonly F402PullPhase[] = [
   "census",
@@ -53,15 +62,23 @@ Options:
   --agent-id <id>          Root agent (default: F402_AGENT_ID)
   --agent-owner <id>       agentOwner form field (default: --agent-id)
   --agent-type <M|A>       agentType for getListAgenstByAgent (default: from hierarchy)
+  --agents <id,id>         Limit to these agents (plus --recurse-downline to walk GENERAL)
+  --recurse-downline       Extra getListAgenstByAgent calls for each downline agent
+  --accounts <id,id>       Limit per-customer reads (transactions, figure-date)
   --customer <id>          Test customer for the contract phase (required there)
   --start <YYYY-MM-DD>     Transaction start; contract also sends start=""
   --from <YYYY-MM-DD>      Weblog / wagers range start (required for those phases)
   --to <YYYY-MM-DD>        Weblog / wagers range end (required for those phases)
+  --since <YYYY-MM-DD>     Incremental start; later of --since and --from wins
   --mode <A|B|C|I>         getWebLog type (default: I)
   --skip-figure-date       Wagers: skip per-customer getWagersByFigureDate
   --base-url <url>         Portal origin (default: ${F402_PULL_DEFAULT_BASE_URL})
   --interval-ms <n>        Minimum delay between requests (default: ${F402_PULL_DEFAULT_INTERVAL_MS})
+  --rate <n>               Requests per second (default 1); do not also pass a conflicting --interval-ms
+  --concurrency <n>        Max in-flight per-customer jobs (default 1, checkpoint-safe)
+  --resume                 Resume from the checkpoint (default)
   --no-resume              Ignore completed ids/dates in the checkpoint
+  --dry-run                Print the planned allowlisted calls only; no session, no writes
   --help
 
 Session (existing path only; this CLI does not invent a login):
@@ -119,7 +136,15 @@ async function main(argv: string[]): Promise<number> {
       mode: { type: "string" },
       "base-url": { type: "string" },
       "interval-ms": { type: "string" },
+      rate: { type: "string" },
+      concurrency: { type: "string" },
+      agents: { type: "string" },
+      accounts: { type: "string" },
+      since: { type: "string" },
+      resume: { type: "boolean", default: false },
       "no-resume": { type: "boolean", default: false },
+      "dry-run": { type: "boolean", default: false },
+      "recurse-downline": { type: "boolean", default: false },
       "skip-figure-date": { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
@@ -141,11 +166,59 @@ async function main(argv: string[]): Promise<number> {
     );
   }
   const outDir = flagString(values, "out") ?? F402_PULL_DEFAULT_OUT_DIR;
-  const intervalMs = Number(
-    flagString(values, "interval-ms") ?? F402_PULL_DEFAULT_INTERVAL_MS,
+  const rate = parseRateAndInterval(
+    flagString(values, "rate"),
+    flagString(values, "interval-ms"),
   );
-  if (!Number.isFinite(intervalMs) || intervalMs < 0) {
-    throw new F402PullerError("config", phase, "invalid --interval-ms");
+  const intervalMs = rate.intervalMs;
+  const concurrency = parseConcurrency(flagString(values, "concurrency"));
+  const resume = resolveResume(
+    values.resume === true,
+    values["no-resume"] === true,
+  );
+  const agentsRaw = flagString(values, "agents");
+  const accountsRaw = flagString(values, "accounts");
+  const agents =
+    agentsRaw === undefined ? [] : parseIdList(agentsRaw, "--agents");
+  const accounts =
+    accountsRaw === undefined ? [] : parseIdList(accountsRaw, "--accounts");
+  const sinceRaw = flagString(values, "since");
+  const since =
+    sinceRaw === undefined ? null : parseIsoDate(sinceRaw, "--since");
+  const pullOptions = {
+    resume,
+    dryRun: values["dry-run"] === true,
+    intervalMs,
+    ratePerSec: rate.ratePerSec,
+    concurrency,
+    since,
+    agents,
+    accounts,
+    recurseDownline: values["recurse-downline"] === true,
+  };
+
+  if (pullOptions.dryRun) {
+    const from = flagString(values, "from");
+    const to = flagString(values, "to");
+    const start = flagString(values, "start");
+    const customer = flagString(values, "customer");
+    const mode = flagString(values, "mode");
+    const plan = planPull({
+      phase,
+      outDir,
+      agentId,
+      agentOwner: flagString(values, "agent-owner") ?? agentId,
+      agentType: flagString(values, "agent-type") ?? "",
+      options: pullOptions,
+      ...(from === undefined ? {} : { from }),
+      ...(to === undefined ? {} : { to }),
+      ...(start === undefined ? {} : { start }),
+      ...(customer === undefined ? {} : { customer }),
+      ...(mode === undefined ? {} : { mode }),
+      includeFigureDate: values["skip-figure-date"] !== true,
+    });
+    console.log(JSON.stringify(redactSecretsAndIps(plan)));
+    return 0;
   }
 
   const session = await resolvePullSession({});
@@ -164,7 +237,11 @@ async function main(argv: string[]): Promise<number> {
   };
 
   if (phase === "census") {
-    const result = await runCensus(ctx);
+    const result = await runCensus(ctx, {
+      recurseDownline: pullOptions.recurseDownline,
+      ...(agents.length === 0 ? {} : { agents }),
+      ...(accounts.length === 0 ? {} : { accounts }),
+    });
     console.log(
       JSON.stringify(
         redactSecretsAndIps({
@@ -198,25 +275,32 @@ async function main(argv: string[]): Promise<number> {
   }
   if (phase === "transactions") {
     const result = await runTransactions(ctx, {
-      start: flagString(values, "start") ?? "",
-      resume: values["no-resume"] !== true,
+      start: flagString(values, "start") ?? pullOptions.since ?? "",
+      resume,
+      concurrency,
+      ...(accounts.length === 0 ? {} : { accounts }),
     });
     console.log(
       JSON.stringify(redactSecretsAndIps({ phase, ...result, outDir })),
     );
     return 0;
   }
-  const from = flagString(values, "from");
-  const to = flagString(values, "to");
-  if (from === undefined || to === undefined) {
-    throw new F402PullerError("config", phase, "missing --from or --to");
-  }
+  const range = applySinceToRange(
+    flagString(values, "from"),
+    flagString(values, "to"),
+    since,
+    phase,
+  );
+  const from = range.from;
+  const to = range.to;
   if (phase === "wagers") {
     const result = await runWagers(ctx, {
       from,
       to,
-      resume: values["no-resume"] !== true,
+      resume,
       includeFigureDate: values["skip-figure-date"] !== true,
+      concurrency,
+      ...(accounts.length === 0 ? {} : { accounts }),
     });
     console.log(
       JSON.stringify(redactSecretsAndIps({ phase, ...result, outDir })),
@@ -236,7 +320,7 @@ async function main(argv: string[]): Promise<number> {
     from,
     to,
     mode: modeRaw,
-    resume: values["no-resume"] !== true,
+    resume,
   });
   console.log(
     JSON.stringify(
