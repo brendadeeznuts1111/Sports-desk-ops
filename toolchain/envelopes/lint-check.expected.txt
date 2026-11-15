@@ -1,0 +1,4 @@
+Found 0 warnings and 0 errors.
+Finished on 1557 files with 100 rules
+Found 0 warnings and 0 errors.
+Finished on 1526 files with 8 rules

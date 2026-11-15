@@ -1,0 +1,195 @@
+(pass) Bridge3aTicketColumnStore collision safety > preserves distinct keys and probes correctly under slot collisions
+(pass) Cloudflare Pages credential file > a value already in the environment wins over the file
+(pass) Cloudflare Pages credential file > only the two Pages names are read from the file
+(pass) F402 getBetTicker probe > classifies 401 as unauthorized
+(pass) F402 getBetTicker probe > classifies timeouts
+(pass) F402 getBetTicker probe > forwards the bearer token when present
+(pass) F402 getBetTicker probe > posts the captured form shape and counts LIST rows
+(pass) F402 session cache > builds a TTL session and never logs the cookie value
+(pass) F402 session cache > live login stays disabled without F402_LIVE_LOGIN=1
+(pass) F402 session cache > rejects group/world-readable, expired, and missing sessions
+(pass) F402 session cache > writes 0600 and reads back
+(pass) Int32Array overflow guard > a batch containing a $30M wager skips the overflowing row without aborting valid tickets
+(pass) Int32Array overflow guard > accepts valid amounts up to MAX_INT32_CENTS
+(pass) Int32Array overflow guard > rejects amounts exceeding Int32Array boundary with RangeError
+(pass) JSC heapStats Structure and PropertyTable invariant > steady-state iteration produces 0 delta in PropertyTable and bounds Structure delta
+(pass) assertSanitizedTickerArtifact > rejects a denylisted key at any depth
+(pass) assertSanitizedTickerArtifact > rejects an IP literal and an oversized artifact
+(pass) bin/dx DX_VERIFY_RUNTIME guard > off by default: a bad pin does not affect dx
+(pass) bin/dx DX_VERIFY_RUNTIME guard > on: a mismatching runtime stops dx with exit 70 before it runs anything
+(pass) bounded demux > ALERT rows carry zero canonical volume; whole dollars convert exactly
+(pass) bounded demux > maps every channel code, trims padding, and fails closed to other
+(pass) bounded demux > maps the eight wager types and fails closed to unknown
+(pass) bounded demux > novel channel maps to explicit UNKNOWN ordinal and other, not Internet
+(pass) bounded demux > the locked key collapses to the wager number when TicketNumber is absent
+(pass) buildF402TickerSnapshot > summarizes totals, watermark, and the same bounded aggregates
+(pass) buildMintCommand > omits --from-keychain when fromKeychain is false (op run env credentials present)
+(pass) buildMintCommand > uses execPath, --no-orphans, --no-env-file, and direct session_login.ts path
+(pass) column boundary and range assertions > legCountOf clamps at MAX_UINT16_LEGS (65535)
+(pass) column boundary and range assertions > numericWagerNumber bounds against MAX_UINT32_WAGER_NUMBER (4.29B)
+(pass) column boundary and range assertions > projectF402TickerDeltaWithDiagnostics surfaces batch diagnostics and overflow counts
+(pass) connected `bun run --help` across ./bin/dx and cli/sportsdesk_cli.ts > ./bin/dx --help and ./bin/dx help --bun expose live `bun run --help` flags
+(pass) connected `bun run --help` across ./bin/dx and cli/sportsdesk_cli.ts > cli/sportsdesk_cli.ts --help and --bun-help connect the live `bun run --help` surface
+(pass) constants > DEFAULT_REFRESH_GRACE_MS is 5 minutes
+(pass) constants > DEFAULT_REFRESH_TTL_MINUTES is 24 hours
+(pass) constants > REFRESH_EXIT codes are distinct and ok === 0
+(pass) createF402ReplayTransport > re-reads session cookie on each attempt
+(pass) createF402ReplayTransport > replay transport does not loop on repeated 401
+(pass) createF402ReplayTransport > replay transport retries once after 401 refresh
+(pass) decideRefresh > custom grace is honored
+(pass) decideRefresh > expiry == now → expired (<= boundary)
+(pass) decideRefresh > expiry comfortably in the future → fresh
+(pass) decideRefresh > expiry exactly at grace boundary → fresh (< not ≤)
+(pass) decideRefresh > expiry in the past → expired
+(pass) decideRefresh > expiry just under grace window → expiring-soon
+(pass) decideRefresh > null session → refresh with reason 'missing'
+(pass) decideRefresh > session with unparseable expiry → refresh with reason 'unparseable-expiry'
+(pass) dx command dispatch > a command with no near match still exits 2 and points at help
+(pass) dx command dispatch > a real program on PATH still runs through dx
+(pass) dx command dispatch > an unknown command exits 2 with a suggestion instead of `exec: … not found`
+(pass) dx command dispatch > every dispatch case is a declared command, and every declared command has a case
+(pass) dx command dispatch > help documents every primary command (aliases excluded)
+(pass) dx exec --with > --with r2 delivers exactly the r2 group to the child
+(pass) dx exec --with > an unknown group is refused with exit 2 and runs nothing
+(pass) dx exec --with > plain `dx exec` still passes through without injecting
+(pass) dx exec --with > the injection summary names sources and never a value
+(pass) dx home links never destroy data > `setup --replace` backs the real file up before linking
+(pass) dx home links never destroy data > a real ~/.zshrc is left in place and reported, not replaced
+(pass) dx home links never destroy data > a stale symlink is repointed
+(pass) dx home links never destroy data > creates missing links, and a second run leaves them untouched
+(pass) dx modes > a valid mode prints only that mode's detail line
+(pass) dx modes > an option-looking or surplus argument is a usage error, not 'all modes'
+(pass) dx modes > parseModeFilter: no argument means every mode
+(pass) dx modes > rejects a mode outside 1..10 with exit 2
+(pass) dx monitor and dx live-bets control & telemetry > collectMonitorSnapshot and `./bin/dx monitor --offline --prune --json` inspect profiles without network
+(pass) dx monitor and dx live-bets control & telemetry > dx live-bets controls source/fallback contract and rejects implicit auto
+(pass) dx monitor and dx live-bets control & telemetry > parsePsBunProcesses isolates real Bun processes and detects --no-orphans / --title
+(pass) dx run control, presets, validation, and secret safety > DX_BUN_FLAGS forwards validated runtime flags through standard dx subcommands
+(pass) dx run control, presets, validation, and secret safety > buildDxRunPlan injects containment, env isolation, low-mem, and markdown profiles
+(pass) dx run control, presets, validation, and secret safety > checkVerboseFetchSecretSafety blocks BUN_CONFIG_VERBOSE_FETCH when secrets exist and never logs values
+(pass) dx run control, presets, validation, and secret safety > dx run rejects unknown Bun flags with exit 2 and nearest-flag hint
+(pass) dx run control, presets, validation, and secret safety > splitShellTokens handles single and double quotes cleanly
+(pass) dx scripts > filterScripts matches on the name, case-insensitively
+(pass) dx scripts > groupScripts orders the largest group first and sorts names
+(pass) dx scripts > scriptPrefix groups by the part before the first colon
+(pass) dx scripts > the CLI lists real scripts and exits 1 on a filter with no match
+(pass) dx status reports only what it measured > XDG_CONFIG_HOME is reported as re-anchored only when it changed
+(pass) dx status reports only what it measured > no hardcoded readiness claims, and credential lines say what is missing
+(pass) dx status reports only what it measured > online status finishes and reports wrangler not installed when the package is absent
+(pass) external-view call-site guard (flag-gated, dead by default) > a reject is buffered until the log module resolves, then swept
+(pass) external-view call-site guard (flag-gated, dead by default) > flag false: the wrapper delegates (zero behavior change on merge)
+(pass) external-view call-site guard (flag-gated, dead by default) > flag true + authenticated: allowed module loads through the original
+(pass) external-view call-site guard (flag-gated, dead by default) > flag true + no session: ends the session and never calls the original
+(pass) external-view call-site guard (flag-gated, dead by default) > flag true + traversal module: rejected before the original runs
+(pass) external-view call-site guard (flag-gated, dead by default) > guard is inert outside the active external-view branch and installs once
+(pass) external-view call-site guard (flag-gated, dead by default) > rejected module ids are buffered and flushed to system/log.write
+(pass) hasEnvLoginCredentials > returns true only when both F402_AGENT_ID and F402_PASSWORD are non-blank
+(pass) journalLine > failed refresh carries an `error` classifier (never stderr)
+(pass) journalLine > fresh no-op entry carries no `error`
+(pass) journalLine > journal line ends with exactly one newline (JSONL contract)
+(pass) journalLine > journal never leaks a cookie, password, or 'session' field
+(pass) module attributes > detectors catch empty attribute lists and leave valid ones alone
+(pass) module attributes > no tracked source carries an empty module-attribute list
+(pass) parseF402TickerRow > falls through empty string PascalCase fields to populated camelCase aliases
+(pass) parseF402TickerRow > keeps TicketNumber when a future payload carries it
+(pass) parseF402TickerRow > maps the captured 13-field row without inventing a ticket number
+(pass) parseF402TickerRow > rejects rows with no login or customer id
+(pass) probeF402BetTicker > maps 401 to the unauthorized sentinel
+(pass) probeF402BetTicker > normalizes the full list and honors maxTicks
+(pass) probeF402BetTicker > reports an unexpected body instead of inventing rows
+(pass) probeF402BetTicker > sends the paging cursor as wagerNumber
+(pass) projectF402TickerDelta > an alert whose twin arrives in a later poll is late
+(pass) projectF402TickerDelta > an empty current page reports the previous watermark and gone tickets
+(pass) projectF402TickerDelta > an unmatched ALERT row is an orphan with zero volume
+(pass) projectF402TickerDelta > counts new, gone, and changed tickets once per key
+(pass) projectF402TickerDelta > dedupes a ticket once: ALERT twin adds no money and confirms in-batch
+(pass) projectF402TickerDelta > desk clock is America/Chicago, not UTC
+(pass) projectF402TickerDelta > hashing is deterministic for the same sanitized content
+(pass) projectF402TickerDelta > the delta carries no identifier or raw description
+(pass) projectF402TickerDelta > watermark is the highest numeric wager number, ignoring non-numeric values
+(pass) readF402Session validation > accepts a well-formed session and drops non-string cookie names
+(pass) readF402Session validation > keeps the expiry, missing-file, and file-mode checks
+(pass) readF402Session validation > rejects a missing, empty, or unparseable cookieHeader
+(pass) readF402Session validation > rejects a present authorizationHeader that is not `Bearer <token>`
+(pass) readF402Session validation > rejects content that is not a JSON object
+(pass) readF402TickerJsonl > a corrupt state file is ignored
+(pass) readF402TickerJsonl > a file that ends without a newline yields no row until it completes
+(pass) readF402TickerJsonl > a shrunken file is re-windowed instead of reading garbage
+(pass) readF402TickerJsonl > incremental reads skip rows at or below the watermark
+(pass) readF402TickerJsonl > malformed lines are skipped, never guessed into rows
+(pass) readF402TickerJsonl > persisted offset/watermark round-trips and is scoped to its file
+(pass) readF402TickerJsonl > reads complete lines and holds back a partial trailing record
+(pass) readF402TickerJsonl > the initial window begins on a line boundary
+(pass) readF402TickerJsonl > window refresh happens every N ticks and only with new bytes
+(pass) seam probe and installer > a healthy probe is clean and reports csrf as dormant with the reason
+(pass) seam probe and installer > an unapplied seam fails with its reason
+(pass) seam probe and installer > exit-code contract distinguishes covered/uncovered and completed/could-not-run
+(pass) seam probe and installer > flag on without the manager wrapper is a structural failure; install failure is noted
+(pass) seam probe and installer > installer uses CDP on chrome and refuses webkit
+(pass) seam probe and installer > probe evaluates on chrome and surfaces issues
+(pass) seam probe and installer > probe script carries the expected own properties and leaves
+(pass) seam probe and installer > probe skips webkit with a not-covered note instead of passing
+(pass) seam probe and installer > registry degradation is surfaced as a probe note
+(pass) seam probe and installer > render expectation parses and gates canary exit 0
+(pass) seam probe and installer > structural failures are issues; an unverified session is a note and exit 2
+(pass) security seam preload: csrf seam > reads a delivered meta token, then a cookie, then stays empty
+(pass) security seam preload: escape seams > escHtml encodes the five HTML-significant characters
+(pass) security seam preload: escape seams > escUrl accepts only http(s), root-relative, fragment and query forms
+(pass) security seam preload: installation > adds every seam as an own property without touching the prototype
+(pass) security seam preload: installation > decorates a class export by materializing own props on the instance
+(pass) security seam preload: installation > is idempotent and preserves a pre-existing endSession
+(pass) security seam preload: installation > kill switch is latched at preload and cannot be cleared by a later URL rewrite
+(pass) security seam preload: installation > no-seam wins over external-view-guard (dependency, not policy)
+(pass) security seam preload: module allowlist > a manager class without searchComponent installs loudly, not silently
+(pass) security seam preload: module allowlist > a manager class without setAccountInfo installs loudly, not silently
+(pass) security seam preload: module allowlist > accepts leaves and full ids, rejects traversal and false
+(pass) security seam preload: module allowlist > agent-management-thin restores html hook when success handler or setCols throws
+(pass) security seam preload: module allowlist > agent-management-thin setColsAgentManagement escapes password column while balance stays raw
+(pass) security seam preload: module allowlist > agent-management-thin setPassword and setName escape markup while leaving other .html calls raw
+(pass) security seam preload: module allowlist > flags expose the dormant transport and the latched phase-1 canary gate
+(pass) security seam preload: module allowlist > getCommunicationMessages preserves the first <BR> strip then escapes both paths
+(pass) security seam preload: module allowlist > getMessageInit escapes FromE/Subject for the render and restores emailCount raw
+(pass) security seam preload: module allowlist > getPopUpMessages does not dereference an empty COMMENT or null fields
+(pass) security seam preload: module allowlist > getPopUpMessages escapes before the newline-to-<br> replacement
+(pass) security seam preload: module allowlist > manager overlay anchors exist in the pinned controller and fail on a move
+(pass) security seam preload: module allowlist > module sink anchors exist and fail on a move
+(pass) security seam preload: module allowlist > pending-thin getResultTicketMobile escapes chosen team and short names
+(pass) security seam preload: module allowlist > pending-thin getResultTicketMobileDetails escapes Comments, Description, and team fields while preserving template HTML
+(pass) security seam preload: module allowlist > pending-thin getResultTicketPending escapes Description, ChosenTeamID, and teams while preserving template HTML
+(pass) security seam preload: module allowlist > pending-thin records failure in status when class or prototype is invalid
+(pass) security seam preload: module allowlist > player-info restores the html hook when the success handler throws
+(pass) security seam preload: module allowlist > player-info.password-h is escaped while other .html calls stay raw
+(pass) security seam preload: module allowlist > registry degradation is an audit signal, not a page break
+(pass) security seam preload: module allowlist > searchComponent escapes rows once and every later keyup render stays escaped
+(pass) security seam preload: module allowlist > searchComponent escaping is idempotent across repeated setup calls
+(pass) security seam preload: module allowlist > searchCustomer entity-encodes CustomerID so a quote cannot close the unquoted attribute
+(pass) security seam preload: module allowlist > searchCustomer escapes Login/Password/NameFirst and leaves CustomerID raw
+(pass) security seam preload: module allowlist > setCommunicationMessages escapes Message but leaves Id raw for .attr()
+(pass) security seam preload: module allowlist > setHistory escapes only the title and leaves the getHistory argument raw
+(pass) security seam preload: module allowlist > the preload list, the gate list and the pinned controller agree
+(pass) security seam preload: session seams > isAuthenticated follows customerID and the expiry pair
+(pass) security seam preload: session seams > requireAuth denies an expired session and calls the session teardown
+(pass) sentinel channels > ALERT, BLOCKED, and NON_SPORTS_DROP stay out of a mixed handle sum
+(pass) sentinel channels > BLOCKED and NON_SPORTS_DROP are counted but carry zero money
+(pass) session:login > refuses to start without F402_LIVE_LOGIN=1, and says what to set
+(pass) session:login > refuses to start without credentials once the gate is open
+(pass) session:status > a proxy counts as configured even without a session
+(pass) session:status > calls out a profile that the transport cannot use
+(pass) session:status > reports a missing session and exits non-zero
+(pass) session:status > reports names and expiry, never the cookie value
+(pass) session:status > without --json prints the same report through Bun.inspect, uncoloured off a terminal
+(pass) toolchain/bun.pin.json > matches .bun-version and pins every platform by zip and binary sha256
+(pass) toolchain/verify-bun.sh > fails (exit 1) on a hash mismatch
+(pass) toolchain/verify-bun.sh > fails closed (exit 2) on a script it does not recognise
+(pass) toolchain/verify-bun.sh > fails closed (exit 2) when the binary or pin is missing
+(pass) toolchain/verify-bun.sh > follows an npm/pnpm cmd-shim to the real binary
+(pass) toolchain/verify-bun.sh > passes when the binary hash matches the pin, and prints the resolved path
+(pass) watermark semantics under out-of-order and duplicate arrivals > duplicate row arrival preserves stable watermark
+(pass) watermark semantics under out-of-order and duplicate arrivals > out-of-order arrival advances watermark and backfilled ticket does not regress it
+(pass) writeF402Session atomicity > creates a missing parent directory 0700 before writing
+(pass) writeF402Session atomicity > leaves a 0600 file, no .tmp, and a 0700 directory
+(pass) writeF402Session atomicity > replaces an existing file in one rename and leaves no .tmp
+191 pass
+0 fail
+893 expect() calls
+Ran 191 tests across 13 files.

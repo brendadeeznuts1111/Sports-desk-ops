@@ -1,0 +1,88 @@
+{
+  "envelope_version": "sportsdesk.tool-step/0.1",
+  "step": {
+    "id": "lint-check",
+    "description": "The repo's enforced lint gate: bun run lint:check (oxlint --deny-warnings, then the type-aware pass). No network."
+  },
+  "command": {
+    "argv": ["{bun}", "run", "lint:check"],
+    "cwd": ".",
+    "env": {
+      "PATH": "{bun_dir}:/usr/bin:/bin",
+      "HOME": "{tmp_home}",
+      "TZ": "UTC",
+      "LANG": "C.UTF-8",
+      "NO_COLOR": "1",
+      "FORCE_COLOR": "0"
+    },
+    "network": "none",
+    "timeout_s": 600
+  },
+  "repo": {
+    "commit": "54d5fff7081efdced81d8b7e541d750003f66605"
+  },
+  "inputs": {
+    "worktree": {
+      "sha256": "e3c369128863613f1ace0120d10048356e419f26e1d1ed8dc7269e59f67fd70c",
+      "files": 2092,
+      "excludes": ["toolchain/envelopes/"]
+    },
+    "files": [
+      {
+        "path": "bun.lock",
+        "sha256": "89210694a15792746d5e9b4befb5cd2fe314fbc69083a034fde265d4a208b231"
+      },
+      {
+        "path": ".oxlintrc.json",
+        "sha256": "63be1636a75abb93495a8484dd07e9aba7f00d5e376a044dfe94eeb4a93a6af4"
+      },
+      {
+        "path": ".oxlintrc.type-aware.json",
+        "sha256": "b219a5cb85172042763c3ee661875b8dcc4962469bcbb0e84141a901bb328384"
+      }
+    ],
+    "trees": [
+      {
+        "path": "node_modules",
+        "manifest_sha256": "9f284b1418a856e7a8378e65c8aecea977babf7735ca860113a7b0c685e8f7e6"
+      }
+    ],
+    "digest": "7cb5c1a4cf07473a4d734fcf60774616b44d995ae5d913db6b0818d6dfe6aa05"
+  },
+  "runtime": {
+    "policy": "pinned",
+    "pin": {
+      "version": "1.4.4",
+      "revision": "38afee6c8",
+      "binary_sha256": {
+        "linux-x64": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235",
+        "linux-x64-baseline": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235",
+        "linux-aarch64": "354c2b049c716aca07b2e5cddb887928ac58950675d1258bb6312083917793b6",
+        "darwin-aarch64": "0a2237cdcfa0d16ef501d9acca9f0026309ef348bea7393a64e8d1e3609565cc",
+        "darwin-x64": "c35307c7d45d65c5a385a58c4a6cb0bb9499e4e626abdee207c177a77ba666ab"
+      }
+    },
+    "captured_with_sha256": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235"
+  },
+  "expected": {
+    "exit_code": 0,
+    "normalizer": "oxlint",
+    "normalized_sha256": "09094d38123cf2b4deeaf1204b8bb64fff0f3a7ef9c8ee6c6de685e1cbe98b26",
+    "normalized_file": "lint-check.expected.txt",
+    "summary": {
+      "found": [
+        "Found 0 warnings and 0 errors.",
+        "Found 0 warnings and 0 errors."
+      ]
+    }
+  },
+  "tolerance": {
+    "level": "byte-normalized"
+  },
+  "recorded": {
+    "at": "2026-11-15T18:10:51Z",
+    "duration_ms": 3367,
+    "platform": "Linux-x86_64",
+    "note": "informational; not verified"
+  }
+}

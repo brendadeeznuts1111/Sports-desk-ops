@@ -1,0 +1,73 @@
+{
+  "envelope_version": "sportsdesk.tool-step/0.1",
+  "step": {
+    "id": "verify-bun-fake-pin",
+    "description": "Negative control: the boot verifier must reject the runtime against a pin of all-zero hashes (exit 1)."
+  },
+  "command": {
+    "argv": ["sh", "toolchain/verify-bun.sh"],
+    "cwd": ".",
+    "env": {
+      "PATH": "{bun_dir}:/usr/bin:/bin",
+      "DX_BUN_BIN": "{bun}",
+      "DX_BUN_PIN": "toolchain/testdata/bun.fake.pin.json"
+    },
+    "network": "none",
+    "timeout_s": 60
+  },
+  "repo": {
+    "commit": "54d5fff7081efdced81d8b7e541d750003f66605"
+  },
+  "inputs": {
+    "worktree": {
+      "sha256": "e3c369128863613f1ace0120d10048356e419f26e1d1ed8dc7269e59f67fd70c",
+      "files": 2092,
+      "excludes": ["toolchain/envelopes/"]
+    },
+    "files": [
+      {
+        "path": "toolchain/verify-bun.sh",
+        "sha256": "568b35d93466827915f5a1a3ee0e884bfab37209fdab922473a98adb88c5bfa6"
+      },
+      {
+        "path": "toolchain/testdata/bun.fake.pin.json",
+        "sha256": "e4d1f8cce35705321bf326a64dbc03f6149c5690eacbcbdb01a19e7294a1c319"
+      }
+    ],
+    "trees": [],
+    "digest": "212544ac374e1da8201c8524c1ea3e4d5f78078297fca16ae7011d0de00f0115"
+  },
+  "runtime": {
+    "policy": "any",
+    "pin": {
+      "version": "1.4.4",
+      "revision": "38afee6c8",
+      "binary_sha256": {
+        "linux-x64": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235",
+        "linux-x64-baseline": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235",
+        "linux-aarch64": "354c2b049c716aca07b2e5cddb887928ac58950675d1258bb6312083917793b6",
+        "darwin-aarch64": "0a2237cdcfa0d16ef501d9acca9f0026309ef348bea7393a64e8d1e3609565cc",
+        "darwin-x64": "c35307c7d45d65c5a385a58c4a6cb0bb9499e4e626abdee207c177a77ba666ab"
+      }
+    },
+    "captured_with_sha256": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235"
+  },
+  "expected": {
+    "exit_code": 1,
+    "normalizer": "verify-bun",
+    "normalized_sha256": "21c16084426f22c07a9c25ff7fad6523753f4093dffbb58f7c318c6c2f2dd2d1",
+    "normalized_file": "verify-bun-fake-pin.expected.txt",
+    "summary": {
+      "lines": 1
+    }
+  },
+  "tolerance": {
+    "level": "byte-normalized"
+  },
+  "recorded": {
+    "at": "2026-11-15T18:10:55Z",
+    "duration_ms": 93,
+    "platform": "Linux-x86_64",
+    "note": "informational; not verified"
+  }
+}

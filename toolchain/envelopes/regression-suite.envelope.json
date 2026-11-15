@@ -1,0 +1,101 @@
+{
+  "envelope_version": "sportsdesk.tool-step/0.1",
+  "step": {
+    "id": "regression-suite",
+    "description": "Agent tool-execution paths, offline: dx CLI dispatch + run control, F402 session file read/write/validation/refresh, session login CLI (live login disabled), replay transport, bet-ticker JSONL/delta/ingest, client seams, module attributes, runtime-pin verifier. Loopback-only network namespace: local Bun.serve fixtures work, nothing leaves the box."
+  },
+  "command": {
+    "argv": [
+      "{bun}",
+      "test",
+      "tests/dx_cli.test.ts",
+      "tests/dx_run_control.test.ts",
+      "tests/f402_session.test.ts",
+      "tests/f402_session_validation.test.ts",
+      "tests/f402_session_refresh.test.ts",
+      "tests/session_login_cli.test.ts",
+      "tests/f402_replay_transport.test.ts",
+      "tests/f402_bet_ticker_jsonl.test.ts",
+      "tests/f402_bet_ticker_delta.test.ts",
+      "tests/f402_bet_ticker_ingest.test.ts",
+      "tests/f402_client_seams.test.ts",
+      "tests/module_attributes.test.ts",
+      "tests/toolchain_verify_bun.test.ts"
+    ],
+    "cwd": ".",
+    "env": {
+      "PATH": "{bun_dir}:/usr/bin:/bin",
+      "HOME": "{tmp_home}",
+      "TZ": "UTC",
+      "LANG": "C.UTF-8",
+      "NO_COLOR": "1",
+      "FORCE_COLOR": "0"
+    },
+    "network": "loopback",
+    "timeout_s": 600
+  },
+  "repo": {
+    "commit": "54d5fff7081efdced81d8b7e541d750003f66605"
+  },
+  "inputs": {
+    "worktree": {
+      "sha256": "e3c369128863613f1ace0120d10048356e419f26e1d1ed8dc7269e59f67fd70c",
+      "files": 2092,
+      "excludes": ["toolchain/envelopes/"]
+    },
+    "files": [
+      {
+        "path": "bun.lock",
+        "sha256": "89210694a15792746d5e9b4befb5cd2fe314fbc69083a034fde265d4a208b231"
+      },
+      {
+        "path": "bunfig.toml",
+        "sha256": "15fab7c86d28e97c9fa2b5a7b3d89bf223da0364c99c72df3644b4653bf57990"
+      }
+    ],
+    "trees": [
+      {
+        "path": "node_modules",
+        "manifest_sha256": "9f284b1418a856e7a8378e65c8aecea977babf7735ca860113a7b0c685e8f7e6"
+      }
+    ],
+    "digest": "667658c0e2ff66366fbaeff094d871888988f7c952b814c6aca7435e7a228a76"
+  },
+  "runtime": {
+    "policy": "pinned",
+    "pin": {
+      "version": "1.4.4",
+      "revision": "38afee6c8",
+      "binary_sha256": {
+        "linux-x64": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235",
+        "linux-x64-baseline": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235",
+        "linux-aarch64": "354c2b049c716aca07b2e5cddb887928ac58950675d1258bb6312083917793b6",
+        "darwin-aarch64": "0a2237cdcfa0d16ef501d9acca9f0026309ef348bea7393a64e8d1e3609565cc",
+        "darwin-x64": "c35307c7d45d65c5a385a58c4a6cb0bb9499e4e626abdee207c177a77ba666ab"
+      }
+    },
+    "captured_with_sha256": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235"
+  },
+  "expected": {
+    "exit_code": 0,
+    "normalizer": "bun-test",
+    "normalized_sha256": "2c2b7c513361be5fb7ca3ff2a755da4b5b3b6c685180a089aeccf3f24407b99a",
+    "normalized_file": "regression-suite.expected.txt",
+    "summary": {
+      "pass": 191,
+      "fail": 0,
+      "skip": 0,
+      "todo": 0,
+      "expect_calls": 893
+    }
+  },
+  "tolerance": {
+    "level": "byte-normalized"
+  },
+  "recorded": {
+    "at": "2026-11-15T18:10:54Z",
+    "duration_ms": 2649,
+    "platform": "Linux-x86_64",
+    "note": "informational; not verified"
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "envelope_version": "sportsdesk.tool-step/0.1",
+  "step": {
+    "id": "dx-help",
+    "description": "./bin/dx help. The help text embeds the live 'bun run --help' flag catalog, so it is a direct probe of the runtime's CLI surface (a Bun bump that adds/removes/renames a flag shows up here as a diff). Throwaway HOME; no network. The DX_VERIFY_RUNTIME guard itself is covered by verify-bun-fake-pin and tests/toolchain_verify_bun.test.ts."
+  },
+  "command": {
+    "argv": ["./bin/dx", "help"],
+    "cwd": ".",
+    "env": {
+      "PATH": "{bun_dir}:/usr/bin:/bin",
+      "HOME": "{tmp_home}",
+      "TZ": "UTC",
+      "LANG": "C.UTF-8",
+      "NO_COLOR": "1",
+      "FORCE_COLOR": "0"
+    },
+    "network": "none",
+    "timeout_s": 120
+  },
+  "repo": {
+    "commit": "54d5fff7081efdced81d8b7e541d750003f66605"
+  },
+  "inputs": {
+    "worktree": {
+      "sha256": "e3c369128863613f1ace0120d10048356e419f26e1d1ed8dc7269e59f67fd70c",
+      "files": 2092,
+      "excludes": ["toolchain/envelopes/"]
+    },
+    "files": [
+      {
+        "path": "toolchain/bun.pin.json",
+        "sha256": "6669d17cd327bade985a8882745d6c4330327f2afcbcca07205b2e23ef723905"
+      }
+    ],
+    "trees": [],
+    "digest": "81df1b4a3a6ce9cda181134807a386e50f5058d073af70697dce1ef01c79a992"
+  },
+  "runtime": {
+    "policy": "any",
+    "pin": {
+      "version": "1.4.4",
+      "revision": "38afee6c8",
+      "binary_sha256": {
+        "linux-x64": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235",
+        "linux-x64-baseline": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235",
+        "linux-aarch64": "354c2b049c716aca07b2e5cddb887928ac58950675d1258bb6312083917793b6",
+        "darwin-aarch64": "0a2237cdcfa0d16ef501d9acca9f0026309ef348bea7393a64e8d1e3609565cc",
+        "darwin-x64": "c35307c7d45d65c5a385a58c4a6cb0bb9499e4e626abdee207c177a77ba666ab"
+      }
+    },
+    "captured_with_sha256": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235"
+  },
+  "expected": {
+    "exit_code": 0,
+    "normalizer": "raw",
+    "normalized_sha256": "c07986e2f2bc267cd310e1ea44829de09ca9beadf41497d9c9f32a6b87b6858f",
+    "normalized_file": "dx-help.expected.txt",
+    "summary": {
+      "lines": 129
+    }
+  },
+  "tolerance": {
+    "level": "byte-normalized"
+  },
+  "recorded": {
+    "at": "2026-11-15T18:10:45Z",
+    "duration_ms": 43,
+    "platform": "Linux-x86_64",
+    "note": "informational; not verified"
+  }
+}

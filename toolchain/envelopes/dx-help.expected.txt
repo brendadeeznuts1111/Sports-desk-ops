@@ -1,0 +1,129 @@
+SportsDesk DX — operator commands (Bun 1.4.4)
+
+Usage: ./bin/dx <command> [args...]
+
+  Environment / Diagnostics / Runtime Control
+    ./bin/dx status                 Measured environment: git, R2/Pages credentials, edge probe
+                                    (DX_STATUS_OFFLINE=1 skips the network probe)
+    ./bin/dx setup [--replace]      Report home links (~/.zshrc etc.); --replace backs up and links
+    ./bin/dx scripts [filter|--bins|--workspaces]
+                                    Group package.json scripts by prefix, list bun x bins, or list workspace scripts
+    ./bin/dx workspaces [list|graph|audit|run|add|remove|link|init]
+                                    Monorepo workspace dev control (workspace:*, waves, self-contained audit)
+    ./bin/dx bun [--url <u>]        Runtime surface, declaration drift, proxy routing
+    ./bin/dx provenance [flags]     Bun oracle pin + spine repo & worktree SHA provenance (--table|--json|--yaml)
+    ./bin/dx run [flags] <target>   Controlled Bun runner (connects live `bun run --help` + presets)
+    ./bin/dx monitor [flags]        Monitor Bun processes, daemon /health + /api/v2/live-bets, profiles
+    ./bin/dx live-bets [flags]      Control & monitor v2 live-bets (--source/--fallback/--daemon/--watch)
+    ./bin/dx deps [add|remove|version|check]
+                                    bun-deps (frozen-safe); version = pm version + lock refresh
+    ./bin/dx nsh [doctor|artifacts|verify-loop|check|build|test|run|...]
+                                    Native Shell (packages/nsh-desk) CLI & verification loop
+    ./bin/dx worktrees [--apply] [--remote] [--ensure-auto-delete] [--offline] [--json|--yaml]
+                                    Audit & clean stale Git worktrees and merged local/remote branches
+
+  Manager Tools / partner config (GSID cookie auth — set GSLIVE_SESSION_ID in .env)
+    ./bin/dx fetch-config           Fetch partnerConfig JSON → partnerConfig.json
+    ./bin/dx fetch-i18n             Fetch i18n translation resources → i18n-resources.json
+    ./bin/dx fetch-common           Fetch manager-tools common data → manager-common.json
+    ./bin/dx fetch-live-data        Fetch live sports/reference data → live-data.json
+    ./bin/dx fetch-report-status    Probe live Manager report endpoints → status matrix
+    ./bin/dx fetch-report-periods   Fetch report period vocabulary → report-periods.json
+
+  Wagers by state, day, event, player, agent (columns, groups, layout from config/wagers.json)
+    ./bin/dx wagers-by-state --from=M/D/YYYY --to=M/D/YYYY [--state=X] [--nlegs=N] [--wager-number N] [--format=table|json|csv|summary|inspect|columns|grid] [--out=PATH] [--group-by=state|day|event|player|agent] [--top=N]
+    ./bin/dx wagers-by-state-live   Same against live ajax.php (requires GSLIVE_SESSION_ID; --format/--out/--group-by/--top supported)
+
+  Ticket lookup
+    ./bin/dx ticket <wagerNumber>|--list   One ticket or every ticket's leg count [--file=PATH] [--json]
+
+  Anomaly signatures
+    ./bin/dx flags --file=<capture> [--verbose] [--rule=NAME] [--strict] [--json]
+    ./bin/dx flags --rules          Deterministic rule catalog
+    ./bin/dx flags --review          Plan a stratified review ledger (--budget-minutes, --seed)
+    ./bin/dx flags --record          Record one review (--run-id --seq --verdict --reviewer)
+    ./bin/dx flags --review-report   Sampled rule precision for a review run
+    ./bin/dx flags --review-status   Reviewed vs remaining for a run
+    ./bin/dx flags --review-export --format=csv   Reviewer tracker
+    ./bin/dx bet-flags <cmd>        Incoming-bet YAML rules, scan, explain, locate & alert ledger
+    ./bin/dx layoff-risk <cmd>      Cross-market parlay & layoff risk scanner (scan|seed|daemon)
+    ./bin/dx queue [--limit N]      Ranked triage queue (flags, findings, model score, rule evidence, bets)
+    ./bin/dx queue build --dry-run  Readiness gate: prints blockers and exits 1; no queue rows
+
+  Surveillance / ingestion
+    ./bin/dx modes [1..10]          10-mode forensic / risk / cross-market matrix
+    ./bin/dx iptracker              Per-office and cross-office IP clusters
+    ./bin/dx gslive <LOGIN>         GSLive 7-param report + live bet-history links
+    ./bin/dx poll [--once] [--live] [--live-f402]
+                                    Poll feeds (--live = Polymarket, --live-f402 = F402 probe)
+    ./bin/dx watch                  In-process Bun.cron daemon (60s) + R2 sync
+    ./bin/dx backtest               4-week CFB + NBA parlay/combo backtest
+
+  Utilities
+    ./bin/dx dashboard [flags]      Render dashboard.md via Bun.markdown.ansi (--exec, --theme, --columns, --light, --no-color)
+    ./bin/dx docs [gslive|--json]   Deployed API docs (Scalar, R2, local artifacts)
+    ./bin/dx stale -i <export>      Stale-line / post-move bet cohort
+    ./bin/dx profile <0x|user>      Polymarket PnL, win rate, positions, categories
+    ./bin/dx combo legs|price|wallet|uniqueness|verify-subset|backtest
+                                    CFB combo legs, pricing, wallet positions, uniqueness, realized PnL
+    ./bin/dx bridge coverage|value|match
+                                    Cross-domain customer book ↔ Polymarket wallet join
+    ./bin/dx pipeline               Docs/artifact verification gates (apply:captures … verify:docs)
+    ./bin/dx exec <program> [args]  Run any program with dx's environment (PATH programs also run directly)
+    ./bin/dx exec --with <group|NAME> [--] <program> [args]
+                                    ...and inject keychain-backed credentials (groups: r2 pages blob gslive daemon telegram)
+    ./bin/dx shot <url>             Bun.WebView screenshot → scratch/shots/ (--f402-login, --profile <dir>)
+    ./bin/dx session [status|login] Portal session file the replay transport reads (status is read-only)
+    ./bin/dx image-meta <file>      Print image metadata via Bun.Image (or '-' for stdin)
+    ./bin/dx assets [--write] [--json|--yaml]
+                                    Audit & optimize repo image assets with Bun.file().image() & WebP siblings
+    ./bin/dx blob-formdata <file>   Parse a blob as FormData and print JSON (or '-' for stdin)
+    ./bin/dx xml-parse <file>       Parse XML via Bun.XML as JSON or round-trip XML (or '-' for stdin)
+    ./bin/dx sql [--url <u>] <sql>  Read-only SQL inspector via Bun.SQL / Bun.sql (--tables, --json, --yaml)
+    ./bin/dx enrich --figure=<path> [--ticker=<path>] [--output=<path>] [--format=inspect|jsonl|summary] [--inspect]
+                                    Stream and join live ticker wagers with settled getWagersByFigureDate
+    ./bin/dx taxonomy [--mode=CP|CPS|CPV|G] [--period=-1..6] [--engine=native|full] [--sqlite=<path>] [--format=inspect|table|json] [--inspect]
+                                    Normalize wagers to canonical 0-6 portal period enum with multi-family dates
+    ./bin/dx edge [--input=<path>] [--sort=leak|hold|edge|volume] [--min-wagers=N] [--inspect]
+                                    Market edge & leakage dashboard slicing by sport, period & market
+    ./bin/dx shadow-price [--db=<path>] [--ladder-3=odds] [--ladder-7=odds] [--min-volume=N] [--elasticity=0.15]
+                                    Simulate counterfactual point-buy pricing ladders against settled history
+
+  Deploy
+    ./bin/dx stage                  Regenerate + stage dist/ (no upload)
+    ./bin/dx deploy                 Stage, publish to R2 and Cloudflare Pages
+    ./bin/dx ship                   Deploy, then push main
+
+Docs: README.md · docs/OPERATOR_QUICKSTART_AND_10_MODE_RUNBOOK.md
+
+  Bun Runtime Control & Monitoring (live `bun run --help` · Bun 1.4.4 · 100 flags: control=18, monitor=22, workspace=8, environment=12, network=19, transpiler=21)
+    ./bin/dx run [presets|bun-flags] <script|file> [args...]   Controlled runner (--containment, --profile-cpu, --profile-heap, --low-mem, --isolated-env, --watch-safe, --debug)
+    ./bin/dx monitor [--watch] [--interval=N] [--offline] [--prune] [--json]   Monitor active Bun processes, daemon /health + /api/v2/live-bets, and scratch/profiles/
+    ./bin/dx live-bets [--source=db|file|fixture|none] [--fallback=strict|sample] [--path=P] [--daemon] [--watch] [--json]   Control & monitor v2 live-bets resolution
+    ./bin/dx help --bun [--category=control|monitor|workspace|environment|network|transpiler] [--filter=TEXT] [--raw]   Expand full live `bun run --help` catalog
+
+    Process Control (`bun run` flags, forwardable via `./bin/dx run` or `DX_BUN_FLAGS`):
+          --no-orphans                   Exit when the parent process dies, and on exit kill every descendant.
+          --watch                        Automatically restart the process on file change
+          --watch-kill-signal=<val>      Signal whose handlers run when --watch restarts the process (default: "SIGTERM")
+          --hot                          Enable auto reload in the Bun runtime, test runner, or bundler
+          --smol                         Use less memory, but run garbage collection more often
+          --check                        Type check before running. Nothing runs if there are type errors. Alone: bun check
+          --title=<val>                  Set the process title
+          --unhandled-rejections=<val>   One of "strict", "throw", "warn", "none", or "warn-with-error-code"
+
+    Profiling, Debugging & Telemetry (`bun run` flags):
+          --cpu-prof-md                  Output CPU profile in markdown format (grep-friendly, designed for LLM analysis)
+          --heap-prof-md                 Generate markdown heap profile on exit (for CLI analysis)
+          --inspect-wait=<val>           Activate Bun's debugger, wait for a connection before executing
+          --inspect-brk=<val>            Activate Bun's debugger, set breakpoint on first line of code and wait
+          --console-depth=<val>          Set the default depth for console.log object inspection (default: 2)
+          --redirect-warnings=<val>      Write process warnings to the given file instead of printing to stderr
+
+    Orchestration & Isolation (`bun run` flags):
+          --parallel                     Run multiple scripts concurrently with Foreman-style output
+          --sequential                   Run multiple scripts sequentially with Foreman-style output
+          --no-exit-on-error             Continue running other scripts when one fails (with --parallel/--sequential)
+      -F, --filter=<val>                 Run a script in all workspace packages matching the pattern
+          --elide-lines=<val>            Number of lines of script output shown when using --filter (default: 0, show all lines)
+          --no-env-file                  Disable automatic loading of .env files
