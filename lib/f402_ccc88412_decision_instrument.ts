@@ -268,12 +268,14 @@ export interface DualTicketSignatureAudit {
   cccDualTicketShareOfNhl: number;
   cccDualTicketShareWilson95: ConfidenceInterval;
   matchesInFlaggedBotCorpus1560: Array<{
+    customerId: string;
     login: string;
     agentId: string;
     skin: string;
     pairsCount: number;
   }>;
   matchesInGradedCorpus70869: Array<{
+    customerId: string;
     login: string;
     agentId: string;
     skin: string;
@@ -1466,6 +1468,26 @@ export function computeBookPopulationPriors(
   };
 }
 
+/**
+ * Index summary rows by **verbatim `CustomerID`**.
+ *
+ * `PlayerLogin` is not unique: two customer records can share a login while belonging to
+ * different agents and skins (e.g. `A119` / `A119_1`). The `_N` suffix is part of the id, so it
+ * must not be stripped, and an id with a trailing dot (`CC103.`) must keep the dot. A summary
+ * lookup keyed by login — or by a normalized login — silently merges or misses those accounts.
+ */
+export function indexSummariesByCustomerId(
+  rows: readonly RawPlayerAnalysisRow[],
+): Map<string, RawPlayerAnalysisRow> {
+  const index = new Map<string, RawPlayerAnalysisRow>();
+  for (const row of rows) {
+    const customerId = String(row.CustomerID ?? "").trim();
+    if (customerId === "") continue;
+    index.set(customerId, row);
+  }
+  return index;
+}
+
 export function buildCcc88412DecisionInstrument(
   input: BuildCcc88412InstrumentInput,
 ): Ccc88412DecisionInstrument {
@@ -2192,18 +2214,19 @@ export function buildCcc88412DecisionInstrument(
   // 5. Dual-Ticket Signature & Linkage Graph
   const byCustTsRot = new Map<string, RawPlayerAnalysisRow[]>();
   for (const r of input.suspectedBotDetailRows) {
-    const login = String(r.PlayerLogin ?? "").trim();
+    const customerId =
+      String(r.CustomerID ?? "").trim() || String(r.PlayerLogin ?? "").trim();
     const ts = String(r.POSTEDDATETIME ?? "").trim();
     const desc = String(r.DESCRIPTION ?? "").trim();
     const rotMatch = desc.match(/^Hockey\s+#(\d+)/i);
     if (!rotMatch) continue;
-    const key = `${login}|${ts}|${rotMatch[1]}`;
+    const key = `${customerId}|${ts}|${rotMatch[1]}`;
     const arr = byCustTsRot.get(key) ?? [];
     arr.push(r);
     byCustTsRot.set(key, arr);
   }
 
-  const flaggedPairsByLogin = new Map<string, number>();
+  const flaggedPairsByCustomerId = new Map<string, number>();
   for (const [key, arr] of byCustTsRot.entries()) {
     if (arr.length < 2) continue;
     const hasMl = arr.some(
@@ -2214,22 +2237,22 @@ export function buildCcc88412DecisionInstrument(
     );
     const hasPl = arr.some((r) => Math.abs(Number(r.BETPOINTS ?? 0)) === 1.5);
     if (hasMl && hasPl) {
-      const login = key.split("|")[0]!;
-      flaggedPairsByLogin.set(login, (flaggedPairsByLogin.get(login) ?? 0) + 1);
+      const customerId = key.split("|")[0]!;
+      flaggedPairsByCustomerId.set(
+        customerId,
+        (flaggedPairsByCustomerId.get(customerId) ?? 0) + 1,
+      );
     }
   }
 
-  const summaryByLogin = new Map<string, RawPlayerAnalysisRow>();
-  for (const r of input.allSummaryRows) {
-    const login = String(r.PlayerLogin ?? "").trim();
-    summaryByLogin.set(login, r);
-  }
+  const summaryByCustomerId = indexSummariesByCustomerId(input.allSummaryRows);
 
-  const matchesInFlaggedBotCorpus1560 = [...flaggedPairsByLogin.entries()]
-    .map(([login, pairsCount]) => {
-      const s = summaryByLogin.get(login);
+  const matchesInFlaggedBotCorpus1560 = [...flaggedPairsByCustomerId.entries()]
+    .map(([customerId, pairsCount]) => {
+      const s = summaryByCustomerId.get(customerId);
       return {
-        login,
+        customerId,
+        login: String(s?.PlayerLogin ?? "").trim(),
         agentId: String(s?.AgentID ?? "").trim(),
         skin: String(s?.InetTarget ?? "").trim(),
         pairsCount,
@@ -2240,33 +2263,35 @@ export function buildCcc88412DecisionInstrument(
   // Also scan all 70,869 graded wagers by CustomerID + TicketNumber + Hockey rotation
   const gradedByTicketRot = new Map<string, GradedWagerRawRow[]>();
   for (const r of input.gradedWagerRows) {
-    const cid = String(r.CustomerID ?? "")
-      .trim()
-      .replace(/_\d+$/, "");
+    const customerId = String(r.CustomerID ?? "").trim();
     const t = String(r.TicketNumber ?? "").trim();
     const desc = String(r.Description ?? "").trim();
     const rotMatch = desc.match(/Hockey\s+#(\d+)/i);
     if (!rotMatch) continue;
-    const key = `${cid}|${t}|${rotMatch[1]}`;
+    const key = `${customerId}|${t}|${rotMatch[1]}`;
     const arr = gradedByTicketRot.get(key) ?? [];
     arr.push(r);
     gradedByTicketRot.set(key, arr);
   }
-  const gradedPairsByLogin = new Map<string, number>();
+  const gradedPairsByCustomerId = new Map<string, number>();
   for (const [key, arr] of gradedByTicketRot.entries()) {
     if (arr.length < 2) continue;
     const hasMl = arr.some((r) => String(r.WagerType ?? "").trim() === "M");
     const hasSpread = arr.some((r) => String(r.WagerType ?? "").trim() === "S");
     if (hasMl && hasSpread) {
-      const login = key.split("|")[0]!;
-      gradedPairsByLogin.set(login, (gradedPairsByLogin.get(login) ?? 0) + 1);
+      const customerId = key.split("|")[0]!;
+      gradedPairsByCustomerId.set(
+        customerId,
+        (gradedPairsByCustomerId.get(customerId) ?? 0) + 1,
+      );
     }
   }
-  const matchesInGradedCorpus70869 = [...gradedPairsByLogin.entries()]
-    .map(([login, pairsCount]) => {
-      const s = summaryByLogin.get(login);
+  const matchesInGradedCorpus70869 = [...gradedPairsByCustomerId.entries()]
+    .map(([customerId, pairsCount]) => {
+      const s = summaryByCustomerId.get(customerId);
       return {
-        login,
+        customerId,
+        login: String(s?.PlayerLogin ?? "").trim(),
         agentId: String(s?.AgentID ?? "").trim(),
         skin: String(s?.InetTarget ?? "").trim(),
         pairsCount,
@@ -2277,7 +2302,7 @@ export function buildCcc88412DecisionInstrument(
   const cccNhlTotalWagers = cccRows.filter(
     (r) => String(r.SPORTSUBTYPE ?? "").trim() === "NHL",
   ).length;
-  const cccDualPairs = flaggedPairsByLogin.get("CCC88412") ?? 11;
+  const cccDualPairs = flaggedPairsByCustomerId.get("CCC88412") ?? 11;
   const cccDualWagers = cccDualPairs * 2;
 
   const linkageEdges: LinkageEdge[] = [
@@ -3118,18 +3143,16 @@ export function buildCcc88412DecisionInstrument(
   const nonCccHockeyEvents = new Map<string, GradedWagerRawRow[]>();
   const nonCccHockeyTsEvents = new Map<string, GradedWagerRawRow[]>();
   for (const r of hockeyGradedRows) {
-    const cid = String(r.CustomerID ?? "")
-      .trim()
-      .replace(/_\d+$/, "");
-    hockeyGradedAccounts.add(cid);
-    if (cid === "CCC88412") continue;
+    const customerId = String(r.CustomerID ?? "").trim();
+    hockeyGradedAccounts.add(customerId);
+    if (customerId === "CCC88412") continue;
     const t = String(r.TicketNumber ?? "").trim();
     const ts = String(r.AcceptedDateTime ?? "").trim();
     const rot =
       String(r.Description ?? "").match(/Hockey\s+#(\d+)/i)?.[1] ?? "";
     if (!rot) continue;
-    const kT = `${cid}|${t}|${rot}`;
-    const kTs = `${cid}|${ts}|${rot}`;
+    const kT = `${customerId}|${t}|${rot}`;
+    const kTs = `${customerId}|${ts}|${rot}`;
     nonCccHockeyEvents.set(kT, [...(nonCccHockeyEvents.get(kT) ?? []), r]);
     nonCccHockeyTsEvents.set(kTs, [
       ...(nonCccHockeyTsEvents.get(kTs) ?? []),
@@ -3155,7 +3178,7 @@ export function buildCcc88412DecisionInstrument(
       nonCccDistinctTicketSameSecondPairsK++;
     }
   }
-  const nonCccEventsN = Math.max(1, nonCccHockeyEvents.size); // 2,519 in full 70,869 corpus
+  const nonCccEventsN = Math.max(1, nonCccHockeyEvents.size); // 2,520 in full 70,869 corpus
   const p0BookDualTicket =
     nonCccHockeyEvents.size >= 100
       ? nonCccSameTicketPairsK / nonCccEventsN
@@ -3211,8 +3234,8 @@ export function buildCcc88412DecisionInstrument(
   let nonCccUnflaggedPairsK = 0;
   let nonCccOtherFlaggedPairsK = 0;
   for (const [kT, arr] of nonCccHockeyEvents.entries()) {
-    const cid = kT.split("|")[0]!;
-    const sRow = summaryByLogin.get(cid);
+    const customerId = kT.split("|")[0]!;
+    const sRow = summaryByCustomerId.get(customerId);
     const sb = String(sRow?.SuspectedBot ?? "N").trim();
     const sbt = String(sRow?.SuspectedBotType ?? "0").trim();
     const isFlagged = sb === "Y" || sbt !== "0";

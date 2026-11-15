@@ -10,6 +10,7 @@ import {
   computeMinimumSampleSizePower80,
   computeWagerClvEvMetrics,
   computeWilson95,
+  indexSummariesByCustomerId,
   renderCcc88412DecisionInstrumentMarkdown,
   shrinkRateBetaBinomial,
   type GradedWagerRawRow,
@@ -308,5 +309,45 @@ describe("lib/f402_ccc88412_decision_instrument", () => {
     const sha1 = createHash("sha256").update(md1).digest("hex");
     const sha2 = createHash("sha256").update(md2).digest("hex");
     expect(sha1).toBe(sha2);
+  });
+
+  test("H7 summary index keys by verbatim customerId, not by shared PlayerLogin", () => {
+    const rows = [
+      {
+        CustomerID: "A119",
+        PlayerLogin: "A119",
+        AgentID: "ADKINSON",
+        InetTarget: "FiresideSports.com",
+      },
+      {
+        CustomerID: "A119_1",
+        PlayerLogin: "A119",
+        AgentID: "JKN",
+        InetTarget: "vip365.com",
+      },
+      {
+        CustomerID: "CC103.",
+        PlayerLogin: "CC103",
+        AgentID: "DOTCO",
+        InetTarget: "betolive.com",
+      },
+    ] as const satisfies readonly ReportPlayerAnalysisRowRaw[];
+
+    const index = indexSummariesByCustomerId(rows);
+    expect([...index.keys()]).toEqual(["A119", "A119_1", "CC103."]);
+    expect(index.get("A119")?.AgentID).toBe("ADKINSON");
+    expect(index.get("A119_1")?.AgentID).toBe("JKN");
+    expect(index.get("A119_1")?.InetTarget).toBe("vip365.com");
+    expect(index.get("CC103.")?.AgentID).toBe("DOTCO");
+    // A trailing-dot id keeps its dot; the bare login is not a key.
+    expect(index.get("CC103")).toBeUndefined();
+
+    // The login-keyed shape cannot represent both A119 records: one silently wins.
+    const byLogin = new Map<string, ReportPlayerAnalysisRowRaw>();
+    for (const row of rows) {
+      byLogin.set(String(row.PlayerLogin ?? "").trim(), row);
+    }
+    expect(byLogin.size).toBe(2);
+    expect(byLogin.get("A119")?.CustomerID).toBe("A119_1");
   });
 });
