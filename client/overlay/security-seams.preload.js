@@ -916,6 +916,13 @@
                   if (!row || typeof row !== "object") continue;
                   if (typeof row.Login === "string")
                     row.Login = api.escHtml(row.Login);
+                  // The id is interpolated twice: into data-customer="…" (quoted) and into
+                  // data-param=<json> (unquoted). Encode it so a quote cannot close the unquoted
+                  // attribute. Consequence: for an id containing a quote, the vendor stringifies
+                  // the encoded value, so after the browser decodes the attribute the JSON payload
+                  // no longer parses and the row's click fails closed. Ordinary ids are unchanged.
+                  if (typeof row.CustomerID === "string")
+                    row.CustomerID = api.escHtml(row.CustomerID);
                   if (row.info && typeof row.info === "object") {
                     if (typeof row.info.Password === "string") {
                       row.info.Password = api.escHtml(row.info.Password);

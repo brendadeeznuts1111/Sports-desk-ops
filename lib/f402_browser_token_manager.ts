@@ -60,21 +60,36 @@ export function decodeJwtExp(jwt: string): number | null {
   }
 }
 
+/**
+ * The OAuth-shaped `authenticateCustomer` body. `auth.js` reuses this builder so the browser
+ * login and the remint path cannot drift apart; the overrides carry the values only a live
+ * login knows (request host, the agent token, the `authenticateCustomerforAgent` operation).
+ */
 export function buildAuthenticateCustomerBody(
   customerID: string,
   password: string,
+  overrides: {
+    domain?: string;
+    multiaccount?: string | number;
+    operation?: string;
+    token?: string;
+    RRO?: unknown;
+  } = {},
 ): Record<string, unknown> {
+  const domain = overrides.domain ?? "fantasy402.com";
   return {
     customerID,
     state: true,
     password,
-    multiaccount: "1",
+    multiaccount: overrides.multiaccount ?? "1",
     response_type: "code",
     client_id: customerID,
-    domain: "fantasy402.com",
-    redirect_uri: "fantasy402.com",
-    operation: "authenticateCustomer",
-    RRO: 1,
+    domain,
+    redirect_uri: domain,
+    operation: overrides.operation ?? "authenticateCustomer",
+    // The remint path has no agent token; omitting the key keeps that body unchanged.
+    ...(overrides.token !== undefined ? { token: overrides.token } : {}),
+    RRO: overrides.RRO ?? 1,
   };
 }
 

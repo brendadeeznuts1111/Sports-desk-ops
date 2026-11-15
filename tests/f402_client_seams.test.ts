@@ -1421,6 +1421,68 @@ describe("security seam preload: module allowlist", () => {
     expect(rendered[0]!["CustomerID"]).toBe("c1");
   });
 
+  test("searchCustomer entity-encodes CustomerID so a quote cannot close the unquoted attribute", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const defined = withRegistry(context);
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+    let captured: Record<string, unknown> | null = null;
+    context.window["jQuery"] = {
+      ajax(options: Record<string, unknown>): void {
+        captured = options;
+      },
+    };
+    let html = "";
+    class Manager {
+      searchCustomer(): void {
+        (context.window["jQuery"] as { ajax: (o: unknown) => void }).ajax({
+          data: { operation: "searchCustomerAdmin" },
+          success: (response: { LIST: Array<Record<string, unknown>> }) => {
+            const row = response.LIST[0] as { CustomerID: string };
+            const g = { customerID: row.CustomerID.trim() };
+            html =
+              '<div data-customer="' +
+              row.CustomerID.trim() +
+              '" data-param=' +
+              JSON.stringify(g) +
+              "></div>";
+          },
+        });
+      }
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+    new Manager().searchCustomer();
+    (captured as unknown as { success: (r: unknown) => void }).success({
+      LIST: [{ CustomerID: 'a"b<c&d' }],
+    });
+
+    const decode = (v: string): string =>
+      v
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, "&");
+    const attr = html.match(/data-customer="([^"]*)"/);
+    expect(attr).not.toBeNull();
+    expect(decode(attr![1]!)).toBe('a"b<c&d');
+    // The unquoted data-param attribute contains no raw quote.
+    expect(html).not.toContain('data-param={"customerID":"a"b');
+  });
+
   test("getCommunicationMessages preserves the first <BR> strip then escapes both paths", async () => {
     const source = await preloadSource();
     const context = runPreload(source, "https://x/");
