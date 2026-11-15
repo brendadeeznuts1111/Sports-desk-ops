@@ -10,7 +10,7 @@ That covers commits written **on this machine**. It does not cover commits GitHu
 
 ## The web-merge channel (the one the gitconfig did not close)
 
-Of the 196 commits carrying `bw496915@gmail.com`, **195 were committed by `GitHub <noreply@github.com>`**: web squash merges. Those take the author from the account profile name plus the account's _visible_ email and ignore `~/.gitconfig` entirely. Exactly one gmail commit was local. So the gitconfig fix, on its own, never stopped this channel — it kept producing gmail-authored commits after the identity change, which is what `git log` shows on 2026-11-15.
+Of the 196 commits carrying `bw496915@gmail.com` on 2026-11-15 (the count rises by one with every web merge until the account setting below is on), **195 were committed by `GitHub <noreply@github.com>`**: web squash merges. Those take the author from the account profile name plus the account's _visible_ email and ignore `~/.gitconfig` entirely. Exactly one gmail commit was local. So the gitconfig fix, on its own, never stopped this channel — it kept producing gmail-authored commits after the identity change, which is what `git log` shows on 2026-11-15.
 
 The control is account-level, and it is a setting, not a rewrite:
 
@@ -43,7 +43,7 @@ The primary address stays listed in `user/emails` either way; what changes is th
 
 ## Why the rewrite stays deferred
 
-A history rewrite (`git filter-repo --mailmap`) would replace the address inside every commit object, change every SHA, require a force-push, and make the one collaborator re-clone. It buys tidiness, not confidentiality: the address is already public in 196 of this public repo's 1,054 commit objects (the other 843 carry `dev@duoplus.com`), and a rewrite removes it from none of the copies anyone may already hold. The forward fix is the account setting above, which stops new exposure at the source.
+A history rewrite (`git filter-repo --mailmap`) would replace the address inside every commit object, change every SHA, require a force-push, and make the one collaborator re-clone. It buys tidiness, not confidentiality: the address is already public in 196 of this public repo's 1,054 commit objects, and 843 more carry `dev@duoplus.com`, and a rewrite removes it from none of the copies anyone may already hold. The forward fix is the account setting above, which stops new exposure at the source.
 
 **This is deferred, not abandoned. Reopen it when any one of these becomes true:**
 
@@ -55,6 +55,12 @@ Absent one of those, the decision stands. Note what is _not_ a trigger: a date. 
 
 ## The address inside `.mailmap`
 
-`.mailmap` is tracked, so the mapping places `bw496915@gmail.com` in current source rather than only in history. That is not new exposure — the address sits in 196 commit objects anyone with the repo can read — and the mapping removes no copy of it. It is also not what the account setting does: turning the setting on does not retract anything already written, and leaving it off would have kept adding new copies.
+`.mailmap` is tracked, so the mapping places `bw496915@gmail.com` in current source rather than only in history. That is not new exposure — the address sits in the commit objects of roughly 200 commits anyone with the repo can read — and the mapping removes no copy of it. It is also not what the account setting does: turning the setting on does not retract anything already written, and leaving it off would have kept adding new copies.
 
 Keeping the mapping is the better trade. It makes historical commits display as a single identity; deleting it would hide the alias from `git log` without deleting a single copy of the address.
+
+### One mapping per address, and the last line wins
+
+Before adding a line here: git keys the mapping on the **commit email** and applies the **last matching line**. So two lines that map `bw496915@gmail.com` to different names are not complementary — appending the second silently renames every commit carrying that address (198 of them), while placing it first makes it a no-op. Measured both ways: appending a `bw496915-cmyk` line after the canonical one changes `git shortlog` output to that name; putting it first changes nothing.
+
+The 150 commits authored `Ash - BookDeskOps <bw496915@gmail.com>` and the 48 authored `bw496915-cmyk <bw496915@gmail.com>` **cannot be displayed with different names**, because the display name is not part of the key. The canonical line is a decision about all 198 at once. To change it, replace that line — never append a second one.
