@@ -259,7 +259,7 @@ export function buildAllCustomerDecisionRankingSystem(
   let totalBeatPrice = 0;
   let totalNetCents = 0;
 
-  const skinMapByLogin = new Map<string, string>();
+  const skinByCustomerId = new Map<string, string>();
   for (const r of input.allSummaryRows) {
     const n = Math.round(Number(r.TOTALBETS ?? 0));
     const bpPts = Math.round(Number(r.BETTERPOINTSLINES ?? 0));
@@ -269,11 +269,9 @@ export function buildAllCustomerDecisionRankingSystem(
     totalBeatPoints += bpPts;
     totalBeatPrice += bpPrc;
     totalNetCents += wlCents;
-    const login = String(r.PlayerLogin ?? r.CustomerID ?? "")
-      .trim()
-      .replace(/_\d+$/, "");
+    const customerId = String(r.CustomerID ?? "").trim();
     const skin = String(r.InetTarget ?? "unknown").trim() || "unknown";
-    if (login) skinMapByLogin.set(login, skin);
+    if (customerId) skinByCustomerId.set(customerId, skin);
   }
 
   const p1Prior =
@@ -290,20 +288,18 @@ export function buildAllCustomerDecisionRankingSystem(
     string,
     { risked: number; won: number; lost: number }
   >();
-  const gradedByLogin = new Map<string, GradedWagerRawRow[]>();
+  const gradedByCustomerId = new Map<string, GradedWagerRawRow[]>();
 
   for (const g of input.gradedWagerRows) {
-    const cid = String(g.CustomerID ?? "")
-      .trim()
-      .replace(/_\d+$/, "");
+    const cid = String(g.CustomerID ?? "").trim();
     if (!cid) continue;
-    const list = gradedByLogin.get(cid);
+    const list = gradedByCustomerId.get(cid);
     if (list) list.push(g);
-    else gradedByLogin.set(cid, [g]);
+    else gradedByCustomerId.set(cid, [g]);
 
     const wt = String(g.WagerType ?? "").trim();
     if (!straightTypes.has(wt)) continue;
-    const skin = skinMapByLogin.get(cid) ?? "unknown";
+    const skin = skinByCustomerId.get(cid) ?? "unknown";
     const acc = skinHoldAccum.get(skin) ?? { risked: 0, won: 0, lost: 0 };
     acc.risked += Number(g.AmountWagered ?? 0);
     acc.won += Number(g.AmountWon ?? 0);
@@ -321,18 +317,20 @@ export function buildAllCustomerDecisionRankingSystem(
     }
   }
 
-  // Group detail rows by login and detect synchronized 2H office bursts
-  const detailByLogin = new Map<string, ReportPlayerAnalysisRowRaw[]>();
+  // Group detail rows by verbatim CustomerID and detect synchronized 2H office bursts.
+  // `playerLogin` remains the office-burst grouping key; `customerId` keys the per-account set.
+  const detailByCustomerId = new Map<string, ReportPlayerAnalysisRowRaw[]>();
   const office2hGameLogins = new Map<string, Set<string>>();
 
   for (const d of input.suspectedBotDetailRows) {
-    const login = String(d.PlayerLogin ?? d.CustomerID ?? "")
+    const playerLogin = String(d.PlayerLogin ?? d.CustomerID ?? "")
       .trim()
       .replace(/_\d+$/, "");
-    if (!login) continue;
-    const arr = detailByLogin.get(login);
+    const customerId = String(d.CustomerID ?? "").trim();
+    if (!customerId) continue;
+    const arr = detailByCustomerId.get(customerId);
     if (arr) arr.push(d);
-    else detailByLogin.set(login, [d]);
+    else detailByCustomerId.set(customerId, [d]);
 
     const agent = String(d.AgentID ?? "").trim();
     const per = String(d.PERIODNUMBER ?? "0").trim();
@@ -344,7 +342,7 @@ export function buildAllCustomerDecisionRankingSystem(
       const pairBase = rot % 2 === 1 ? rot : rot - 1;
       const key = `${agent}|${date}|#${pairBase}`;
       const set = office2hGameLogins.get(key) ?? new Set<string>();
-      set.add(login);
+      set.add(playerLogin);
       office2hGameLogins.set(key, set);
     }
   }
@@ -434,8 +432,8 @@ export function buildAllCustomerDecisionRankingSystem(
 
     // If detail rows exist (for the 159 flagged accounts), compute exact per-wager EV%;
     // otherwise derive from summary PRICE (cents vs close) and POINTS (points vs close).
-    const drows = detailByLogin.get(playerLogin) ?? [];
-    const grows = gradedByLogin.get(playerLogin) ?? [];
+    const drows = detailByCustomerId.get(customerId) ?? [];
+    const grows = gradedByCustomerId.get(customerId) ?? [];
 
     let estClvEdgePct = 0;
     let estNetEvPct = -4.55;
