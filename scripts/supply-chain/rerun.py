@@ -121,7 +121,12 @@ def summarize(kind, norm):
 
 def run_step(spec, bun):
     tmp_home = tempfile.mkdtemp(prefix="rerun-home-")
-    ctx = {"bun": bun, "bun_dir": os.path.dirname(bun), "repo": REPO, "tmp_home": tmp_home}
+    # {bun_dir} is a private dir holding only a `bun` symlink to the exact binary under test, so
+    # PATH lookups of `bun` (package scripts, bin/dx) hit it even when the real file is named
+    # bun.exe (npm/pnpm installs) and nothing else from the binary's directory leaks in.
+    bun_dir = tempfile.mkdtemp(prefix="rerun-bin-")
+    os.symlink(bun, os.path.join(bun_dir, "bun"))
+    ctx = {"bun": bun, "bun_dir": bun_dir, "repo": REPO, "tmp_home": tmp_home}
     sub = lambda s: re.sub(r"\{(bun|bun_dir|repo|tmp_home)\}", lambda m: ctx[m.group(1)], s)
     argv = [sub(a) for a in spec["argv"]]
     env = {k: sub(v) for k, v in spec.get("env", {}).items()}
@@ -134,7 +139,7 @@ def run_step(spec, bun):
     t0 = time.time()
     r = subprocess.run(argv, cwd=os.path.join(REPO, spec.get("cwd", ".")), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=spec.get("timeout_s", 900))
     dt = int((time.time() - t0) * 1000)
-    shutil.rmtree(tmp_home, ignore_errors=True)
+    shutil.rmtree(tmp_home, ignore_errors=True); shutil.rmtree(bun_dir, ignore_errors=True)
     text = r.stdout.decode("utf-8", "replace")
     norm = normalize(spec.get("normalizer", "raw"), text, ctx)
     return r.returncode, norm, dt, text
