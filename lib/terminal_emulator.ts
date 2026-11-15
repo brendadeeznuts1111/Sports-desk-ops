@@ -39,6 +39,7 @@ import {
 } from "./canonical_osc8_links.ts";
 import { formatHalfPointLine } from "../design/domain-branded-types.ts";
 import { padDisplay } from "./cli_inspect.ts";
+import { harvestLiveCustomerProfiles } from "./live_profile_harvester.ts";
 import { TIER, SURFACE, composite, type WagerTier } from "./wager_tokens.ts";
 
 const FG = (c: string) =>
@@ -284,6 +285,9 @@ export const COMMAND_ALIASES: Readonly<Record<string, string>> = {
   capabilities: "capabilities",
   caps: "capabilities",
   features: "capabilities",
+  harvest: "harvest",
+  hv: "harvest",
+  anomalies: "harvest",
 };
 
 /**
@@ -292,6 +296,7 @@ export const COMMAND_ALIASES: Readonly<Record<string, string>> = {
 export const AUTOCOMPLETE_COMMANDS: readonly string[] = [
   "profile",
   "find",
+  "harvest",
   "sharps",
   "syndicates",
   "key-numbers",
@@ -1620,6 +1625,78 @@ async function executeTerminalQueryInner(
     return await executeTerminalQuery("find -t syndicate", options);
   }
 
+  // Quick Command: Automated 24h Live Profile Harvester & Pattern Anomaly Scanner
+  if (canonicalCmd === "harvest") {
+    const limitIdx = cmdArgs.findIndex((a) => a === "--limit" || a === "-n");
+    const limit =
+      limitIdx >= 0 && cmdArgs[limitIdx + 1]
+        ? Math.max(1, Number(cmdArgs[limitIdx + 1]) || 15)
+        : 15;
+    const harvested = await harvestLiveCustomerProfiles({
+      onlyFlagged: !cmdArgs.includes("--all"),
+      limit,
+    });
+    if (cmdArgs.includes("--json")) {
+      return {
+        command: trimmed,
+        stdout: JSON.stringify(harvested, null, 2),
+        exitCode: 0,
+        durationMs: Date.now() - startedAt,
+        timestamp: startedAt,
+      };
+    }
+    const rows = [
+      `\x1b[1;36m⚡ AUTOMATED 24H LIVE PROFILE HARVESTER & PATTERN ANOMALY SCANNER\x1b[0m`,
+      `\x1b[90mScanned: ${harvested.totalUniqueCustomersScanned} active accounts · DOD6 v5.4 Spine Matched: ${harvested.dodSpineMatchedCount}/${harvested.totalUniqueCustomersScanned} (${harvested.dodSpineCustomerCount.toLocaleString()} total) · Flagged: ${harvested.flaggedProfilesCount}\x1b[0m`,
+      `\x1b[90mInputs: ${Object.entries(harvested.sources)
+        .map(([name, status]) => `${name}=${status}`)
+        .join(" ")}\x1b[0m`,
+      `  • Whale Single-Agent Conduits : \x1b[1;31m${harvested.patternCounts.WHALE_SINGLE_AGENT_CONDUIT}\x1b[0m   • Key-Number / Hook Buyers : \x1b[1;33m${harvested.patternCounts.KEY_NUMBER_HOOK_BUYER}\x1b[0m   • Velocity Burst Snipers : \x1b[1;35m${harvested.patternCounts.VELOCITY_BURST_SNIPER}\x1b[0m`,
+      `  • Positive CLV / Net Sharps   : \x1b[1;32m${harvested.patternCounts.POSITIVE_CLV_OR_NET_SHARP}\x1b[0m   • Sub-Account Splitters    : \x1b[1;36m${harvested.patternCounts.SUB_ACCOUNT_SUFFIX_SPLITTING}\x1b[0m`,
+      "┌────────────┬────────────┬────────────┬───────┬────────────┬──────────────┬─────────┬────────────────────────────────────────┐",
+      "│ Customer   │ Agent      │ Master     │ Score │ 24h Risk   │ DOD6 LT Net  │ CLV bps │ Detected Anomaly Flags                 │",
+      "├────────────┼────────────┼────────────┼───────┼────────────┼──────────────┼─────────┼────────────────────────────────────────┤",
+    ];
+    for (const p of harvested.profiles) {
+      const idLink = formatOsc8Hyperlink(
+        getCanonicalCustomerUrl(p.id),
+        padDisplay(p.id, 10),
+      );
+      const agLink = formatOsc8Hyperlink(
+        getCanonicalAgentUrl(p.agentId),
+        padDisplay(p.agentId.slice(0, 10), 10),
+      );
+      const maPad = padDisplay(p.masterAgent.slice(0, 10), 10);
+      const scPad = p.score.toFixed(1).padStart(5);
+      const riskPad = `$${p.openRisk24hUsd.toLocaleString()}`.padStart(10);
+      const netRaw = `${p.ltvUsd < 0 ? "-" : "+"}$${Math.abs(p.ltvUsd).toLocaleString()}`;
+      const netPad =
+        p.ltvUsd > 0
+          ? `\x1b[32m${netRaw.padStart(12)}\x1b[0m`
+          : `\x1b[31m${netRaw.padStart(12)}\x1b[0m`;
+      const clvStr =
+        p.dodClvBps !== null
+          ? `${p.dodClvBps >= 0 ? "+" : ""}${p.dodClvBps}`
+          : "—";
+      const clvPad = clvStr.padStart(7);
+      const flagsPad = padDisplay(p.anomalyFlags.join(", ").slice(0, 38), 38);
+      rows.push(
+        `│ \x1b[1;36m${idLink}\x1b[0m │ ${agLink} │ ${maPad} │ \x1b[1m${scPad}\x1b[0m │ ${riskPad} │ ${netPad} │ ${clvPad} │ ${flagsPad} │`,
+      );
+    }
+    rows.push(
+      "└────────────┴────────────┴────────────┴───────┴────────────┴──────────────┴─────────┴────────────────────────────────────────┘",
+      `\x1b[90mTip: Type 'p <ID>' to inspect a profile, or 'harvest --all' to widen the scan.\x1b[0m`,
+    );
+    return {
+      command: trimmed,
+      stdout: rows.join("\n"),
+      exitCode: 0,
+      durationMs: Date.now() - startedAt,
+      timestamp: startedAt,
+    };
+  }
+
   // Quick Command: Profile Inspector
   if (canonicalCmd === "profile") {
     const flags = new Set(cmdArgs.filter((a) => a.startsWith("-")));
@@ -1656,7 +1733,7 @@ async function executeTerminalQueryInner(
 
       return {
         command: trimmed,
-        stdout: `\x1b[33mCustomer '${idArg}' not found in local active profile matrix.\x1b[0m\n\x1b[90mTry: profile GP301, profile BRT5229, profile ST100, or type 'find <query>'\x1b[0m`,
+        stdout: `\x1b[33mCustomer '${idArg}' not found in local active profile matrix.\x1b[0m\n\x1b[90mTry: profile GP301, profile BRT5229, or type 'harvest' / 'find <query>'\x1b[0m`,
         exitCode: 1,
         durationMs: Date.now() - startedAt,
         timestamp: startedAt,

@@ -363,7 +363,8 @@
     "venue:table": "bun scripts/venue_registry_table.ts",
     "audit:deps": "bun audit",
     "audit:deps:json": "bun audit --json",
-    "validate:field-contract": "bun scripts/validate_wagers_field_contract.ts"
+    "validate:field-contract": "bun scripts/validate_wagers_field_contract.ts",
+    "profiles:harvest": "bun run scripts/harvest_live_profiles.ts"
   },
   "keywords": [
     "sportsdesk",

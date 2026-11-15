@@ -37,6 +37,7 @@ const QUICK_TERMINAL_CHIPS: readonly {
   readonly cmd: string;
   readonly cat: Exclude<TerminalCategory, "ALL">;
 }[] = [
+  { label: "🌾 harvest", cmd: "harvest", cat: "SHARPS" },
   { label: "🏆 rank-all", cmd: "rank-all", cat: "SHARPS" },
   { label: "🏆 sh", cmd: "sh", cat: "SHARPS" },
   { label: "🔍 f syndicate", cmd: "f syndicate", cat: "SHARPS" },
