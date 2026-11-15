@@ -1,0 +1,134 @@
+# DRAFT — NOT ENABLED. This file lives under docs/ci-drafts/, so GitHub Actions ignores it.
+# To enable: review, then copy to .github/workflows/supply-chain-verify.yml in its own PR.
+#
+# Purpose: a second, independent pipeline that re-derives every claim in docs/supply-chain.md
+# from raw material on machines we do not control, instead of trusting the committed hashes:
+#   rederive   GitHub-hosted Ubuntu: Bun pin from Oven's signed SHASUMS (gpg), lockfile
+#              integrity spot-check against the npm registry, clean frozen installs, SBOM
+#              regenerated + validated by two tools, every envelope replayed.
+#   nix        a different builder: nix build of .#bun / .#nodeModules / .#regression, each
+#              rebuilt with --rebuild (Nix fails if the second build is not bit-identical),
+#              and the sandbox regression hash compared to the host envelope's.
+#   sign       keyless Sigstore signing of the SBOM with this workflow's GitHub OIDC identity.
+#              ONLY on pushes to main. This PUBLISHES the workflow identity + artifact digest
+#              to the public Rekor transparency log — get explicit sign-off before enabling.
+#
+# Action refs are pinned to commit SHAs resolved with `git ls-remote` on 2026-11-15
+# (tags shown in comments). Check for newer releases when enabling.
+name: supply-chain-verify (independent)
+
+on:
+  pull_request:
+    paths:
+      [
+        ".bun-version",
+        "bun.lock",
+        "package.json",
+        "packages/*/package.json",
+        "toolchain/**",
+        "flake.nix",
+        "flake.lock",
+        "scripts/supply-chain/**",
+      ]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rederive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Re-derive the Bun pin from Oven's signed release material
+        run: |
+          sh toolchain/fetch-and-verify-bun.sh linux-x64 --install "$RUNNER_TEMP/bun-verified"
+          echo "$RUNNER_TEMP/bun-verified" >> "$GITHUB_PATH"
+      - name: Boot verifier accepts the verified binary and rejects a fake pin
+        run: |
+          sh toolchain/verify-bun.sh
+          if DX_BUN_PIN=toolchain/testdata/bun.fake.pin.json sh toolchain/verify-bun.sh; then exit 1; fi
+      - name: Lockfile graph + registry integrity spot-check (20 tarballs)
+        run: python3 scripts/supply-chain/lock_graph.py bun.lock --spot-check 20 > lock-graph.json
+      - name: Two clean frozen installs must match each other and the committed envelope
+        run: |
+          a=$(sh scripts/supply-chain/install_repro.sh bun); b=$(sh scripts/supply-chain/install_repro.sh bun)
+          [ "$a" = "$b" ] || { echo "install not reproducible"; diff <(echo "$a") <(echo "$b"); exit 1; }
+          diff <(echo "$a") toolchain/envelopes/install-repro.expected.txt
+      - name: Install deps (frozen) for the replay
+        run: bun install --frozen-lockfile
+      - name: Replay every committed envelope (byte-normalized)
+        run: python3 scripts/supply-chain/rerun.py verify-all --bun "$(command -v bun)" --out-dir replay
+      - name: SBOM — regenerate, validate with cyclonedx-cli and with python-jsonschema
+        run: |
+          python3 scripts/supply-chain/sbom_from_bunlock.py --timestamp 2026-11-15T00:00:00Z > sbom.cdx.json
+          curl -fsSL -o cyclonedx https://github.com/CycloneDX/cyclonedx-cli/releases/download/v0.33.1/cyclonedx-linux-x64
+          echo "bfc8b2538da86fe239bc53658bbb63c1c8c510a293c1e6891aa5bea5d3c58746  cyclonedx" | sha256sum -c -
+          chmod +x cyclonedx && ./cyclonedx validate --input-file sbom.cdx.json --input-version v1_6 --fail-on-errors
+          python3 -m venv v && v/bin/pip -q install jsonschema==4.25.1
+          for f in bom-1.6.schema.json spdx.schema.json jsf-0.82.schema.json; do curl -fsSL -o $f https://raw.githubusercontent.com/CycloneDX/specification/1.6/schema/$f; done
+          v/bin/python - <<'PY'
+          import json
+          from jsonschema import Draft7Validator
+          from referencing import Registry, Resource
+          names = ("bom-1.6.schema.json", "spdx.schema.json", "jsf-0.82.schema.json")
+          res = {n: Resource.from_contents(json.load(open(n))) for n in names}
+          reg = Registry().with_resources(list(res.items()) + [(r.contents["$id"], r) for r in res.values() if "$id" in r.contents])
+          errs = list(Draft7Validator(json.load(open("bom-1.6.schema.json")), registry=reg).iter_errors(json.load(open("sbom.cdx.json"))))
+          assert not errs, errs[:5]
+          print("jsonschema: VALID")
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rederive
+          path: |
+            lock-graph.json
+            sbom.cdx.json
+            replay/
+
+  nix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: DeterminateSystems/nix-installer-action@21a544727d0c62386e78b4befe52d19ad12692e3 # v17
+      - name: Build twice, bit-for-bit (nix --rebuild fails on any difference)
+        run: |
+          for a in bun nodeModules regression; do
+            nix build ".#$a" -L
+            nix build ".#$a" --rebuild -L
+          done
+      - name: Sandbox regression result == host envelope (different builder, same answer)
+        run: |
+          want=$(jq -r .expected.normalized_sha256 toolchain/envelopes/regression-suite.envelope.json)
+          got=$(cat result/normalized.sha256)
+          echo "envelope=$want nix=$got"; [ "$want" = "$got" ]
+
+  sign:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [rederive, nix]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Fulcio cert for this workflow's identity; entry is PUBLIC in Rekor
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+        with:
+          cosign-release: v3.1.4
+      - name: Keyless sign the SBOM
+        run: |
+          python3 scripts/supply-chain/sbom_from_bunlock.py --timestamp 2026-11-15T00:00:00Z > sbom.cdx.json
+          cosign sign-blob --yes --bundle sbom.cdx.json.sigstore.json sbom.cdx.json
+      - name: Verify with the expected identity (anyone can repeat this offline from the bundle)
+        run: |
+          cosign verify-blob --bundle sbom.cdx.json.sigstore.json \
+            --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/supply-chain-verify.yml@refs/heads/main" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com sbom.cdx.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom-signed
+          path: sbom.cdx.json*
