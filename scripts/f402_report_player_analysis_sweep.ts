@@ -11,7 +11,7 @@
  *   bun run scripts/f402_report_player_analysis_sweep.ts --customers CUST04_1,MM1012,MM1023
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createF402ReplayTransport } from "../lib/f402_replay_transport.ts";
 import {
@@ -283,7 +283,7 @@ async function main(): Promise<void> {
   const opts = parseArgs(process.argv.slice(2));
 
   if (opts.fromFile !== "") {
-    const rawJson = JSON.parse(readFileSync(opts.fromFile, "utf8")) as {
+    const rawJson = (await Bun.file(opts.fromFile).json()) as {
       startDate?: string;
       endDate?: string;
       agentID?: string;
@@ -300,7 +300,7 @@ async function main(): Promise<void> {
     const mode = rawJson.mode ?? `from-file (${opts.fromFile})`;
 
     mkdirSync(dirname(opts.outPath), { recursive: true });
-    writeFileSync(
+    await Bun.write(
       opts.outPath,
       JSON.stringify(
         {
@@ -314,7 +314,6 @@ async function main(): Promise<void> {
         null,
         2,
       ),
-      "utf8",
     );
 
     printSummaryReport(summary, {
@@ -419,7 +418,7 @@ async function main(): Promise<void> {
     const summary = summarizeReportPlayerAnalysis({ LIST: allRows });
     const botCohort = summarizeSuspectedBotCohort({ LIST: allRows });
     mkdirSync(dirname(opts.outPath), { recursive: true });
-    writeFileSync(
+    await Bun.write(
       opts.outPath,
       JSON.stringify(
         {
@@ -438,7 +437,6 @@ async function main(): Promise<void> {
         null,
         2,
       ),
-      "utf8",
     );
 
     printSummaryReport(summary, {

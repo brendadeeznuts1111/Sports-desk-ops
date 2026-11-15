@@ -6,7 +6,7 @@
 import { openSportsdeskSqlite } from "../lib/sportsdesk_sqlite.ts";
 import { parseVenueId } from "../lib/domain_venue_registry.ts";
 import { type ComboWireSide } from "../lib/canonical_combo_index.ts";
-import { readFileSync } from "node:fs";
+
 import { resolve } from "node:path";
 import {
   auditRunAt,
@@ -83,7 +83,7 @@ async function cmdDerive(args: string[], opts: GlobalOpts): Promise<number> {
     console.error("derive requires --fixture");
     return 1;
   }
-  const wire = JSON.parse(readFileSync(fixturePath, "utf8")) as
+  const wire = (await Bun.file(fixturePath).json()) as
     InternalComboWire | PolymarketComboWire;
   const projected = canonicalComboFromWire(side, wire);
   if (!projected) {
@@ -127,7 +127,7 @@ async function cmdIngest(args: string[], opts: GlobalOpts): Promise<number> {
     return 1;
   }
 
-  const batch = JSON.parse(readFileSync(fixturePath, "utf8")) as IngestFixture;
+  const batch = (await Bun.file(fixturePath).json()) as IngestFixture;
   const projected = canonicalComboFromWire(side, batch.wire);
   if (!projected) {
     console.error("ingest: wire did not project to canonical combo");

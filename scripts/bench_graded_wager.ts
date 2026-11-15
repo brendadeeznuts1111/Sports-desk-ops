@@ -4,7 +4,7 @@
  *
  *   bun run bench:graded-wager
  */
-import { readFileSync } from "node:fs";
+
 import { join } from "node:path";
 
 import {
@@ -13,10 +13,9 @@ import {
   isLive,
 } from "../lib/f402_graded_wager_row.ts";
 
-const html = readFileSync(
+const html = await Bun.file(
   join(import.meta.dir, "../tests/fixtures/f402-graded-wager-rows.html"),
-  "utf8",
-);
+).text();
 
 const WARMUP = 5;
 const RUNS = 50;

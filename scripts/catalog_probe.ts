@@ -434,7 +434,7 @@ export async function runCatalogProbe(
     );
     const digest = captureHash(record);
     const existing = existsSync(manifestPath)
-      ? (tryParseJson(readFileSync(manifestPath, "utf8")) as Record<
+      ? (tryParseJson(await Bun.file(manifestPath).text()) as Record<
           string,
           unknown
         >)

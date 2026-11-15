@@ -8,7 +8,6 @@
  *
  *   bun run scripts/extract_graded_wager_schema.ts tests/fixtures/f402-graded-wager-rows.html
  */
-import { readFileSync } from "node:fs";
 
 import { parseGradedWagerRowsSoA } from "../lib/f402_graded_wager_row.ts";
 
@@ -17,7 +16,7 @@ if (!path) {
   console.error("usage: extract_graded_wager_schema <html-file>");
   process.exit(1);
 }
-const html = readFileSync(path, "utf8");
+const html = await Bun.file(path).text();
 const soa = parseGradedWagerRowsSoA(html);
 const fields = Object.keys(soa).sort();
 console.log(JSON.stringify({ fieldCount: fields.length, fields }, null, 2));

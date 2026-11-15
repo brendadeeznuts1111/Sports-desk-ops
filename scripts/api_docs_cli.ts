@@ -11,7 +11,6 @@
  *   bun run scripts/api_docs_cli.ts --open     # open the Scalar portal in the browser
  */
 
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CANONICAL_DOMAINS } from "../lib/canonical_osc8_links.ts";
 import { renderGSLiveDocsMarkdown } from "../lib/gslive_api_docs.ts";
@@ -36,7 +35,7 @@ interface GsLiveExtension {
   readonly surfaces?: readonly GsLiveSurface[];
 }
 
-const spec = JSON.parse(readFileSync(specPath, "utf8")) as Record<
+const spec = (await Bun.file(specPath).json()) as Record<
   string,
   unknown
 >;

@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { FEATURES } from "../types/features.ts";
@@ -43,4 +43,4 @@ const footer = `
 });
 `;
 
-writeFileSync(out, `${header}${positives}${footer}`);
+await Bun.write(out, `${header}${positives}${footer}`);

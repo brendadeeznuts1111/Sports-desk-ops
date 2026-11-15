@@ -1979,7 +1979,7 @@ export async function checkLive(
   committedSpecPath: string,
 ): Promise<CheckOutcome> {
   const name = `live spec parity (${baseUrl})`;
-  const committed = readFileSync(committedSpecPath);
+  const committed = Buffer.from(await Bun.file(committedSpecPath).bytes());
   let specUrl: string;
   try {
     specUrl = new URL(
@@ -2084,7 +2084,7 @@ async function checkLedgerFile(
       ),
     ]);
   }
-  const parsed = parseJson(readFileSync(ledgerPath, "utf8"));
+  const parsed = parseJson(await Bun.file(ledgerPath).text());
   if (!parsed.ok) {
     return failed(name, [
       problem(
@@ -2175,7 +2175,7 @@ export async function runChecks(options: RunOptions): Promise<CheckOutcome[]> {
   const specPath = join(options.root, "docs", "openapi.json");
   let spec: unknown = undefined;
   if (existsSync(specPath)) {
-    const parsed = parseJson(readFileSync(specPath, "utf8"));
+    const parsed = parseJson(await Bun.file(specPath).text());
     if (parsed.ok) spec = parsed.value;
   }
 

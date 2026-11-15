@@ -5,7 +5,7 @@
  */
 
 import { join } from "node:path";
-import { readFileSync } from "node:fs";
+
 import { tmpdir } from "node:os";
 import {
   enrichIngestionJsonlRowWithXmlGoldenAst,
@@ -31,7 +31,7 @@ type Manifest = {
 };
 
 async function main(): Promise<number> {
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Manifest;
+  const manifest = (await Bun.file(manifestPath).json()) as Manifest;
   for (const entry of manifest.entries) {
     const live = goldenAstFingerprintFromXml(entry.xml).sha256;
     if (live !== entry.sha256) {
@@ -46,7 +46,7 @@ async function main(): Promise<number> {
   // would silently truncate the prefix. The non-string-xml branch also preserves the original line
   // text byte-for-byte (JSON.stringify would normalize). See
   // `docs/bun-upstream-reference.md` "When NOT to migrate to Bun.JSONL".
-  const lines = readFileSync(domainJsonl, "utf8").trim().split("\n");
+  const lines = (await Bun.file(domainJsonl).text()).trim().split("\n");
   const enriched = lines
     .filter((l) => l.trim())
     .map((line) => {

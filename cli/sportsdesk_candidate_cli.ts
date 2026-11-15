@@ -146,8 +146,8 @@ async function cmdPin(args: string[], opts: GlobalOpts): Promise<number> {
       fixturesDir,
       name.replace(".golden.json", ".golden.sha256"),
     );
-    const bytes = readFileSync(jsonPath, "utf8");
-    const expected = readFileSync(shaPath, "utf8").trim();
+    const bytes = await Bun.file(jsonPath).text();
+    const expected = (await Bun.file(shaPath).text()).trim();
     const actual = hashCanonicalJsonBytes(bytes);
     if (actual !== expected) {
       failures.push(`${name}: expected ${expected}, got ${actual}`);

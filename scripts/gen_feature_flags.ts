@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { FEATURES, BUILD_FEATURES, DESCRIPTIONS } from "../types/features.ts";
@@ -11,7 +11,7 @@ const START = "<!-- FLAGS:START -->";
 const END = "<!-- FLAGS:END -->";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const readmePath = join(scriptDir, "../types/README.md");
-const readme = readFileSync(readmePath, "utf8");
+const readme = await Bun.file(readmePath).text();
 
 const table = [
   "| Flag | Purpose |",
@@ -25,7 +25,7 @@ if (s === -1 || e === -1 || e < s) {
   throw new Error(`Missing or misordered ${START} / ${END} in types/README.md`);
 }
 
-writeFileSync(
+await Bun.write(
   readmePath,
   readme.slice(0, s + START.length) + "\n" + table + "\n" + readme.slice(e),
 );
@@ -36,7 +36,7 @@ const dashboardPath = join(
   "../examples/feature_flags/dashboard.html",
 );
 if (existsSync(dashboardPath)) {
-  let html = readFileSync(dashboardPath, "utf8");
+  let html = await Bun.file(dashboardPath).text();
   const ssotConfig = `<script id="sportsdesk-ssot-config">
       window.CANONICAL_FEATURES = ${JSON.stringify(FEATURES)};
       window.CANONICAL_BUILD_FEATURES = ${JSON.stringify(BUILD_FEATURES)};
@@ -46,5 +46,5 @@ if (existsSync(dashboardPath)) {
     /<script id="sportsdesk-ssot-config">[\s\S]*?<\/script>/,
     ssotConfig,
   );
-  writeFileSync(dashboardPath, html);
+  await Bun.write(dashboardPath, html);
 }

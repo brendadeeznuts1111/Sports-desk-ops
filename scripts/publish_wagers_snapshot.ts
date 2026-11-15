@@ -12,7 +12,7 @@
  *   bun run wagers:publish-snapshot --from scratch/gslive-wagers-by-state.summary.json
  */
 
-import { readFileSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 import { sha256Hex, stableJson } from "../lib/f402_bet_ticker_delta.ts";
@@ -63,7 +63,7 @@ const { values } = parseArgs({
 });
 
 const summaryPath = values.from as string;
-const raw = JSON.parse(readFileSync(summaryPath, "utf8")) as Record<
+const raw = (await Bun.file(summaryPath).json()) as Record<
   string,
   unknown
 >;
