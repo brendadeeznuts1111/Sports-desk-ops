@@ -241,7 +241,7 @@ describe("@sportsdesk-ops/ui live hydration & Signal-Honesty provenance (zero po
     expect(bundle.wagers.data.wagers[0]?.autoExecute).toBe(false);
     expect(bundle.wagers.data.provenance.kind).toBe("capture");
     expect(formatProvenanceBadge(bundle.wagers.data.provenance).badgeText).toBe(
-      "● LIVE CAPTURE",
+      "● LOCAL CAPTURE",
     );
 
     const noop = () => {};
@@ -279,7 +279,7 @@ describe("@sportsdesk-ops/ui live hydration & Signal-Honesty provenance (zero po
     );
     expect(bundle.customers.data.cohorts.backtestCount).toBe(3);
     expect(bundle.customers.data.cohorts.uniqueSurveillanceCount).toBe(7);
-    expect(customersHtml).toContain("● LIVE CAPTURE");
+    expect(customersHtml).toContain("● LOCAL CAPTURE");
     expect(customersHtml).toContain("enriched_customers_full.json");
     expect(customersHtml).not.toContain("49 Accounts");
     expect(customersHtml).not.toContain("4,914 IDs");
@@ -310,7 +310,7 @@ describe("@sportsdesk-ops/ui live hydration & Signal-Honesty provenance (zero po
     );
 
     expect(wagersHtml).toContain("#W-88401");
-    expect(wagersHtml).toContain("● LIVE CAPTURE");
+    expect(wagersHtml).toContain("● LOCAL CAPTURE");
     expect(wagersHtml).toContain("data/live-wagers.json");
     expect(wagersHtml).toContain("1 Wagers");
   });

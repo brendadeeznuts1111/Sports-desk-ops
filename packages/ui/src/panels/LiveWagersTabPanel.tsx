@@ -4,7 +4,10 @@ import {
   formatProvenanceBadge,
   SHOWCASE_WAGERS_PROVENANCE,
 } from "../hydration.ts";
-import { DASHBOARD_THRESHOLDS } from "../config/dashboard.ts";
+import {
+  DASHBOARD_FRESHNESS,
+  DASHBOARD_THRESHOLDS,
+} from "../config/dashboard.ts";
 import {
   clvEdgeTone,
   WAGER_ALERT_TIERS,
@@ -108,7 +111,9 @@ export function LiveWagersTabPanel({
         observedAt: provenance.observedAt,
       }
     : provenance;
-  const provenanceBadge = formatProvenanceBadge(activeProvenance);
+  const provenanceBadge = formatProvenanceBadge(activeProvenance, {
+    staleAfterMinutes: DASHBOARD_FRESHNESS.stale_after_minutes,
+  });
 
   const criticalSteamCount = activeWagers.filter(
     (w) => w.alertTier === "CRITICAL" || w.alertTier === "STEAM",
@@ -179,7 +184,13 @@ export function LiveWagersTabPanel({
       } else if (wagerSortField === "toWinUsd") {
         cmp = a.toWinUsd - b.toWinUsd;
       } else if (wagerSortField === "clvCents") {
-        cmp = a.clvCents - b.clvCents;
+        // Unknown CLV sorts last in both directions rather than pretending to be 0.
+        if (a.clvCents === null || b.clvCents === null) {
+          return a.clvCents === null ? (b.clvCents === null ? 0 : 1) : -1;
+        }
+        return wagerSortDir === "asc"
+          ? a.clvCents - b.clvCents
+          : b.clvCents - a.clvCents;
       } else if (wagerSortField === "alertTier") {
         cmp = (TIER_ORDER[a.alertTier] ?? 0) - (TIER_ORDER[b.alertTier] ?? 0);
       }
@@ -203,6 +214,9 @@ export function LiveWagersTabPanel({
     }
   >();
   for (const w of filteredWagers) {
+    // The customer aggregate is a CLV aggregate; a row without a closing-line
+    // comparison contributes nothing rather than a zero.
+    if (w.clvCents === null) continue;
     const existing = sliceCustomerMap.get(w.customerId);
     const edgeUsd = w.riskUsd * (w.clvCents / 100);
     if (existing) {
@@ -721,7 +735,11 @@ export function LiveWagersTabPanel({
                         color: clvEdgeTone(w.clvCents),
                       }}
                     >
-                      {w.clvCents > 0 ? `+${w.clvCents}¢` : `${w.clvCents}¢`}
+                      {w.clvCents === null
+                        ? "—"
+                        : w.clvCents > 0
+                          ? `+${w.clvCents}¢`
+                          : `${w.clvCents}¢`}
                     </span>
                   </td>
                   <td style={styles.td}>
@@ -910,9 +928,11 @@ export function LiveWagersTabPanel({
                     color: clvEdgeTone(selectedWager.clvCents),
                   }}
                 >
-                  {selectedWager.clvCents > 0
-                    ? `+${selectedWager.clvCents}¢`
-                    : `${selectedWager.clvCents}¢`}
+                  {selectedWager.clvCents === null
+                    ? "— (no closing line)"
+                    : selectedWager.clvCents > 0
+                      ? `+${selectedWager.clvCents}¢`
+                      : `${selectedWager.clvCents}¢`}
                 </span>
               </div>
             </div>
@@ -946,12 +966,14 @@ export function LiveWagersTabPanel({
                 <span
                   style={{
                     fontWeight: 700,
-                    color: selectedWager.clvCents > 0 ? "#f87171" : "#4ade80",
+                    color: clvEdgeTone(selectedWager.clvCents),
                   }}
                 >
-                  {selectedWager.clvCents > 0
-                    ? `Beat Move (+${selectedWager.clvCents}¢ CLV)`
-                    : `Behind Move (${selectedWager.clvCents}¢ CLV)`}
+                  {selectedWager.clvCents === null
+                    ? "No closing-line comparison"
+                    : selectedWager.clvCents > 0
+                      ? `Beat Move (+${selectedWager.clvCents}¢ CLV)`
+                      : `Behind Move (${selectedWager.clvCents}¢ CLV)`}
                 </span>
               </div>
             </div>
