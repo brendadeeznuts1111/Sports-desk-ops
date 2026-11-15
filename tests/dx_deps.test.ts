@@ -64,6 +64,11 @@ describe("dx deps", () => {
     };
     expect(report.ok).toBe(true);
     expect(report.checks?.map((c) => c.name)).toContain("runtime pin");
+    // Scratch HOME has an empty ~/.bun/bin; the doctor must still see
+    // the bun that was on the caller's PATH, not a shadowed system copy.
+    expect(
+      report.checks?.find((check) => check.name === "runtime pin")?.detail,
+    ).toContain(`bun ${Bun.version}`);
   });
 
   test.skipIf(!hasBunDeps)(

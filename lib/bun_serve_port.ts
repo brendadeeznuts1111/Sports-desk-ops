@@ -10,6 +10,9 @@
 /** Precedence from the Bun server docs; `--port` outranks all three but is argv, not env. */
 export const BUN_SERVE_PORT_NAMES = ["BUN_PORT", "PORT", "NODE_PORT"] as const;
 
+/** Default Sportsdesk Ops daemon port when no Bun port env is set. */
+export const DEFAULT_SPORTSDESK_DAEMON_PORT = 4020;
+
 /**
  * Resolve the port Bun would pick: `BUN_PORT` → `PORT` → `NODE_PORT` → 3000.
  *
@@ -30,7 +33,7 @@ export function resolveBunServePort(
  */
 export function resolveSportsdeskDaemonPort(
   environment: Readonly<Record<string, string | undefined>>,
-  defaultPort = 4020,
+  defaultPort = DEFAULT_SPORTSDESK_DAEMON_PORT,
 ): number {
   for (const name of BUN_SERVE_PORT_NAMES) {
     const raw = environment[name];
