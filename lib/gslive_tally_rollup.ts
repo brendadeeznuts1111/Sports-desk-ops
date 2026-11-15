@@ -187,12 +187,56 @@ function openBetCaptureStream(
     : raw.pipeThrough(new DecompressionStreamCtor(compression));
 }
 
+/**
+ * Bound a source stream's reads to `chunkBytes` without copying: each source
+ * chunk is emitted as at-most-`chunkBytes` subarray views, so a small bound
+ * really drives the incremental parser across object boundaries.
+ */
+export function rechunkBytes(
+  source: ReadableStream<Uint8Array>,
+  chunkBytes: number,
+): ReadableStream<Uint8Array> {
+  if (!Number.isSafeInteger(chunkBytes) || chunkBytes <= 0) {
+    throw new RangeError(
+      `rechunkBytes: chunkBytes must be a positive safe integer (got ${chunkBytes})`,
+    );
+  }
+  const reader = source.getReader();
+  let pending: Uint8Array | null = null;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      for (;;) {
+        if (pending !== null && pending.byteLength > 0) {
+          const out = pending.subarray(
+            0,
+            Math.min(chunkBytes, pending.byteLength),
+          );
+          pending = pending.subarray(out.byteLength);
+          controller.enqueue(out);
+          return;
+        }
+        const next = await reader.read();
+        if (next.done === true) {
+          pending = null;
+          controller.close();
+          return;
+        }
+        pending = next.value;
+      }
+    },
+    cancel(reason) {
+      pending = null;
+      return reader.cancel(reason);
+    },
+  });
+}
+
 /** Stream the `bets` array of a bet-report document without loading the whole file. */
 export async function* streamBetReportBets(
   path: string,
   options: { readonly chunkBytes?: number } = {},
 ): AsyncGenerator<Record<string, unknown>> {
-  const _chunkBytes =
+  const chunkBytes =
     options.chunkBytes !== undefined &&
     Number.isSafeInteger(options.chunkBytes) &&
     options.chunkBytes > 0
@@ -202,7 +246,9 @@ export async function* streamBetReportBets(
   // capture used to reach textStream as raw bytes and fail as mojibake.
   const head = new Uint8Array(await Bun.file(path).slice(0, 4).arrayBuffer());
   const compression = sniffBetCaptureCompression(head);
-  const reader = new Response(openBetCaptureStream(path, compression))
+  const reader = new Response(
+    rechunkBytes(openBetCaptureStream(path, compression), chunkBytes),
+  )
     .textStream()
     .getReader();
   let buffer = "";

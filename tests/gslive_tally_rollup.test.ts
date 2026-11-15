@@ -9,6 +9,7 @@ import {
   NULL_CLV_SENTINEL_BIGINT,
   parseCentsStrict,
   parseLineHundredths,
+  rechunkBytes,
   roundDivHalfEven,
   sniffBetCaptureCompression,
   streamBetReportBets,
@@ -293,5 +294,39 @@ describe("compressed bet-report captures", () => {
       }
     };
     await expect(drain()).rejects.toThrow(/streamBetReportBets: /);
+  });
+});
+
+describe("capture chunk bound", () => {
+  test("rechunkBytes bounds every read without losing bytes", async () => {
+    const parts = [
+      new Uint8Array([1, 2, 3]),
+      new Uint8Array([4, 5, 6, 7]),
+      new Uint8Array([8, 9, 10]),
+    ];
+    const source = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const part of parts) controller.enqueue(part);
+        controller.close();
+      },
+    });
+    const seen: number[][] = [];
+    for await (const chunk of rechunkBytes(source, 2)) {
+      seen.push([...chunk]);
+    }
+    expect(seen.every((chunk) => chunk.length <= 2)).toBe(true);
+    expect(seen.flat()).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  test("rechunkBytes rejects an invalid bound instead of guessing", () => {
+    const empty = () =>
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.close();
+        },
+      });
+    expect(() => rechunkBytes(empty(), 0)).toThrow(RangeError);
+    expect(() => rechunkBytes(empty(), 2.5)).toThrow(RangeError);
+    expect(() => rechunkBytes(empty(), Number.NaN)).toThrow(RangeError);
   });
 });
