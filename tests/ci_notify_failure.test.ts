@@ -141,16 +141,39 @@ describe("renderFailureMessage", () => {
 });
 
 describe("decideCredentials", () => {
+  const base = {
+    hasToken: true,
+    hasChatId: true,
+    isFork: false,
+    isDraft: false,
+  };
+
   test("sends when both secrets are present", () => {
-    expect(
-      decideCredentials({ hasToken: true, hasChatId: true, isFork: false }),
-    ).toEqual({
-      kind: "send",
+    expect(decideCredentials(base)).toEqual({ kind: "send" });
+  });
+
+  test("skips a draft PR even when everything else would send", () => {
+    const decision = decideCredentials({ ...base, isDraft: true });
+    expect(decision.kind).toBe("skip");
+    if (decision.kind === "skip") expect(decision.reason).toContain("draft");
+  });
+
+  test("draft outranks fork and misconfiguration in the reason given", () => {
+    // A draft fork PR with no secrets should report the draft reason: it is the one the author
+    // can act on, and the others are consequences of being a draft fork PR anyway.
+    const decision = decideCredentials({
+      hasToken: false,
+      hasChatId: false,
+      isFork: true,
+      isDraft: true,
     });
+    expect(decision.kind).toBe("skip");
+    if (decision.kind === "skip") expect(decision.reason).toContain("draft");
   });
 
   test("skips on a fork PR, where secrets are never provided", () => {
     const decision = decideCredentials({
+      ...base,
       hasToken: false,
       hasChatId: false,
       isFork: true,
@@ -159,11 +182,7 @@ describe("decideCredentials", () => {
   });
 
   test("fails loudly when secrets are missing outside a fork PR", () => {
-    const decision = decideCredentials({
-      hasToken: false,
-      hasChatId: true,
-      isFork: false,
-    });
+    const decision = decideCredentials({ ...base, hasToken: false });
     expect(decision.kind).toBe("misconfigured");
     if (decision.kind === "misconfigured") {
       expect(decision.reason).toContain("TELEGRAM_BOT_TOKEN");
@@ -174,16 +193,14 @@ describe("decideCredentials", () => {
   test("a fork PR is skipped even when one secret appears present", () => {
     // Secrets are not exposed to fork PRs, so a partial value is noise, not a fixable config.
     expect(
-      decideCredentials({ hasToken: true, hasChatId: false, isFork: true })
-        .kind,
+      decideCredentials({ ...base, hasChatId: false, isFork: true }).kind,
     ).toBe("skip");
   });
 
   test("a half-configured repo outside a fork is a misconfiguration, not a skip", () => {
-    expect(
-      decideCredentials({ hasToken: true, hasChatId: false, isFork: false })
-        .kind,
-    ).toBe("misconfigured");
+    expect(decideCredentials({ ...base, hasChatId: false }).kind).toBe(
+      "misconfigured",
+    );
   });
 });
 

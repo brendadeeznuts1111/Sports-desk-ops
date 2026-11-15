@@ -120,7 +120,18 @@ export function decideCredentials(input: {
   readonly hasToken: boolean;
   readonly hasChatId: boolean;
   readonly isFork: boolean;
+  readonly isDraft: boolean;
 }): CredentialDecision {
+  // A draft PR is the author telling GitHub "not ready for review or action". Paging on it
+  // contradicts the state they deliberately recorded, so this short-circuits every other
+  // consideration — a draft is not a failure that needs attention, it is work in progress.
+  if (input.isDraft) {
+    return {
+      kind: "skip",
+      reason: "draft pull request: not ready for review or action",
+    };
+  }
+
   if (input.hasToken && input.hasChatId) return { kind: "send" };
 
   if (input.isFork) {
@@ -268,6 +279,7 @@ async function main(argv: readonly string[]): Promise<number> {
   const token = Bun.env.TELEGRAM_BOT_TOKEN ?? "";
   const chatId = Bun.env.TELEGRAM_CHAT_ID ?? "";
   const isFork = (Bun.env.IS_FORK ?? "").toLowerCase() === "true";
+  const isDraft = (Bun.env.IS_DRAFT ?? "").toLowerCase() === "true";
 
   if (ctx.failedJobs.length === 0) {
     console.log(
@@ -280,6 +292,7 @@ async function main(argv: readonly string[]): Promise<number> {
     hasToken: token !== "",
     hasChatId: chatId !== "",
     isFork,
+    isDraft,
   });
 
   // A dry run never sends, so it is not gated on credentials — the point is to inspect the

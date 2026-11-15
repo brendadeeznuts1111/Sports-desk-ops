@@ -37,6 +37,11 @@ on:
   schedule:
     - cron: "17 7 * * *"
   workflow_dispatch:
+    inputs:
+      fail_on_purpose:
+        description: "Self-test: fail this run on purpose so the notify job is exercised. Dispatch it on a branch, never on main."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -55,6 +60,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # Opt-in self-test (#248): the `notify` job's true branch cannot be observed on a push
+      # without breaking main, and inspection alone cannot rule out an event-level exclusion.
+      # Dispatching this on a branch makes a needed job fail on purpose, so notify must fire.
+      # Default false, and it is dispatch-only — the `inputs` context is empty for push/PR.
+      - name: Deliberate failure (self-test)
+        if: ${{ inputs.fail_on_purpose == true }}
+        run: |
+          echo "::error::fail_on_purpose=true — failing on purpose to exercise scripts/ci/notify_failure.ts"
+          exit 1
       - uses: actions/checkout@v4
         with:
           # git pin tests: commit must exist in this repo
@@ -374,6 +388,10 @@ jobs:
     # `failure()` is true only when a needed job actually failed. A run superseded by the
     # concurrency group is `cancelled` and a job that did not apply is `skipped`; neither reaches
     # here, so this does not page for pushes that were already replaced.
+    #
+    # Draft PRs are filtered inside the script rather than here (`IS_DRAFT`), because a draft is
+    # the author declaring "not ready for review or action" and paging on it would contradict the
+    # state they recorded. Keeping the decision in the script keeps it unit-tested.
     if: failure()
     needs: [market-index, verify-changed, code-mode, verify]
     runs-on: ubuntu-latest
@@ -394,4 +412,5 @@ jobs:
           NEEDS_JSON: ${{ toJSON(needs) }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
         run: bun run scripts/ci/notify_failure.ts
