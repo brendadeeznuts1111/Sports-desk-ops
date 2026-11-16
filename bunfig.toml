@@ -47,8 +47,10 @@ ignorePatterns = [
 exact = true
 ignoreScripts = true
 
-# Native Bun lint (Bun 1.5+; also present in the 1.4.5 canary used by the CI `lint-native`
-# job). The pinned 1.4.4 runtime accepts but ignores this section, so the local gate remains
+# Native Bun lint config. Only the native linter reads it. That linter exists on the 1.4.5
+# canary (`bun lint --no-script`), which the CI `lint-native` job runs, and is expected in
+# Bun 1.5+; it is not on the pinned 1.4.4, which parses this section without error but has
+# no command that uses it. The enforced local gate remains
 # `bun run lint:check` (oxlint 1.90 + oxlint-tsgolint). Keep this block aligned with
 # .oxlintrc.json.
 #
@@ -66,7 +68,8 @@ ignorePatterns = [
 [lint.categories]
 correctness = "warn"
 
-# [[lint.overrides]] — measured 2026-11-11 (Bun 1.4.4-canary.1), before any override exists here.
+# [[lint.overrides]] — measured 2026-11-11 on a canary build (1.4.4-canary.1); not observable on
+# the pinned 1.4.4, which has no native linter. Measured before any override exists here.
 # Add the first one only after re-checking these rows; the dialect differs from minimatch.
 #   files         union of independent matchers, Bun.Glob syntax (braces, [ab], @(a|b) all work),
 #                 anchored to this file's directory rather than the invocation cwd.

@@ -3,8 +3,9 @@
 Operator tooling for the Fantasy402 sports desk: ingestion, settlement, combo/CLV analytics, the R2
 portal and the VPS service. Bun **1.4.4** (`package.json` `engines.bun` / `.bun-version`).
 
-The notes below were measured on the `1.4.4-canary.1` build this checkout runs. Where a claim is
-scoped to a version, re-check it before relying on it for the stable tag.
+The pinned runtime is stable `1.4.4+38afee6c8`. Some notes below were first measured on canary
+builds (`1.4.4-canary.1`, `1.4.5-canary.1`); where a behaviour exists only on a canary the note says
+so. Re-check any version-scoped claim against the pin before relying on it.
 
 ## Verification loop
 
@@ -105,20 +106,25 @@ with `bun run audit:tool-calls`.
 
 **Bun toolchain**
 
-- **Linting is `oxlint` today; `bun lint` is not a native command on 1.4.4 stable.** `bun run
-lint:check` runs oxlint twice — `.oxlintrc.json`, then `.oxlintrc.type-aware.json` passed
-  explicitly as `-c .oxlintrc.type-aware.json` (it is not auto-discovered). The repo's `"lint"`
-  script is `bun --bun run oxlint --fix`: `bun lint` always runs that script and would autofix the
-  working tree, and `--no-script` does not bypass it (measured 2026-11-15: the flag is forwarded
-  to oxlint; outside a package.json `bun lint` reports `Script not found "lint"`). The `[lint]`
-  block in `bunfig.toml` is future-native configuration and is inert on this build. `oxlint`
-  stays in `devDependencies` because the `lint` script and `lint:check` run it — keep it for
-  editor LSP (`oxlint --lsp`). CI also runs the native linter on a canary runtime: job
-  `lint-native` installs `bun-version: canary` and runs `bun run lint:native` /
-  `bun run lint:native:type-aware` (both fail on 1.4.4 by design). The repo pin stays exact —
-  do not add canary to `.bun-version`; the pin contract requires one X.Y.Z across
-  `.bun-version`, `engines.bun`, `packageManager`, and `@types/bun`, and `@types/bun` has no
-  canary version. The older note that `"lint": "bun lint"` recurses still holds on 1.4.4.
+- **Linting is `oxlint`; stable Bun 1.4.4 has no native `bun lint`.** `bun run lint:check` runs
+  oxlint twice — `.oxlintrc.json`, then `.oxlintrc.type-aware.json` passed explicitly as
+  `-c .oxlintrc.type-aware.json` (it is not auto-discovered). On the pinned 1.4.4, `bun lint` is not
+  a subcommand: it resolves to the package `"lint"` script, which is `bun --bun run oxlint --fix`
+  and **rewrites files**, and `--no-script` does not bypass it (measured 2026-11-15: the flag is
+  forwarded to oxlint; outside a package.json `bun lint` reports `Script not found "lint"`). So
+  never run bare `bun lint` / `bun run lint` as a check; use `bun run lint:check`. The older note
+  that `"lint": "bun lint"` recurses still holds on 1.4.4. A native linter (`bun lint`,
+  `--no-script`, `--doctor`, `--type-aware`, `[lint]` in `bunfig.toml`) exists only on the 1.4.5
+  canary (measured on `1.4.5-canary.1+ed4363334`); there the package script still wins unless
+  `--no-script` is passed. On 1.4.4 the `[lint]` block is inert future-native configuration.
+- **CI runs the native linter on a canary runtime:** job `lint-native` installs
+  `bun-version: canary` and runs `bun run lint:native` / `bun run lint:native:type-aware` (both
+  fail on 1.4.4 by design). The repo pin stays exact — do not add canary to `.bun-version`; the pin
+  contract requires one X.Y.Z across `.bun-version`, `engines.bun`, `packageManager`, and
+  `@types/bun`, and `@types/bun` has no canary version.
+- Keep `oxlint` in `devDependencies`: the `lint` script and `lint:check` run it, and editors use
+  it via `oxlint --lsp`. The canary's `--doctor` view of which packages are removable does not
+  apply to 1.4.4.
 - **`bun:bundle` AST constraint:** `feature()` from `"bun:bundle"` can only appear directly inside
   an `if` condition or ternary (`feature("FLAG") ? true : false`). Passing it to functions like
   `expect()` or `expectTypeOf()` fails at parse time. Testing `--feature=FLAG` requires subprocess spawning
