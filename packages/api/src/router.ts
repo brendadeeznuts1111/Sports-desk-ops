@@ -586,6 +586,9 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
             schemaVersion: 1,
             targets: probe.targets,
             generatedAt: probe.generatedAt,
+            ...(probe.staticDir !== undefined
+              ? { staticDir: probe.staticDir }
+              : {}),
           });
         } catch (err) {
           return Response.json(

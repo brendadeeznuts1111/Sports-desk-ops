@@ -29,6 +29,8 @@ const { store, sortedRowOrderU16 } = buildHierarchyColumnStore([
 
 const filter: DownlineRiskFilter = (_arena, _root, tier, _ord, out) => {
   if (tier === 6) return -1;
+  if (tier === 5) return Number.NaN;
+  if (tier === 4) return 1.5;
   out[0] = 0;
   out[1] = 1;
   return 2;
@@ -174,6 +176,42 @@ describe("hierarchy cold-ingest scaffold", () => {
     ).toBe(-1);
   });
 
+  test("rejects duplicate canonical keys and non-base40 characters", () => {
+    expect(() =>
+      buildHierarchyColumnStore([
+        { login: "AB12", kind: "agent" },
+        { login: "AB12_3", kind: "agent" },
+      ]),
+    ).toThrow("ERR_DUPLICATE_LOGIN_KEY");
+
+    const key = new Uint32Array(2);
+    const ascii = new Uint8Array(64);
+    const len = new Uint8Array(1);
+    const limbs = new Uint16Array(8);
+    expect(() =>
+      canonicalizeAndEncodeLoginIntoRow(
+        "A/B",
+        false,
+        0,
+        key,
+        ascii,
+        len,
+        limbs,
+      ),
+    ).toThrow("ERR_INVALID_AGENT_LOGIN");
+    expect(() =>
+      canonicalizeAndEncodeLoginIntoRow(
+        "A.B",
+        false,
+        0,
+        key,
+        ascii,
+        len,
+        limbs,
+      ),
+    ).not.toThrow();
+  });
+
   test("packs structure flags above the 15-bit row ordinal", () => {
     const customerRow = sortedRowOrderU16.find(
       (row) =>
@@ -238,6 +276,7 @@ describe("downline risk route", () => {
     expect(await invalid.json()).toEqual({ error: "ERR_AUTH_REJECTED" });
     const clearCookie = invalid.headers.get("set-cookie") ?? "";
     expect(clearCookie).toContain("__Host-bdo_ops_sid=;");
+    expect(clearCookie).toContain("Secure");
     expect(clearCookie).not.toContain("=wrong");
   });
 
@@ -259,6 +298,7 @@ describe("downline risk route", () => {
       );
       expect(response.status).toBe(405);
       expect(response.headers.get("allow")).toBe("GET");
+      expect(response.headers.get("cache-control")).toBe("no-store");
       if (method !== "HEAD") {
         expect(await response.json()).toEqual({
           error: "ERR_METHOD_NOT_ALLOWED",
@@ -269,13 +309,43 @@ describe("downline risk route", () => {
 
   test("rejects empty, whitespace and oversized logins at the boundary", async () => {
     expect((await request("%20", "2")).status).toBe(400);
+    expect((await request("A%2FB", "2")).status).toBe(400);
+    expect((await request("A%ZZB", "2")).status).toBe(400);
     expect((await request("A".repeat(200), "2")).status).toBe(400);
+    expect((await request("A".repeat(4096), "2")).status).toBe(400);
   });
 
-  test("accepts tier 0 and rejects tier 7 and non-numeric tiers", async () => {
+  test("accepts tier 0 and rejects non-canonical or out-of-range tiers", async () => {
     expect((await request("AGENTROOT", "0")).status).toBe(200);
-    expect((await request("AGENTROOT", "7")).status).toBe(400);
-    expect((await request("AGENTROOT", "abc")).status).toBe(400);
+    for (const tier of ["7", "abc", "0x1", "+1", "1.0", "%201"]) {
+      expect((await request("AGENTROOT", tier)).status).toBe(400);
+    }
+  });
+
+  test("does not refresh the cookie on post-auth errors", async () => {
+    const cases = [
+      { login: "AGENTROOT", tier: "9", status: 400 },
+      { login: "NOSUCHAGENT", tier: "2", status: 404 },
+      { login: "PLAYERONE", tier: "2", status: 422 },
+      { login: "AGENTERR", tier: "6", status: 503 },
+    ];
+    for (const testCase of cases) {
+      const response = await request(testCase.login, testCase.tier);
+      expect(response.status).toBe(testCase.status);
+      expect(response.headers.get("set-cookie")).toBeNull();
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+  });
+
+  test("rejects non-integer filter counts", async () => {
+    for (const tier of ["4", "5"]) {
+      const response = await request("AGENTROOT", tier);
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({
+        error: "ERR_MATCH_COUNT_INVALID",
+      });
+      expect(response.headers.get("x-match-count")).toBeNull();
+    }
   });
 
   test("does not emit a refreshed cookie on a failed verifier", async () => {

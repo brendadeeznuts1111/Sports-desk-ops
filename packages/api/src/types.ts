@@ -24,9 +24,40 @@ import type {
  * time, not the response time: the server caches the probe and re-serves it, so a
  * response timestamp would make a stale probe look fresh.
  */
+export interface BuildMatrixStaticDirProbe {
+  readonly wildcardPath: string;
+  readonly dir: string;
+  readonly caseInsensitiveHostFs: boolean;
+  readonly totalFiles: number;
+  readonly totalBytes: number;
+  readonly files: readonly {
+    readonly relativePath: string;
+    readonly urlPath: string;
+    readonly bytes: number;
+    readonly contentType: string;
+    readonly lastModifiedIso: string | null;
+  }[];
+  readonly liveCheck: {
+    readonly origin: string;
+    readonly elapsedMs: number;
+    readonly allPassed: boolean;
+    readonly etag: string | null;
+    readonly contentRange: string | null;
+    readonly checks: readonly {
+      readonly name: string;
+      readonly requestPath: string;
+      readonly expectedStatus: number;
+      readonly status: number | null;
+      readonly ok: boolean;
+      readonly detail: string;
+    }[];
+  } | null;
+}
+
 export interface BuildMatrixProbe {
   readonly targets: readonly unknown[];
   readonly generatedAt: string;
+  readonly staticDir?: BuildMatrixStaticDirProbe | undefined;
 }
 
 export type RouteRequestWithParams<

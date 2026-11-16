@@ -340,6 +340,13 @@ export function buildBookdeskopsTokensDeskHref(
   return u.href;
 }
 
+export function buildBookdeskopsDirectoryRouteHref(
+  origin: string = DEFAULT_BOOKDESKOPS_SERVE_LOCAL,
+): string {
+  return new URL("/_dev/serve-local/bun-directory", origin.replace(/\/$/, ""))
+    .href;
+}
+
 // `useSyncExternalStore` requires a referentially stable snapshot: rebuilding
 // the object on every call makes React re-render until it aborts with
 // "Maximum update depth exceeded". Cache by search string so the object only

@@ -24,11 +24,13 @@
  *   - MAX_DOWNLINE_MATCHES_15=0x7fff and SUBACCT_ORD_WILDCARD=0xffff
  *   - canonical login is trimmed/uppercased; `agentCount` includes all rows
  *   - strict mode rejects logins longer than 12 characters
+ *   - only A-Za-z0-9_.- is accepted; unknown/base-40-fallback characters are rejected
+ *   - duplicate canonical keys fail build and lookup, never resolve arbitrarily
  */
 
 import type { Brand } from "./brand.ts";
 import {
-  encodeCustomerPackedKeyPartsInto,
+  encodeCustomerPackedKeyPartsIntoRange,
   loginBoundsInto,
 } from "./dod6_v54_login_key.ts";
 
@@ -78,11 +80,26 @@ function base40Digit(code: number): number {
  * Canonicalize one login and encode its 64-bit key into the caller's scratch.
  *
  * `keyWords32` receives `[lo, hi]`; `asciiU8`/`lenU8` receive the canonical
- * uppercase login; `limbU16` receives the first eight base-40 digits. No heap
- * allocation. Throws `TypeError` for an empty, oversized or replacement-bearing
- * login. `rowIdx` is accepted for call-site parity and is not used to index the
- * scratch (the arrays are row-local).
+ * uppercase login; `limbU16` receives the first eight base-40 digits. The
+ * function allocates nothing: it trims through `loginBoundsInto`, validates and
+ * uppercases by code unit, and encodes straight from the source range. Throws
+ * `TypeError` for an empty, oversized, unknown-character or replacement-bearing
+ * login. `rowIdx` is accepted for call-site parity and is not used here.
  */
+const LOGIN_BOUNDS = new Int32Array(2);
+
+/** Base-40 alphabet plus the two hierarchy separators; anything else is rejected. */
+function isAllowedLoginCode(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    code === 95 || // _
+    code === 45 || // -
+    code === 46 // .
+  );
+}
+
 export function canonicalizeAndEncodeLoginIntoRow(
   rawLogin: string,
   strict: boolean,
@@ -101,41 +118,30 @@ export function canonicalizeAndEncodeLoginIntoRow(
     throw new TypeError("ERR_COLD_INGEST_SCRATCH_TOO_SMALL");
   }
 
-  const raw = rawLogin.trim();
-  if (raw === "" || raw.includes("\uFFFD")) {
-    throw new TypeError("ERR_INVALID_AGENT_LOGIN");
+  loginBoundsInto(rawLogin, LOGIN_BOUNDS);
+  const start = LOGIN_BOUNDS[0]!;
+  const end = LOGIN_BOUNDS[1]!;
+  const length = end - start;
+  if (length <= 0) throw new TypeError("ERR_INVALID_AGENT_LOGIN");
+  if (length > 64 || (strict && length > 12)) {
+    throw new TypeError("ERR_AGENT_LOGIN_TOO_LONG");
   }
-  for (let index = 0; index < raw.length; index += 1) {
-    const code = raw.charCodeAt(index);
-    if (code < 33 || code > 126) {
-      throw new TypeError("ERR_INVALID_AGENT_LOGIN");
-    }
-    if (strict && raw.length > 12) {
-      // The base-40 exact-12 mode is the only strict key mode; longer ids use FNV.
-      throw new TypeError("ERR_AGENT_LOGIN_TOO_LONG");
-    }
-  }
-  if (raw.length > 64) throw new TypeError("ERR_AGENT_LOGIN_TOO_LONG");
-
-  const canonical = raw.toUpperCase();
-  const bounds = new Int32Array(2);
-  loginBoundsInto(canonical, bounds);
-  const start = bounds[0]!;
-  const end = bounds[1]!;
-  if (end <= start) throw new TypeError("ERR_INVALID_AGENT_LOGIN");
 
   asciiU8.fill(0);
-  for (let index = start; index < end; index += 1) {
-    asciiU8[index - start] = canonical.charCodeAt(index);
-  }
-  lenU8[0] = end - start;
-
   limbU16.fill(0);
-  for (let limb = 0; limb < 8 && start + limb < end; limb += 1) {
-    limbU16[limb] = base40Digit(canonical.charCodeAt(start + limb));
+  for (let index = start; index < end; index += 1) {
+    const code = rawLogin.charCodeAt(index);
+    if (!isAllowedLoginCode(code)) {
+      throw new TypeError("ERR_INVALID_AGENT_LOGIN");
+    }
+    const offset = index - start;
+    const upper = code >= 97 && code <= 122 ? code - 32 : code;
+    asciiU8[offset] = upper;
+    if (offset < 8) limbU16[offset] = base40Digit(upper);
   }
+  lenU8[0] = length;
 
-  encodeCustomerPackedKeyPartsInto(canonical, keyWords32);
+  encodeCustomerPackedKeyPartsIntoRange(rawLogin, keyWords32, start, end);
 }
 
 /** Binary search the sorted row order for a `[lo, hi]` login key; -1 when absent. */
@@ -159,6 +165,24 @@ export function findStandbyRowByLoginKeyBinarySearch(
     } else if (rowHi > keyHi || (rowHi === keyHi && rowLo > keyLo)) {
       high = mid - 1;
     } else {
+      // A duplicate key makes the root ambiguous; fail closed rather than
+      // returning whichever row the sort happened to place at `mid`.
+      const previous = mid > 0 ? sortedRowOrderU16[mid - 1]! : -1;
+      if (
+        previous >= 0 &&
+        (loginKeyWords32Col[previous * 2] ?? 0) === rowLo &&
+        (loginKeyWords32Col[previous * 2 + 1] ?? 0) === rowHi
+      ) {
+        return -1;
+      }
+      const next = mid + 1 < limit ? sortedRowOrderU16[mid + 1]! : -1;
+      if (
+        next >= 0 &&
+        (loginKeyWords32Col[next * 2] ?? 0) === rowLo &&
+        (loginKeyWords32Col[next * 2 + 1] ?? 0) === rowHi
+      ) {
+        return -1;
+      }
       return row;
     }
   }
@@ -219,6 +243,17 @@ export function buildHierarchyColumnStore(
     return (keyWords[a * 2] ?? 0) - (keyWords[b * 2] ?? 0);
   });
   order.set(orderArray);
+
+  for (let index = 1; index < order.length; index += 1) {
+    const previous = order[index - 1]!;
+    const current = order[index]!;
+    if (
+      keyWords[previous * 2] === keyWords[current * 2] &&
+      keyWords[previous * 2 + 1] === keyWords[current * 2 + 1]
+    ) {
+      throw new TypeError("ERR_DUPLICATE_LOGIN_KEY");
+    }
+  }
 
   return {
     store: {

@@ -22,6 +22,11 @@ The route (`services/downline_risk_route.ts`) imports only this surface:
 | `canonicalizeAndEncodeLoginIntoRow`                  | canonical login → `[lo, hi]` key + ASCII/limb scratch                  |
 | `findStandbyRowByLoginKeyBinarySearch`               | key lookup over the sorted row order                                   |
 
+The scaffold now allowlists `A-Za-z0-9_.-`, rejects duplicate canonical keys at
+ingest, fails an ambiguous external lookup closed (`-1`), and its canonicalizer
+no longer allocates. The canonical module must still pin these semantics in the
+parity test; `agentCount` semantics remain a scaffold assumption (all rows).
+
 The canonical module must keep these names (or the handler import list must be
 updated in the same commit). Any change to the packed-node layout must update
 `SanitizedRequestAuditView`-style readers and the route's structure check.

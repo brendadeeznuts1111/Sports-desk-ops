@@ -54,6 +54,7 @@ import {
 import { TOKENS_TOML_VERSION } from "./tokens.registry.generated.ts";
 import {
   applyShadowSliceToLocation,
+  buildBookdeskopsDirectoryRouteHref,
   buildBookdeskopsTokensDeskHref,
   buildDashboardShadowSliceUrl,
   formatShadowSliceRibbonLabel,
@@ -101,6 +102,7 @@ import {
   type RankingsFilter,
   type ShiftSummaryData,
   type ShowcaseCustomer,
+  type StaticDirectoryProbeSummary,
   type TerminalCategory,
   type TerminalHistoryEntry,
   type TierStyleConfig,
@@ -176,6 +178,8 @@ export function App(): React.ReactElement {
   const [buildMatrixCompiledMs, setBuildMatrixCompiledMs] = useState<
     number | null
   >(null);
+  const [buildMatrixStaticDir, setBuildMatrixStaticDir] =
+    useState<StaticDirectoryProbeSummary | null>(null);
   const [rankingsFilter, setRankingsFilter] = useState<RankingsFilter>("ALL");
   const [rankingsSearch, setRankingsSearch] = useState<string>(
     () => initialUrl.agent,
@@ -244,6 +248,9 @@ export function App(): React.ReactElement {
   const [copiedCliId, setCopiedCliId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] =
     useState<ShowcaseCustomer | null>(null);
+  const [customerLookupNotice, setCustomerLookupNotice] = useState<
+    string | null
+  >(null);
   const [customerReverseForensics, setCustomerReverseForensics] =
     useState<ReverseDnsForensicsView | null>(null);
   /** HMR/back-compat: older dashboard bundles referenced this name. */
@@ -641,6 +648,7 @@ export function App(): React.ReactElement {
         return (await r.json()) as {
           targets?: readonly BuildMatrixRow[];
           generatedAt?: string;
+          staticDir?: StaticDirectoryProbeSummary;
         };
       })
       .then((json) => {
@@ -651,6 +659,7 @@ export function App(): React.ReactElement {
             typeof json.generatedAt === "string" ? json.generatedAt : null,
           );
           setBuildMatrixCompiledMs(Math.round(performance.now() - startedAt));
+          setBuildMatrixStaticDir(json.staticDir ?? null);
         }
       })
       .catch((err) => {
@@ -1358,12 +1367,14 @@ export function App(): React.ReactElement {
   }, [filteredCustomers, customerSort]);
 
   const handleSelectCustomerById = (customerId: string) => {
-    const upper = customerId.trim().toUpperCase();
+    const raw = customerId.trim();
+    if (raw === "") return;
+    const upper = raw.toUpperCase();
     const found = profileCustomers.find((c) => c.id.toUpperCase() === upper);
-    if (found) {
-      setSelectedCustomer(found);
-    }
-    setSearchQuery(customerId);
+    setSelectedCustomer(found ?? null);
+    setSearchQuery(raw);
+    setFilterTier("ALL");
+    setCustomerLookupNotice(found ? null : upper);
     setActiveTab("customers");
   };
 
@@ -1372,10 +1383,9 @@ export function App(): React.ReactElement {
     if (!fromUrl) return;
     const upper = fromUrl.toUpperCase();
     const found = profileCustomers.find((c) => c.id.toUpperCase() === upper);
-    if (found) {
-      setSelectedCustomer(found);
-      setSearchQuery(fromUrl);
-    }
+    setSelectedCustomer(found ?? null);
+    setSearchQuery(fromUrl);
+    setCustomerLookupNotice(found ? null : upper);
   }, [profileCustomers]);
 
   const previousTabRef = useRef(activeTab);
@@ -1410,17 +1420,22 @@ export function App(): React.ReactElement {
     wagerSortDir,
   ]);
 
-  // Customer/ticket links are read elsewhere; only append the customer when the
-  // matrix overlay is open, never delete an inbound deep link.
+  // Customer deep links are usable outside the build matrix too: keep the
+  // selected profile, or the failed lookup id, in the URL without dropping the
+  // hash (text fragments / row anchors).
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!showBuildMatrix || activeTab !== "customers" || !selectedCustomer)
-      return;
+    if (typeof window === "undefined" || activeTab !== "customers") return;
+    const requested = selectedCustomer?.id ?? customerLookupNotice;
+    if (!requested) return;
     const url = new URL(window.location.href);
-    if (url.searchParams.get("customer") === selectedCustomer.id) return;
-    url.searchParams.set("customer", selectedCustomer.id);
-    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
-  }, [showBuildMatrix, activeTab, selectedCustomer]);
+    if (url.searchParams.get("customer") === requested) return;
+    url.searchParams.set("customer", requested);
+    window.history.replaceState(
+      null,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }, [activeTab, selectedCustomer, customerLookupNotice]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1449,10 +1464,9 @@ export function App(): React.ReactElement {
         const found = profileCustomers.find(
           (customer) => customer.id.toUpperCase() === customerId.toUpperCase(),
         );
-        if (found) {
-          setSelectedCustomer(found);
-          setSearchQuery(customerId);
-        }
+        setSelectedCustomer(found ?? null);
+        setSearchQuery(customerId);
+        setCustomerLookupNotice(found ? null : customerId.toUpperCase());
       }
       const ticketId = params.get("ticket")?.trim() ?? "";
       if (ticketId !== "") {
@@ -1906,8 +1920,10 @@ export function App(): React.ReactElement {
       {showBuildMatrix ? (
         <BuildMatrixDrawer
           dceMarker={runtimeFlags.dceMarker}
+          activeSentinels={runtimeFlags.sentinels}
           loading={buildMatrixLoading}
           rows={buildMatrixRows}
+          staticDir={buildMatrixStaticDir}
           target={runtimeFlags.target}
           enabledFeatures={runtimeFlags.enabledFeatures}
           error={buildMatrixError}
@@ -2045,6 +2061,25 @@ export function App(): React.ReactElement {
             title="BookDeskOps serve-local tokens desk (DCE compile-time anchor)"
           >
             📎 BookDeskOps tokens
+          </a>
+          <a
+            href={buildBookdeskopsDirectoryRouteHref()}
+            target="_blank"
+            rel="noreferrer"
+            data-desk-quickjump="bookdeskops-directory"
+            style={{
+              padding: "3px 9px",
+              borderRadius: "999px",
+              border: "1px solid rgba(56, 189, 248, 0.35)",
+              backgroundColor: "rgba(56, 189, 248, 0.1)",
+              color: "#38bdf8",
+              fontSize: "11px",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+            title="BookDeskOps serve-local /static/* directory route inspector & HTTP probes"
+          >
+            📁 /static/* Dir
           </a>
           <button
             type="button"
@@ -2276,14 +2311,24 @@ export function App(): React.ReactElement {
             cohortsStatus={cohortsStatus}
             cohortsError={cohortsError}
             searchQuery={searchQuery}
-            onSearchQueryChange={setSearchQuery}
+            onSearchQueryChange={(value) => {
+              setSearchQuery(value);
+              setCustomerLookupNotice(null);
+            }}
+            customerLookupNotice={customerLookupNotice}
+            onClearCustomerLookupNotice={() => {
+              setCustomerLookupNotice(null);
+            }}
             filterTier={filterTier}
             onFilterTierChange={setFilterTier}
             sortedCustomers={sortedCustomers}
             customerSort={customerSort}
             onCustomerSort={onCustomerSort}
             selectedCustomer={selectedCustomer}
-            onSelectCustomer={setSelectedCustomer}
+            onSelectCustomer={(customer) => {
+              setSelectedCustomer(customer);
+              setCustomerLookupNotice(null);
+            }}
             copiedCliId={copiedCliId}
             onCopyCli={(customerId) => {
               const cmd = `bun run cli -C ${customerId}`;
@@ -2432,16 +2477,7 @@ export function App(): React.ReactElement {
           />
         ) : activeTab === "shadow" ? (
           <ShadowPricingPanel
-            onInspectAccount={(accountId) => {
-              const found = profileCustomers.find(
-                (c) => c.id.toUpperCase() === accountId.toUpperCase(),
-              );
-              if (found) {
-                setSelectedCustomer(found);
-              }
-              setSearchQuery(accountId);
-              setActiveTab("customers");
-            }}
+            onInspectAccount={handleSelectCustomerById}
             onRunPtyCommand={(cmd) => {
               setActiveTab("terminal");
               void runTerminalCommand(cmd);
@@ -2537,7 +2573,7 @@ export function App(): React.ReactElement {
           {runtimeFlags.target}) + tokens.toml v{TOKENS_TOML_VERSION} ·
           dashboard.toml v{DASHBOARD_META.version}
           {buildInfo
-            ? ` · build ${buildInfo.target}@${buildInfo.commit} · ${buildInfo.builtAt}`
+            ? ` · build ${buildInfo.target}@${buildInfo.commit} · ${buildInfo.builtAt} · bun ${buildInfo.bunVersion}+${buildInfo.bunRevision.slice(0, 9)} on ${buildInfo.builtOn}`
             : ""}{" "}
           · autoExecute: false invariant active
         </span>

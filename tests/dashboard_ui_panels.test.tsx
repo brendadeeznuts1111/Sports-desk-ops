@@ -303,6 +303,72 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(stale).toContain("⚠ Stale probe");
   });
 
+  test("BuildMatrixDrawer renders 5-flag sentinels, gzip bytes, inputs/hash, and staticDir probe strip", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(BuildMatrixDrawer, {
+        dceMarker: "[DCE_PROD_TARGET_ACTIVE]",
+        activeSentinels: [
+          "[DCE_PROD_TARGET_ACTIVE]",
+          "[DCE_ANALYTICS_TELEMETRY_ACTIVE]",
+        ],
+        loading: false,
+        target: "prod",
+        enabledFeatures: ["PROD", "ANALYTICS"],
+        error: null,
+        rows: [
+          {
+            target: "prod",
+            features: ["PROD", "ANALYTICS"],
+            totalJsBytes: 40960,
+            totalCssBytes: 8192,
+            gzipJsBytes: 12288,
+            inputFileCount: 14,
+            bundleHash8: "c7156202",
+            hasProdSentinel: true,
+            hasDebugSentinel: false,
+            hasTestSentinel: false,
+            hasAnalyticsSentinel: true,
+            hasExperimentalSentinel: false,
+          },
+        ],
+        staticDir: {
+          wildcardPath: "/static/*",
+          dir: "/repo/static",
+          caseInsensitiveHostFs: true,
+          totalFiles: 5,
+          totalBytes: 327680,
+          files: [],
+          liveCheck: {
+            origin: "http://127.0.0.1:4022",
+            elapsedMs: 1.2,
+            allPassed: true,
+            etag: 'W/"100-abc"',
+            contentRange: "bytes 0-9/100",
+            checks: [
+              {
+                name: "GET 200",
+                requestPath: "/static/status.html",
+                expectedStatus: 200,
+                status: 200,
+                ok: true,
+                detail: "text/html",
+              },
+            ],
+          },
+        },
+      }),
+    );
+    expect(html).toContain("TEST Branch");
+    expect(html).toContain("ANALYTICS Branch");
+    expect(html).toContain("12.0 KB gz");
+    expect(html).toContain("Inputs / Hash");
+    expect(html).toContain("14 · c7156202");
+    expect(html).toContain("sentinels 5/5 match the flags each target enables");
+    expect(html).toContain('data-static-dir-probe="true"');
+    expect(html).toContain("/_dev/serve-local/bun-directory");
+    expect(html).toContain("Inspect in BookDeskOps");
+  });
+
   test("CustomersTabPanel renders customer table, radars, and inspector actions", () => {
     const cust = FIXTURE_PROFILE_CUSTOMERS[0]!;
     const noop = () => {};
@@ -438,6 +504,38 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(brtHtml).toContain("LINE_MOVER_WEIGHT_ACTIVE");
     expect(brtHtml).toContain("BETTING_ALERTS_DISABLED");
     expect(brtHtml).toContain("⚡ Wager Tape");
+  });
+
+  test("CustomersTabPanel explains a lookup outside the curated cohort", () => {
+    const noop = () => {};
+    const html = renderToStaticMarkup(
+      React.createElement(CustomersTabPanel, {
+        bannerDismissed: true,
+        onDismissBanner: noop,
+        kpisCollapsed: false,
+        onToggleKpis: noop,
+        searchQuery: "BRT5229",
+        onSearchQueryChange: noop,
+        filterTier: "ALL",
+        onFilterTierChange: noop,
+        sortedCustomers: [],
+        customerSort: { key: "score", dir: -1 },
+        onCustomerSort: noop,
+        selectedCustomer: null,
+        onSelectCustomer: noop,
+        customerLookupNotice: "BRT5229",
+        onClearCustomerLookupNotice: noop,
+        copiedCliId: null,
+        onCopyCli: noop,
+        onClearForensicResult: noop,
+        onRunReverseLookup: noop,
+        onOpenTerminalProfile: noop,
+      }),
+    );
+    expect(html).toContain('data-customer-lookup-notice="BRT5229"');
+    expect(html).toContain("No curated cohort profile for");
+    expect(html).toContain("Open terminal profile");
+    expect(html).toContain("Dismiss");
   });
 
   test("CustomersTabPanel renders cohort provenance, row source, and unknown fields as dashes", () => {

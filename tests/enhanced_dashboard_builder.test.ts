@@ -79,10 +79,17 @@ describe("Enhanced Dashboard Builder & Shadow-Pricing Suite", () => {
           join(outdir, "build-manifest.json"),
         ).json();
         expect(manifestDisk.target).toBe("prod");
+        expect(manifestDisk.bunVersion).toBe(Bun.version);
+        expect(manifestDisk.bunRevision).toBe(Bun.revision);
+        expect(manifestDisk.builtOn).toBe(
+          `${process.platform}/${process.arch}`,
+        );
 
         // Build-time constants are inlined into the client bundle (Bun.build define).
         const jsBundled = await Bun.file(join(outdir, jsArt!.fileName)).text();
         expect(jsBundled).toContain(manifest.builtAt);
+        expect(jsBundled).toContain(Bun.version);
+        expect(jsBundled).toContain(Bun.revision);
       } finally {
         rmSync(outdir, { recursive: true, force: true });
       }
@@ -96,19 +103,29 @@ describe("Enhanced Dashboard Builder & Shadow-Pricing Suite", () => {
       const dev = matrix.find((r) => r.target === "dev")!;
       const testTarget = matrix.find((r) => r.target === "test")!;
 
-      // PROD keeps PROD sentinel and eliminates DEBUG + EXPERIMENTAL sentinels
+      // PROD keeps PROD + ANALYTICS sentinels and eliminates DEBUG, TEST, EXPERIMENTAL sentinels
       expect(prod.hasProdSentinel).toBe(true);
       expect(prod.hasDebugSentinel).toBe(false);
+      expect(prod.hasTestSentinel).toBe(false);
+      expect(prod.hasAnalyticsSentinel).toBe(true);
       expect(prod.hasExperimentalSentinel).toBe(false);
+      expect(prod.gzipJsBytes).toBeGreaterThan(0);
+      expect(prod.gzipJsBytes).toBeLessThan(prod.totalJsBytes);
+      expect(prod.inputFileCount).toBeGreaterThan(0);
+      expect(prod.bundleHash8).toMatch(/^[0-9a-f]{8}$/);
 
-      // DEV keeps DEBUG + EXPERIMENTAL sentinels and eliminates PROD sentinel
+      // DEV keeps DEBUG + TEST + ANALYTICS + EXPERIMENTAL sentinels and eliminates PROD sentinel
       expect(dev.hasProdSentinel).toBe(false);
       expect(dev.hasDebugSentinel).toBe(true);
+      expect(dev.hasTestSentinel).toBe(true);
+      expect(dev.hasAnalyticsSentinel).toBe(true);
       expect(dev.hasExperimentalSentinel).toBe(true);
 
-      // TEST keeps DEBUG sentinel and eliminates PROD + EXPERIMENTAL sentinels
+      // TEST keeps DEBUG + TEST + ANALYTICS sentinels and eliminates PROD + EXPERIMENTAL sentinels
       expect(testTarget.hasProdSentinel).toBe(false);
       expect(testTarget.hasDebugSentinel).toBe(true);
+      expect(testTarget.hasTestSentinel).toBe(true);
+      expect(testTarget.hasAnalyticsSentinel).toBe(true);
       expect(testTarget.hasExperimentalSentinel).toBe(false);
     });
   });

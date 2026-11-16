@@ -12,11 +12,17 @@
 declare const __DASHBOARD_BUILD_TARGET__: string;
 declare const __DASHBOARD_BUILD_TIME__: string;
 declare const __DASHBOARD_BUILD_COMMIT__: string;
+declare const __DASHBOARD_BUILD_BUN_VERSION__: string;
+declare const __DASHBOARD_BUILD_BUN_REVISION__: string;
+declare const __DASHBOARD_BUILD_PLATFORM__: string;
 
 export interface DashboardBuildInfo {
   readonly target: string;
   readonly builtAt: string;
   readonly commit: string;
+  readonly bunVersion: string;
+  readonly bunRevision: string;
+  readonly builtOn: string;
 }
 
 export function getDashboardBuildInfo(): DashboardBuildInfo | null {
@@ -25,5 +31,8 @@ export function getDashboardBuildInfo(): DashboardBuildInfo | null {
     target: __DASHBOARD_BUILD_TARGET__,
     builtAt: __DASHBOARD_BUILD_TIME__,
     commit: __DASHBOARD_BUILD_COMMIT__,
+    bunVersion: __DASHBOARD_BUILD_BUN_VERSION__,
+    bunRevision: __DASHBOARD_BUILD_BUN_REVISION__,
+    builtOn: __DASHBOARD_BUILD_PLATFORM__,
   };
 }

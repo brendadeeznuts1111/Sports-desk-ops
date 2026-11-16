@@ -47,10 +47,22 @@ export type DownlineSessionVerifier = (
 
 const MAX_AGENT_LOGIN_LENGTH = 64;
 
+function errorResponse(
+  status: number,
+  body: Record<string, unknown>,
+  headers: Record<string, string> = {},
+): Response {
+  return Response.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store", ...headers },
+  });
+}
+
 export function downlineRiskMethodNotAllowed(): Response {
-  return Response.json(
+  return errorResponse(
+    405,
     { error: "ERR_METHOD_NOT_ALLOWED" },
-    { status: 405, headers: { Allow: "GET" } },
+    { Allow: "GET" },
   );
 }
 
@@ -64,38 +76,23 @@ export async function handleDownlineRiskRoute(
 ): Promise<Response> {
   const sessionToken = req.cookies.get("__Host-bdo_ops_sid");
   if (!sessionToken) {
-    return Response.json(
-      { error: "ERR_AUTH_MISSING_HOST_COOKIE" },
-      { status: 401 },
-    );
+    return errorResponse(401, { error: "ERR_AUTH_MISSING_HOST_COOKIE" });
   }
   if (!(await verifySession(sessionToken))) {
+    // Bun appends Secure for the __Host- prefix; CookieStoreDeleteOptions
+    // accepts path only, so the other invariants cannot be passed here.
     req.cookies.delete("__Host-bdo_ops_sid", { path: "/" });
-    return Response.json({ error: "ERR_AUTH_REJECTED" }, { status: 401 });
+    return errorResponse(401, { error: "ERR_AUTH_REJECTED" });
   }
-
-  // Refresh the origin-locked session cookie with the full __Host- invariants:
-  // no Domain attribute, Path=/, Secure, HttpOnly, SameSite=Strict.
-  req.cookies.set("__Host-bdo_ops_sid", sessionToken, {
-    secure: true,
-    httpOnly: true,
-    sameSite: "strict",
-    path: "/",
-  });
 
   const { agentLogin, tier } = req.params;
   if (agentLogin.length > MAX_AGENT_LOGIN_LENGTH) {
-    return Response.json({ error: "ERR_INVALID_AGENT_LOGIN" }, { status: 400 });
+    return errorResponse(400, { error: "ERR_INVALID_AGENT_LOGIN" });
+  }
+  if (!/^[0-6]$/.test(tier) || agentLogin.includes("\uFFFD")) {
+    return errorResponse(400, { error: "ERR_BAD_ROUTE_PARAM" });
   }
   const tierCode = Number(tier);
-  if (
-    !Number.isInteger(tierCode) ||
-    tierCode < 0 ||
-    tierCode > 6 ||
-    agentLogin.includes("\uFFFD")
-  ) {
-    return Response.json({ error: "ERR_BAD_ROUTE_PARAM" }, { status: 400 });
-  }
 
   try {
     canonicalizeAndEncodeLoginIntoRow(
@@ -108,7 +105,7 @@ export async function handleDownlineRiskRoute(
       workerLimbU16,
     );
   } catch {
-    return Response.json({ error: "ERR_INVALID_AGENT_LOGIN" }, { status: 400 });
+    return errorResponse(400, { error: "ERR_INVALID_AGENT_LOGIN" });
   }
 
   const matchedRow = findStandbyRowByLoginKeyBinarySearch(
@@ -120,7 +117,7 @@ export async function handleDownlineRiskRoute(
   );
 
   if (matchedRow < 0 || matchedRow >= activeSpine.agentCount) {
-    return Response.json({ error: "ERR_AGENT_NOT_FOUND" }, { status: 404 });
+    return errorResponse(404, { error: "ERR_AGENT_NOT_FOUND" });
   }
 
   const structKind =
@@ -128,10 +125,7 @@ export async function handleDownlineRiskRoute(
       NODE_STRUCT_FLAGS_SHIFT) &
     NODE_STRUCT_FLAGS_MASK;
   if (structKind === STRUCT_NODE_CUSTOMER) {
-    return Response.json(
-      { error: "ERR_CUSTOMER_NOT_AGENT_ROOT" },
-      { status: 422 },
-    );
+    return errorResponse(422, { error: "ERR_CUSTOMER_NOT_AGENT_ROOT" });
   }
 
   const count = filterFn(
@@ -142,14 +136,20 @@ export async function handleDownlineRiskRoute(
     workerOutMatchesU16,
   );
   if (count < 0) {
-    return Response.json(
-      { error: "ERR_SPINE_CONTENDED", code: count },
-      { status: 503 },
-    );
+    return errorResponse(503, { error: "ERR_SPINE_CONTENDED", code: count });
   }
-  if (count > MAX_DOWNLINE_MATCHES_15) {
-    return Response.json({ error: "ERR_MATCH_OVERFLOW" }, { status: 500 });
+  if (!Number.isInteger(count) || count > MAX_DOWNLINE_MATCHES_15) {
+    return errorResponse(500, { error: "ERR_MATCH_COUNT_INVALID" });
   }
+
+  // Refresh the origin-locked session cookie only after every request check
+  // passed, so 400/404/422/503 replies do not extend the session.
+  req.cookies.set("__Host-bdo_ops_sid", sessionToken, {
+    secure: true,
+    httpOnly: true,
+    sameSite: "strict",
+    path: "/",
+  });
 
   return new Response(workerOutMatchesU16.subarray(0, count).slice().buffer, {
     headers: {

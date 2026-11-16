@@ -37,6 +37,9 @@ export interface CustomersTabPanelProps {
   readonly onCustomerSort: (key: CustomerSortKey) => void;
   readonly selectedCustomer: ShowcaseCustomer | null;
   readonly onSelectCustomer: (cust: ShowcaseCustomer) => void;
+  /** Account id the operator tried to inspect but the curated cohort lacks. */
+  readonly customerLookupNotice?: string | null | undefined;
+  readonly onClearCustomerLookupNotice?: (() => void) | undefined;
   readonly copiedCliId: string | null;
   readonly onCopyCli: (customerId: string) => void;
   readonly customerReverseForensics?:
@@ -168,6 +171,8 @@ export function CustomersTabPanel({
   onCustomerSort,
   selectedCustomer,
   onSelectCustomer,
+  customerLookupNotice = null,
+  onClearCustomerLookupNotice,
   copiedCliId,
   onCopyCli,
   customerReverseForensics = null,
@@ -517,6 +522,46 @@ export function CustomersTabPanel({
           {profilesProvenance}
         </div>
       )}
+
+      {customerLookupNotice !== null ? (
+        <div
+          role="status"
+          data-customer-lookup-notice={customerLookupNotice}
+          className="sd-card"
+          style={{
+            margin: "0 12px 10px",
+            padding: "10px 14px",
+            border: "1px solid rgba(245, 158, 11, 0.45)",
+            backgroundColor: "rgba(245, 158, 11, 0.10)",
+            color: "#fcd34d",
+            fontSize: "12px",
+          }}
+        >
+          <strong>
+            No curated cohort profile for <code>{customerLookupNotice}</code>.
+          </strong>{" "}
+          The shadow buyer table contains accounts outside the profile cohort;
+          the search is set to this id so a partial match is still visible.
+          <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
+            <button
+              type="button"
+              className="sd-preset-btn"
+              onClick={() => onOpenTerminalProfile(customerLookupNotice)}
+            >
+              💻 Open terminal profile
+            </button>
+            {onClearCustomerLookupNotice ? (
+              <button
+                type="button"
+                className="sd-preset-btn"
+                onClick={onClearCustomerLookupNotice}
+              >
+                Dismiss
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {/* Two-Column Grid: Customer Table & Deep Inspector */}
       {(() => {

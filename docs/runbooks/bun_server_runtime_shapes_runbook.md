@@ -181,8 +181,11 @@ difference is what makes route-level typing useful:
 Boundary rules for this split:
 
 - `BunRequest<T>.params` is percent-decoded; malformed `%XX` sequences become
-  `\uFFFD` rather than throwing. Reject `\uFFFD` (or gate to ASCII) before using
-  a param as a key — `services/downline_risk_route.ts` does both.
+  `\uFFFD` rather than throwing. Measured 2026-11-16 on Bun 1.4.4: `/params/a%ZZb`
+  yields `a\uFFFDb`, `%E2%82` and `%FF` yield `\uFFFD`, while
+  `decodeURIComponent` throws `URIError` for the same inputs. Reject `\uFFFD`
+  (or gate to ASCII) before using a param as a key —
+  `services/downline_risk_route.ts` does both.
 - A `__Host-` cookie set from a route must pass `secure`, `httpOnly`,
   `sameSite: "strict"`, `path: "/"`, and omit `domain`; the runtime appends the
   `Set-Cookie` to the handler's `Response`.
@@ -193,7 +196,20 @@ Boundary rules for this split:
 - A sensitive binary route response should set `Content-Type` explicitly and
   `Cache-Control: no-store`; assert `X-Match-Count` equals the post-copy buffer
   length. Cookie mutations must be verified on the binary response, not only on
-  JSON responses.
+  JSON responses, and the refresh should happen only after every route check
+  passes so 400/404/422/503 replies cannot extend a session.
+- Route-param keys should allowlist the canonical login alphabet
+  (`A-Za-z0-9_.-`) and reject duplicates at ingest: unknown base-40 characters
+  collide, and suffix normalization makes `AB12` and `AB12_3` the same key.
+- A directory route such as `routes: { "/static/*": { dir: "./static" } }`
+  serves a tree natively: the prefix is percent-decoded once, a directory
+  without a trailing slash redirects `301`, `index.html` is served for `/`,
+  and symlinks are clamped to `dir`. The dashboard uses this for `/static/*`;
+  `tests/dev_dashboard_endpoints.test.ts` covers a hit and a traversal attempt.
+- Measured 2026-11-16 on Bun 1.4.4: server-side `BunRequest.keepalive` is typed
+  `boolean` but reads `undefined` at runtime. The BunRequest contract test records
+  that measured gap; do not use `keepalive` for routing decisions until a later
+  runtime changes it.
 
 The typed slice in `services/live_bets_typed_server.ts` exercises both sides:
 `withAuthenticatedRoute` reads `req.cookies`, `SanitizedRequestAuditView` reports

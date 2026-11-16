@@ -287,9 +287,44 @@ export interface BuildMatrixRow {
   readonly features: readonly string[];
   readonly totalJsBytes: number;
   readonly totalCssBytes: number;
+  readonly gzipJsBytes?: number | undefined;
+  readonly inputFileCount?: number | null | undefined;
+  readonly bundleHash8?: string | undefined;
   readonly hasDebugSentinel: boolean;
   readonly hasExperimentalSentinel: boolean;
   readonly hasProdSentinel: boolean;
+  readonly hasTestSentinel?: boolean | undefined;
+  readonly hasAnalyticsSentinel?: boolean | undefined;
+}
+
+export interface StaticDirectoryProbeSummary {
+  readonly wildcardPath: string;
+  readonly dir: string;
+  readonly caseInsensitiveHostFs: boolean;
+  readonly totalFiles: number;
+  readonly totalBytes: number;
+  readonly files: readonly {
+    readonly relativePath: string;
+    readonly urlPath: string;
+    readonly bytes: number;
+    readonly contentType: string;
+    readonly lastModifiedIso: string | null;
+  }[];
+  readonly liveCheck: {
+    readonly origin: string;
+    readonly elapsedMs: number;
+    readonly allPassed: boolean;
+    readonly etag: string | null;
+    readonly contentRange: string | null;
+    readonly checks: readonly {
+      readonly name: string;
+      readonly requestPath: string;
+      readonly expectedStatus: number;
+      readonly status: number | null;
+      readonly ok: boolean;
+      readonly detail: string;
+    }[];
+  } | null;
 }
 
 /**
