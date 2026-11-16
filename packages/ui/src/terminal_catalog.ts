@@ -179,8 +179,9 @@ export const TERMINAL_COMMAND_SPECS: readonly TerminalCommandSpec[] = [
   },
   {
     command: "markdown",
-    usage: "markdown [file]",
-    description: "Render Markdown via native Bun.markdown.ansi",
+    usage: "markdown [file|text] [--theme=dark|light|mono] [--columns=N]",
+    description:
+      "Render Markdown via native Bun.markdown.ansi with AnsiTheme & OSC 8 links",
     group: "UTILITY",
     aliases: ["md"],
   },
@@ -193,10 +194,10 @@ export const TERMINAL_COMMAND_SPECS: readonly TerminalCommandSpec[] = [
   },
   {
     command: "help",
-    usage: "help",
+    usage: "help (--help / -h)",
     description: "Display the reference manual",
     group: "UTILITY",
-    aliases: ["h", "?"],
+    aliases: ["h", "?", "--help", "-h"],
   },
   {
     command: "keybindings",
@@ -317,7 +318,7 @@ export const TERMINAL_WELCOME_HELP_STDOUT =
   "  \x1b[1;32mdns <host>\x1b[0m (alias: \x1b[32md\x1b[0m)         Benchmark c-ares vs system DNS resolver latency\n" +
   "  \x1b[1;32mreverse <ip>\x1b[0m (alias: \x1b[32mr, ip\x1b[0m)     Reverse DNS forensics & datacenter/residential IP lookup\n" +
   "  \x1b[1;32mcron <expr>\x1b[0m (alias: \x1b[32mcr\x1b[0m)        Inspect Bun.cron() schedule triggers\n" +
-  "  \x1b[1;32mmarkdown\x1b[0m (alias: \x1b[32mmd\x1b[0m)           Render Markdown via native Bun.markdown.ansi\n" +
+  "  \x1b[1;32mmarkdown\x1b[0m (alias: \x1b[32mmd\x1b[0m)           Render Markdown via native Bun.markdown.ansi (\x1b[36m--theme\x1b[0m, \x1b[36m--columns\x1b[0m, \x1b[36m--no-color\x1b[0m)\n" +
   "  \x1b[1;32mclear\x1b[0m (alias: \x1b[32mcls\x1b[0m)             Clear terminal screen buffer\n" +
   "  \x1b[1;32mhelp\x1b[0m (aliases: \x1b[32mh, ?\x1b[0m)           Display this reference manual\n\n" +
   "\x1b[1;33mKeyboard Shortcuts:\x1b[0m \x1b[36m[Tab]\x1b[0m Autocomplete · \x1b[36m[Ctrl+` / Cmd+K]\x1b[0m Toggle PTY · \x1b[36m[Ctrl+1/2/3]\x1b[0m Tabs · \x1b[36m[Ctrl+L]\x1b[0m Clear";
