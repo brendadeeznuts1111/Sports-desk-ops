@@ -82,7 +82,8 @@ export * from "./types.ts";
 export const PROFILES_UNAVAILABLE_REASON =
   "Profile cards are limited to what the curated cohort file records: wager limit, delay, CLV and " +
   "sharpness score. VaR and sharpness components have no source yet, so they stay blank rather than " +
-  "computed from nothing. The cohort is 6 customers, not the full book.";
+  "computed from nothing. The cohort is 6 rows: 4 synthetic fixtures and 2 desk accounts — " +
+  "a demo surface, not the book.";
 
 const PROFILE_CUSTOMERS: readonly ShowcaseCustomer[] = [];
 
