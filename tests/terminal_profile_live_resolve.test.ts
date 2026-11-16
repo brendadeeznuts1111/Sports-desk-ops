@@ -1,7 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { executeTerminalQuery } from "../lib/terminal_emulator.ts";
 
-describe("terminal profile live book resolve", () => {
+// `data/live-wagers.json` is a gitignored local capture (see .gitignore). Without it the
+// profile matrix has no row for this login and `profile` exits 1, so these assertions are
+// only meaningful on a desk machine that holds the capture. CI and fresh clones skip.
+const hasLiveWagersCapture = existsSync(
+  resolve(import.meta.dir, "../data/live-wagers.json"),
+);
+const describeWithCapture = describe.skipIf(!hasLiveWagersCapture);
+
+describeWithCapture("terminal profile live book resolve", () => {
   test("profile DCC306 --radar uses data/live-wagers.json", async () => {
     const radarRes = await executeTerminalQuery("profile DCC306 --radar");
     expect(radarRes.exitCode).toBe(0);
