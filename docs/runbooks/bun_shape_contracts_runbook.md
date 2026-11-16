@@ -39,7 +39,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/argv)
 - **Shape:** value: `object` · writable true · enumerable true
-- **Here:** `scripts/audit_bun_surface.ts`, `scripts/probe/parse-tree-only.ts`
+- **Here:** `scripts/audit_bun_surface.ts`, `scripts/generate_customer_decision_rankings.ts`
 - **Evidence:** `probe:proc.shell`
 
 #### Bun.$
