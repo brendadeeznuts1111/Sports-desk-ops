@@ -100,7 +100,7 @@
         '';
         outputHashMode = "recursive";
         outputHashAlgo = "sha256";
-        outputHash = "sha256-064DfXmdiR0ey4YRjRe5XJBKJ+dYiZmYS/8o6R34Lbc=";
+        outputHash = "sha256-vDK95epjP2SemtxyBwkfpHEUi98hvH9DEK4TwHnZMcI=";
       };
 
       regression = pkgs.stdenv.mkDerivation {
