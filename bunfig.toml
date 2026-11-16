@@ -138,8 +138,16 @@ noOrphans = true
 depth = 8
 
 [test]
-# Ignore scratch experiments, heavy fixtures, and generated gate artifacts from default test scans.
-# Keeps colocated tests in lib/ and scripts/ active without traversing scratch/.
+# Every key below is a Bun 1.4.4 [test] key, checked 2026-11-15 against the pinned binary in a
+# scratch project by toggling each one and watching discovery or coverage output change.
+# 1.4.4 does NOT warn on an unknown or misspelled [test] key, so re-check behaviour, not just
+# the absence of a warning.
+#
+# Ignore scratch experiments, heavy fixtures, and generated gate artifacts from test scans; this
+# also applies when a path is given (`bun test tests/` skips tests/fixtures/**).
+# Local bare `bun test` / `bun run test` also runs the colocated tests in lib/ and scripts/; CI's
+# full suite is `bun test tests/ --parallel --reporter=junit` and runs only the colocated files
+# its workflow names, so a colocated-only failure shows up locally first.
 pathIgnorePatterns = [
   "scratch/**",
   "Scratch/**",
@@ -150,7 +158,8 @@ pathIgnorePatterns = [
   "scripts/author_openapi_spec.mjs",
 ]
 
-# Dual coverage reporting: preserves console text table while producing lcov.info for CI
+# Only applies with `--coverage` (no CI job passes it today): console text table plus
+# coverage/lcov.info.
 coverageReporter = ["text", "lcov"]
 coverageDir = "coverage"
 coverageSkipTestFiles = true
