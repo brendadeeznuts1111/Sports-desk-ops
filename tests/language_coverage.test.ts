@@ -57,6 +57,8 @@ const COVERAGE: Readonly<Record<string, string>> = {
   txt: "plain text document",
   hex: "even-length hex byte vector + NSH frame golden tests",
   gz: "Bun.gunzipSync decompression check",
+  nix: "Nix flake (opt-in hermetic build; not run by CI)",
+  asc: "OpenPGP public key (checked by toolchain/fetch-and-verify-bun.sh)",
 };
 
 const EXACT_FILES: Readonly<Record<string, string>> = {
