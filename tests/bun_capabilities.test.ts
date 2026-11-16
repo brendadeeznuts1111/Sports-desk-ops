@@ -216,12 +216,21 @@ describe("Bun capabilities used by the ops tooling", () => {
           fileExtensions: [".tsx"],
         });
         const about = router.match("/about");
+        const noOrigin = new Bun.FileSystemRouter({
+          style: "nextjs",
+          dir,
+          fileExtensions: [".tsx"],
+        });
         console.log(JSON.stringify({
           dir: realpathSync(dir),
           missing: router.match("/missing"),
           filePath: about === null ? null : about.filePath,
           kind: about === null ? null : about.kind,
           scriptSrc: about === null ? null : about.scriptSrc,
+          assetPrefix: router.assetPrefix,
+          queryZero: router.match("/?0=a")?.query ?? null,
+          origin: router.origin,
+          noOrigin: noOrigin.origin,
         }));
       } finally {
         rmSync(dir, { recursive: true, force: true });
@@ -241,11 +250,22 @@ describe("Bun capabilities used by the ops tooling", () => {
       filePath: string;
       kind: string;
       scriptSrc: string;
+      assetPrefix: string | null;
+      queryZero: Record<string, string> | null;
+      origin: string | null;
+      noOrigin: string | null;
     };
     expect(result.missing).toBeNull();
     expect(result.filePath).toBe(join(result.dir, "about.tsx"));
     expect(result.kind).toBe("exact");
     expect(result.scriptSrc).toBe("https://example.test/static/about.tsx");
+    // Next-release fixes: assetPrefix is exposed (was always undefined), and a
+    // numeric-only query key is not listed twice.
+    expect(result.assetPrefix).toBe("/static/");
+    expect(result.queryZero).toEqual({ "0": "a" });
+    // Next-release types fix: origin is `string | null`, not always a string.
+    expect(result.origin).toBe("https://example.test");
+    expect(result.noOrigin).toBeNull();
   });
 
   test("StructuredSerializeOptions transfer detaches the source buffer", async () => {
@@ -702,6 +722,9 @@ describe("Bun capabilities used by the ops tooling", () => {
     const escaped = Bun.$.escape("foo bar; rm -rf /");
     expect(escaped).not.toBe("foo bar; rm -rf /");
     expect(escaped.length).toBeGreaterThan("foo bar; rm -rf /".length);
+    // Release fix: non-string arguments are stringified, never passed through.
+    expect(Bun.$.escape(null as unknown as string)).toBe("null");
+    expect(Bun.$.escape(true as unknown as string)).toBe("true");
 
     // `$.braces` is pure bash brace expansion — no I/O, safe to call unconditionally.
     expect(Bun.$.braces("index.{js,ts}").sort()).toEqual([
@@ -720,6 +743,25 @@ describe("Bun capabilities used by the ops tooling", () => {
     // `.nothrow()` is the only safe way to tolerate a non-zero exit without a try/catch stack.
     const failed = await Bun.$`exit 7`.nothrow().quiet();
     expect(failed.exitCode).toBe(7);
+  });
+
+  test("subprocess resourceUsage exposes bigint cpuTime fields", async () => {
+    const proc = Bun.spawn([process.execPath, "--version"], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    await proc.exited;
+    const usage = await proc.resourceUsage();
+    if (usage === undefined) {
+      throw new Error("resourceUsage() returned undefined after exit");
+    }
+    // The installed bun-types already declare cpuTime.user/system/total as bigint;
+    // this pins the declaration to the values the subprocess actually reports.
+    expect(typeof usage.cpuTime.user).toBe("bigint");
+    expect(typeof usage.cpuTime.system).toBe("bigint");
+    expect(typeof usage.cpuTime.total).toBe("bigint");
+    expect(usage.cpuTime.total).toBe(usage.cpuTime.user + usage.cpuTime.system);
+    expect(usage.cpuTime.user >= 0n).toBe(true);
   });
 
   test("Bun.allocUnsafe returns a Uint8Array of the requested length (unzeroed)", () => {

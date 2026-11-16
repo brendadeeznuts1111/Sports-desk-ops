@@ -5,16 +5,29 @@
 
 import type {
   AgentDetailApiResponse,
+  AutomationsSnapshot,
   BetTickerApiResponse,
   Daemon4020Status,
   MarketFilter,
   PeriodFilter,
   R2PipelineApiResponse,
+  RegimeFilter,
   RouterAuditMode,
   ShadowRepriceMode,
   SportFilter,
   SubSportFilter,
+  TicketVerificationSummary,
 } from "@sportsdesk-ops/contracts";
+
+/**
+ * One completed `Bun.build` DCE probe. `generatedAt` is the probe's completion
+ * time, not the response time: the server caches the probe and re-serves it, so a
+ * response timestamp would make a stale probe look fresh.
+ */
+export interface BuildMatrixProbe {
+  readonly targets: readonly unknown[];
+  readonly generatedAt: string;
+}
 
 export type RouteRequestWithParams<
   P extends Record<string, string> = Record<string, string>,
@@ -40,6 +53,7 @@ export interface ShadowPricingQueryParams {
   readonly subSport?: SubSportFilter | undefined;
   readonly period?: PeriodFilter | undefined;
   readonly market?: MarketFilter | undefined;
+  readonly regime?: RegimeFilter | undefined;
   readonly routerAuditMode?: RouterAuditMode | undefined;
 }
 
@@ -120,7 +134,11 @@ export interface DashboardApiDeps {
   ) => Promise<unknown>;
   readonly forceShadowFixture?: boolean | undefined;
   readonly shadowDbPath?: string | undefined;
-  readonly getBuildMatrix: () => Promise<readonly unknown[]>;
+  /**
+   * DCE build-matrix probe. `force` recompiles the three targets instead of
+   * returning the process-wide cached probe.
+   */
+  readonly getBuildMatrix: (force?: boolean) => Promise<BuildMatrixProbe>;
   readonly handleMcp?:
     ((req: Request) => Response | Promise<Response>) | undefined;
   readonly getBetTickerPayload?:
@@ -136,6 +154,13 @@ export interface DashboardApiDeps {
     | undefined;
   readonly getDaemonStatusPayload?:
     (() => Promise<Daemon4020Status> | Daemon4020Status) | undefined;
+  readonly getAutomationsPayload?:
+    (() => Promise<AutomationsSnapshot> | AutomationsSnapshot) | undefined;
+  readonly runGsliveTicketVerify?:
+    | ((options?: {
+        readonly dryRun?: boolean | undefined;
+      }) => Promise<TicketVerificationSummary>)
+    | undefined;
   readonly getAgentDetailPayload?:
     | ((
         agentId: string,

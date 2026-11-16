@@ -195,7 +195,7 @@ async function runVerifySuite(binaryPath: string): Promise<boolean> {
   console.log("\n[2/3] Spec citations gate...");
   const citations = spawnSync(
     binaryPath,
-    ["run", "scripts/check_spec_citations.ts"],
+    ["run", "scripts/run_check_spec_citations.ts"],
     {
       cwd: REPO_ROOT,
       stdio: "inherit",

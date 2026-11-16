@@ -20,6 +20,27 @@ describe("Bun compression contract", () => {
     expect(new Uint8Array(inflateSync(wrapped))).toEqual(BYTES);
   });
 
+  test("out-of-range memLevel/strategy throw instead of being ignored", () => {
+    // Next-release contract: these options used to be accepted and silently replaced
+    // with defaults. Callers get a RangeError now, so a bad CLI/env-derived option
+    // cannot quietly change the compression profile.
+    expect(() => Bun.gzipSync(BYTES, { memLevel: 10 } as never)).toThrow(
+      RangeError,
+    );
+    expect(() => Bun.gzipSync(BYTES, { memLevel: 0 } as never)).toThrow(
+      RangeError,
+    );
+    expect(() => Bun.deflateSync(BYTES, { strategy: 5 } as never)).toThrow(
+      RangeError,
+    );
+    expect(() => Bun.deflateSync(BYTES, { strategy: -1 } as never)).toThrow(
+      RangeError,
+    );
+    // In-range options still round-trip.
+    const gz = Bun.gzipSync(BYTES, { memLevel: 1, strategy: 0 });
+    expect(new Uint8Array(Bun.gunzipSync(gz))).toEqual(BYTES);
+  });
+
   test("gzip and zstd round-trip through the native APIs", () => {
     const gzip = Bun.gzipSync(BYTES);
     expect(new Uint8Array(Bun.gunzipSync(gzip))).toEqual(BYTES);

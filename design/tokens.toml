@@ -5,9 +5,9 @@
 
 [meta]
 schema = "sportsdesk-tokens/v1"
-version = "1.3.0"
+version = "1.4.0"
 author = "bw496915-cmyk"
-updated_at = "2026-11-14T20:15:00Z" # quoted ISO-8601 — avoids Temporal.* in browser bundles
+updated_at = "2026-11-16T00:45:00Z" # quoted ISO-8601 — avoids Temporal.* in browser bundles
 
 [gates]
 min_body_contrast_ratio_milli = 4500 # 4.50:1 WCAG AA body copy on all surfaces
@@ -430,6 +430,47 @@ max_hold_rate_basis_points = -5000
 max_deficit_cents = 10000000
 mitigation_kind = "MANAGER_LIMIT_CLAMP"
 operational_role = "Terminal Risk Containment & Manager Write-Gate"
+
+# ------------------------------------------------------------------------------
+# Semantic :root Alias Layer
+# Emitted as `<alias>: var(<target>);` only — an alias is never an @property and
+# never a new color. Every target is validated against the canonical token names
+# above, so an alias cannot point at a token that does not exist, cannot shadow
+# one, and cannot chain through another alias.
+#   legacy    -> emitted into every generated stylesheet (dashboard + static snapshots)
+#   dashboard -> emitted into src/dashboard/tokens.generated.css only; the static
+#                snapshots keep their own hand-maintained theme mapping
+# Order is emission order.
+# ------------------------------------------------------------------------------
+[aliases.legacy]
+"--sd-theme-emerald" = "--sd-tier-gateway" # L20 legacy token alias (wager_tiers.toml)
+
+[aliases.dashboard]
+"--bg" = "--sd-surface-bg"
+"--bg-cli" = "--sd-surface-cli"
+"--card" = "--sd-surface-card"
+"--card-elevated" = "--sd-surface-elevated"
+"--card-hover" = "--sd-surface-hover"
+"--card-raised" = "--sd-surface-raised"
+"--card-selected" = "--sd-surface-selected"
+"--border" = "--sd-surface-border"
+"--border-strong" = "--sd-border-strong"
+"--focus-ring" = "--sd-focus-ring"
+"--text" = "--sd-text-primary"
+"--text-secondary" = "--sd-text-secondary"
+"--muted" = "--sd-text-muted"
+"--accent" = "--sd-tier-rec-bias"
+"--emerald" = "--sd-tier-gateway"
+"--amber" = "--sd-tier-steam"
+"--danger" = "--sd-tier-alert"
+"--purple" = "--sd-route-sharp"
+"--cyan" = "--sd-route-devig"
+# Component state slots — UI code should reference these instead of literal hexes.
+"--sd-state-ok" = "--sd-tier-whale"
+"--sd-state-warn" = "--sd-tier-steam"
+"--sd-state-danger" = "--sd-tier-alert"
+"--sd-state-info" = "--sd-tier-phone"
+"--sd-state-accent" = "--sd-focus-ring"
 
 # ------------------------------------------------------------------------------
 # Axis 3: Deterministic BitSet32 Masks (Unsigned >>> 0 Shift Contract; Bit <= 30)

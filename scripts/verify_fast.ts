@@ -24,6 +24,7 @@ import { existsSync, lstatSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { analyzeWorkspaceGraph, inspectWorkspaces } from "../lib/pm_policy.ts";
+import { resolveNativeBunLintBin } from "./lint_native.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 
@@ -592,7 +593,12 @@ async function main(): Promise<number> {
     }
   }
 
-  const oxlintCmd = resolveOxlintCmd();
+  const nativeLintBin = resolveNativeBunLintBin();
+  const lintLabel = nativeLintBin !== null ? "bun-lint" : "oxlint";
+  const lintCmd =
+    nativeLintBin !== null
+      ? [nativeLintBin, "lint", "--no-script"]
+      : resolveOxlintCmd();
   const workspaceGraph = analyzeWorkspaceGraph(await inspectWorkspaces(ROOT));
   const typecheckSpecs = planTypecheckTasks(changed, {
     hasRootBlast,
@@ -604,20 +610,20 @@ async function main(): Promise<number> {
     runTask(spec.name, spec.cmd),
   );
 
-  if (lintTargets.length > 0 && oxlintCmd !== null) {
+  if (lintTargets.length > 0 && lintCmd !== null) {
     tasks.push(
-      runTask(`oxlint (${lintTargets.length})`, [
-        ...oxlintCmd,
+      runTask(`${lintLabel} (${lintTargets.length})`, [
+        ...lintCmd,
         "--deny-warnings",
         ...lintTargets,
       ]),
     );
   }
 
-  if (values.deep && oxlintCmd !== null) {
+  if (values.deep && lintCmd !== null) {
     tasks.push(
-      runTask("oxlint:type-aware", [
-        ...oxlintCmd,
+      runTask(`${lintLabel}:type-aware`, [
+        ...lintCmd,
         "--type-aware",
         "-c",
         ".oxlintrc.type-aware.json",

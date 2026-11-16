@@ -235,6 +235,13 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: ["probe:proc.paths"],
   },
   {
+    name: "pathToFileURL",
+    kind: "value",
+    subsystem: "process",
+    heading: "Bun.pathToFileURL",
+    evidence: ["test:tests/bun_url_native_utils.test.ts"],
+  },
+  {
     name: "gc",
     kind: "value",
     subsystem: "process",

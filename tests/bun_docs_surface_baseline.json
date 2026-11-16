@@ -115,6 +115,10 @@
       "documented": true,
       "link": "https://bun.com/guides/util/file-url-to-path"
     },
+    "pathToFileURL": {
+      "documented": true,
+      "link": "https://bun.com/guides/util/path-to-file-url"
+    },
     "gc": {
       "documented": true,
       "link": "https://bun.com/blog/bun-v1.1.43#expose-gc-flag-adds-globalthis-gc"

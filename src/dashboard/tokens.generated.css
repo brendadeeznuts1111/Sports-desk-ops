@@ -1,6 +1,6 @@
 /**
  * @file src/dashboard/tokens.generated.css
- * @description Generated from design/tokens.toml (v1.3.0) via `bun run gen:tokens`.
+ * @description Generated from design/tokens.toml (v1.4.0) via `bun run gen:tokens`.
  * DO NOT EDIT BY HAND — enforced by `bun run gen:tokens:gate`.
  */
 
@@ -259,7 +259,7 @@
    ========================================================================== */
 :root {
   color-scheme: dark;
-  /* Generated from tokens.toml (v1.3.0) */
+  /* Generated from tokens.toml (v1.4.0) */
   --sd-surface-bg: #070b14;
   --sd-surface-cli: #04070e;
   --sd-surface-card: #0b1120;
@@ -323,4 +323,9 @@
   --danger: var(--sd-tier-alert);
   --purple: var(--sd-route-sharp);
   --cyan: var(--sd-route-devig);
+  --sd-state-ok: var(--sd-tier-whale);
+  --sd-state-warn: var(--sd-tier-steam);
+  --sd-state-danger: var(--sd-tier-alert);
+  --sd-state-info: var(--sd-tier-phone);
+  --sd-state-accent: var(--sd-focus-ring);
 }

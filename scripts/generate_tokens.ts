@@ -26,6 +26,7 @@ import { DOMAIN_BRANDED_TYPES_PATH } from "../lib/gen_tokens/domain_branded_sect
 import { DOMAIN_BRANDED_PREAMBLE } from "../lib/gen_tokens/domain_branded_preamble.ts";
 import { DOMAIN_BRANDED_TRANSPORT } from "../lib/gen_tokens/domain_branded_transport.ts";
 import { renderDomainBrandedSection7 } from "../lib/gen_tokens/domain_branded_section7.ts";
+import { renderTokenRegistryModule } from "../lib/gen_tokens/token_registry_module.ts";
 import {
   parseTokensToml,
   type TokensSsot,
@@ -105,9 +106,8 @@ const slaCssTokens = sla.flatMap((s) => [
   { token_name: `${s.token_name}-border`, hex: s.border_hex },
 ]);
 
-const legacyAliases: readonly [string, string][] = ingestion
-  .filter((c) => c.legacy_token_name !== undefined)
-  .map((c) => [c.legacy_token_name!, c.token_name]);
+const legacyAliases = ssot.aliases.legacy;
+const dashboardAliases = ssot.aliases.dashboard;
 
 console.log(`[gen:tokens] Loaded tokens.toml (v${ssot.meta.version}):`);
 console.log(` - Surfaces : ${surfaces.length}`);
@@ -115,6 +115,9 @@ console.log(` - Ingestion: ${ingestion.length}`);
 console.log(` - Routes   : ${routes.length}`);
 console.log(` - UI       : ${ui.length}`);
 console.log(` - SLA      : ${sla.length} (${slaCssTokens.length} CSS tokens)`);
+console.log(
+  ` - Aliases  : ${legacyAliases.length} legacy + ${dashboardAliases.length} dashboard`,
+);
 
 // ============================================================================
 // 1. GENERATE DOMAIN-BRANDED-TYPES.TS (SECTION 7)
@@ -133,11 +136,11 @@ console.log(`[gen:tokens] Emitted updated domain-branded-types.ts`);
 // 2. GENERATE CSS DECLARATIONS & SYNCHRONIZE DASHBOARDS
 // ============================================================================
 const allTokens = [
-  ...surfaces,
-  ...ui,
-  ...slaCssTokens,
-  ...ingestion,
-  ...routes,
+  ...surfaces.map((token) => ({ ...token, group: "surfaces" as const })),
+  ...ui.map((token) => ({ ...token, group: "ui" as const })),
+  ...slaCssTokens.map((token) => ({ ...token, group: "sla" as const })),
+  ...ingestion.map((token) => ({ ...token, group: "ingestion" as const })),
+  ...routes.map((token) => ({ ...token, group: "routes" as const })),
 ];
 
 function generateHoudiniPropertyCss(): string {
@@ -167,8 +170,8 @@ function generateRootVariablesCss(): string {
   for (const t of allTokens) {
     css += `      ${t.token_name}: ${t.hex};\n`;
   }
-  for (const [legacyToken, targetToken] of legacyAliases) {
-    css += `      ${legacyToken}: var(${targetToken});\n`;
+  for (const entry of legacyAliases) {
+    css += `      ${entry.alias}: var(${entry.target});\n`;
   }
   return css;
 }
@@ -221,32 +224,14 @@ function generateStandaloneDashboardTokensCss(): string {
   for (const t of allTokens) {
     css += `  ${t.token_name}: ${t.hex};\n`;
   }
-  for (const [legacyToken, targetToken] of legacyAliases) {
-    css += `  ${legacyToken}: var(${targetToken});\n`;
+  for (const entry of legacyAliases) {
+    css += `  ${entry.alias}: var(${entry.target});\n`;
   }
-  css += `
-  /* Semantic dashboard aliases mapped to canonical tokens.toml variables */
-  --bg: var(--sd-surface-bg);
-  --bg-cli: var(--sd-surface-cli);
-  --card: var(--sd-surface-card);
-  --card-elevated: var(--sd-surface-elevated);
-  --card-hover: var(--sd-surface-hover);
-  --card-raised: var(--sd-surface-raised);
-  --card-selected: var(--sd-surface-selected);
-  --border: var(--sd-surface-border);
-  --border-strong: var(--sd-border-strong);
-  --focus-ring: var(--sd-focus-ring);
-  --text: var(--sd-text-primary);
-  --text-secondary: var(--sd-text-secondary);
-  --muted: var(--sd-text-muted);
-  --accent: var(--sd-tier-rec-bias);
-  --emerald: var(--sd-tier-gateway);
-  --amber: var(--sd-tier-steam);
-  --danger: var(--sd-tier-alert);
-  --purple: var(--sd-route-sharp);
-  --cyan: var(--sd-route-devig);
-}
-`;
+  css += `\n  /* Semantic dashboard aliases mapped to canonical tokens.toml variables */\n`;
+  for (const entry of dashboardAliases) {
+    css += `  ${entry.alias}: var(${entry.target});\n`;
+  }
+  css += `}\n`;
   return css;
 }
 
@@ -259,6 +244,31 @@ emitRepoFile(
   generateStandaloneDashboardTokensCss(),
 );
 console.log(`[gen:tokens] Emitted updated ${standaloneCssRelPath}`);
+
+// The UI palette + footer read the same arrays the CSS above was built from.
+const registryRelPath = "packages/ui/src/tokens.registry.generated.ts";
+const registryAbsPath = resolve(rootDir, registryRelPath);
+mkdirSync(resolve(registryAbsPath, ".."), { recursive: true });
+emitRepoFile(
+  registryRelPath,
+  registryAbsPath,
+  renderTokenRegistryModule({
+    version: ssot.meta.version,
+    tokens: allTokens.map(({ token_name, hex, group }) => ({
+      token_name,
+      hex,
+      group,
+    })),
+    aliases: [
+      ...legacyAliases.map((alias) => ({ ...alias, scope: "legacy" as const })),
+      ...dashboardAliases.map((alias) => ({
+        ...alias,
+        scope: "dashboard" as const,
+      })),
+    ],
+  }),
+);
+console.log(`[gen:tokens] Emitted updated ${registryRelPath}`);
 
 for (const template of DASHBOARD_TEMPLATES) {
   const dashboardPath = resolve(rootDir, template.repoPath);

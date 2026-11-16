@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DASHBOARD_PANELS } from "../config/dashboard.ts";
 import { styles } from "../dashboard_styles.ts";
 import type { DashboardData, DnsData } from "../types.ts";
+import type { ReverseDnsForensicsView } from "../../../../lib/reverse_dns_forensics.ts";
+import { ReverseDnsForensicsCard } from "./ReverseDnsForensicsCard.tsx";
 import { ThresholdsPanel } from "./ThresholdsPanel.tsx";
 import { VIZ_COLORS } from "../viz/perceptual.ts";
 
@@ -19,7 +21,7 @@ export interface SurveillanceTabPanelProps {
   readonly onRunBenchmark: () => void;
   readonly reverseIp: string;
   readonly onReverseIpChange: (value: string) => void;
-  readonly reverseResult: string | null;
+  readonly reverseForensics?: ReverseDnsForensicsView | null | undefined;
   readonly onRunReverseLookup: () => void;
   readonly viewMode: "interactive" | "raw";
   readonly onViewModeChange: (mode: "interactive" | "raw") => void;
@@ -135,7 +137,7 @@ export function SurveillanceTabPanel({
   onRunBenchmark,
   reverseIp,
   onReverseIpChange,
-  reverseResult,
+  reverseForensics = null,
   onRunReverseLookup,
   viewMode,
   onViewModeChange,
@@ -454,23 +456,32 @@ export function SurveillanceTabPanel({
           </button>
           {benchResult && <span style={styles.toolResult}>{benchResult}</span>}
         </div>
-        <div style={styles.toolItem}>
-          <input
-            style={styles.input}
-            value={reverseIp}
-            onChange={(e) => onReverseIpChange(e.target.value)}
-            placeholder="IP (e.g. 1.1.1.1)"
-          />
-          <button
-            type="button"
-            style={styles.actionBtn}
-            onClick={onRunReverseLookup}
-          >
-            🔍 Reverse DNS & Forensics
-          </button>
-          {reverseResult && (
-            <span style={styles.toolResult}>{reverseResult}</span>
-          )}
+        <div
+          style={{
+            ...styles.toolItem,
+            flexDirection: "column",
+            alignItems: "stretch",
+            flex: "1 1 280px",
+          }}
+        >
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <input
+              style={styles.input}
+              value={reverseIp}
+              onChange={(e) => onReverseIpChange(e.target.value)}
+              placeholder="IP (e.g. 1.1.1.1)"
+            />
+            <button
+              type="button"
+              style={styles.actionBtn}
+              onClick={onRunReverseLookup}
+            >
+              🔍 Reverse DNS & Forensics
+            </button>
+          </div>
+          {reverseForensics ? (
+            <ReverseDnsForensicsCard view={reverseForensics} />
+          ) : null}
         </div>
         <div style={styles.viewToggleGroup}>
           <button

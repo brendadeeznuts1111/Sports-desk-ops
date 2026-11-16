@@ -9,13 +9,14 @@ import type {
   MarketFilter,
   PeriodFilter,
   PointBuyPolicy,
+  RegimeFilter,
   SportCode,
   SportFilter,
   SubSportFilter,
   TaxonomyRiskStatus,
 } from "@sportsdesk-ops/contracts/shadow-pricing";
 
-export type CubeTab = "sport" | "subSport" | "period" | "market";
+export type CubeTab = "sport" | "subSport" | "period" | "market" | "regime";
 
 export interface ClientLadderPreset {
   readonly id: string;
@@ -32,6 +33,7 @@ export interface QuickSlicePreset {
   readonly subSport: SubSportFilter;
   readonly period: PeriodFilter;
   readonly market: MarketFilter;
+  readonly regime?: RegimeFilter | undefined;
   readonly cubeTab: CubeTab;
 }
 
@@ -50,6 +52,33 @@ export function formatUsd(val: number): string {
 export function formatCompactLegs(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
+}
+
+/** Share of slice handle staked on point-buy legs (distinct from leg-count share). */
+export function formatBuyHandleSharePct(
+  buyHandleUsd: number,
+  handleUsd: number,
+): string {
+  if (handleUsd <= 0 || buyHandleUsd <= 0) {
+    return "0.0%";
+  }
+  return `${((buyHandleUsd / handleUsd) * 100).toFixed(1)}%`;
+}
+
+export function formatLegsSettledOpen(
+  totalLegs: number,
+  settledLegs: number,
+): {
+  readonly settled: string;
+  readonly open: string;
+  readonly total: string;
+} {
+  const open = Math.max(0, totalLegs - settledLegs);
+  return {
+    total: totalLegs.toLocaleString(),
+    settled: settledLegs.toLocaleString(),
+    open: open.toLocaleString(),
+  };
 }
 
 export const SPORT_ICONS: Readonly<Record<SportCode, string>> = {
@@ -115,6 +144,15 @@ export const QUICK_SLICE_PRESETS: readonly QuickSlicePreset[] = [
     cubeTab: "period",
   },
   {
+    label: "🏈 NFL 1H Pregame",
+    sport: "Football",
+    subSport: "NFL",
+    period: "1h",
+    market: "ALL",
+    regime: "pregame",
+    cubeTab: "period",
+  },
+  {
     label: "🏟️ CFB P0 Spread (Key Leak)",
     sport: "Football",
     subSport: "NCAAF",
@@ -160,6 +198,7 @@ export const QUICK_SLICE_PRESETS: readonly QuickSlicePreset[] = [
     subSport: "ALL",
     period: "game",
     market: "ALL",
+    regime: "live_in_play",
     cubeTab: "subSport",
   },
 ];

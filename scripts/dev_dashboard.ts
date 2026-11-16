@@ -38,6 +38,7 @@ import {
   retryAlert,
 } from "../lib/alerts.ts";
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
+import { buildAutomationsSnapshot } from "../lib/automations_status.ts";
 import {
   benchmarkResolverLatency,
   classifyIpAddress,
@@ -69,6 +70,7 @@ import { executeTerminalQuery } from "../lib/terminal_emulator.ts";
 import indexHtml from "../src/dashboard/index.html";
 import { runBunBuild } from "./build.ts";
 import { computeDashboardDceMatrix } from "./build_dashboard.ts";
+import { runGsliveTicketVerification } from "./verify-gslive-tickets.ts";
 
 export interface DashboardServerDevelopmentOptions {
   readonly hmr?: boolean | undefined;
@@ -291,6 +293,7 @@ export function startDashboardServer(
   const r2PipelineService = createR2PipelineService({
     daemon4020Origin:
       Bun.env.SPORTSDESK_API_ORIGIN ?? DEFAULT_COMPANION_4020_ORIGIN,
+    getAutomationsSnapshot: () => buildAutomationsSnapshot(),
   });
   const { buildLiveWagersPayload, clearCache: clearWagersCache } =
     createDevLiveWagersLoader({
@@ -386,9 +389,11 @@ export function startDashboardServer(
     getPort: () => serverRef?.port ?? port,
   });
 
-  let cachedDceMatrix: Awaited<
-    ReturnType<typeof computeDashboardDceMatrix>
-  > | null = null;
+  let cachedDceMatrixProbe: {
+    readonly targets: Awaited<ReturnType<typeof computeDashboardDceMatrix>>;
+    /** When the probe finished, so a cached re-serve cannot look freshly built. */
+    readonly generatedAt: string;
+  } | null = null;
   let cachedLegacyBundle: CachedLegacyBundle | null = null;
   let inflightLegacyBundle: Promise<CachedLegacyBundle | null> | null = null;
 
@@ -604,6 +609,14 @@ export function startDashboardServer(
       getBetTickerPayload: (filters) => betTickerService.getPayload(filters),
       getR2PipelinePayload: (opts) => r2PipelineService.probeAll(opts),
       getDaemonStatusPayload: () => r2PipelineService.probeDaemon(),
+      getAutomationsPayload: () => buildAutomationsSnapshot(),
+      runGsliveTicketVerify: async (opts) => {
+        const summary = await runGsliveTicketVerification({
+          dryRun: opts?.dryRun ?? true,
+        });
+        r2PipelineService.clearCache();
+        return summary;
+      },
       getAgentDetailPayload: (agentId) =>
         agentDetailService.getAgentDetail(agentId),
       getTiersConfig: async () => {
@@ -621,11 +634,15 @@ export function startDashboardServer(
       runShadowPricing: (params) => runShadowPricingDashboard(params),
       forceShadowFixture: options.forceShadowFixture,
       shadowDbPath: options.shadowDbPath,
-      getBuildMatrix: async () => {
-        if (!cachedDceMatrix) {
-          cachedDceMatrix = await computeDashboardDceMatrix();
+      getBuildMatrix: async (force = false) => {
+        if (force || cachedDceMatrixProbe === null) {
+          const targets = await computeDashboardDceMatrix();
+          cachedDceMatrixProbe = {
+            targets,
+            generatedAt: new Date().toISOString(),
+          };
         }
-        return cachedDceMatrix;
+        return cachedDceMatrixProbe;
       },
       handleMcp: (req: Request) => mcpHandler.handleRequest(req),
     },
@@ -999,7 +1016,7 @@ export function startDashboardServer(
           if (!existsSync(dir)) continue;
           watchers.push(
             watch(dir, { recursive: true }, () => {
-              cachedDceMatrix = null;
+              cachedDceMatrixProbe = null;
               cachedLegacyBundle = null;
               api.publishTopic("dashboard", "reload");
             }),

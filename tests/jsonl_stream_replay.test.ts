@@ -95,6 +95,42 @@ describe("jsonl_stream_replay SSOT", () => {
     expect(fromWhole).toEqual([{ wager: 1 }, { wager: 2 }]);
   });
 
+  test("stray delimiters never replay a record", async () => {
+    // Next-release fix: a value followed by a stray comma/bracket used to report
+    // `read` before the value and could be emitted twice by a streaming caller.
+    const text = '\n\n{"wager":1},]\n{"wager":2}\n';
+    const records: unknown[] = [];
+    const corrupted: number[] = [];
+    const result = await replayHistoricalJsonlStream(
+      new ReadableStream({
+        start(c) {
+          c.enqueue(enc.encode(text));
+          c.close();
+        },
+      }),
+      {
+        onRecord: (value) => {
+          records.push(value);
+        },
+        onCorruptedLine: () => {
+          corrupted.push(1);
+        },
+      },
+    );
+    expect(records).toEqual([{ wager: 1 }, { wager: 2 }]);
+    expect(corrupted).toHaveLength(1);
+    expect(result.corruptedLineSkips).toBe(1);
+    expect(result.recordCount).toBe(2);
+  });
+
+  test("Bun.JSONL.parse / parseChunk handle blank lines and stray delimiters", () => {
+    expect(Bun.JSONL.parse('\n\n{"wager":1},]')).toEqual([{ wager: 1 }]);
+    const chunk = Bun.JSONL.parseChunk('{"wager":1},}');
+    expect(chunk.values).toEqual([{ wager: 1 }]);
+    // `read` must cover the value it returned (never point before it).
+    expect(chunk.read).toBeGreaterThanOrEqual(enc.encode('{"wager":1}').length);
+  });
+
   test("worked example: bet-ticker slab read → parseChunk → file offset", () => {
     const fileBytes = enc.encode('{"wager":10}\n{"wager":11}\nPARTIAL');
     const slab = Bun.allocUnsafe(fileBytes.length);

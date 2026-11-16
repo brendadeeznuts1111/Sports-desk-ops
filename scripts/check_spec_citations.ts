@@ -23,14 +23,12 @@
  * preserved) and rewrites the key in every citing doc. Ambiguous anchors — the literal appears
  * twice — and vanished ones still fail: neither identifies one site, so a rewrite would guess.
  *
- *   bun run scripts/check_spec_citations.ts
- *   bun run scripts/check_spec_citations.ts --sync-anchors
+ *   bun run scripts/run_check_spec_citations.ts
+ *   bun run scripts/run_check_spec_citations.ts --sync-anchors
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-
-const ROOT = resolve(import.meta.dir, "..");
+import { join } from "node:path";
 
 /** Every document whose citations are audited. The ledger's own anchor registry is excluded. */
 export const CITING_DOCS = [
@@ -42,7 +40,7 @@ export const CITING_DOCS = [
 ] as const;
 
 const LEDGER_PATH = "docs/evidence/ledger.json";
-const ANCHORS_KEY = "citationAnchors";
+export const ANCHORS_KEY = "citationAnchors";
 
 export type Citation = {
   readonly file: string;
@@ -426,58 +424,6 @@ export function collectDocCitations(root: string): {
   return { citations, anchors };
 }
 
-function label(citation: Citation): string {
+export function label(citation: Citation): string {
   return `${citation.context}: ${citationKey(citation)}`;
-}
-
-if (import.meta.main) {
-  let { citations, anchors } = collectDocCitations(ROOT);
-  let problems = auditCitations(citations, ROOT, anchors);
-
-  if (process.argv.includes("--sync-anchors")) {
-    const moves = planAnchorSync(citations, ROOT, anchors);
-    if (moves.length > 0) {
-      const changed = applyAnchorSync(moves, ROOT);
-      console.error(
-        `check:spec-citations: --sync-anchors moved ${moves.length} citation(s) across ${changed.length} doc(s)`,
-      );
-      for (const move of moves) {
-        console.error(`  ${move.from} -> ${move.to}`);
-      }
-      ({ citations, anchors } = collectDocCitations(ROOT));
-      problems = auditCitations(citations, ROOT, anchors);
-    }
-  }
-
-  const unused = unusedAnchors(citations, anchors);
-  const external = new Set(
-    citations.filter((c) => c.external).map(citationKey),
-  );
-  const checked = citations.length - citations.filter((c) => c.external).length;
-
-  if (problems.length === 0 && unused.length === 0) {
-    console.log(
-      `check:spec-citations: ok — ${checked} citation(s) across ${CITING_DOCS.length} docs resolve and hold their anchor (${anchors.size} anchors); ${external.size} distinct zip: citation(s) name the external GS extract and are not checked`,
-    );
-    process.exit(0);
-  }
-  if (problems.length > 0) {
-    console.error(
-      `check:spec-citations: ${problems.length}/${checked} citation(s) no longer point at the code they describe`,
-    );
-    const seen = new Set<string>();
-    for (const problem of problems) {
-      const line = `  [${problem.reason}] ${label(problem.citation)} — ${problem.detail}`;
-      if (seen.has(line)) continue;
-      seen.add(line);
-      console.error(line);
-    }
-  }
-  if (unused.length > 0) {
-    console.error(
-      `check:spec-citations: ${unused.length} ${ANCHORS_KEY} entr${unused.length === 1 ? "y is" : "ies are"} cited nowhere; delete or re-point them`,
-    );
-    for (const key of unused) console.error(`  [unused-anchor] ${key}`);
-  }
-  process.exit(1);
 }

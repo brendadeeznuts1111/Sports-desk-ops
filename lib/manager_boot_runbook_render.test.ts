@@ -33,4 +33,16 @@ describe("manager_boot_runbook_render", () => {
       "manager:ingest-hierarchy",
     );
   });
+
+  test("renders encoded OSC-8 hyperlinks for https and local .md paths without spaces breaking file URLs", () => {
+    const out = renderManagerBootRunbookTerminal(
+      "[utils](https://bun.sh/docs) · [notes](./space%20note.md) · [local](./doc with spaces.md)\n",
+      { colors: true },
+    );
+    expect(out).toContain(
+      "\u001b]8;;https://bun.sh/docs\u0007utils\u001b]8;;\u0007",
+    );
+    expect(out).toContain("file://");
+    expect(out).toContain("line=1&column=1");
+  });
 });

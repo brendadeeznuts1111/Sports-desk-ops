@@ -12,6 +12,7 @@ import {
   type DashboardWsTopic,
   type MarketFilter,
   type PeriodFilter,
+  type RegimeFilter,
   type RouterAuditMode,
   type ShadowRepriceMode,
   type SportFilter,
@@ -495,6 +496,7 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
           const subSportParam = url.searchParams.get("subSport");
           const periodParam = url.searchParams.get("period");
           const marketParam = url.searchParams.get("market");
+          const regimeParam = url.searchParams.get("regime");
           const payload = await deps.runShadowPricing({
             dbPath: deps.shadowDbPath,
             forceFixture,
@@ -513,6 +515,7 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
               SubSportFilter | undefined,
             period: (periodParam ?? undefined) as PeriodFilter | undefined,
             market: (marketParam ?? undefined) as MarketFilter | undefined,
+            regime: (regimeParam ?? undefined) as RegimeFilter | undefined,
             routerAuditMode: parseRouterAuditMode(
               url.searchParams.get("routerAudit"),
             ),
@@ -540,6 +543,7 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
             subSport?: SubSportFilter;
             period?: PeriodFilter;
             market?: MarketFilter;
+            regime?: RegimeFilter;
             routerAuditMode?: RouterAuditMode;
             source?: string;
           };
@@ -558,6 +562,7 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
             subSport: body.subSport,
             period: body.period,
             market: body.market,
+            regime: body.regime,
             routerAuditMode: parseRouterAuditMode(body.routerAuditMode),
           });
           return Response.json(payload);
@@ -575,11 +580,12 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
         const denied = await enforceAuth(req);
         if (denied) return denied;
         try {
-          const targets = await deps.getBuildMatrix();
+          const refresh = new URL(req.url).searchParams.get("refresh") === "1";
+          const probe = await deps.getBuildMatrix(refresh);
           return Response.json({
             schemaVersion: 1,
-            targets,
-            generatedAt: new Date().toISOString(),
+            targets: probe.targets,
+            generatedAt: probe.generatedAt,
           });
         } catch (err) {
           return Response.json(
@@ -727,6 +733,56 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
           });
         }
         return Response.json(await deps.getDaemonStatusPayload());
+      },
+    },
+
+    "/api/automations": {
+      GET: async (req: Request): Promise<Response> => {
+        const denied = await enforceAuth(req);
+        if (denied) return denied;
+        if (!deps.getAutomationsPayload) {
+          return Response.json({
+            observedAt: new Date().toISOString(),
+            bridgeRollupUpdatedAt: null,
+            bridgeJobs: [],
+            schedules: [],
+            ticketVerification: null,
+          });
+        }
+        return Response.json(await deps.getAutomationsPayload());
+      },
+    },
+
+    "/api/gslive/verify-tickets": {
+      POST: async (req: Request): Promise<Response> => {
+        const denied = await enforceAuth(req);
+        if (denied) return denied;
+        if (!deps.runGsliveTicketVerify) {
+          return Response.json(
+            { ok: false, error: "GSLive ticket verification not configured" },
+            { status: 503 },
+          );
+        }
+        let dryRun = true;
+        try {
+          const body = (await req.json()) as { dryRun?: unknown };
+          if (typeof body.dryRun === "boolean") {
+            dryRun = body.dryRun;
+          }
+        } catch {
+          // signal-honesty: intentional-empty-json-body-allowed
+        }
+        const summary = await deps.runGsliveTicketVerify({ dryRun });
+        publishTopic(
+          "dashboard",
+          JSON.stringify({
+            type: "topic-event",
+            topic: "dashboard",
+            event: "automations-updated",
+            timestamp: new Date().toISOString(),
+          }),
+        );
+        return Response.json({ ok: true, summary });
       },
     },
   } satisfies Record<string, SimpleMethodHandlers>;

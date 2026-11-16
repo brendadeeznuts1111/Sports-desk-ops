@@ -1,4 +1,4 @@
-# Bun shape contracts — the 92 shapes this repository calls
+# Bun shape contracts — the 93 shapes this repository calls
 
 The single source of truth is layered, and nothing here restates upstream text: **declarations** come from `bun-types@1.4.4` (the surface the reference site renders), **behaviour** from probes against the local `Bun 1.4.4` binary (`tests/bun_baseline.json`), **property attributes** from the pinned Bun commit `38afee6c84`. When they disagree: declarations win on names and signatures, the Bun source wins on attributes, and the measured binary wins on behaviour.
 
@@ -61,8 +61,15 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/fileURLToPath)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/local_path.ts`, `scripts/capture/f402_hierarchy_probe.ts`
+- **Here:** `lib/schema_cli_errors.ts`, `lib/local_path.ts`
 - **Evidence:** `probe:proc.paths`
+
+#### Bun.pathToFileURL
+
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/guides/util/path-to-file-url))
+- **Shape:** value: `function` · writable true · enumerable true
+- **Here:** `src/lib/source_location_url.ts`
+- **Evidence:** `test:tests/bun_url_native_utils.test.ts`
 
 #### Bun.gc
 
@@ -89,14 +96,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/openInEditor)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/schema_cli_errors.ts`
+- **Here:** `lib/schema_cli_errors.ts`, `src/lib/source_location_url.ts`
 - **Evidence:** `probe:proc.paths`
 
 #### Bun.resolveSync
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/resolveSync)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/f402_agent_graph_layouts.ts`, `scripts/module_graph.ts`
+- **Here:** `packages/sportsdesk-ops/src/lib/bun_surface_dts_inventory.ts`, `lib/f402_agent_graph_layouts.ts`
 - **Evidence:** `probe:proc.paths`
 
 #### Bun.sleep
@@ -152,7 +159,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/which)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/agent_env_doctor.ts`, `scripts/dx_workspaces.ts`
+- **Here:** `bin/bun_surface.ts`, `scripts/agent_env_doctor.ts`
 - **Evidence:** `surface:which`, `probe:proc.paths`
 
 #### Bun.write
@@ -394,7 +401,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/S3Client)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (9):** `delete`, `exists`, `file`, `list`, `presign`, `size`, `stat`, `unlink`, `write`
-- **Here:** `bin/bun_surface.ts`, `lib/r2_s3_client.ts`
+- **Here:** `scripts/verify-gslive-tickets.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:S3Client`
 
 #### Bun.s3
@@ -402,7 +409,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/s3#bun-s3client-bun-s3))
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (9):** `delete`, `exists`, `file`, `list`, `presign`, `size`, `stat`, `unlink`, `write`
-- **Here:** `bin/bun_surface.ts`
+- **Here:** `scripts/verify-gslive-tickets.ts`, `src/telemetry/runtime-preflight.ts`
 - **Evidence:** `surface:s3`, `test:tests/bun_s3client_contract.test.ts`
 
 #### Bun.S3File (type)
@@ -476,7 +483,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/secrets)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (3):** `delete`, `get`, `set`
-- **Here:** `scripts/secrets_r2.ts`, `lib/secrets.ts`
+- **Here:** `scripts/secrets_r2.ts`, `scripts/verify-gslive-tickets.ts`
 - **Evidence:** `surface:secrets.get`, `test:tests/bun_capabilities.test.ts`
 
 ## Crypto, hashing and compression
@@ -639,7 +646,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/dns)
 - **Shape:** value: `object` · writable false · enumerable true
 - **Members (21):** snapshot in tests/bun_shape_members.json
-- **Here:** `lib/preflight.ts`, `bin/bun_surface.ts`
+- **Here:** `lib/preflight.ts`, `scripts/verify-gslive-tickets.ts`
 - **Evidence:** `surface:dns.lookup`
 
 #### Bun.fetch
@@ -707,14 +714,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/env)
 - **Shape:** value: `object` · writable false · enumerable true
-- **Here:** `services/sportsdesk_webview_server.ts`, `scripts/probe/parse-tree-only.ts`
+- **Here:** `scripts/verify-gslive-tickets.ts`, `services/sportsdesk_webview_server.ts`
 - **Evidence:** `probe:proc.shell`
 
 #### Bun.revision
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/revision)
 - **Shape:** value: `string` · writable false · enumerable true
-- **Here:** `lib/bun_runtime.ts`, `bin/bun_surface.ts`
+- **Here:** `lib/bun_runtime.ts`, `packages/sportsdesk-ops/src/bin/bun-surface.ts`
 - **Evidence:** `probe:proc.meta`
 
 #### Bun.version
