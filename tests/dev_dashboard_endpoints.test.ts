@@ -12,6 +12,7 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
         ...process.env,
         PORT: String(PORT),
         SPORTSDESK_AUTH_DISABLED: "1",
+        SPORTSDESK_LIVE_WAGERS_JSON: "tests/fixtures/live-wagers.partial.json",
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -114,11 +115,16 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
         wagers: Array<{ ticketId: string; alertTier: string; riskUsd: number }>;
         totalRiskUsd: number;
         autoExecute: boolean;
+        provenance: { kind: string; sourcePath: string | null };
       };
       expect(Array.isArray(data.wagers)).toBe(true);
       expect(data.wagers.length).toBeGreaterThan(0);
       expect(data.totalRiskUsd).toBeGreaterThan(0);
       expect(data.autoExecute).toBe(false);
+      expect(data.provenance.kind).toBe("fixture");
+      expect(data.provenance.sourcePath).toBe(
+        "tests/fixtures/live-wagers.partial.json",
+      );
     });
 
     it("serves live wagers on alias route GET /api/live-wagers", async () => {

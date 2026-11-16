@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Deterministically bootstrap pinned NSH v0.4.0 (commit e626a8dd8f8d8b277b9507cfd5ac74d0e67020f3)
+# Deterministically bootstrap pinned NSH v0.5.0 (commit f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1)
 # into .agents/tools/nsh, verifying SHA-256 archive integrity and exact binary revision.
 set -euo pipefail
 
 ROOT=$(git -C "${BASH_SOURCE%/*}/../.." rev-parse --show-toplevel)
 INSTALL_DIR="${NSH_INSTALL_DIR:-$ROOT/.agents/tools/nsh}"
 
-PINNED_TAG="v0.4.0"
-PINNED_VERSION="0.4.0"
-PINNED_SHORT_SHA="e626a8d"
-LINUX_X86_64_SHA256="8806121aebf40bb51f8fb6aa703722fbb01253f9a435759c18d53beece1ec976"
-MACOS_ARM64_SHA256="f63c3d57c31b28c9b34227aac81f099d1e0e61f1db552a6ec5127d114eaf59cb"
+PINNED_TAG="v0.5.0"
+PINNED_VERSION="0.5.0"
+PINNED_SHORT_SHA="f4d68f7"
+LINUX_X86_64_SHA256="a422bbe5dc2a7ae3ff308ee56e05d73d5becc81f57adf11447fc570dcee65e0f"
+MACOS_ARM64_SHA256="e6722427b391b00cf7ec13137db9366e78d1e7a045f2933cf00b340365309d9d"
 
 fail() {
   echo "[install-nsh] error: $*" >&2

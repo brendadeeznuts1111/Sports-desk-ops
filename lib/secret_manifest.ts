@@ -49,6 +49,7 @@ export const SECRET_MANIFEST: readonly SecretDefinition[] = [
     keychainName: "R2_ACCESS_KEY_ID",
     groups: ["r2"],
     inject: true,
+    aliases: ["AWS_ACCESS_KEY_ID", "S3_ACCESS_KEY_ID"],
     description: "R2 S3-compatible access key id (the S3 SDK fixes the name)",
   },
   {
@@ -56,6 +57,7 @@ export const SECRET_MANIFEST: readonly SecretDefinition[] = [
     keychainName: "R2_SECRET_ACCESS_KEY",
     groups: ["r2"],
     inject: true,
+    aliases: ["AWS_SECRET_ACCESS_KEY", "S3_SECRET_ACCESS_KEY"],
     description: "R2 S3-compatible secret key",
   },
   {
@@ -328,6 +330,8 @@ export function manifestNames(): ReadonlySet<string> {
 export const NON_SECRET_ALLOWLIST: Readonly<Record<string, string>> = {
   ANTIGRAVITY_CONVERSATION_ID:
     "agent session conversation identifier for brain artifact sync",
+  DASH_PREVIEW_TLS_KEY:
+    "filesystem path to the preview's TLS private key (the value is a path, never key material)",
   F402_CUSTOMER_ID: "customer identifier sent in request URLs, not a login",
   F402_GRAPH_ROOT_AGENT_ID: "root node id of the agent tree, a query parameter",
   F402_MASTER_ID:

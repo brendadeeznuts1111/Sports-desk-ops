@@ -334,6 +334,79 @@ function isTransientPutStatus(status: number): boolean {
   );
 }
 
+const EMPTY_SHA256 =
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+export class R2PreconditionFailedError extends Error {
+  readonly status = 412 as const;
+  readonly key: string;
+  constructor(key: string) {
+    super(`R2 PUT ${key} precondition failed (412)`);
+    this.name = "R2PreconditionFailedError";
+    this.key = key;
+  }
+}
+
+async function buildSignedR2Headers(options: {
+  readonly auth: R2S3Auth;
+  readonly method: "PUT" | "HEAD";
+  readonly path: string;
+  readonly host: string;
+  readonly payloadHash: string;
+  readonly headers: Readonly<Record<string, string>>;
+}): Promise<Headers> {
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.[0-9]{3}/g, "");
+  const dateStamp = amzDate.slice(0, 8);
+  const region = options.auth.region ?? "auto";
+  const signingHeaders: Record<string, string> = {
+    ...options.headers,
+    host: options.host,
+    "x-amz-content-sha256": options.payloadHash,
+    "x-amz-date": amzDate,
+  };
+  if (options.auth.sessionToken !== undefined) {
+    signingHeaders["x-amz-security-token"] = options.auth.sessionToken;
+  }
+  const signedHeaderNames = Object.keys(signingHeaders).sort();
+  const canonicalHeaders = signedHeaderNames
+    .map((name) => `${name}:${signingHeaders[name]}\n`)
+    .join("");
+  const signedHeaders = signedHeaderNames.join(";");
+  const canonicalRequest = [
+    options.method,
+    options.path,
+    "",
+    canonicalHeaders,
+    signedHeaders,
+    options.payloadHash,
+  ].join("\n");
+  const scope = `${dateStamp}/${region}/s3/aws4_request`;
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    scope,
+    new Bun.CryptoHasher("sha256").update(canonicalRequest).digest("hex"),
+  ].join("\n");
+  const signing = await signingKey(
+    options.auth.secretAccessKey,
+    dateStamp,
+    region,
+  );
+  const signature = Buffer.from(
+    await hmacSha256(signing, stringToSign),
+  ).toString("hex");
+  const requestHeaders = new Headers();
+  for (const [name, value] of Object.entries(signingHeaders)) {
+    if (name !== "host") requestHeaders.set(name, value);
+  }
+  requestHeaders.set(
+    "authorization",
+    `AWS4-HMAC-SHA256 Credential=${options.auth.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+  );
+  return requestHeaders;
+}
+
 async function putObjectWithMetadata(
   auth: R2S3Auth,
   bucket: string,
@@ -342,15 +415,22 @@ async function putObjectWithMetadata(
   type: string,
   metadata: Readonly<Record<string, string>>,
   retryOptions: {
+    readonly ifMatch?: string;
+    readonly ifNoneMatch?: string;
     readonly retry?: number;
     readonly retryDelayMs?: number;
     readonly fetchImpl?: typeof fetch;
   } = {},
 ): Promise<void> {
+  if (
+    retryOptions.ifMatch !== undefined &&
+    retryOptions.ifNoneMatch !== undefined
+  ) {
+    throw new Error("R2 PUT: ifMatch and ifNoneMatch are mutually exclusive");
+  }
   const endpoint = new URL(auth.endpoint);
   const host = endpoint.host;
   const path = `/${encodeBucket(bucket)}/${key.split("/").map(encodeRfc3986).join("/")}`;
-  const region = auth.region ?? "auto";
   const payloadHash = new Bun.CryptoHasher("sha256")
     .update(payload)
     .digest("hex");
@@ -368,56 +448,33 @@ async function putObjectWithMetadata(
     if (attempt > 0 && baseDelayMs > 0) {
       await Bun.sleep(baseDelayMs * attempt);
     }
-    const now = new Date();
-    const amzDate = now.toISOString().replace(/[:-]|\.[0-9]{3}/g, "");
-    const dateStamp = amzDate.slice(0, 8);
     const headers: Record<string, string> = {
       "content-length": String(payload.byteLength),
       "content-type": type,
-      host,
-      "x-amz-content-sha256": payloadHash,
-      "x-amz-date": amzDate,
     };
-    if (auth.sessionToken !== undefined) {
-      headers["x-amz-security-token"] = auth.sessionToken;
+    if (retryOptions.ifMatch !== undefined) {
+      headers["if-match"] = retryOptions.ifMatch
+        .replace(/[\r\n]+/g, " ")
+        .trim();
+    }
+    if (retryOptions.ifNoneMatch !== undefined) {
+      headers["if-none-match"] = retryOptions.ifNoneMatch
+        .replace(/[\r\n]+/g, " ")
+        .trim();
     }
     for (const [name, value] of Object.entries(metadata)) {
       headers[`x-amz-meta-${name.toLowerCase()}`] = value
         .replace(/[\r\n]+/g, " ")
         .trim();
     }
-    const signedHeaderNames = Object.keys(headers).sort();
-    const canonicalHeaders = signedHeaderNames
-      .map((name) => `${name}:${headers[name]}\n`)
-      .join("");
-    const signedHeaders = signedHeaderNames.join(";");
-    const canonicalRequest = [
-      "PUT",
+    const requestHeaders = await buildSignedR2Headers({
+      auth,
+      method: "PUT",
       path,
-      "",
-      canonicalHeaders,
-      signedHeaders,
+      host,
       payloadHash,
-    ].join("\n");
-    const scope = `${dateStamp}/${region}/s3/aws4_request`;
-    const stringToSign = [
-      "AWS4-HMAC-SHA256",
-      amzDate,
-      scope,
-      new Bun.CryptoHasher("sha256").update(canonicalRequest).digest("hex"),
-    ].join("\n");
-    const signing = await signingKey(auth.secretAccessKey, dateStamp, region);
-    const signature = Buffer.from(
-      await hmacSha256(signing, stringToSign),
-    ).toString("hex");
-    const requestHeaders = new Headers();
-    for (const [name, value] of Object.entries(headers)) {
-      if (name !== "host") requestHeaders.set(name, value);
-    }
-    requestHeaders.set(
-      "authorization",
-      `AWS4-HMAC-SHA256 Credential=${auth.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
-    );
+      headers,
+    });
     let response: Response;
     try {
       response = await doFetch(`${endpoint.origin}${path}`, {
@@ -431,6 +488,9 @@ async function putObjectWithMetadata(
       throw lastError;
     }
     if (response.ok) return;
+    if (response.status === 412) {
+      throw new R2PreconditionFailedError(key);
+    }
     lastError = new Error(`R2 PUT ${key} failed (${response.status})`);
     if (!isTransientPutStatus(response.status) || attempt === maxRetries) {
       throw lastError;
@@ -522,6 +582,14 @@ export class R2S3Client {
   }
 
   /**
+   * Columnar snapshot ingest: stream the object body into one `ArrayBuffer` without a string hop.
+   * Uses `S3File.stream()` (`docs/runtime/s3.mdx#reading-files-from-s3`).
+   */
+  async readArrayBufferFromStream(key: string): Promise<ArrayBuffer> {
+    return Bun.readableStreamToArrayBuffer(this.client.file(key).stream());
+  }
+
+  /**
    * Upload with `x-amz-meta-*` headers. Bun's writer has no metadata option and its
    * presigner cannot sign custom headers, so this signs the exact metadata PUT with
    * Web Crypto (SigV4); plain writes still go through `Bun.S3Client.write`.
@@ -532,6 +600,8 @@ export class R2S3Client {
     options: {
       readonly type?: string;
       readonly metadata?: Readonly<Record<string, string>>;
+      readonly ifMatch?: string;
+      readonly ifNoneMatch?: string;
       readonly retry?: number;
       readonly retryDelayMs?: number;
       readonly fetchImpl?: typeof fetch;
@@ -539,7 +609,13 @@ export class R2S3Client {
   ): Promise<number> {
     const type = options.type ?? "application/octet-stream";
     const metadata = options.metadata ?? {};
-    if (Object.keys(metadata).length === 0) {
+    if (
+      Object.keys(metadata).length === 0 &&
+      options.ifMatch === undefined &&
+      options.ifNoneMatch === undefined &&
+      options.retry === undefined &&
+      options.fetchImpl === undefined
+    ) {
       return this.write(key, data, { type });
     }
     if (this.auth === undefined) {
@@ -554,6 +630,10 @@ export class R2S3Client {
       type,
       metadata,
       {
+        ...(options.ifMatch === undefined ? {} : { ifMatch: options.ifMatch }),
+        ...(options.ifNoneMatch === undefined
+          ? {}
+          : { ifNoneMatch: options.ifNoneMatch }),
         ...(options.retry === undefined ? {} : { retry: options.retry }),
         ...(options.retryDelayMs === undefined
           ? {}
@@ -564,6 +644,40 @@ export class R2S3Client {
       },
     );
     return byteLength(data);
+  }
+
+  /** Read object ETag (returns null if the key does not exist). */
+  async headEtag(
+    key: string,
+    options: { readonly fetchImpl?: typeof fetch } = {},
+  ): Promise<string | null> {
+    if (this.auth === undefined) {
+      if (!(await this.client.exists(key))) return null;
+      const stat = await this.client.stat(key);
+      const etag = stat.etag.trim();
+      return etag === "" ? null : etag;
+    }
+    const endpoint = new URL(this.auth.endpoint);
+    const path = `/${encodeBucket(this.bucket)}/${key.split("/").map(encodeRfc3986).join("/")}`;
+    const requestHeaders = await buildSignedR2Headers({
+      auth: this.auth,
+      method: "HEAD",
+      path,
+      host: endpoint.host,
+      payloadHash: EMPTY_SHA256,
+      headers: {},
+    });
+    const doFetch = options.fetchImpl ?? fetch;
+    const response = await doFetch(`${endpoint.origin}${path}`, {
+      method: "HEAD",
+      headers: requestHeaders,
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new Error(`R2 HEAD ${key} failed (${response.status})`);
+    }
+    const etag = response.headers.get("etag")?.trim() ?? "";
+    return etag === "" ? null : etag;
   }
 
   /** Back-compat alias for callers written before the writeWithMetadata rename. */

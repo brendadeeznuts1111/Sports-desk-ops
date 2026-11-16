@@ -1,6 +1,17 @@
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  BET_TICKER_RENDER_LIMIT,
+  betTickerRowsToTsv,
+  nextBetTickerSort,
+  sortBetTickerRows,
+  type BetTickerSortField,
+  type BetTickerSortSpec,
+} from "../bet_ticker_view.ts";
+import { sanitizeCaptureText } from "../capture_text.ts";
+import { copyText } from "../clipboard.ts";
 import { styles } from "../dashboard_styles.ts";
+import { DASHBOARD_FRESHNESS } from "../config/dashboard.ts";
 import { formatProvenanceBadge } from "../hydration.ts";
 import { getLocalAgentHref, getLocalCustomerHref } from "../links.ts";
 import type { BetTickerApiResponse } from "../types.ts";
@@ -14,6 +25,16 @@ export interface BetTickerTabPanelProps {
   readonly onSelectCustomerById: (customerId: string) => void;
   readonly onInspectPty: (customerId: string) => void;
 }
+
+const SORT_BUTTON: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  padding: 0,
+  margin: 0,
+  color: "inherit",
+  font: "inherit",
+  cursor: "pointer",
+};
 
 function formatUsd(cents: number): string {
   const usd = cents / 100;
@@ -45,6 +66,26 @@ export function BetTickerTabPanel({
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [search, setSearch] = useState<string>("");
   const [showSentinelTwins, setShowSentinelTwins] = useState<boolean>(false);
+  const [sort, setSort] = useState<BetTickerSortSpec | null>({
+    field: "ticket",
+    direction: "desc",
+  });
+  const [showAll, setShowAll] = useState<boolean>(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setShowAll(false);
+  }, [writerFilter, typeFilter, search, showSentinelTwins]);
+
+  useEffect(
+    () => () => {
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+    },
+    [],
+  );
 
   const tickets = useMemo(() => {
     const raw = data?.localFeed.tickets ?? [];
@@ -72,7 +113,42 @@ export function BetTickerTabPanel({
     });
   }, [data, writerFilter, typeFilter, search, showSentinelTwins]);
 
-  const provenanceBadge = data ? formatProvenanceBadge(data.provenance) : null;
+  const sortedTickets = useMemo(
+    () => sortBetTickerRows(tickets, sort),
+    [tickets, sort],
+  );
+  const visibleTickets = showAll
+    ? sortedTickets
+    : sortedTickets.slice(0, BET_TICKER_RENDER_LIMIT);
+
+  const handleSort = (field: BetTickerSortField) => {
+    setSort((prev) => nextBetTickerSort(prev, field));
+  };
+  const sortIndicator = (field: BetTickerSortField): string => {
+    if (sort === null || sort.field !== field) return "";
+    return sort.direction === "asc" ? " ▲" : " ▼";
+  };
+  const ariaSort = (
+    field: BetTickerSortField,
+  ): "ascending" | "descending" | "none" => {
+    if (sort === null || sort.field !== field) return "none";
+    return sort.direction === "asc" ? "ascending" : "descending";
+  };
+
+  const copyRows = () => {
+    if (sortedTickets.length === 0) return;
+    void copyText(betTickerRowsToTsv(sortedTickets)).then((result) => {
+      setCopyState(result.ok ? "copied" : "failed");
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopyState("idle"), 1_800);
+    });
+  };
+
+  const provenanceBadge = data
+    ? formatProvenanceBadge(data.provenance, {
+        staleAfterMinutes: DASHBOARD_FRESHNESS.stale_after_minutes,
+      })
+    : null;
   const bridge = data?.bridge3aR2;
   const pending = data?.pendingGames;
   const health = data?.captureHealth;
@@ -274,10 +350,18 @@ export function BetTickerTabPanel({
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>Channel</th>
-                <th style={styles.th}>Local Tix</th>
-                <th style={styles.th}>Canonical Vol</th>
-                <th style={styles.th}>R2 Bridge 3a</th>
+                <th scope="col" style={styles.th}>
+                  Channel
+                </th>
+                <th scope="col" style={styles.th}>
+                  Local Tix
+                </th>
+                <th scope="col" style={styles.th}>
+                  Canonical Vol
+                </th>
+                <th scope="col" style={styles.th}>
+                  R2 Bridge 3a
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -308,7 +392,7 @@ export function BetTickerTabPanel({
                           color: bucket.isSentinelNoise ? "#fbbf24" : "#f1f5f9",
                         }}
                       >
-                        {bucket.writer}
+                        {sanitizeCaptureText(bucket.writer)}
                       </span>
                       {bucket.isSentinelNoise && (
                         <span
@@ -348,10 +432,18 @@ export function BetTickerTabPanel({
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>Code</th>
-                <th style={styles.th}>Local Tix</th>
-                <th style={styles.th}>Canonical Vol</th>
-                <th style={styles.th}>R2 Bridge 3a</th>
+                <th scope="col" style={styles.th}>
+                  Code
+                </th>
+                <th scope="col" style={styles.th}>
+                  Local Tix
+                </th>
+                <th scope="col" style={styles.th}>
+                  Canonical Vol
+                </th>
+                <th scope="col" style={styles.th}>
+                  R2 Bridge 3a
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -401,6 +493,7 @@ export function BetTickerTabPanel({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search ticket #, customer, sub-agent, channel, or team/pick..."
+            aria-label="Filter Bet-Ticker rows"
           />
         </div>
         <div
@@ -454,32 +547,146 @@ export function BetTickerTabPanel({
       <div style={styles.tableCard}>
         <div style={styles.tableHeader}>
           <h3 style={styles.tableTitle}>
-            🎟️ Bet-Ticker Stream ({tickets.length} rows shown)
+            🎟️ Bet-Ticker Stream
+            <span
+              data-bet-ticker-count="true"
+              style={{
+                marginLeft: "8px",
+                fontSize: "11px",
+                fontWeight: 400,
+                color: "#64748b",
+              }}
+            >
+              Showing {visibleTickets.length} of {sortedTickets.length} filtered
+              · {data?.localFeed.rawRowCount ?? 0} captured
+            </span>
           </h3>
-          <span style={styles.kpiSub}>
-            autoExecute: false · Sentinel `ALERT`/`BLOCKED` stakes excluded from
-            book volume
-          </span>
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <span style={styles.kpiSub}>
+              autoExecute: false · Sentinel `ALERT`/`BLOCKED` stakes excluded
+              from book volume
+            </span>
+            <button
+              type="button"
+              data-bet-ticker-copy-rows="true"
+              onClick={copyRows}
+              disabled={sortedTickets.length === 0}
+              title={`Copy all ${sortedTickets.length} filtered rows as TSV (the export is not capped by the ${visibleTickets.length}-row page)`}
+              style={{
+                padding: "4px 9px",
+                borderRadius: "6px",
+                fontSize: "11px",
+                fontWeight: 600,
+                backgroundColor: "rgba(34, 197, 94, 0.12)",
+                border: "1px solid rgba(34, 197, 94, 0.38)",
+                color: sortedTickets.length === 0 ? "#475569" : "#4ade80",
+                cursor: sortedTickets.length === 0 ? "default" : "pointer",
+              }}
+            >
+              {copyState === "copied"
+                ? "✓ Copied"
+                : copyState === "failed"
+                  ? "⚠ Copy blocked"
+                  : `⧉ Copy rows (${sortedTickets.length})`}
+            </button>
+          </div>
         </div>
         <div style={{ overflowX: "auto" }}>
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>Ticket</th>
-                <th style={styles.th}>Channel / Type</th>
-                <th style={styles.th}>Customer</th>
-                <th style={styles.th}>Sub-Agent</th>
-                <th style={styles.th}>Selection</th>
-                <th style={styles.th}>Wagered → Vol</th>
-                <th style={styles.th}>To Win</th>
-                <th style={styles.th}>Flags / Actions</th>
+                <th
+                  scope="col"
+                  style={styles.th}
+                  aria-sort={ariaSort("ticket")}
+                >
+                  <button
+                    type="button"
+                    data-bet-ticker-sort="ticket"
+                    onClick={() => handleSort("ticket")}
+                    style={SORT_BUTTON}
+                    title="Sort by ticket number"
+                  >
+                    Ticket{sortIndicator("ticket")}
+                  </button>
+                </th>
+                <th
+                  scope="col"
+                  style={styles.th}
+                  title="Channel family from the captured TicketWriter"
+                >
+                  Channel
+                </th>
+                <th
+                  scope="col"
+                  style={styles.th}
+                  title="Wager type code and label from the ticket"
+                >
+                  Type
+                </th>
+                <th scope="col" style={styles.th}>
+                  Customer
+                </th>
+                <th scope="col" style={styles.th}>
+                  Sub-Agent
+                </th>
+                <th
+                  scope="col"
+                  style={styles.th}
+                  title="Sport and leg count from the captured ticket"
+                >
+                  Sport
+                </th>
+                <th
+                  scope="col"
+                  style={styles.th}
+                  title="Pick, line and price for the ticket"
+                >
+                  Selection
+                </th>
+                <th
+                  scope="col"
+                  style={styles.th}
+                  aria-sort={ariaSort("wagered")}
+                >
+                  <button
+                    type="button"
+                    data-bet-ticker-sort="wagered"
+                    onClick={() => handleSort("wagered")}
+                    style={SORT_BUTTON}
+                    title="Sort by amount wagered"
+                  >
+                    Wagered → Vol{sortIndicator("wagered")}
+                  </button>
+                </th>
+                <th scope="col" style={styles.th} aria-sort={ariaSort("toWin")}>
+                  <button
+                    type="button"
+                    data-bet-ticker-sort="toWin"
+                    onClick={() => handleSort("toWin")}
+                    style={SORT_BUTTON}
+                    title="Sort by amount to win"
+                  >
+                    To Win{sortIndicator("toWin")}
+                  </button>
+                </th>
+                <th scope="col" style={styles.th}>
+                  Flags / Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {tickets.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={10}
                     style={{
                       ...styles.td,
                       textAlign: "center",
@@ -491,7 +698,7 @@ export function BetTickerTabPanel({
                   </td>
                 </tr>
               ) : (
-                tickets.slice(0, 120).map((t) => (
+                visibleTickets.map((t) => (
                   <tr key={`${t.ticketId}-${t.ticketWriter}`}>
                     <td style={styles.td}>
                       <div style={{ fontWeight: 700, fontFamily: "monospace" }}>
@@ -499,7 +706,7 @@ export function BetTickerTabPanel({
                       </div>
                       <div style={styles.custSub}>{t.insertedAt ?? "—"}</div>
                     </td>
-                    <td style={styles.td}>
+                    <td style={styles.td} data-bet-ticker-channel={t.ticketId}>
                       <span
                         style={{
                           padding: "2px 6px",
@@ -512,11 +719,8 @@ export function BetTickerTabPanel({
                           color: t.isSentinelNoise ? "#fbbf24" : "#38bdf8",
                         }}
                       >
-                        {t.ticketWriter}
-                      </span>{" "}
-                      <code style={{ fontSize: "11px", color: "#cbd5e1" }}>
-                        {t.wagerType}
-                      </code>
+                        {sanitizeCaptureText(t.ticketWriter)}
+                      </span>
                       {t.live && (
                         <span
                           style={{
@@ -529,6 +733,12 @@ export function BetTickerTabPanel({
                           LIVE
                         </span>
                       )}
+                    </td>
+                    <td style={styles.td} data-bet-ticker-type={t.ticketId}>
+                      <code style={{ fontSize: "11px", color: "#cbd5e1" }}>
+                        {t.wagerType}
+                      </code>
+                      <div style={styles.custSub}>{t.wagerTypeLabel}</div>
                     </td>
                     <td style={styles.td}>
                       <div
@@ -586,11 +796,17 @@ export function BetTickerTabPanel({
                       </a>
                       <div style={styles.custSub}>M: {t.masterAgent}</div>
                     </td>
-                    <td style={styles.td}>
-                      <div style={{ fontWeight: 600 }}>
-                        {t.sport} · {t.legCount}L
+                    <td style={styles.td} data-bet-ticker-sport={t.ticketId}>
+                      <div style={{ fontWeight: 600 }}>{t.sport || "—"}</div>
+                      <div style={styles.custSub}>{t.legCount}L</div>
+                    </td>
+                    <td
+                      style={styles.td}
+                      data-bet-ticker-selection={t.ticketId}
+                    >
+                      <div style={styles.custSub}>
+                        {sanitizeCaptureText(t.selection)}
                       </div>
-                      <div style={styles.custSub}>{t.selection}</div>
                     </td>
                     <td style={styles.td}>
                       <div>{formatUsd(t.amountWageredCents)}</div>
@@ -649,6 +865,41 @@ export function BetTickerTabPanel({
             </tbody>
           </table>
         </div>
+        {sortedTickets.length > BET_TICKER_RENDER_LIMIT || showAll ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap",
+              padding: "8px 14px",
+              borderTop: "1px solid #1e293b",
+              fontSize: "11px",
+              color: "#94a3b8",
+            }}
+          >
+            <span>
+              Rendered {visibleTickets.length} of {sortedTickets.length}{" "}
+              filtered rows
+              {showAll ? " (all)" : ` (page limit ${BET_TICKER_RENDER_LIMIT})`}
+            </span>
+            <button
+              type="button"
+              data-bet-ticker-show-all={showAll ? "collapse" : "expand"}
+              onClick={() => setShowAll((prev) => !prev)}
+              style={{
+                ...styles.actionBtn,
+                padding: "3px 9px",
+                fontSize: "11px",
+              }}
+            >
+              {showAll
+                ? `Collapse to first ${BET_TICKER_RENDER_LIMIT} rows`
+                : `Show all ${sortedTickets.length} rows`}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

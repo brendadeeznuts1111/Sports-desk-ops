@@ -1,10 +1,13 @@
 import type {
   AgentDetailApiResponse,
+  AutomationScheduleSummary,
+  AutomationsSnapshot,
   BetTickerApiResponse,
   BetTickerBridge3aSnapshot,
   BetTickerChannelBucket,
   BetTickerTicketRow,
   BetTickerTypeBucket,
+  BridgeJobStatusSummary,
   CustomersApiResponse,
   CustomersCohortsSummary,
   Daemon4020State,
@@ -16,17 +19,23 @@ import type {
   R2PipelineApiResponse,
   R2SinkDetail,
   SlabPolicySummary,
+  TicketVerificationMode,
+  TicketVerificationSummary,
+  WagerChannel,
   WagerTier,
   WagersWireContractSummary,
 } from "@sportsdesk-ops/contracts";
 
 export type {
   AgentDetailApiResponse,
+  AutomationScheduleSummary,
+  AutomationsSnapshot,
   BetTickerApiResponse,
   BetTickerBridge3aSnapshot,
   BetTickerChannelBucket,
   BetTickerTicketRow,
   BetTickerTypeBucket,
+  BridgeJobStatusSummary,
   CustomersApiResponse,
   CustomersCohortsSummary,
   Daemon4020State,
@@ -37,8 +46,10 @@ export type {
   LiveWagersApiResponse,
   R2PipelineApiResponse,
   R2SinkDetail,
-  WagersWireContractSummary,
   SlabPolicySummary,
+  TicketVerificationMode,
+  TicketVerificationSummary,
+  WagersWireContractSummary,
 };
 
 export interface DashboardData {
@@ -141,6 +152,15 @@ export interface ShowcaseCustomer {
   readonly action: string;
   readonly ipAddress: string;
   readonly portalReconciliation?: CustomerPortalReconciliation | undefined;
+  /** Fields the customer book did not carry; set by profile_rows, never guessed. */
+  readonly unknown?: readonly string[] | undefined;
+  /** Where the row came from; every row the Profiles tab shows is cohort data, not a live book fetch. */
+  readonly source?:
+    "book" | "fixture" | "backtest" | "rankings" | "live-open" | undefined;
+  /** Human tier label when the API carried one (30d rankings). */
+  readonly tierLabel?: string | undefined;
+  /** Open risk in USD when synthesized from the live wager tape (`?matrix=1` overlay). */
+  readonly openRiskUsd?: number | undefined;
 }
 
 export interface RankedPlayer30d {
@@ -176,7 +196,11 @@ export interface LiveWager {
   readonly agentId: string;
   readonly masterAgent: string;
   readonly ticketWriter?: string | undefined;
+  /** Channel family derived from `ticketWriter` (shared vocabulary with ingest). */
+  readonly writer?: WagerChannel | undefined;
   readonly sport: string;
+  /** League / sub-sport when the source carries it; null when unknown. */
+  readonly subSport?: string | null | undefined;
   readonly betType: string;
   readonly event: string;
   readonly selection: string;
@@ -185,7 +209,8 @@ export interface LiveWager {
   readonly riskUsd: number;
   readonly volumeUsd?: number | undefined;
   readonly toWinUsd: number;
-  readonly clvCents: number;
+  /** Real CLV in cents, or null when no closing-line comparison exists. */
+  readonly clvCents: number | null;
   readonly vip?: boolean | undefined;
   readonly alertTier: WagerTier;
   readonly alertBadge: string;
@@ -461,6 +486,12 @@ export interface TerminalHistoryEntry {
   readonly exitCode: number;
   readonly durationMs: number;
   readonly timestamp: number;
+  /**
+   * True for the seeded welcome buffer, which never executed. A real run can
+   * legitimately report `durationMs: 0` (sub-millisecond command), so run
+   * statistics must not infer "did not execute" from the duration.
+   */
+  readonly synthetic?: boolean;
 }
 
 export interface TierSwatchStyle {

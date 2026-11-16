@@ -70,6 +70,11 @@ export function parseDataWindowEndMs(value: unknown): number | null {
       return window.to < 1e12 ? window.to * 1000 : window.to;
     }
   }
+  const maxEpochMs =
+    value.data_window_max_epoch_ms ?? value.dataWindowMaxEpochMs;
+  if (typeof maxEpochMs === "number" && Number.isFinite(maxEpochMs)) {
+    return maxEpochMs;
+  }
   const generatedAt = value.generatedAt ?? value.capturedAt;
   if (typeof generatedAt === "string" && generatedAt.trim() !== "") {
     const ms = Date.parse(generatedAt);

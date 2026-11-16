@@ -187,6 +187,52 @@ export function summarizePendingBets(pendingBets) {
   };
 }
 
+/**
+ * Map a `/api/live-wagers` row into the feed tick shape for preview tables and the tape.
+ * Money stays off the wire; description is legs-only.
+ */
+export function liveWagerToTickPreview(wager) {
+  if (!isRecord(wager)) return null;
+  const legs = Array.isArray(wager.legs) ? wager.legs : [];
+  const shortDesc =
+    legs.length === 0
+      ? ""
+      : legs
+          .map(function (leg) {
+            return isRecord(leg)
+              ? asString(leg.raw) || asString(leg.pick) || ""
+              : "";
+          })
+          .filter(Boolean)
+          .join(" · ");
+  return {
+    insertedAt: asString(wager.insertedAt),
+    login: asString(wager.login),
+    agentLogin: asString(wager.agentLogin),
+    agentId: asString(wager.agentId),
+    ticketWriter: asString(wager.ticketWriter),
+    wagerNumber: String(wager.wagerNumber ?? ""),
+    shortDesc,
+  };
+}
+
+/** Operator-facing label for the tick panel when rows come from `/api/live-wagers`. */
+export function describeLiveWagersTickerSource({
+  servedFrom,
+  live,
+  freshness,
+} = {}) {
+  const parts = ["ticker: /api/live-wagers"];
+  if (servedFrom) parts.push(String(servedFrom));
+  if (live && typeof live === "object" && live.status) {
+    parts.push("live " + String(live.status));
+  }
+  if (freshness && typeof freshness === "object" && freshness.stale === true) {
+    parts.push("capture stale");
+  }
+  return parts.join(" · ");
+}
+
 /** One feed tick row (F402 ticker) as a tape entry; identity + timing only. */
 export function normalizeTickerRow(tick, fallbackSeq = 0) {
   if (!isRecord(tick)) return null;
@@ -393,6 +439,77 @@ export function resolvePollerState({
     };
   }
   return resolveLiveMode({ wsState, feedAgeMs, feedDataMode });
+}
+
+/** Same stale cutoff as {@link resolveLiveMode} SNAPSHOT (5 minutes). */
+export const GRAPH_FEED_POLL_STALE_MS = 300_000;
+
+/**
+ * Where the graph page is hosted: static Pages (committed feed file) or the ops daemon
+ * (API + stream routes).
+ *
+ * @typedef {{ kind: "daemon" | "static_pages" }} GraphHostEdge
+ */
+
+/**
+ * Resolve host edge from probe inputs. Policy: operator token ⇒ daemon; non-loopback without
+ * token ⇒ static; loopback ⇒ HEAD `/api/graph-feed` result (`feedHeadOk`).
+ *
+ * @param {object} [input]
+ * @param {boolean} [input.hasAdminToken]
+ * @param {boolean} [input.loopback]
+ * @param {boolean} [input.feedHeadOk]
+ * @param {boolean} [input.fetchAvailable]
+ * @returns {GraphHostEdge}
+ */
+export function resolveGraphHostEdge({
+  hasAdminToken = false,
+  loopback = false,
+  feedHeadOk = false,
+  fetchAvailable = true,
+} = {}) {
+  if (hasAdminToken) return { kind: "daemon" };
+  if (!loopback) return { kind: "static_pages" };
+  if (!fetchAvailable) return { kind: "static_pages" };
+  return feedHeadOk ? { kind: "daemon" } : { kind: "static_pages" };
+}
+
+/** @param {GraphHostEdge | null | undefined} edge */
+export function graphHostEdgeIsDaemon(edge) {
+  return edge?.kind === "daemon";
+}
+
+/**
+ * Poll URL for the graph feed: daemon serves `/api/graph-feed`; the static Pages edge uses
+ * the committed sibling file.
+ */
+export function resolveGraphFeedPollUrl({
+  daemonFeedReachable,
+  hostEdge,
+} = {}) {
+  const daemon = hostEdge
+    ? graphHostEdgeIsDaemon(hostEdge)
+    : daemonFeedReachable === true;
+  return daemon ? "/api/graph-feed" : "./graph-live-feed.json";
+}
+
+/** SSE fallback copy when the summary stream is unavailable. */
+export function graphStreamPollingFallbackTitle(hostEdge) {
+  return graphHostEdgeIsDaemon(hostEdge)
+    ? "SSE unavailable — falling back to the 15s /api/graph-feed poll"
+    : "No stream on this edge — falling back to the 15s graph-live-feed.json poll";
+}
+
+/**
+ * One-line operator hint when the feed is fixture-backed or older than the stale threshold.
+ */
+export function pollerRefreshHint({ feedDataMode, feedAgeMs } = {}) {
+  const mode = String(feedDataMode ?? "").toUpperCase();
+  const hasAge = typeof feedAgeMs === "number" && Number.isFinite(feedAgeMs);
+  const stale = hasAge && feedAgeMs > GRAPH_FEED_POLL_STALE_MS;
+  const fixture = mode === "FIXTURE";
+  if (!fixture && !stale) return "";
+  return "refresh: bun run graph:poll (live session when not FIXTURE)";
 }
 
 /**

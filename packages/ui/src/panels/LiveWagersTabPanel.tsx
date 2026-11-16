@@ -1,10 +1,30 @@
 import type React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  PARTNER_118_CHANNELS,
+  WAGER_CHANNEL_LABELS,
+  wagerChannelOf,
+  type WagerChannel,
+} from "@sportsdesk-ops/contracts";
 import { styles } from "../dashboard_styles.ts";
 import {
+  buildGsliveEventLog,
+  buildGsliveGameLog,
+  gameKeyOf,
+} from "../gslive_game_log.ts";
+import { GsliveGameLogSection } from "./GsliveGameLogSection.tsx";
+import { findAlertForWager } from "../ticket_inspector.ts";
+import { sanitizeCaptureText } from "../capture_text.ts";
+import { formatWagerSelection } from "../wager_display.ts";
+import { TicketInspectorPanel } from "./TicketInspectorPanel.tsx";
+import {
   formatProvenanceBadge,
-  SHOWCASE_WAGERS_PROVENANCE,
+  PENDING_WAGERS_PROVENANCE,
 } from "../hydration.ts";
-import { DASHBOARD_THRESHOLDS } from "../config/dashboard.ts";
+import {
+  DASHBOARD_FRESHNESS,
+  DASHBOARD_THRESHOLDS,
+} from "../config/dashboard.ts";
 import {
   clvEdgeTone,
   WAGER_ALERT_TIERS,
@@ -17,9 +37,9 @@ import {
   WAGERS_THRESHOLDS,
 } from "../config/wagers.ts";
 import { getLocalAgentHref } from "../links.ts";
-import { SAMPLE_LIVE_WAGERS } from "../showcase_data.ts";
 import { WireContractChip } from "./WireContractChip.tsx";
 import type {
+  DashboardAlertRecord,
   DashboardSourceProvenance,
   LiveWager,
   TierStyleConfig,
@@ -32,6 +52,12 @@ export interface LiveWagersTabPanelProps {
   readonly wagers?: readonly LiveWager[] | undefined;
   readonly provenance?: DashboardSourceProvenance | undefined;
   readonly wagersError?: string | null | undefined;
+  /** Epoch ms of the last successful wager fetch, for the stream status line. */
+  readonly wagersLastUpdatedAt?: number | null | undefined;
+  /** Ticket ids that arrived in the latest refresh (highlighted, then cleared by the caller). */
+  readonly newTicketIds?: ReadonlySet<string> | undefined;
+  /** WebSocket state; false means the stream is on the polling fallback. */
+  readonly streamingConnected?: boolean | undefined;
   readonly onRefreshWagers?: (() => void) | undefined;
   readonly wagerSearch: string;
   readonly onWagerSearchChange: (value: string) => void;
@@ -39,6 +65,9 @@ export interface LiveWagersTabPanelProps {
   readonly onWagerSportFilterChange: (sport: string) => void;
   readonly wagerAlertFilter: string;
   readonly onWagerAlertFilterChange: (tier: string) => void;
+  /** Channel split: ALL, GSLIVE, GSBUILDER, INTERNET (case-insensitive). */
+  readonly wagerChannelFilter?: string | undefined;
+  readonly onWagerChannelFilterChange?: ((channel: string) => void) | undefined;
   readonly wagerTypeFilter: string;
   readonly onWagerTypeFilterChange: (betType: string) => void;
   readonly wagerSortField: WagerSortField;
@@ -55,7 +84,9 @@ export interface LiveWagersTabPanelProps {
   readonly slabPolicy?: SlabPolicySummary | null | undefined;
   readonly onSelectCustomerById: (customerId: string) => void;
   readonly onInspectPty: (customerId: string) => void;
+  readonly onRunPtyCommand?: ((command: string) => void) | undefined;
   readonly onSelectAgent?: ((agentId: string) => void) | undefined;
+  readonly alertRecords?: readonly DashboardAlertRecord[] | undefined;
 }
 
 // Filter vocabulary and severity ranks are inlined from
@@ -69,13 +100,105 @@ const ALERT_PILLS = [
 ];
 const TIER_ORDER = WAGER_TIER_RANK;
 
+const CHANNEL_PILLS: readonly {
+  readonly id: string;
+  readonly label: string;
+}[] = [
+  { id: "ALL", label: "All Channels" },
+  { id: "GSLIVE", label: "🔴 GSLIVE" },
+  { id: "GSBUILDER", label: "🧩 GS Builder" },
+  { id: "INTERNET", label: "🌐 Internet" },
+];
+
+/** Channel of a row: the hydrated family when present, else the writer string. */
+function channelOfWager(w: LiveWager): WagerChannel {
+  return w.writer ?? wagerChannelOf(w.ticketWriter);
+}
+
+interface ChannelProfile {
+  readonly channel: WagerChannel;
+  readonly label: string;
+  readonly tickets: number;
+  readonly riskUsd: number;
+  readonly toWinUsd: number;
+  readonly avgTicketUsd: number;
+  readonly liveTickets: number;
+  readonly topCustomerId: string | null;
+  readonly topCustomerRiskUsd: number;
+}
+
+function profileChannels(
+  wagers: readonly LiveWager[],
+  channels: readonly WagerChannel[],
+): ChannelProfile[] {
+  return channels.map((channel) => {
+    const rows = wagers.filter((w) => channelOfWager(w) === channel);
+    const byCustomer = new Map<string, number>();
+    let riskUsd = 0;
+    let toWinUsd = 0;
+    let liveTickets = 0;
+    for (const w of rows) {
+      riskUsd += w.riskUsd;
+      toWinUsd += w.toWinUsd;
+      if (
+        w.alertTier === "LATENCY" ||
+        /in-play|live|halftime/i.test(w.selection)
+      ) {
+        liveTickets += 1;
+      }
+      byCustomer.set(
+        w.customerId,
+        (byCustomer.get(w.customerId) ?? 0) + w.riskUsd,
+      );
+    }
+    let topCustomerId: string | null = null;
+    let topCustomerRiskUsd = 0;
+    for (const [id, risk] of byCustomer) {
+      if (risk > topCustomerRiskUsd) {
+        topCustomerId = id;
+        topCustomerRiskUsd = risk;
+      }
+    }
+    return {
+      channel,
+      label: WAGER_CHANNEL_LABELS[channel],
+      tickets: rows.length,
+      riskUsd,
+      toWinUsd,
+      avgTicketUsd: rows.length > 0 ? Math.round(riskUsd / rows.length) : 0,
+      liveTickets,
+      topCustomerId,
+      topCustomerRiskUsd,
+    };
+  });
+}
+
 /** Stake emphasis is owned by `dashboard.toml`, not duplicated in wagers.toml. */
 const HIGH_RISK_WAGER_USD = DASHBOARD_THRESHOLDS.high_risk_wager_usd;
 
+function describeEmptyWagers(
+  loadedCount: number,
+  provenance: DashboardSourceProvenance,
+): string {
+  const endpoint = provenance.sourcePath ?? "/api/wagers";
+  if (loadedCount > 0) return "No wagers match the current filters.";
+  switch (provenance.kind) {
+    case "pending":
+      return `Waiting for GET ${endpoint}…`;
+    case "unavailable":
+      return `Unavailable — ${endpoint}: ${provenance.label}`;
+    default:
+      return `${provenance.label} returned no wagers (${endpoint}).`;
+  }
+}
+
 export function LiveWagersTabPanel({
-  wagers = SAMPLE_LIVE_WAGERS,
-  provenance = SHOWCASE_WAGERS_PROVENANCE,
+  wagers = [],
+  provenance = PENDING_WAGERS_PROVENANCE,
   wagersError = null,
+  wagersLastUpdatedAt = null,
+  newTicketIds,
+  streamingConnected,
   onRefreshWagers,
   wagerSearch,
   onWagerSearchChange,
@@ -83,6 +206,8 @@ export function LiveWagersTabPanel({
   onWagerSportFilterChange,
   wagerAlertFilter,
   onWagerAlertFilterChange,
+  wagerChannelFilter = "ALL",
+  onWagerChannelFilterChange = () => {},
   wagerTypeFilter,
   onWagerTypeFilterChange,
   wagerSortField,
@@ -97,9 +222,73 @@ export function LiveWagersTabPanel({
   slabPolicy = null,
   onSelectCustomerById,
   onInspectPty,
+  onRunPtyCommand,
   onSelectAgent,
+  alertRecords = [],
 }: LiveWagersTabPanelProps): React.ReactElement {
+  const [selectedGame, setSelectedGame] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [frozenWagers, setFrozenWagers] = useState<readonly LiveWager[] | null>(
+    null,
+  );
+  const [pendingNew, setPendingNew] = useState(0);
+  const seenTicketIdsRef = useRef<Set<string>>(new Set());
+  const isGsliveScope = wagerChannelFilter.toUpperCase() === "GSLIVE";
+
+  const inspectorRelatedWagers = useMemo(() => {
+    if (selectedWager === null) {
+      return [];
+    }
+    return wagers
+      .filter(
+        (w) =>
+          w.customerId === selectedWager.customerId &&
+          w.ticketId !== selectedWager.ticketId,
+      )
+      .slice(0, 8);
+  }, [wagers, selectedWager]);
+
+  const inspectorMatchedAlert = useMemo(() => {
+    if (selectedWager === null) {
+      return null;
+    }
+    return findAlertForWager(alertRecords, selectedWager);
+  }, [alertRecords, selectedWager]);
+
+  // A game selection belongs to the GSLIVE scope; leaving it must not silently keep
+  // filtering another channel's table.
+  useEffect(() => {
+    setSelectedGame(null);
+  }, [wagerChannelFilter]);
+
   const activeWagers = wagers;
+  // Pause freezes the table only; channel profiles and the GSLIVE logs stay live.
+  const tableWagers =
+    paused && frozenWagers !== null ? frozenWagers : activeWagers;
+
+  useEffect(() => {
+    const ids = new Set(wagers.map((w) => w.ticketId));
+    if (paused) {
+      let added = 0;
+      for (const id of ids) {
+        if (!seenTicketIdsRef.current.has(id)) added += 1;
+      }
+      if (added > 0) setPendingNew((count) => count + added);
+    }
+    seenTicketIdsRef.current = ids;
+  }, [wagers, paused]);
+
+  const toggleWagersPause = () => {
+    if (paused) {
+      setPaused(false);
+      setFrozenWagers(null);
+      setPendingNew(0);
+      return;
+    }
+    setPaused(true);
+    setFrozenWagers(activeWagers);
+    setPendingNew(0);
+  };
   const activeProvenance: DashboardSourceProvenance = wagersError
     ? {
         kind: "unavailable",
@@ -108,24 +297,59 @@ export function LiveWagersTabPanel({
         observedAt: provenance.observedAt,
       }
     : provenance;
-  const provenanceBadge = formatProvenanceBadge(activeProvenance);
+  const provenanceBadge = formatProvenanceBadge(activeProvenance, {
+    staleAfterMinutes: DASHBOARD_FRESHNESS.stale_after_minutes,
+  });
 
   const criticalSteamCount = activeWagers.filter(
     (w) => w.alertTier === "CRITICAL" || w.alertTier === "STEAM",
   ).length;
   const totalRiskUsd = activeWagers.reduce((acc, w) => acc + w.riskUsd, 0);
   const totalToWinUsd = activeWagers.reduce((acc, w) => acc + w.toWinUsd, 0);
+  // Partner 118 split is computed over the whole capture, not the filtered slice, so the
+  // two channel profiles stay comparable while an operator narrows the table.
+  const partner118Profiles = profileChannels(
+    activeWagers,
+    PARTNER_118_CHANNELS,
+  );
+  const nonPartnerTicketCount =
+    activeWagers.length -
+    partner118Profiles.reduce((acc, profile) => acc + profile.tickets, 0);
+  // Game/event logs only exist for the GSLIVE scope; deriving them elsewhere would show
+  // an empty section on every channel.
+  const gsliveGames = isGsliveScope ? buildGsliveGameLog(activeWagers) : [];
+  const gsliveEvents = isGsliveScope
+    ? buildGsliveEventLog(activeWagers, selectedGame)
+    : [];
 
   const baseSportIds = new Set(SPORT_PILLS.map((p) => p.id.toUpperCase()));
   const extraSportPills: Array<{ id: string; label: string }> = [];
   for (const w of activeWagers) {
-    const up = w.sport.toUpperCase();
-    if (up && !baseSportIds.has(up)) {
-      baseSportIds.add(up);
-      extraSportPills.push({ id: up, label: up });
+    for (const value of [w.sport, w.subSport ?? ""]) {
+      const up = value.toUpperCase();
+      if (up && !baseSportIds.has(up)) {
+        baseSportIds.add(up);
+        extraSportPills.push({ id: up, label: up });
+      }
     }
   }
-  const sportPills = [...SPORT_PILLS, ...extraSportPills];
+  const availableSportIds = new Set<string>();
+  for (const w of activeWagers) {
+    for (const value of [w.sport, w.subSport ?? ""]) {
+      const up = value.toUpperCase();
+      if (up !== "") availableSportIds.add(up);
+    }
+  }
+  // Keep only sport/league pills that can match a row (plus All); a league pill with no
+  // subsport data would filter the table to zero rows.
+  const sportPills = [
+    ...SPORT_PILLS.filter(
+      (pill) =>
+        pill.id.toUpperCase() === "ALL" ||
+        availableSportIds.has(pill.id.toUpperCase()),
+    ),
+    ...extraSportPills,
+  ];
 
   const baseTypeIds = new Set(BET_TYPE_PILLS.map((p) => p.id.toUpperCase()));
   const extraTypePills: Array<{ id: string; label: string }> = [];
@@ -138,7 +362,7 @@ export function LiveWagersTabPanel({
   }
   const betTypePills = [...BET_TYPE_PILLS, ...extraTypePills];
 
-  const filteredWagers = activeWagers
+  const filteredWagers = tableWagers
     .filter((w) => {
       const q = wagerSearch.trim().toLowerCase();
       const matchesSearch =
@@ -156,12 +380,25 @@ export function LiveWagersTabPanel({
             /in-play|live|halftime/i.test(w.alertBadge) ||
             w.alertTier === "LATENCY"));
       if (!matchesSearch) return false;
+      if (wagerSportFilter !== "ALL") {
+        const sportFilter = wagerSportFilter.toUpperCase();
+        const subSport = (w.subSport ?? "").toUpperCase();
+        if (w.sport.toUpperCase() !== sportFilter && subSport !== sportFilter) {
+          return false;
+        }
+      }
+      if (wagerAlertFilter !== "ALL" && w.alertTier !== wagerAlertFilter)
+        return false;
       if (
-        wagerSportFilter !== "ALL" &&
-        w.sport.toUpperCase() !== wagerSportFilter.toUpperCase()
+        wagerChannelFilter !== "ALL" &&
+        channelOfWager(w).toUpperCase() !== wagerChannelFilter.toUpperCase()
       )
         return false;
-      if (wagerAlertFilter !== "ALL" && w.alertTier !== wagerAlertFilter)
+      if (
+        isGsliveScope &&
+        selectedGame !== null &&
+        gameKeyOf(w) !== selectedGame
+      )
         return false;
       if (
         wagerTypeFilter !== "ALL" &&
@@ -179,7 +416,13 @@ export function LiveWagersTabPanel({
       } else if (wagerSortField === "toWinUsd") {
         cmp = a.toWinUsd - b.toWinUsd;
       } else if (wagerSortField === "clvCents") {
-        cmp = a.clvCents - b.clvCents;
+        // Unknown CLV sorts last in both directions rather than pretending to be 0.
+        if (a.clvCents === null || b.clvCents === null) {
+          return a.clvCents === null ? (b.clvCents === null ? 0 : 1) : -1;
+        }
+        return wagerSortDir === "asc"
+          ? a.clvCents - b.clvCents
+          : b.clvCents - a.clvCents;
       } else if (wagerSortField === "alertTier") {
         cmp = (TIER_ORDER[a.alertTier] ?? 0) - (TIER_ORDER[b.alertTier] ?? 0);
       }
@@ -189,6 +432,22 @@ export function LiveWagersTabPanel({
   // Hard render bound from wagers.toml: the feed may carry more rows than the
   // desk wants mounted in one table pass.
   const visibleWagers = filteredWagers.slice(0, WAGERS_TABLE.max_rows);
+  const wagersAgeSeconds =
+    wagersLastUpdatedAt === null
+      ? null
+      : Math.max(0, Math.round((Date.now() - wagersLastUpdatedAt) / 1000));
+  const wagerStreamState = paused
+    ? "paused"
+    : streamingConnected === false
+      ? "fallback"
+      : "live";
+  const freshVisibleCount = visibleWagers.filter(
+    (w) => newTicketIds?.has(w.ticketId) === true,
+  ).length;
+  // Stable per capture: a filter must not make the column appear/disappear.
+  const showSubSportColumn = activeWagers.some(
+    (w) => (w.subSport ?? "") !== "",
+  );
 
   // Aggregate per-customer CLV & dollar edge across the active slice
   const sliceCustomerMap = new Map<
@@ -203,6 +462,9 @@ export function LiveWagersTabPanel({
     }
   >();
   for (const w of filteredWagers) {
+    // The customer aggregate is a CLV aggregate; a row without a closing-line
+    // comparison contributes nothing rather than a zero.
+    if (w.clvCents === null) continue;
     const existing = sliceCustomerMap.get(w.customerId);
     const edgeUsd = w.riskUsd * (w.clvCents / 100);
     if (existing) {
@@ -299,7 +561,7 @@ export function LiveWagersTabPanel({
             style={styles.searchInput}
             value={wagerSearch}
             onChange={(e) => onWagerSearchChange(e.target.value)}
-            placeholder="Filter by Ticket (#W-...), Customer ('GP301'), Agent, Event, Selection..."
+            placeholder="Filter by Ticket (#W-...), Customer, Agent, Event, Selection..."
           />
         </div>
 
@@ -325,6 +587,21 @@ export function LiveWagersTabPanel({
               type="button"
               style={styles.filterPill(wagerAlertFilter === pill.id)}
               onClick={() => onWagerAlertFilterChange(pill.id)}
+            >
+              {pill.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={styles.tierFilterGroup}>
+          {CHANNEL_PILLS.map((pill) => (
+            <button
+              key={pill.id}
+              type="button"
+              style={styles.filterPill(
+                wagerChannelFilter.toUpperCase() === pill.id.toUpperCase(),
+              )}
+              onClick={() => onWagerChannelFilterChange(pill.id)}
             >
               {pill.label}
             </button>
@@ -361,6 +638,114 @@ export function LiveWagersTabPanel({
           ))}
         </div>
       </div>
+
+      {/* Partner 118 channel profile: GSLIVE vs GSBUILDER, split before filtering */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "stretch",
+          gap: "10px",
+          padding: "0 14px 10px",
+        }}
+      >
+        {partner118Profiles.map((profile) => {
+          const active =
+            wagerChannelFilter.toUpperCase() === profile.channel.toUpperCase();
+          return (
+            <button
+              key={profile.channel}
+              type="button"
+              data-channel-profile={profile.channel}
+              onClick={() =>
+                onWagerChannelFilterChange(
+                  active ? "ALL" : profile.channel.toUpperCase(),
+                )
+              }
+              title={`Filter Live Wagers to ${profile.label} tickets`}
+              style={{
+                flex: "1 1 320px",
+                textAlign: "left",
+                padding: "10px 12px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                backgroundColor: active
+                  ? "rgba(56, 189, 248, 0.14)"
+                  : "rgba(15, 23, 42, 0.75)",
+                border: `1px solid ${active ? "rgba(56, 189, 248, 0.55)" : "rgba(148, 163, 184, 0.25)"}`,
+                color: "#e2e8f0",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "baseline",
+                  gap: "8px",
+                }}
+              >
+                <span style={{ fontWeight: 700, fontSize: "12px" }}>
+                  {profile.channel === "gslive" ? "🔴" : "🧩"} {profile.label}
+                </span>
+                <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                  {profile.tickets} ticket{profile.tickets === 1 ? "" : "s"}
+                </span>
+              </div>
+              <div
+                style={{ fontSize: "11px", color: "#cbd5e1", marginTop: "4px" }}
+              >
+                ${profile.riskUsd.toLocaleString()} risk · $
+                {profile.toWinUsd.toLocaleString()} to-win · avg $
+                {profile.avgTicketUsd.toLocaleString()}
+              </div>
+              <div
+                style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}
+              >
+                {profile.liveTickets} live-marked · top{" "}
+                {profile.topCustomerId ?? "—"}
+                {profile.topCustomerId !== null
+                  ? ` ($${profile.topCustomerRiskUsd.toLocaleString()})`
+                  : ""}
+              </div>
+            </button>
+          );
+        })}
+        <div
+          style={{
+            flex: "1 1 180px",
+            padding: "10px 12px",
+            borderRadius: "8px",
+            backgroundColor: "rgba(15, 23, 42, 0.55)",
+            border: "1px solid rgba(148, 163, 184, 0.18)",
+            fontSize: "11px",
+            color: "#94a3b8",
+          }}
+        >
+          <div style={{ fontWeight: 700, color: "#cbd5e1" }}>
+            Other channels
+          </div>
+          <div style={{ marginTop: "4px" }}>
+            {nonPartnerTicketCount} ticket
+            {nonPartnerTicketCount === 1 ? "" : "s"} (Internet, other writers)
+          </div>
+        </div>
+      </div>
+
+      {isGsliveScope && (
+        <GsliveGameLogSection
+          games={gsliveGames}
+          events={gsliveEvents}
+          selectedGame={selectedGame}
+          onSelectGame={setSelectedGame}
+          onSelectEvent={(ticketId) => {
+            const wager = activeWagers.find((w) => w.ticketId === ticketId);
+            if (wager !== undefined) onSelectWager(wager);
+          }}
+          lastUpdatedAt={wagersLastUpdatedAt}
+          newTicketIds={newTicketIds}
+          connected={streamingConnected}
+        />
+      )}
 
       {/* Slice Edge Leaderboard: Who is beating the desk in the active filter slice */}
       {topSliceBeaters.length > 0 && (
@@ -463,23 +848,93 @@ export function LiveWagersTabPanel({
             ) : null}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span
+              data-wagers-stream={wagerStreamState}
+              title="WebSocket push on capture changes; the table also refetches every 10s while this tab is open"
+              style={{
+                fontSize: "10px",
+                fontWeight: 700,
+                color: paused
+                  ? "#f59e0b"
+                  : wagerStreamState === "fallback"
+                    ? "#94a3b8"
+                    : "#4ade80",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {paused
+                ? "⏸ paused"
+                : wagerStreamState === "fallback"
+                  ? "◌ polling"
+                  : "● live"}
+              {!paused && wagersAgeSeconds !== null
+                ? ` · ${wagersAgeSeconds}s ago`
+                : ""}
+              {paused && pendingNew > 0 ? ` · ${pendingNew} new` : ""}
+              {!paused ? (
+                <span style={{ color: "#64748b", fontWeight: 500 }}>
+                  {" "}
+                  · auto 10s
+                </span>
+              ) : null}
+              {freshVisibleCount > 0 ? (
+                <span style={{ color: "#4ade80", fontWeight: 700 }}>
+                  {" "}
+                  · +{freshVisibleCount} new
+                </span>
+              ) : null}
+            </span>
             <span style={{ fontSize: "11px", color: "#64748b" }}>
               {provenanceBadge.detail} · showing {visibleWagers.length}/
               {filteredWagers.length} · autoExecute: false invariant active
             </span>
-            {onRefreshWagers ? (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                flexShrink: 0,
+                whiteSpace: "nowrap",
+              }}
+            >
               <button
                 type="button"
+                data-wagers-pause="true"
+                onClick={toggleWagersPause}
+                title={
+                  paused
+                    ? "Resume live updates for the table"
+                    : "Freeze the table while you read; updates keep arriving"
+                }
                 style={{
                   ...styles.actionBtn,
                   padding: "4px 8px",
                   fontSize: "11px",
+                  ...(paused
+                    ? {
+                        color: "#f59e0b",
+                        borderColor: "rgba(245, 158, 11, 0.5)",
+                      }
+                    : {}),
                 }}
-                onClick={onRefreshWagers}
               >
-                ↻ Refresh
+                {paused ? "▶ Resume" : "⏸ Pause"}
               </button>
-            ) : null}
+              {onRefreshWagers ? (
+                <button
+                  type="button"
+                  style={{
+                    ...styles.actionBtn,
+                    padding: "4px 8px",
+                    fontSize: "11px",
+                  }}
+                  onClick={onRefreshWagers}
+                  title="Fetch /api/wagers now (the table also auto-refreshes every 10s)"
+                >
+                  ↻ Refresh
+                </button>
+              ) : null}
+            </span>
           </div>
         </div>
 
@@ -505,8 +960,33 @@ export function LiveWagersTabPanel({
                 </th>
                 <th style={styles.th}>Customer</th>
                 <th style={styles.th}>Sub-Agent / Master</th>
-                <th style={styles.th}>Sport / Type</th>
-                <th style={styles.th}>Event & Market Selection</th>
+                <th style={styles.th}>Sport</th>
+                {showSubSportColumn ? (
+                  <th
+                    style={styles.th}
+                    title="League / sub-sport from the source (F402 SubSport). Live betTicker captures do not carry it."
+                  >
+                    Subsport
+                  </th>
+                ) : null}
+                <th
+                  style={styles.th}
+                  title="Bet type from the ticket (Moneyline, Spread, Total, Parlay, Straight, Live). The channel follows 'via'."
+                >
+                  Bet Type
+                </th>
+                <th
+                  style={styles.th}
+                  title="Game or matchup the ticket was written on"
+                >
+                  Event
+                </th>
+                <th
+                  style={styles.th}
+                  title="Pick, line and price for the selected market"
+                >
+                  Market Selection
+                </th>
                 <th
                   style={{
                     ...styles.th,
@@ -563,9 +1043,12 @@ export function LiveWagersTabPanel({
               {visibleWagers.map((w) => (
                 <tr
                   key={w.ticketId}
-                  style={styles.wagerRow(
-                    selectedWager?.ticketId === w.ticketId,
-                  )}
+                  style={{
+                    ...styles.wagerRow(selectedWager?.ticketId === w.ticketId),
+                    ...(newTicketIds?.has(w.ticketId) === true
+                      ? { backgroundColor: "rgba(74, 222, 128, 0.10)" }
+                      : {}),
+                  }}
                   onClick={() => onSelectWager(w)}
                 >
                   <td style={styles.td}>
@@ -604,6 +1087,18 @@ export function LiveWagersTabPanel({
                       >
                         {copiedTicketId === w.ticketId ? "✓" : "📋"}
                       </button>
+                      {newTicketIds?.has(w.ticketId) === true ? (
+                        <span
+                          style={{
+                            color: "#4ade80",
+                            fontWeight: 800,
+                            fontSize: "9px",
+                            letterSpacing: "0.06em",
+                          }}
+                        >
+                          NEW
+                        </span>
+                      ) : null}
                     </div>
                     <div style={styles.custSub}>{w.timestamp}</div>
                   </td>
@@ -673,16 +1168,27 @@ export function LiveWagersTabPanel({
                     <div style={styles.custSub}>Master: {w.masterAgent}</div>
                   </td>
                   <td style={styles.td}>
-                    <div style={{ fontWeight: 600 }}>{w.sport}</div>
-                    <div style={styles.custSub}>
-                      {w.betType}
-                      {w.ticketWriter ? ` · ${w.ticketWriter}` : ""}
-                    </div>
+                    <div style={{ fontWeight: 600 }}>{w.sport || "—"}</div>
                   </td>
+                  {showSubSportColumn ? (
+                    <td style={styles.td}>
+                      <div style={{ fontWeight: 600 }}>{w.subSport ?? "—"}</div>
+                    </td>
+                  ) : null}
                   <td style={styles.td}>
+                    <div style={{ fontWeight: 600 }}>{w.betType}</div>
+                    {w.ticketWriter ? (
+                      <div style={styles.custSub}>
+                        via {sanitizeCaptureText(w.ticketWriter)}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td style={styles.td} data-wager-event={w.ticketId}>
                     <div style={{ fontWeight: 600 }}>{w.event}</div>
+                  </td>
+                  <td style={styles.td} data-wager-market={w.ticketId}>
                     <div style={{ color: "#f59e0b", fontWeight: 700 }}>
-                      {w.selection} {w.lineDisplay} ({w.oddsAmerican})
+                      {formatWagerSelection(w)}
                     </div>
                   </td>
                   <td style={styles.td}>
@@ -721,7 +1227,11 @@ export function LiveWagersTabPanel({
                         color: clvEdgeTone(w.clvCents),
                       }}
                     >
-                      {w.clvCents > 0 ? `+${w.clvCents}¢` : `${w.clvCents}¢`}
+                      {w.clvCents === null
+                        ? "—"
+                        : w.clvCents > 0
+                          ? `+${w.clvCents}¢`
+                          : `${w.clvCents}¢`}
                     </span>
                   </td>
                   <td style={styles.td}>
@@ -784,242 +1294,40 @@ export function LiveWagersTabPanel({
                   </td>
                 </tr>
               ))}
+              {visibleWagers.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={showSubSportColumn ? 13 : 12}
+                    data-wagers-empty={activeProvenance.kind}
+                    style={{
+                      ...styles.td,
+                      textAlign: "center",
+                      color: "#94a3b8",
+                    }}
+                  >
+                    {describeEmptyWagers(activeWagers.length, activeProvenance)}
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Interactive Selected Wager Inspector */}
-      {selectedWager && (
-        <div style={styles.wagerInspectorCard}>
-          <div style={styles.inspectorHeader}>
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  marginBottom: "4px",
-                }}
-              >
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "18px",
-                    color: "#f8fafc",
-                  }}
-                >
-                  Ticket Inspector: #{selectedWager.ticketId}
-                </h3>
-                <span
-                  style={styles.wagerBadge(
-                    selectedWager.alertTier,
-                    tiersConfig,
-                  )}
-                >
-                  {selectedWager.alertBadge}
-                </span>
-              </div>
-              <div style={styles.inspectorSub}>
-                Placed {selectedWager.timestamp} · Sport: {selectedWager.sport}{" "}
-                · Market: {selectedWager.betType} · Line:{" "}
-                {selectedWager.lineDisplay} ({selectedWager.oddsAmerican})
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                type="button"
-                style={styles.actionBtn}
-                onClick={() => onInspectPty(selectedWager.customerId)}
-                title="Inspect Customer in Terminal PTY"
-              >
-                💻 PTY Profile
-              </button>
-              <button
-                type="button"
-                style={styles.actionBtn}
-                onClick={() => onSelectCustomerById(selectedWager.customerId)}
-                title="Inspect in Customer Showcase"
-              >
-                👤 Customer Card
-              </button>
-              <button
-                type="button"
-                style={styles.actionBtn}
-                onClick={() =>
-                  onCopyText(
-                    selectedWager.ticketId,
-                    JSON.stringify(selectedWager, null, 2),
-                  )
-                }
-                title="Copy Full Ticket Payload"
-              >
-                {copiedTicketId === selectedWager.ticketId
-                  ? "✓ Payload Copied"
-                  : "📋 Copy Payload"}
-              </button>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: "12px",
-              marginBottom: "16px",
-            }}
-          >
-            <div style={styles.radarCard}>
-              <div style={styles.cardHeader}>EVENT & SELECTION</div>
-              <div
-                style={{
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  color: "#f8fafc",
-                  marginBottom: "4px",
-                }}
-              >
-                {selectedWager.event}
-              </div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "#f59e0b",
-                  fontWeight: 600,
-                }}
-              >
-                Pick: {selectedWager.selection} {selectedWager.lineDisplay} (
-                {selectedWager.oddsAmerican})
-              </div>
-            </div>
-
-            <div style={styles.radarCard}>
-              <div style={styles.cardHeader}>FINANCIAL EXPOSURE & EDGE</div>
-              <div style={styles.radarRow}>
-                <span style={{ color: "#94a3b8" }}>Risk / To Win:</span>
-                <span style={{ fontWeight: 700, color: "#f8fafc" }}>
-                  ${selectedWager.riskUsd.toLocaleString()} / $
-                  {selectedWager.toWinUsd.toLocaleString()}
-                </span>
-              </div>
-              <div style={styles.radarRow}>
-                <span style={{ color: "#94a3b8" }}>CLV Edge Delta:</span>
-                <span
-                  style={{
-                    fontWeight: 700,
-                    color: clvEdgeTone(selectedWager.clvCents),
-                  }}
-                >
-                  {selectedWager.clvCents > 0
-                    ? `+${selectedWager.clvCents}¢`
-                    : `${selectedWager.clvCents}¢`}
-                </span>
-              </div>
-            </div>
-
-            <div style={styles.radarCard}>
-              <div style={styles.cardHeader}>AGENT & SYNDICATE ROUTING</div>
-              <div style={styles.radarRow}>
-                <span style={{ color: "#94a3b8" }}>Customer Login:</span>
-                <span style={{ fontWeight: 700, color: "#38bdf8" }}>
-                  {selectedWager.customerId}
-                </span>
-              </div>
-              <div style={styles.radarRow}>
-                <span style={{ color: "#94a3b8" }}>Sub-Agent / Master:</span>
-                <span style={{ fontWeight: 600, color: "#f8fafc" }}>
-                  {selectedWager.agentId} / {selectedWager.masterAgent}
-                </span>
-              </div>
-            </div>
-
-            <div style={styles.radarCard}>
-              <div style={styles.cardHeader}>PRE/POST-BET LINE WINDOW</div>
-              <div style={styles.radarRow}>
-                <span style={{ color: "#94a3b8" }}>Entry Line / Price:</span>
-                <span style={{ fontWeight: 700, color: "#f8fafc" }}>
-                  {selectedWager.lineDisplay} ({selectedWager.oddsAmerican})
-                </span>
-              </div>
-              <div style={styles.radarRow}>
-                <span style={{ color: "#94a3b8" }}>Post-Bet Trajectory:</span>
-                <span
-                  style={{
-                    fontWeight: 700,
-                    color: selectedWager.clvCents > 0 ? "#f87171" : "#4ade80",
-                  }}
-                >
-                  {selectedWager.clvCents > 0
-                    ? `Beat Move (+${selectedWager.clvCents}¢ CLV)`
-                    : `Behind Move (${selectedWager.clvCents}¢ CLV)`}
-                </span>
-              </div>
-            </div>
-
-            <div style={styles.radarCard}>
-              <div style={styles.cardHeader}>
-                DESK DIRECTIVE (autoExecute: false)
-              </div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  color:
-                    selectedWager.alertTier === "CRITICAL" ||
-                    selectedWager.alertTier === "STEAM"
-                      ? "#f87171"
-                      : "#4ade80",
-                  marginBottom: "4px",
-                }}
-              >
-                {selectedWager.operatorDirective}
-              </div>
-              <div style={{ fontSize: "11px", color: "#94a3b8" }}>
-                Max Recommended Stake: $
-                {selectedWager.maxRecommendedStake.toLocaleString()}
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              padding: "10px 14px",
-              borderRadius: "6px",
-              backgroundColor:
-                selectedWager.alertTier === "CRITICAL"
-                  ? "rgba(239, 68, 68, 0.12)"
-                  : selectedWager.alertTier === "STEAM"
-                    ? "rgba(251, 146, 60, 0.12)"
-                    : "rgba(34, 197, 94, 0.12)",
-              border: `1px solid ${
-                selectedWager.alertTier === "CRITICAL"
-                  ? "rgba(239, 68, 68, 0.3)"
-                  : selectedWager.alertTier === "STEAM"
-                    ? "rgba(251, 146, 60, 0.3)"
-                    : "rgba(34, 197, 94, 0.3)"
-              }`,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <div style={{ fontSize: "12px", color: "#f1f5f9" }}>
-              <b>Action Directive:</b> {selectedWager.operatorDirective} ·
-              Safety Invariant: <code>autoExecute: false</code> (Requires
-              operator manual override in Fantasy402 Manager)
-            </div>
-            <span
-              style={{
-                fontSize: "11px",
-                color: "#94a3b8",
-                fontWeight: 600,
-              }}
-            >
-              Cap: ${selectedWager.maxRecommendedStake.toLocaleString()}
-            </span>
-          </div>
-        </div>
-      )}
+      {selectedWager ? (
+        <TicketInspectorPanel
+          wager={selectedWager}
+          relatedWagers={inspectorRelatedWagers}
+          matchedAlert={inspectorMatchedAlert}
+          copiedTicketId={copiedTicketId}
+          onCopyText={onCopyText}
+          onSelectCustomerById={onSelectCustomerById}
+          onSelectWager={onSelectWager}
+          onInspectPty={onInspectPty}
+          onRunPtyCommand={onRunPtyCommand}
+          tiersConfig={tiersConfig}
+        />
+      ) : null}
     </div>
   );
 }

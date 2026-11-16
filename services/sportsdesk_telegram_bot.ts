@@ -1367,7 +1367,7 @@ export class SportsDeskTelegramService {
             "/watchlist - monitored accounts",
             "/check &lt;ID&gt; - one account",
             "/report [MORNING_BRIEFING|MIDDAY_STEAM|EVENING_SETTLEMENT]",
-            "/alert_test [ID] - send a sample watch list alert here",
+            "/alert_test &lt;ID&gt; &lt;riskUSD&gt; - send a labelled test alert for a watch list account",
             "/forensics - open the forensics tab",
             "/chatid - show this chat's ID",
           ].join("\n"),
@@ -1411,7 +1411,19 @@ export class SportsDeskTelegramService {
         return;
       }
       case "/alert_test":
-        await this.dispatchTestAlert(args[0] ?? "RF2003", chatId);
+        try {
+          await this.dispatchTestAlert(
+            args[0] ?? "",
+            Number(args[1] ?? Number.NaN),
+            chatId,
+          );
+        } catch (err) {
+          if (!(err instanceof TelegramTestAlertInputError)) throw err;
+          await this.sendMessage(
+            chatId,
+            `${err.name}: ${Bun.escapeHTML(err.message)}\nUsage: /alert_test &lt;ID&gt; &lt;riskUSD&gt;`,
+          );
+        }
         return;
       case "/report": {
         const type = (args[0] ?? "EVENING_SETTLEMENT").toUpperCase();
@@ -1553,37 +1565,55 @@ ${action}
     return result.ok;
   }
 
+  /**
+   * Send a clearly labelled synthetic alert for a watch-list account. The stake is a required
+   * input: a test alert never invents an amount, an agent, or a customer.
+   */
   public async dispatchTestAlert(
-    targetCustomerId: string = "RF2003",
+    targetCustomerId: string,
+    riskUSD: number,
     targetChatId?: string,
   ): Promise<boolean> {
     const custId = targetCustomerId.trim().toUpperCase();
+    if (custId === "") {
+      throw new TelegramTestAlertInputError(
+        "customerId is required (a watch-list account ID)",
+      );
+    }
     const watch = this.watchListMap.get(custId);
+    if (watch === undefined) {
+      throw new TelegramTestAlertInputError(
+        `customerId '${custId}' is not on the watch list`,
+      );
+    }
+    if (!Number.isFinite(riskUSD) || riskUSD <= 0) {
+      throw new TelegramTestAlertInputError(
+        `riskUSD must be a positive number, got '${String(riskUSD)}'`,
+      );
+    }
 
     const testPayload: WagerAlertPayload = {
       customerId: custId,
-      agentId: watch?.agentId || "FAKEMONEY",
-      masterAgentId: "BILLY666",
-      wagerNumber: Math.floor(Math.random() * 900000) + 100000,
-      riskUSD:
-        custId === "RF2003" ? 20000.0 : custId === "BGD101" ? 20000.0 : 2500.0,
-      toWinUSD:
-        custId === "RF2003"
-          ? 18181.82
-          : custId === "BGD101"
-            ? 18181.82
-            : 2272.73,
+      agentId: watch.agentId,
+      masterAgentId: watch.masterAgentId,
+      wagerNumber: 0,
+      riskUSD,
+      toWinUSD: Math.round((riskUSD * 100 * 100) / 110) / 100,
       odds: "-110",
-      marketDescription:
-        "NFL • Kansas City Chiefs -3½ vs Denver Broncos (Point Spread)",
-      wagerType: "Straight (Point Spread)",
+      marketDescription: "TEST ALERT (synthetic payload, not a real wager)",
+      wagerType: "Test alert",
       acceptedAt:
-        new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC-5",
-      ...(watch !== undefined ? { watchAccount: watch } : {}),
+        new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC",
+      watchAccount: watch,
     };
 
     return this.dispatchWatchListAlert(testPayload, targetChatId);
   }
+}
+
+/** A test alert was requested without a watch-list customer or a positive stake. */
+export class TelegramTestAlertInputError extends Error {
+  override readonly name = "TelegramTestAlertInputError";
 }
 
 export function isReportType(

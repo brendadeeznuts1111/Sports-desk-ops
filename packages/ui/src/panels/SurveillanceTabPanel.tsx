@@ -4,7 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DASHBOARD_PANELS } from "../config/dashboard.ts";
 import { styles } from "../dashboard_styles.ts";
 import type { DashboardData, DnsData } from "../types.ts";
+import type { ReverseDnsForensicsView } from "../../../../lib/reverse_dns_forensics.ts";
+import { ReverseDnsForensicsCard } from "./ReverseDnsForensicsCard.tsx";
 import { ThresholdsPanel } from "./ThresholdsPanel.tsx";
+import { VIZ_COLORS } from "../viz/perceptual.ts";
 
 const DNS_CACHE_CAPACITY = DASHBOARD_PANELS.dns_cache_capacity;
 
@@ -18,7 +21,7 @@ export interface SurveillanceTabPanelProps {
   readonly onRunBenchmark: () => void;
   readonly reverseIp: string;
   readonly onReverseIpChange: (value: string) => void;
-  readonly reverseResult: string | null;
+  readonly reverseForensics?: ReverseDnsForensicsView | null | undefined;
   readonly onRunReverseLookup: () => void;
   readonly viewMode: "interactive" | "raw";
   readonly onViewModeChange: (mode: "interactive" | "raw") => void;
@@ -134,7 +137,7 @@ export function SurveillanceTabPanel({
   onRunBenchmark,
   reverseIp,
   onReverseIpChange,
-  reverseResult,
+  reverseForensics = null,
   onRunReverseLookup,
   viewMode,
   onViewModeChange,
@@ -268,17 +271,19 @@ export function SurveillanceTabPanel({
                   width: "44px",
                   height: "6px",
                   borderRadius: "999px",
-                  backgroundColor: "#1e293b",
+                  backgroundColor: "var(--sd-surface-border)",
                   overflow: "hidden",
                 }}
               >
                 <span
                   style={{
                     display: "block",
-                    width: `${Math.max(4, dnsSummary.capacityPct)}%`,
+                    width: `${Math.min(100, Math.max(0, dnsSummary.capacityPct))}%`,
                     height: "100%",
                     backgroundColor:
-                      dnsSummary.capacityPct >= 85 ? "#fbbf24" : "#38bdf8",
+                      dnsSummary.capacityPct >= 85
+                        ? VIZ_COLORS.accent
+                        : VIZ_COLORS.context,
                   }}
                 />
               </span>
@@ -451,23 +456,32 @@ export function SurveillanceTabPanel({
           </button>
           {benchResult && <span style={styles.toolResult}>{benchResult}</span>}
         </div>
-        <div style={styles.toolItem}>
-          <input
-            style={styles.input}
-            value={reverseIp}
-            onChange={(e) => onReverseIpChange(e.target.value)}
-            placeholder="IP (e.g. 1.1.1.1)"
-          />
-          <button
-            type="button"
-            style={styles.actionBtn}
-            onClick={onRunReverseLookup}
-          >
-            🔍 Reverse DNS & Forensics
-          </button>
-          {reverseResult && (
-            <span style={styles.toolResult}>{reverseResult}</span>
-          )}
+        <div
+          style={{
+            ...styles.toolItem,
+            flexDirection: "column",
+            alignItems: "stretch",
+            flex: "1 1 280px",
+          }}
+        >
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <input
+              style={styles.input}
+              value={reverseIp}
+              onChange={(e) => onReverseIpChange(e.target.value)}
+              placeholder="IP (e.g. 1.1.1.1)"
+            />
+            <button
+              type="button"
+              style={styles.actionBtn}
+              onClick={onRunReverseLookup}
+            >
+              🔍 Reverse DNS & Forensics
+            </button>
+          </div>
+          {reverseForensics ? (
+            <ReverseDnsForensicsCard view={reverseForensics} />
+          ) : null}
         </div>
         <div style={styles.viewToggleGroup}>
           <button

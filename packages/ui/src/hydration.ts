@@ -4,11 +4,12 @@
  * Signal-Honesty provenance badges, and zero-DOM feed loader for `@sportsdesk-ops/ui`.
  */
 
-import type {
-  SlabPolicySummary,
-  WagerTier,
-  WagersWireContractSummary,
-  WagersWireViolation,
+import {
+  wagerChannelOf,
+  type SlabPolicySummary,
+  type WagerTier,
+  type WagersWireContractSummary,
+  type WagersWireViolation,
 } from "@sportsdesk-ops/contracts";
 import type {
   CustomersApiResponse,
@@ -16,13 +17,15 @@ import type {
   DashboardFeedProvenanceKind,
   DashboardSourceProvenance,
   LiveWager,
+  ProxyConduit30d,
+  RankedPlayer30d,
   TierStyleConfig,
 } from "./types.ts";
 
-export const SHOWCASE_WAGERS_PROVENANCE: DashboardSourceProvenance = {
-  kind: "showcase",
-  label: "Showcase Seed",
-  sourcePath: null,
+export const PENDING_WAGERS_PROVENANCE: DashboardSourceProvenance = {
+  kind: "pending",
+  label: "Pending Hydration",
+  sourcePath: "/api/wagers",
   observedAt: "",
 };
 
@@ -137,25 +140,44 @@ function normalizeProvenance(
 /** Format a Signal-Honesty provenance badge (explicitly distinguishing `[not live]` & failures). */
 export function formatProvenanceBadge(
   provenance: DashboardSourceProvenance,
+  options: {
+    readonly staleAfterMinutes?: number | undefined;
+    readonly nowMs?: number | undefined;
+  } = {},
 ): ProvenanceBadgePresentation {
   const detail = provenance.sourcePath
     ? `${provenance.label} (${provenance.sourcePath})`
     : provenance.label;
+  const observedMs = Date.parse(provenance.observedAt);
+  const stale =
+    options.staleAfterMinutes !== undefined &&
+    Number.isFinite(observedMs) &&
+    (options.nowMs ?? Date.now()) - observedMs >
+      options.staleAfterMinutes * 60_000;
+  const suffix = stale ? " · STALE" : "";
 
   switch (provenance.kind) {
     case "live":
-    case "capture":
       return {
-        badgeText: "● LIVE CAPTURE",
+        badgeText: `● LIVE CAPTURE${suffix}`,
         fg: "#4ade80",
         bg: "rgba(34, 197, 94, 0.14)",
         border: "rgba(34, 197, 94, 0.4)",
         isLive: true,
         detail,
       };
+    case "capture":
+      return {
+        badgeText: `● LOCAL CAPTURE${suffix}`,
+        fg: "#4ade80",
+        bg: "rgba(34, 197, 94, 0.14)",
+        border: "rgba(34, 197, 94, 0.4)",
+        isLive: false,
+        detail,
+      };
     case "fixture":
       return {
-        badgeText: "◐ FIXTURE [not live]",
+        badgeText: `◐ FIXTURE [not live]${suffix}`,
         fg: "#fbbf24",
         bg: "rgba(245, 158, 11, 0.14)",
         border: "rgba(245, 158, 11, 0.4)",
@@ -165,7 +187,7 @@ export function formatProvenanceBadge(
     case "fallback":
     case "showcase":
       return {
-        badgeText: "◌ SHOWCASE [not live]",
+        badgeText: `◌ SHOWCASE [not live]${suffix}`,
         fg: "#fb923c",
         bg: "rgba(251, 146, 60, 0.14)",
         border: "rgba(251, 146, 60, 0.4)",
@@ -200,16 +222,30 @@ export function normalizeHydratedWagerRow(
 ): LiveWager {
   const riskUsd = Number(raw.riskUsd ?? 0);
   const toWinUsd = Number(raw.toWinUsd ?? 0);
-  const clvCents = Number(raw.clvCents ?? 0);
+  const clvCents =
+    typeof raw.clvCents === "number" && Number.isFinite(raw.clvCents)
+      ? raw.clvCents
+      : null;
   const maxRecommendedStake = Number(raw.maxRecommendedStake ?? 0);
   const alertTier = normalizeAlertTier(raw.alertTier);
+  const ticketWriter =
+    typeof raw.ticketWriter === "string" ? raw.ticketWriter.trim() : "";
+  const volumeUsd = Number(raw.volumeUsd);
   return {
     ticketId: String(raw.ticketId ?? `W-HYD-${idx}`),
     timestamp: String(raw.timestamp ?? "—"),
     customerId: String(raw.customerId ?? `CUST-${idx}`),
     agentId: String(raw.agentId ?? "AG01"),
     masterAgent: String(raw.masterAgent ?? "MASTER_A"),
-    sport: String(raw.sport ?? "OTHER").toUpperCase(),
+    ...(ticketWriter === "" ? {} : { ticketWriter }),
+    writer: wagerChannelOf(raw.writer ?? ticketWriter),
+    ...(Number.isFinite(volumeUsd) ? { volumeUsd } : {}),
+    ...(raw.vip === true ? { vip: true } : {}),
+    sport: raw.sport == null ? "" : String(raw.sport).toUpperCase(),
+    subSport:
+      raw.subSport == null || String(raw.subSport).trim() === ""
+        ? null
+        : String(raw.subSport).toUpperCase(),
     betType: String(raw.betType ?? "Straight"),
     event: String(raw.event ?? "Event Matchup"),
     selection: String(raw.selection ?? "Selection"),
@@ -217,7 +253,7 @@ export function normalizeHydratedWagerRow(
     oddsAmerican: String(raw.oddsAmerican ?? "-110"),
     riskUsd: Number.isFinite(riskUsd) ? riskUsd : 0,
     toWinUsd: Number.isFinite(toWinUsd) ? toWinUsd : 0,
-    clvCents: Number.isFinite(clvCents) ? clvCents : 0,
+    clvCents,
     alertTier,
     alertBadge: String(raw.alertBadge ?? alertTier),
     operatorDirective: String(
@@ -380,6 +416,11 @@ export function normalizeCustomersCohortResponse(
     backtestTop: Array.isArray(rec.backtestTop)
       ? (rec.backtestTop as ReadonlyArray<Record<string, unknown>>)
       : [],
+    backtestAll: Array.isArray(rec.backtestAll)
+      ? (rec.backtestAll as ReadonlyArray<Record<string, unknown>>)
+      : Array.isArray(rec.backtestTop)
+        ? (rec.backtestTop as ReadonlyArray<Record<string, unknown>>)
+        : [],
     fixtures: Array.isArray(rec.fixtures)
       ? (rec.fixtures as ReadonlyArray<Record<string, unknown>>)
       : [],
@@ -610,4 +651,208 @@ export async function hydrateDashboardFeeds(
     ),
   ]);
   return { wagers, customers, tiers };
+}
+
+/** Provenance for a feed that failed: names the endpoint and the error, never a substitute dataset. */
+export function unavailableProvenance(
+  endpoint: string,
+  error: string,
+  observedAt: string = new Date().toISOString(),
+): DashboardSourceProvenance {
+  return {
+    kind: "unavailable",
+    label: error,
+    sourcePath: endpoint,
+    observedAt,
+  };
+}
+
+/** Endpoint the Downlines tab reads: `runBatchedRanking` over the F402 bets corpus. */
+export const RANKINGS_ENDPOINT = "/api/rankings/all";
+
+export interface RankingsSummary {
+  readonly generatedAtIso: string;
+  readonly windowStart: string;
+  readonly windowEnd: string;
+  readonly inWindowWagers: number;
+  readonly totalHandleUsd: number;
+  readonly totalToWinUsd: number;
+  readonly activeCustomerCount: number;
+  readonly activeSubAgentCount: number;
+  readonly activeMasterAgentCount: number;
+  readonly conduitSubAgentCount: number;
+}
+
+export interface NormalizedRankingsResult {
+  readonly summary: RankingsSummary;
+  readonly players: readonly RankedPlayer30d[];
+  readonly conduits: readonly ProxyConduit30d[];
+  /** Rows dropped because a required field was missing or non-numeric. */
+  readonly rejectedRows: number;
+}
+
+function finiteOrNull(val: unknown): number | null {
+  if (typeof val !== "number" || !Number.isFinite(val)) return null;
+  return val;
+}
+
+function nonEmptyString(val: unknown): string | null {
+  return typeof val === "string" && val.trim().length > 0 ? val.trim() : null;
+}
+
+/**
+ * Normalize a `GET /api/rankings/all` (`BatchedRankingResult`) payload. Returns null when the
+ * envelope is not that shape; rows missing a required field are counted in `rejectedRows`
+ * instead of being coerced.
+ */
+export function normalizeRankingsResponse(
+  raw: unknown,
+): NormalizedRankingsResult | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const rec = raw as Record<string, unknown>;
+  if (
+    !Array.isArray(rec.topRankedPlayers) ||
+    !Array.isArray(rec.topSubAgents)
+  ) {
+    return null;
+  }
+  const summaryNumbers = {
+    inWindowWagers: finiteOrNull(rec.inWindowWagers),
+    totalHandleUsd: finiteOrNull(rec.totalHandleUsd),
+    totalToWinUsd: finiteOrNull(rec.totalToWinUsd),
+    activeCustomerCount: finiteOrNull(rec.activeCustomerCount),
+    activeSubAgentCount: finiteOrNull(rec.activeSubAgentCount),
+    activeMasterAgentCount: finiteOrNull(rec.activeMasterAgentCount),
+    conduitSubAgentCount: finiteOrNull(rec.conduitSubAgentCount),
+  };
+  if (Object.values(summaryNumbers).some((v) => v === null)) return null;
+
+  let rejectedRows = 0;
+  const players: RankedPlayer30d[] = [];
+  for (const entry of rec.topRankedPlayers as unknown[]) {
+    const row = (
+      typeof entry === "object" && entry !== null ? entry : {}
+    ) as Record<string, unknown>;
+    const id = nonEmptyString(row.customerId);
+    const rank = finiteOrNull(row.rank);
+    const handleUsd = finiteOrNull(row.handleUsd);
+    const wagers = finiteOrNull(row.totalWagers);
+    const gini = finiteOrNull(row.stakeGini);
+    const alertRate = finiteOrNull(row.alertRatePct);
+    const score = finiteOrNull(row.compositeScore);
+    const limitUsd = finiteOrNull(row.recommendedLimitUsd);
+    const tier = nonEmptyString(row.tier);
+    if (
+      id === null ||
+      rank === null ||
+      handleUsd === null ||
+      wagers === null ||
+      gini === null ||
+      alertRate === null ||
+      score === null ||
+      limitUsd === null ||
+      tier === null
+    ) {
+      rejectedRows++;
+      continue;
+    }
+    players.push({
+      rank,
+      id,
+      agentId: nonEmptyString(row.agentId) ?? "",
+      masterAgent: nonEmptyString(row.masterAgent) ?? "",
+      handleUsd,
+      wagers,
+      gini,
+      alertRate,
+      score,
+      tier,
+      tierLabel: nonEmptyString(row.tierLabel) ?? tier,
+      dominantSport: nonEmptyString(row.dominantSport) ?? "",
+      isProxy: row.isProxyConduit === true,
+      limitUsd,
+    });
+  }
+
+  const conduits: ProxyConduit30d[] = [];
+  for (const entry of rec.topSubAgents as unknown[]) {
+    const row = (
+      typeof entry === "object" && entry !== null ? entry : {}
+    ) as Record<string, unknown>;
+    if (row.isProxyConduit !== true) continue;
+    const agentId = nonEmptyString(row.agentId);
+    const handleUsd = finiteOrNull(row.totalHandleUsd);
+    const wagers = finiteOrNull(row.totalWagers);
+    const concPct = finiteOrNull(row.topCustomerConcentrationPct);
+    if (
+      agentId === null ||
+      handleUsd === null ||
+      wagers === null ||
+      concPct === null
+    ) {
+      rejectedRows++;
+      continue;
+    }
+    conduits.push({
+      agentId,
+      masterAgent: nonEmptyString(row.masterAgent) ?? "",
+      handleUsd,
+      wagers,
+      topCust: nonEmptyString(row.topCustomer) ?? "",
+      concPct,
+    });
+  }
+
+  return {
+    summary: {
+      generatedAtIso: nonEmptyString(rec.generatedAtIso) ?? "",
+      windowStart: nonEmptyString(rec.windowStart) ?? "",
+      windowEnd: nonEmptyString(rec.windowEnd) ?? "",
+      inWindowWagers: summaryNumbers.inWindowWagers as number,
+      totalHandleUsd: summaryNumbers.totalHandleUsd as number,
+      totalToWinUsd: summaryNumbers.totalToWinUsd as number,
+      activeCustomerCount: summaryNumbers.activeCustomerCount as number,
+      activeSubAgentCount: summaryNumbers.activeSubAgentCount as number,
+      activeMasterAgentCount: summaryNumbers.activeMasterAgentCount as number,
+      conduitSubAgentCount: summaryNumbers.conduitSubAgentCount as number,
+    },
+    players,
+    conduits,
+    rejectedRows,
+  };
+}
+
+/**
+ * Fetch and normalize `GET /api/rankings/all`. A non-2xx reply carries the server's
+ * `{ error }` text (for example a missing bets corpus) into the failure message.
+ */
+export async function fetchRankingsSlice(
+  fetchImpl: (input: string) => Promise<Response>,
+  limit = 100,
+): Promise<HydratedSliceResult<NormalizedRankingsResult>> {
+  const url = `${RANKINGS_ENDPOINT}?limit=${limit}`;
+  try {
+    const res = await fetchImpl(url);
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as {
+        error?: unknown;
+      } | null;
+      const detail = typeof body?.error === "string" ? `: ${body.error}` : "";
+      return {
+        ok: false,
+        error: `GET ${RANKINGS_ENDPOINT} returned HTTP ${res.status} (${res.statusText || "error"})${detail}`,
+      };
+    }
+    const normalized = normalizeRankingsResponse(await res.json());
+    if (normalized === null) {
+      return {
+        ok: false,
+        error: `GET ${RANKINGS_ENDPOINT} returned an unexpected BatchedRankingResult payload`,
+      };
+    }
+    return { ok: true, data: normalized };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `GET ${RANKINGS_ENDPOINT} failed: ${message}` };
+  }
 }

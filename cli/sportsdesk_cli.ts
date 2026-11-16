@@ -79,6 +79,12 @@ import {
   WirePayloadError,
 } from "../lib/fantasy402_manager_wire.ts";
 import {
+  auditPlayerRiskPosture,
+  formatPlayerRiskPostureReport,
+  parseGetInfoPlayerProbe,
+  redactGetInfoPlayer,
+} from "../lib/f402_get_info_player.ts";
+import {
   TEN_MODE_CATALOG,
   buildTenModeLiveSnapshot,
 } from "../lib/forensic_diagnostic_modes.ts";
@@ -1711,10 +1717,39 @@ export async function handleWireCommand(args: string[]): Promise<void> {
 
   if (sub === "info" || sub === "player") {
     const custId = getArgValue(args, ["-c", "--customer"], "CB112_1");
+    const asJson = args.includes("--json");
+    const asRaw = args.includes("--raw");
     console.log(`[Wire Read-Back] Fetching getInfoPlayer for ${custId}...`);
     try {
       const res = await fetchPlayerInfo({ customerIdentifier: custId });
-      console.log(`[Wire Read-Back] Result:`, res);
+      if (!res) {
+        console.error(
+          `[Wire Read-Back] Empty response or request failed for ${custId}. Check portal connectivity/credentials.`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+      const probe = parseGetInfoPlayerProbe(res);
+      if (!probe.found) {
+        console.log(
+          `[Wire Read-Back] Customer "${custId}" not found on portal (INFO: null).`,
+        );
+        return;
+      }
+      if (asRaw) {
+        // A live payload is the one place a plaintext `Password`/`Passwordt` can reach stdout,
+        // so raw output is always redacted. There is deliberately no unredacted flag: adding one
+        // is a separate decision with its own review.
+        console.log(
+          JSON.stringify(redactGetInfoPlayer(probe.envelope), null, 2),
+        );
+      } else if (asJson) {
+        const audit = auditPlayerRiskPosture(probe.envelope);
+        console.log(JSON.stringify({ summary: probe.summary, audit }, null, 2));
+      } else {
+        const audit = auditPlayerRiskPosture(probe.envelope);
+        console.log(formatPlayerRiskPostureReport(audit, probe.summary));
+      }
     } catch (err) {
       console.error(
         `[Wire Read-Back Error] ${err instanceof Error ? err.message : String(err)}`,
@@ -1751,7 +1786,8 @@ Subcommands:
   mutate   Execute updateByColumn mutation (-c <CUST_ID> -a <AGENT_ID> --col <COL> --val <VAL>)
   vig      Execute vigSetupInsert (+15c/+20c) (-c <CUST_ID> -s <SPORT> --spread 15 --derivative 20)
   weblog   Query getWebLog IP Tracker (-m A|B|C|I -c <CUST_ID> --ip <IP>)
-  info     Fetch getInfoPlayer read-back (-c <CUST_ID>)
+  info     Fetch getInfoPlayer read-back (-c <CUST_ID> [--raw] [--json])
+           --raw prints the redacted envelope; --json prints the summary + risk audit
   gslive   Emit GSLive 7-param deep-link & live sidecar JSON (-c <CUST_ID> --date YYYY-MM-DD [--state canceled] [--window 1-31])
 `);
 }
@@ -2561,42 +2597,36 @@ export async function main(): Promise<void> {
   }
 
   if (cmd === "trunks" || cmd === "trunk" || cmd === "trees") {
-    console.log(`\n🌲 NOLAWOLF MASTER FOREST: TWO-TRUNK TOPOLOGY COMPARISON`);
-    console.log(
-      `   30-Day Window: Oct 10, 2026 – Nov 09, 2026 | Total Forest: $240,101,982.77 USD\n`,
-    );
-    console.log(
-      "Trunk Branch".padEnd(16) +
-        "30d Handle (USD)".padStart(18) +
-        "Wagers".padStart(10) +
-        "Bettors".padStart(10) +
-        "Avg Stake".padStart(14) +
-        "Alert Rate".padStart(14) +
-        "  Operating Role",
-    );
-    console.log("-".repeat(95));
-    console.log(
-      "TRACKTHIS".padEnd(16) +
-        "$202,991,868.27".padStart(18) +
-        "258,927".padStart(10) +
-        "3,243".padStart(10) +
-        "$783.97".padStart(14) +
-        "33.35%".padStart(14) +
-        "  VIP / Syndicate Engine (1 in 3 Alerts)",
-    );
-    console.log(
-      "NOLAPPH".padEnd(16) +
-        "$37,450,599.89".padStart(18) +
-        "247,056".padStart(10) +
-        "4,198".padStart(10) +
-        "$151.59".padStart(14) +
-        "3.26%".padStart(14) +
-        "  Retail PPH Downline (Recreational)",
-    );
-    console.log("-".repeat(95));
-    console.log(
-      `\nObservation: TRACKTHIS drives 75.5% of total desk turnover with 10x higher alert frequency.\n`,
-    );
+    const { runBatchedRanking } = await import("../lib/customer_rankings.ts");
+    const {
+      buildDownlineTrunkReport,
+      formatDownlineTrunksAnsi,
+      parseTrunksCliArgs,
+      staticNolawolfTrunkFixture,
+    } = await import("../lib/downline_trunks.ts");
+    const trunkOpts = parseTrunksCliArgs(rawArgs.slice(1));
+    try {
+      const data = await runBatchedRanking({ limitPlayers: 100 });
+      const report = buildDownlineTrunkReport(data);
+      if (trunkOpts.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(
+          formatDownlineTrunksAnsi(report, {
+            branchFilter: trunkOpts.branchFilter,
+          }),
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `[trunks] corpus unavailable: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      console.log(
+        formatDownlineTrunksAnsi(staticNolawolfTrunkFixture(), {
+          branchFilter: trunkOpts.branchFilter,
+        }),
+      );
+    }
     return;
   }
 
@@ -2726,9 +2756,11 @@ export async function main(): Promise<void> {
     rawArgs.includes("--telegram-alert") ||
     cmd === "alert"
   ) {
-    const custId = rawArgs[1] || "RF2003";
     const bot = new SportsDeskTelegramService();
-    await bot.dispatchTestAlert(custId);
+    await bot.dispatchTestAlert(
+      rawArgs[1] ?? "",
+      Number(rawArgs[2] ?? Number.NaN),
+    );
     return;
   }
 

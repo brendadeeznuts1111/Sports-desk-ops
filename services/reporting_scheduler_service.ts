@@ -51,6 +51,7 @@ export const BRIDGE_SCHEDULE_IDS = [
   "sched_customer_profiles_6h",
   "sched_f402_session_refresh",
   "sched_weblog_sentinel_daily",
+  "sched_gslive_tickets_verify_30m",
 ] as const;
 
 export type ReportType =
@@ -264,8 +265,8 @@ export class ReportingSchedulerService {
     return this.start({ only: BRIDGE_SCHEDULE_IDS });
   }
 
-  private initDefaultSchedules(): void {
-    const defaultList: ScheduleDefinition[] = [
+  public static defaultSchedules(): ScheduleDefinition[] {
+    return [
       {
         id: "sched_10m_positions_pulse",
         name: "10-Minute Live Volume & Positions Pulse",
@@ -411,9 +412,33 @@ export class ReportingSchedulerService {
         },
         enabled: true,
       },
+      {
+        id: "sched_gslive_tickets_verify_30m",
+        name: "GSLive Ticket & Canary Verify (30m)",
+        scheduleTime: "*/30 * * * *",
+        reportType: "SHELL_CAPTURE",
+        description:
+          "Runs `scripts/verify-gslive-tickets.ts --json` every 30 minutes to verify Fantasy402 tickets, run the #private/S3Client redaction canary, and stage a zero-secret receipt. Skipped when F402_AGENT_ID is unset.",
+        tz: "America/Chicago",
+        shellJob: {
+          bin: "bun",
+          args: [
+            "--no-orphans",
+            "--no-env-file",
+            "run",
+            "scripts/verify-gslive-tickets.ts",
+            "--json",
+          ],
+          requires: ["F402_AGENT_ID"],
+          timeoutSeconds: 120,
+        },
+        enabled: true,
+      },
     ];
+  }
 
-    for (const item of defaultList) {
+  private initDefaultSchedules(): void {
+    for (const item of ReportingSchedulerService.defaultSchedules()) {
       this.schedules.set(item.id, item);
     }
   }
@@ -502,10 +527,7 @@ Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
 Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
 
 🎯 <b>Originators & Steam Chasers Active:</b>
-• <b>GP300 (GPRO50RSK):</b> 22 tickets, $46.1k handle, <b>+$33,858 win</b> (Hold: -73.4%)
-• <b>AT10359 (ATEAM):</b> 21 tickets, $26.5k handle, <b>+$19,024 win</b> (Hold: -71.8%)
-• <b>BCC1530 (SPEN):</b> 31 tickets, $19.7k handle, <b>+$10,514 win</b> (Hold: -53.3%)
-• <b>AT811 (ATEAM):</b> 30 tickets, $5.9k handle, <b>+$3,967 win</b> (Hold: -66.2%)
+• <b>unmeasured (no per-customer intraday source wired to this report)</b>
 
 🛡 <b>Operational Directive:</b>
 Enforce 6-second dynamic confirmation delay gate across live/in-play markets and moving numbers.
@@ -546,11 +568,7 @@ Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
 • Agent 50% Shared Hold : ${sharedHoldLine}
 
 🚨 <b>Top 5 Sub-Agent House Losses:</b>
-1. <b>BIGDAD</b>    : -$40,000.00 (BGD101 cashed 2 max wagers)
-2. <b>GPRO50RSK</b> : -$29,303.00 (GP300 steam win +$33.9k)
-3. <b>ATEAM</b>     : -$27,434.00 (AT10359 syndicate win +$19.0k)
-4. <b>FAKEMONEY</b> : -$25,000.00 (RF2003 whale swing)
-5. <b>DAN318</b>    : -$12,382.00 (DAN245 won +$14.0k)
+• <b>unmeasured (no per-sub-agent settlement source wired to this report)</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
     return {
@@ -667,6 +685,25 @@ export type ShellCaptureOutcome =
 /** Repo root; `file:` requires resolve relative to it. */
 const REPO_ROOT = resolve(import.meta.dir, "..");
 
+/** Check `requires` entries (`ENV_NAME` or `file:relative/path`) without leaking values. */
+export function checkShellJobRequirements(
+  requires: readonly string[] | undefined,
+  env: Readonly<Record<string, string | undefined>> = Bun.env,
+  repoRoot: string = REPO_ROOT,
+): readonly string[] {
+  const missing: string[] = [];
+  for (const requirement of requires ?? []) {
+    if (requirement.startsWith("file:")) {
+      const relative = requirement.slice("file:".length);
+      if (!existsSync(resolve(repoRoot, relative))) missing.push(requirement);
+      continue;
+    }
+    const value = (env[requirement] ?? "").toString().trim();
+    if (value === "") missing.push(requirement);
+  }
+  return missing;
+}
+
 /**
  * Check the requires list and spawn the capture CLI. Never prints env values, never passes the
  * parent environment with `inherit` — the spawned child inherits the daemon's env explicitly only
@@ -680,18 +717,7 @@ export async function runShellCaptureDefault(
     readonly warn: (line: string) => void;
   } = console,
 ): Promise<ShellCaptureOutcome> {
-  const missing: string[] = [];
-  for (const requirement of spec.requires ?? []) {
-    if (requirement.startsWith("file:")) {
-      const relative = requirement.slice("file:".length);
-      if (!existsSync(resolve(REPO_ROOT, relative))) missing.push(requirement);
-      continue;
-    }
-    const value = (Bun.env[requirement as keyof typeof Bun.env] ?? "")
-      .toString()
-      .trim();
-    if (value === "") missing.push(requirement);
-  }
+  const missing = checkShellJobRequirements(spec.requires);
   if (missing.length > 0) {
     // Only names are logged, never values.
     logger.log(

@@ -1,4 +1,5 @@
 import type React from "react";
+import { DASHBOARD_FRESHNESS } from "../config/dashboard.ts";
 import { styles } from "../dashboard_styles.ts";
 import {
   type CustomerCohortKpiTone,
@@ -7,6 +8,9 @@ import {
   PENDING_COHORTS_PROVENANCE,
 } from "../hydration.ts";
 import { getLocalAgentHref } from "../links.ts";
+import type { ReverseDnsForensicsView } from "../../../../lib/reverse_dns_forensics.ts";
+import { ReverseDnsForensicsCard } from "./ReverseDnsForensicsCard.tsx";
+import { SharpnessDecomposition } from "../viz/SharpnessDecomposition.tsx";
 import type {
   CustomersApiResponse,
   CustomerSortKey,
@@ -35,17 +39,37 @@ export interface CustomersTabPanelProps {
   readonly onSelectCustomer: (cust: ShowcaseCustomer) => void;
   readonly copiedCliId: string | null;
   readonly onCopyCli: (customerId: string) => void;
-  readonly customerForensicResult: string | null;
+  readonly customerReverseForensics?:
+    ReverseDnsForensicsView | null | undefined;
   readonly onClearForensicResult: () => void;
   readonly onRunReverseLookup: (ipAddress: string) => void;
   readonly onOpenTerminalProfile: (customerId: string) => void;
   readonly onSelectAgent?: ((agentId: string) => void) | undefined;
   readonly onViewCustomerWagers?: ((customerId: string) => void) | undefined;
+  /** Set when no live per-customer profile source exists; replaces the table and inspector. */
+  readonly profilesUnavailableReason?: string | null | undefined;
+  /** One-line provenance for the rows on screen (counts + source endpoint). */
+  readonly profilesProvenance?: string | null | undefined;
+  readonly matrixMode?: boolean | undefined;
+  readonly matrixProfileOverlay?:
+    | {
+        readonly total: number;
+        readonly liveOpen: number;
+        readonly ranked: number;
+        readonly cohort: number;
+        readonly liveWagersDistinct: number;
+      }
+    | null
+    | undefined;
+  readonly onOpenTerminalRadar?: ((customerId: string) => void) | undefined;
 }
 
 interface CustomerCohortSummary {
   readonly totalVarUsd: number;
   readonly totalCapUsd: number;
+  /** Rows that actually carry a measured VaR / cap; the rest list them in `unknown`. */
+  readonly varRows: number;
+  readonly capRows: number;
   readonly alertCount: number;
   readonly avgSharpness: string;
 }
@@ -55,17 +79,29 @@ function summarizeDisplayedCustomers(
 ): CustomerCohortSummary {
   let totalVarUsd = 0;
   let totalCapUsd = 0;
+  let varRows = 0;
+  let capRows = 0;
   let alertCount = 0;
   let sharpSum = 0;
   for (const row of rows) {
-    totalVarUsd += row.var95Usd;
-    totalCapUsd += row.recommendedLimitUsd;
+    const unknown = row.unknown ?? [];
+    // A row that never measured VaR or a limit is not a zero-dollar contribution.
+    if (!unknown.includes("var95")) {
+      totalVarUsd += row.var95Usd;
+      varRows += 1;
+    }
+    if (!unknown.includes("limit")) {
+      totalCapUsd += row.recommendedLimitUsd;
+      capRows += 1;
+    }
     if (row.action.includes("ALERT")) alertCount++;
     sharpSum += row.score;
   }
   return {
     totalVarUsd,
     totalCapUsd,
+    varRows,
+    capRows,
     alertCount,
     avgSharpness: rows.length > 0 ? (sharpSum / rows.length).toFixed(1) : "n/a",
   };
@@ -76,7 +112,6 @@ interface RadarAxisSpec {
   readonly valueKey:
     "clvScore" | "skillScore" | "sizingScore" | "sigScore" | "timingScore";
   readonly max: number;
-  readonly color: string;
 }
 
 const RADAR_AXES: readonly RadarAxisSpec[] = [
@@ -84,31 +119,26 @@ const RADAR_AXES: readonly RadarAxisSpec[] = [
     label: "CLV Beat Margin",
     valueKey: "clvScore",
     max: 3.0,
-    color: "#38bdf8",
   },
   {
     label: "Bayesian Skill",
     valueKey: "skillScore",
     max: 2.5,
-    color: "#a855f7",
   },
   {
     label: "Sizing Discipline",
     valueKey: "sizingScore",
     max: 1.5,
-    color: "#22c55e",
   },
   {
     label: "Signature Specialization",
     valueKey: "sigScore",
     max: 2.0,
-    color: "#f59e0b",
   },
   {
     label: "Timing / Parlay Exploitation",
     valueKey: "timingScore",
     max: 1.0,
-    color: "#ef4444",
   },
 ];
 
@@ -140,13 +170,20 @@ export function CustomersTabPanel({
   onSelectCustomer,
   copiedCliId,
   onCopyCli,
-  customerForensicResult,
+  customerReverseForensics = null,
   onClearForensicResult,
   onRunReverseLookup,
   onOpenTerminalProfile,
   onSelectAgent,
   onViewCustomerWagers,
+  profilesUnavailableReason = null,
+  profilesProvenance = null,
+  matrixMode = false,
+  matrixProfileOverlay = null,
+  onOpenTerminalRadar,
 }: CustomersTabPanelProps): React.ReactElement {
+  const showOpenRisk =
+    matrixMode && sortedCustomers.some((c) => (c.openRiskUsd ?? 0) > 0);
   const effectiveStatus: "pending" | "ready" | "unavailable" =
     cohortsStatus ?? (cohortsReport !== null ? "ready" : "pending");
   const kpiCards = deriveCustomerCohortKpiCards({
@@ -154,6 +191,8 @@ export function CustomersTabPanel({
     status: effectiveStatus,
     error: cohortsError,
   });
+  const isUnknown = (cust: ShowcaseCustomer, field: string): boolean =>
+    cust.unknown?.includes(field) ?? false;
   const provenanceBadge = formatProvenanceBadge(
     effectiveStatus === "unavailable"
       ? {
@@ -163,6 +202,7 @@ export function CustomersTabPanel({
           observedAt: "",
         }
       : (cohortsReport?.provenance ?? PENDING_COHORTS_PROVENANCE),
+    { staleAfterMinutes: DASHBOARD_FRESHNESS.stale_after_minutes },
   );
 
   return (
@@ -421,11 +461,93 @@ export function CustomersTabPanel({
           >
             ✅ High-Hold Whales
           </button>
+          {matrixMode ? (
+            <>
+              {(
+                ["TIER_1", "TIER_2", "TIER_3", "TIER_4", "TIER_5"] as const
+              ).map((tier) => (
+                <button
+                  key={tier}
+                  type="button"
+                  style={styles.pill(filterTier === tier)}
+                  onClick={() => onFilterTierChange(tier)}
+                  title={`Filter by data tier ${tier} (30d rankings)`}
+                >
+                  {tier.replace("TIER_", "T")}
+                </button>
+              ))}
+            </>
+          ) : null}
         </div>
       </div>
 
+      {matrixMode && matrixProfileOverlay ? (
+        <div
+          data-customers-matrix="overlay"
+          style={{
+            margin: "0 12px 10px",
+            padding: "10px 12px",
+            borderRadius: "8px",
+            border: "1px solid rgba(56, 189, 248, 0.35)",
+            background:
+              "linear-gradient(90deg, rgba(56, 189, 248, 0.1), rgba(168, 85, 247, 0.08))",
+            fontSize: "12px",
+            color: "#cbd5e1",
+          }}
+        >
+          <strong style={{ color: "#7dd3fc" }}>Matrix overlay</strong> merges{" "}
+          <b>{matrixProfileOverlay.cohort}</b> cohort rows,{" "}
+          <b>{matrixProfileOverlay.ranked}</b> ranked players, and{" "}
+          <b>{matrixProfileOverlay.liveOpen}</b> live-open customers (
+          {matrixProfileOverlay.liveWagersDistinct} on the wager tape). Tiers
+          and scores follow API payloads — not hardcoded cutoffs.
+        </div>
+      ) : null}
+
+      {profilesProvenance !== null && (
+        <div
+          role="status"
+          data-profiles-source="cohort"
+          style={{
+            margin: "0 12px 8px",
+            fontSize: "11px",
+            color: "#94a3b8",
+          }}
+        >
+          {profilesProvenance}
+        </div>
+      )}
+
       {/* Two-Column Grid: Customer Table & Deep Inspector */}
       {(() => {
+        if (
+          profilesUnavailableReason !== null &&
+          !(matrixMode && sortedCustomers.length > 0)
+        ) {
+          return (
+            <div
+              role="status"
+              data-profiles-source="unavailable"
+              style={{
+                ...styles.tablePanel,
+                textAlign: "center",
+                color: "#94a3b8",
+                fontSize: "13px",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 8px",
+                  fontSize: "16px",
+                  color: "#f8fafc",
+                }}
+              >
+                No live profile source yet
+              </h3>
+              <div>{profilesUnavailableReason}</div>
+            </div>
+          );
+        }
         const cohortSummary = summarizeDisplayedCustomers(sortedCustomers);
         const hasActiveFilter =
           searchQuery.trim() !== "" || filterTier !== "ALL";
@@ -505,9 +627,10 @@ export function CustomersTabPanel({
                     {cohortSummary.alertCount} Alerts
                   </span>
                   <span style={{ fontSize: "11px", color: "#94a3b8" }}>
-                    Σ VaR: <b>${cohortSummary.totalVarUsd.toLocaleString()}</b>{" "}
-                    · Σ Caps:{" "}
-                    <b>${cohortSummary.totalCapUsd.toLocaleString()}</b>
+                    Σ VaR ({cohortSummary.varRows}/{sortedCustomers.length}
+                    ): <b>${cohortSummary.totalVarUsd.toLocaleString()}</b> · Σ
+                    Caps ({cohortSummary.capRows}/{sortedCustomers.length}
+                    ): <b>${cohortSummary.totalCapUsd.toLocaleString()}</b>
                   </span>
                 </div>
                 <div
@@ -583,6 +706,11 @@ export function CustomersTabPanel({
                         </span>
                       </th>
                       <th style={styles.th}>Specialization</th>
+                      {showOpenRisk ? (
+                        <th style={styles.th} title="Open risk from live tape">
+                          24h Open
+                        </th>
+                      ) : null}
                       <th style={styles.th}>Correlated Par</th>
                       <th
                         className="sortable"
@@ -672,6 +800,18 @@ export function CustomersTabPanel({
                               >
                                 ↗
                               </a>
+                              {cust.source !== undefined && (
+                                <span
+                                  style={{
+                                    ...styles.subBadge,
+                                    backgroundColor: "rgba(56, 189, 248, 0.14)",
+                                    color: "#7dd3fc",
+                                  }}
+                                  title={`Row source: ${cust.source}`}
+                                >
+                                  {cust.source.toUpperCase()}
+                                </span>
+                              )}
                               {cust.subAccountIndex !== null && (
                                 <span style={styles.subBadge}>
                                   Seat #{cust.subAccountIndex}
@@ -716,11 +856,24 @@ export function CustomersTabPanel({
                               {cust.score.toFixed(1)} ·{" "}
                               {cust.tier.replace("TIER_", "T")}
                             </span>
+                            {cust.tierLabel ? (
+                              <div
+                                style={{
+                                  fontSize: "10px",
+                                  color: "#94a3b8",
+                                  marginTop: "2px",
+                                }}
+                              >
+                                {cust.tierLabel}
+                              </div>
+                            ) : null}
                           </td>
                           <td style={styles.td}>
                             <div>{cust.sizingStrategy}</div>
                             <div style={styles.custSub}>
-                              Gini: {cust.gini.toFixed(3)}
+                              {isUnknown(cust, "gini")
+                                ? "Gini: —"
+                                : `Gini: ${cust.gini.toFixed(3)}`}
                             </div>
                           </td>
                           <td
@@ -736,20 +889,39 @@ export function CustomersTabPanel({
                               {cust.timingArchetype}
                             </div>
                           </td>
+                          {showOpenRisk ? (
+                            <td style={styles.td}>
+                              {(cust.openRiskUsd ?? 0) > 0
+                                ? `$${cust.openRiskUsd!.toLocaleString()}`
+                                : "—"}
+                            </td>
+                          ) : null}
                           <td style={styles.td}>
-                            <span style={styles.corrBadge(cust.correlatedRisk)}>
-                              {cust.correlatedRisk}
-                            </span>
+                            {isUnknown(cust, "correlation") ? (
+                              <span style={{ color: "#64748b" }}>—</span>
+                            ) : (
+                              <span
+                                style={styles.corrBadge(cust.correlatedRisk)}
+                              >
+                                {cust.correlatedRisk}
+                              </span>
+                            )}
                           </td>
                           <td style={styles.td}>
-                            <div>${cust.var95Usd.toLocaleString()}</div>
+                            <div>
+                              {isUnknown(cust, "var95")
+                                ? "—"
+                                : `$${cust.var95Usd.toLocaleString()}`}
+                            </div>
                             <div
                               className={
                                 cust.holdPct < 0 ? "hold-neg" : "hold-pos"
                               }
                               style={{ fontSize: "11px" }}
                             >
-                              Hold: {cust.holdPct}%
+                              {isUnknown(cust, "holdPct")
+                                ? "Hold: —"
+                                : `Hold: ${cust.holdPct}%`}
                             </div>
                           </td>
                           <td className="directive" style={styles.td}>
@@ -757,7 +929,9 @@ export function CustomersTabPanel({
                               {cust.action}
                             </span>
                             <div style={styles.custSub}>
-                              Cap: ${cust.recommendedLimitUsd.toLocaleString()}
+                              {isUnknown(cust, "limit")
+                                ? "Cap: —"
+                                : `Cap: $${cust.recommendedLimitUsd.toLocaleString()}`}
                             </div>
                           </td>
                         </tr>
@@ -899,6 +1073,23 @@ export function CustomersTabPanel({
                       >
                         💻 Terminal
                       </button>
+                      {onOpenTerminalRadar ? (
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.actionBtn,
+                            padding: "4px 8px",
+                            fontSize: "11px",
+                            cursor: "pointer",
+                          }}
+                          onClick={() =>
+                            onOpenTerminalRadar(selectedCustomer.id)
+                          }
+                          title="Run profile &lt;id&gt; --radar in Bun.Terminal"
+                        >
+                          📊 Radar
+                        </button>
+                      ) : null}
                       {onViewCustomerWagers && (
                         <button
                           type="button"
@@ -947,58 +1138,39 @@ export function CustomersTabPanel({
                         Portal ↗
                       </a>
                       <span style={styles.tierBadge(selectedCustomer.tier)}>
-                        {selectedCustomer.tier} (Score:{" "}
-                        {selectedCustomer.score.toFixed(1)}/10.0)
+                        {selectedCustomer.tierLabel ?? selectedCustomer.tier}{" "}
+                        (Score: {selectedCustomer.score.toFixed(1)}/10.0)
                       </span>
+                      {selectedCustomer.source ? (
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            backgroundColor: "rgba(148, 163, 184, 0.15)",
+                            color: "#94a3b8",
+                          }}
+                        >
+                          source: {selectedCustomer.source}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
-                  {/* Decomposed Score Progress Bars */}
+                  {/* Decomposed Score: common-scale aligned bars */}
                   <div style={styles.radarCard}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <h4 style={styles.cardHeader}>
-                        🎯 Decomposed Sharpness Radars
-                      </h4>
-                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>
-                        Sum:{" "}
-                        <b style={{ color: "#f8fafc" }}>
-                          {(
-                            selectedCustomer.clvScore +
-                            selectedCustomer.skillScore +
-                            selectedCustomer.sizingScore +
-                            selectedCustomer.sigScore +
-                            selectedCustomer.timingScore
-                          ).toFixed(1)}
-                        </b>
-                        /10.0
-                      </span>
-                    </div>
-                    {RADAR_AXES.map((axis) => {
-                      const val = selectedCustomer[axis.valueKey];
-                      const pct = Math.min(
-                        100,
-                        Math.max(0, (val / axis.max) * 100),
-                      );
-                      return (
-                        <div key={axis.valueKey} style={styles.radarRow}>
-                          <span>
-                            {axis.label} ({val.toFixed(1)}/{axis.max.toFixed(1)}
-                            ):
-                          </span>
-                          <div style={styles.progressBarBg}>
-                            <div
-                              style={styles.progressBarFill(pct, axis.color)}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <h4 style={styles.cardHeader}>
+                      🎯 Decomposed Sharpness Radars
+                    </h4>
+                    <SharpnessDecomposition
+                      score={selectedCustomer.score}
+                      components={RADAR_AXES.map((axis) => ({
+                        key: axis.valueKey,
+                        label: axis.label,
+                        value: selectedCustomer[axis.valueKey],
+                        cap: axis.max,
+                      }))}
+                    />
                   </div>
 
                   {/* Sizing & Portfolio Risk */}
@@ -1463,11 +1635,11 @@ export function CustomersTabPanel({
                         🔍 Run Reverse DNS
                       </button>
                     </div>
-                    {customerForensicResult && (
-                      <div style={styles.forensicResult}>
-                        {customerForensicResult}
-                      </div>
-                    )}
+                    {customerReverseForensics ? (
+                      <ReverseDnsForensicsCard
+                        view={customerReverseForensics}
+                      />
+                    ) : null}
                   </div>
                 </div>
               ) : (

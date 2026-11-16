@@ -38,6 +38,7 @@ import {
   retryAlert,
 } from "../lib/alerts.ts";
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
+import { buildAutomationsSnapshot } from "../lib/automations_status.ts";
 import {
   benchmarkResolverLatency,
   classifyIpAddress,
@@ -66,18 +67,22 @@ import {
   resolveMcpAllowedOrigins,
 } from "../lib/sportsdesk_mcp_server.ts";
 import { executeTerminalQuery } from "../lib/terminal_emulator.ts";
-import {
-  PROXY_CONDUITS_30D,
-  SAMPLE_PROFILE_DATA,
-} from "../packages/ui/src/showcase_data.ts";
 import indexHtml from "../src/dashboard/index.html";
 import { runBunBuild } from "./build.ts";
 import { computeDashboardDceMatrix } from "./build_dashboard.ts";
+import { runGsliveTicketVerification } from "./verify-gslive-tickets.ts";
+
+export interface DashboardServerDevelopmentOptions {
+  readonly hmr?: boolean | undefined;
+  readonly console?: boolean | undefined;
+}
 
 export interface DashboardServerOptions {
   readonly port?: number | undefined;
   readonly hostname?: string | undefined;
   readonly watchFiles?: boolean | undefined;
+  readonly development?:
+    boolean | DashboardServerDevelopmentOptions | undefined;
   readonly shadowDbPath?: string | undefined;
   readonly forceShadowFixture?: boolean | undefined;
   readonly apiOnly?: boolean | undefined;
@@ -88,6 +93,7 @@ export interface DashboardServerHandle {
   readonly server: Server<undefined>;
   readonly url: URL;
   readonly port: number;
+  readonly development: boolean;
   stop: (closeActiveConnections?: boolean) => void;
 }
 
@@ -221,6 +227,34 @@ function renderAgentHtmlPage(detail: AgentDetailApiResponse): string {
 </html>`;
 }
 
+export function resolveDashboardDevelopmentOption(
+  options: DashboardServerOptions,
+  envNodeEnv: string | undefined = Bun.env.NODE_ENV,
+): boolean | { hmr: boolean; console: boolean } {
+  const apiOnly = options.apiOnly === true;
+  if (options.development !== undefined) {
+    if (typeof options.development === "boolean") {
+      return options.development;
+    }
+    return {
+      hmr:
+        options.development.hmr ?? (!apiOnly && options.watchFiles !== false),
+      console:
+        options.development.console ??
+        (!apiOnly && options.watchFiles !== false),
+    };
+  }
+  const isDevEnv = envNodeEnv !== "production";
+  if (!isDevEnv || apiOnly) {
+    return false;
+  }
+  const activeWatch = options.watchFiles !== false;
+  return {
+    hmr: activeWatch,
+    console: activeWatch,
+  };
+}
+
 export function startDashboardServer(
   options: DashboardServerOptions = {},
 ): DashboardServerHandle {
@@ -237,7 +271,8 @@ export function startDashboardServer(
   const clients = new Set<ServerWebSocket<undefined>>();
   const watchers: FSWatcher[] = [];
   let serverRef: Server<undefined> | null = null;
-  const isDevelopment = Bun.env.NODE_ENV !== "production";
+  const serveDevelopment = resolveDashboardDevelopmentOption(options);
+  const isDevelopment = serveDevelopment !== false;
   const mcpHandler = createSportsdeskMcpHttpHandler({
     stateless:
       options.mcpStateless ??
@@ -258,10 +293,18 @@ export function startDashboardServer(
   const r2PipelineService = createR2PipelineService({
     daemon4020Origin:
       Bun.env.SPORTSDESK_API_ORIGIN ?? DEFAULT_COMPANION_4020_ORIGIN,
+    getAutomationsSnapshot: () => buildAutomationsSnapshot(),
   });
   const { buildLiveWagersPayload, clearCache: clearWagersCache } =
     createDevLiveWagersLoader({
       cwd,
+      // SPORTSDESK_LIVE_WAGERS_JSON points the feed at one capture; unset reads
+      // data/live-wagers.json and reports "unavailable" when it is missing.
+      ...(Bun.env.SPORTSDESK_LIVE_WAGERS_JSON
+        ? {
+            candidatePaths: [resolve(cwd, Bun.env.SPORTSDESK_LIVE_WAGERS_JSON)],
+          }
+        : {}),
       // Vendor wire contract (schema/wagers_field_contract.json) checked against
       // the raw rows before projection; surfaces as payload.wire_contract.
       // Sentinel-noise rows (writer ALERT/BLOCKED) are not wagers; skip and count
@@ -310,17 +353,20 @@ export function startDashboardServer(
   });
   const agentDetailService = createAgentDetailService({
     cwd,
-    getConduits: async () =>
-      PROXY_CONDUITS_30D.map((c) => ({
-        agentId: c.agentId,
-        masterAgent: c.masterAgent,
-        handleUsd: c.handleUsd,
-        wagers: c.wagers,
-        topCustomer: c.topCust,
-        concentrationPct: c.concPct,
-        isProxyConduit: c.concPct >= 80,
-      })),
-    getCustomers: () => SAMPLE_PROFILE_DATA,
+    getConduits: async () => {
+      const { runBatchedRanking } = await import("../lib/customer_rankings.ts");
+      const data = await runBatchedRanking({ limitPlayers: 50 });
+      return data.topSubAgents.map((agent) => ({
+        agentId: agent.agentId,
+        masterAgent: agent.masterAgent,
+        handleUsd: agent.totalHandleUsd,
+        wagers: agent.totalWagers,
+        customers: agent.customerCount,
+        topCustomer: agent.topCustomer,
+        concentrationPct: agent.topCustomerConcentrationPct,
+        isProxyConduit: agent.isProxyConduit,
+      }));
+    },
     getRecentWagers: async () => {
       const payload = await buildLiveWagersPayload();
       return payload.wagers as unknown as ReadonlyArray<
@@ -343,9 +389,11 @@ export function startDashboardServer(
     getPort: () => serverRef?.port ?? port,
   });
 
-  let cachedDceMatrix: Awaited<
-    ReturnType<typeof computeDashboardDceMatrix>
-  > | null = null;
+  let cachedDceMatrixProbe: {
+    readonly targets: Awaited<ReturnType<typeof computeDashboardDceMatrix>>;
+    /** When the probe finished, so a cached re-serve cannot look freshly built. */
+    readonly generatedAt: string;
+  } | null = null;
   let cachedLegacyBundle: CachedLegacyBundle | null = null;
   let inflightLegacyBundle: Promise<CachedLegacyBundle | null> | null = null;
 
@@ -561,6 +609,14 @@ export function startDashboardServer(
       getBetTickerPayload: (filters) => betTickerService.getPayload(filters),
       getR2PipelinePayload: (opts) => r2PipelineService.probeAll(opts),
       getDaemonStatusPayload: () => r2PipelineService.probeDaemon(),
+      getAutomationsPayload: () => buildAutomationsSnapshot(),
+      runGsliveTicketVerify: async (opts) => {
+        const summary = await runGsliveTicketVerification({
+          dryRun: opts?.dryRun ?? true,
+        });
+        r2PipelineService.clearCache();
+        return summary;
+      },
       getAgentDetailPayload: (agentId) =>
         agentDetailService.getAgentDetail(agentId),
       getTiersConfig: async () => {
@@ -578,11 +634,15 @@ export function startDashboardServer(
       runShadowPricing: (params) => runShadowPricingDashboard(params),
       forceShadowFixture: options.forceShadowFixture,
       shadowDbPath: options.shadowDbPath,
-      getBuildMatrix: async () => {
-        if (!cachedDceMatrix) {
-          cachedDceMatrix = await computeDashboardDceMatrix();
+      getBuildMatrix: async (force = false) => {
+        if (force || cachedDceMatrixProbe === null) {
+          const targets = await computeDashboardDceMatrix();
+          cachedDceMatrixProbe = {
+            targets,
+            generatedAt: new Date().toISOString(),
+          };
         }
-        return cachedDceMatrix;
+        return cachedDceMatrixProbe;
       },
       handleMcp: (req: Request) => mcpHandler.handleRequest(req),
     },
@@ -807,6 +867,7 @@ export function startDashboardServer(
   const server: Server<undefined> = Bun.serve({
     port,
     hostname,
+    development: serveDevelopment,
     routes: apiOnly
       ? api.routes
       : { ...uiRoutes, ...api.routes, ...companionApiRoutes },
@@ -955,7 +1016,7 @@ export function startDashboardServer(
           if (!existsSync(dir)) continue;
           watchers.push(
             watch(dir, { recursive: true }, () => {
-              cachedDceMatrix = null;
+              cachedDceMatrixProbe = null;
               cachedLegacyBundle = null;
               api.publishTopic("dashboard", "reload");
             }),
@@ -1017,6 +1078,7 @@ export function startDashboardServer(
     server,
     url: server.url,
     port: server.port ?? port,
+    development: server.development,
     stop(closeActiveConnections = true) {
       alertDispatcher.stop();
       mcpHandler.closeAll().catch(() => {
@@ -1044,12 +1106,21 @@ if (import.meta.main) {
   }
 
   const apiOnly = Bun.argv.includes("--api-only");
+  const noDev = Bun.argv.includes("--no-dev") || Bun.argv.includes("--prod");
+  const noHmr = Bun.argv.includes("--no-hmr");
+  const noConsole = Bun.argv.includes("--no-console");
   const mcpStateless =
     Bun.argv.includes("--stateless") || Bun.argv.includes("--mcp-stateless");
   prefetchSportsDeskEndpoints();
   const handle = startDashboardServer({
-    watchFiles: true,
+    watchFiles: !noDev,
     apiOnly,
+    development: noDev
+      ? false
+      : {
+          hmr: !noHmr,
+          console: !noConsole,
+        },
     ...(mcpStateless ? { mcpStateless: true } : {}),
   });
 
@@ -1057,6 +1128,9 @@ if (import.meta.main) {
     `\n⚡ SportsDesk ${apiOnly ? "API-Only" : "Enhanced Dashboard"} Server running!`,
   );
   console.log(`   ➜ Local URL:    ${handle.url.href}`);
+  console.log(
+    `   ➜ Dev Overlay:  ${handle.development ? `enabled (hmr: ${!noHmr}, console: ${!noConsole} · Bun v${Bun.version})` : "disabled"}`,
+  );
   console.log(`   ➜ Health Probe: ${handle.url.href}health`);
   console.log(`   ➜ Markdown API: ${handle.url.href}api/dashboard`);
   console.log(`   ➜ Shadow API:   ${handle.url.href}api/shadow-pricing`);

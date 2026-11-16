@@ -20,6 +20,7 @@ import {
   type CustomerRow,
   type TreeIndex,
 } from "../lib/customer_profile.ts";
+import { customerRowFromHarvestedProfile } from "../lib/customer_source_rows.ts";
 
 const REPO = join(import.meta.dir, "..");
 const { values } = parseArgs({
@@ -48,8 +49,48 @@ const rows = (await Bun.file(bookPath)
     process.exit(2);
   })) as CustomerRow[];
 
+// Signal honesty: the book can be sparse or synthetic. Merge observed live profiles from
+// reports/harvested-live-profiles.json, and remember which rows came from that model-derived
+// artifact so the output can label them instead of passing their numbers off as book measurements.
+const harvestedPath = join(REPO, "reports", "harvested-live-profiles.json");
+const harvestedIds = new Set<string>();
+const harvestedFile = Bun.file(harvestedPath);
+if (await harvestedFile.exists()) {
+  try {
+    const harvested = (await harvestedFile.json()) as { profiles?: unknown[] };
+    if (Array.isArray(harvested?.profiles)) {
+      const existingIds = new Set(
+        rows.map((row) => row.customer_id.trim().toUpperCase()),
+      );
+      for (const profile of harvested.profiles) {
+        const row = customerRowFromHarvestedProfile(profile);
+        if (row === null || existingIds.has(row.customer_id)) continue;
+        existingIds.add(row.customer_id);
+        harvestedIds.add(row.customer_id);
+        rows.push(row);
+      }
+    }
+  } catch {
+    // signal honesty: an unreadable harvested artifact adds no rows
+  }
+}
+
 const tree = (await Bun.file(resolve(values.tree ?? "")).json()) as TreeIndex;
 const { profiles, summary } = buildCustomerProfiles(rows, tree);
+
+// Harvested rows are model-derived and the artifact publishes no lifetime volume, so their profiles
+// carry a source flag: an absent aggregate must not read as a measured zero.
+const labelledProfiles = profiles.map((profile) =>
+  harvestedIds.has(profile.customerId.toUpperCase())
+    ? {
+        ...profile,
+        flags: [
+          ...profile.flags,
+          "SOURCE:harvested-live-profiles (model-derived; lifetime volume not measured)",
+        ],
+      }
+    : profile,
+);
 
 const outPath = resolve(values.out ?? "");
 await Bun.write(
@@ -61,12 +102,15 @@ await Bun.write(
       source: {
         book: bookPath.replace(REPO, "."),
         tree: resolve(values.tree ?? "").replace(REPO, "."),
+        ...(harvestedIds.size === 0
+          ? {}
+          : { harvestedProfiles: harvestedPath.replace(REPO, ".") }),
       },
       window:
         "recent-sample (5 tickets per customer); lifetime numbers come from the book",
       liveProxy: "GSLIVE channel — unverified as a live-betting flag",
       summary,
-      profiles,
+      profiles: labelledProfiles,
     },
     null,
     2,
@@ -74,7 +118,7 @@ await Bun.write(
 );
 
 if (values.json) {
-  console.log(JSON.stringify({ summary, profiles }, null, 2));
+  console.log(JSON.stringify({ summary, profiles: labelledProfiles }, null, 2));
 } else {
   // The book's `*_usd` fields are dollars (a $20,000 ticket is `risk_usd: 20000`), not cents.
   const usd = (dollars: number) =>

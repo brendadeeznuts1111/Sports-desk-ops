@@ -6,7 +6,10 @@ import {
 } from "@sportsdesk-ops/api";
 import { parseDashboardWsSignal } from "@sportsdesk-ops/contracts";
 import { WAGERS_TABLE } from "../packages/ui/src/config/wagers.ts";
-import { startDashboardServer } from "../scripts/dev_dashboard.ts";
+import {
+  resolveDashboardDevelopmentOption,
+  startDashboardServer,
+} from "../scripts/dev_dashboard.ts";
 
 function buildMockDeps(
   overrides: Partial<DashboardApiDeps> = {},
@@ -49,6 +52,7 @@ function buildMockDeps(
         payload: {
           cohorts: { backtestCount: 2 },
           backtestTop: [],
+          backtestAll: [],
           fixtures: [],
         },
       }),
@@ -203,7 +207,10 @@ function buildMockDeps(
       provenance: params.forceFixture ? "fixture" : "live_db",
       parameters: params,
     }),
-    getBuildMatrix: async () => [{ target: "prod", features: ["PROD"] }],
+    getBuildMatrix: async () => ({
+      targets: [{ target: "prod", features: ["PROD"] }],
+      generatedAt: "2026-11-15T00:00:00.000Z",
+    }),
     ...overrides,
   };
 }
@@ -296,7 +303,7 @@ describe("@sportsdesk-ops/api in-memory router (zero port bind)", () => {
     expect((await call("/api/taxonomy-catalog")).status).toBe(200);
 
     const shadowGet = await call(
-      "/api/shadow-pricing?source=fixture&ladder3=-145&mode=floor&routerAudit=enforced_lockout",
+      "/api/shadow-pricing?source=fixture&ladder3=-145&mode=floor&routerAudit=enforced_lockout&regime=live_in_play",
     );
     expect(shadowGet.status).toBe(200);
     const shadowGetJson = (await shadowGet.json()) as {
@@ -305,12 +312,29 @@ describe("@sportsdesk-ops/api in-memory router (zero port bind)", () => {
         ladderKey3: number;
         repriceMode: string;
         routerAuditMode: string;
+        regime?: string;
       };
     };
     expect(shadowGetJson.provenance).toBe("fixture");
     expect(shadowGetJson.parameters.ladderKey3).toBe(-145);
     expect(shadowGetJson.parameters.repriceMode).toBe("floor");
     expect(shadowGetJson.parameters.routerAuditMode).toBe("enforced_lockout");
+    expect(shadowGetJson.parameters.regime).toBe("live_in_play");
+
+    const shadowPostRegime = await call("/api/shadow-pricing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sport: "Football",
+        regime: "pregame",
+      }),
+    });
+    expect(shadowPostRegime.status).toBe(200);
+    const shadowPostRegimeJson = (await shadowPostRegime.json()) as {
+      parameters: { sport?: string; regime?: string };
+    };
+    expect(shadowPostRegimeJson.parameters.sport).toBe("Football");
+    expect(shadowPostRegimeJson.parameters.regime).toBe("pregame");
 
     const shadowBadPost = await call("/api/shadow-pricing", {
       method: "POST",
@@ -348,6 +372,28 @@ describe("@sportsdesk-ops/api in-memory router (zero port bind)", () => {
 
     expect((await call("/api/not-a-route")).status).toBe(404);
     expect((await call("/unknown")).status).toBe(404);
+  });
+
+  test("forwards the build-matrix refresh flag so the Re-compile button actually reprobes", async () => {
+    const probes: Array<boolean | undefined> = [];
+    const api = createDashboardApi(
+      buildMockDeps({
+        getBuildMatrix: async (force) => {
+          probes.push(force);
+          return {
+            targets: [{ target: "prod", features: ["PROD"] }],
+            generatedAt: "2026-11-15T00:00:00.000Z",
+          };
+        },
+      }),
+    );
+    const call = (path: string) =>
+      api.fetch(new Request(`http://dashboard.local${path}`));
+
+    expect((await call("/api/build-matrix")).status).toBe(200);
+    expect((await call("/api/build-matrix?refresh=0")).status).toBe(200);
+    expect((await call("/api/build-matrix?refresh=1")).status).toBe(200);
+    expect(probes).toEqual([false, false, true]);
   });
 
   test("enforces optional auth gate and manages WebSocket topic subscriptions", async () => {
@@ -563,5 +609,34 @@ describe("@sportsdesk-ops/api in-memory router (zero port bind)", () => {
     } finally {
       handle.stop(true);
     }
+  });
+
+  test("resolveDashboardDevelopmentOption wires Bun v1.4.4 HTML error overlay & HMR options", () => {
+    expect(resolveDashboardDevelopmentOption({}, "development")).toEqual({
+      hmr: true,
+      console: true,
+    });
+    expect(
+      resolveDashboardDevelopmentOption({ watchFiles: false }, "development"),
+    ).toEqual({
+      hmr: false,
+      console: false,
+    });
+    expect(
+      resolveDashboardDevelopmentOption({ apiOnly: true }, "development"),
+    ).toBe(false);
+    expect(resolveDashboardDevelopmentOption({}, "production")).toBe(false);
+    expect(
+      resolveDashboardDevelopmentOption(
+        { development: { hmr: true, console: false } },
+        "production",
+      ),
+    ).toEqual({
+      hmr: true,
+      console: false,
+    });
+    expect(
+      resolveDashboardDevelopmentOption({ development: false }, "development"),
+    ).toBe(false);
   });
 });

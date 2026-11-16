@@ -1,12 +1,26 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type {
+  AmericanOdds as CanonicalAmericanOdds,
+  BasisPoints as CanonicalBasisPoints,
+  Cents as CanonicalCents,
+  EpochMs as CanonicalEpochMs,
+  LineHundredths as CanonicalLineHundredths,
+  SettledCents as CanonicalSettledCents,
+} from "../design/domain-branded-types.ts";
 import {
   agentKeyOf,
   agentsAboveLevel,
+  bridgePendingRowsToDesk,
   buildArtifact,
   buildHierarchyIndex,
   customerKeyOf,
+  dedupeParentPendingTickets,
+  evaluateDeskRisk,
   extractRowsFromPreview,
   logoUrlFor,
+  parseAsCents,
   PII_KEYS,
   readHierarchyRows,
   readPendingRows,
@@ -16,7 +30,13 @@ import {
   summarizeGames,
   ticketKeyOf,
   toLiveBetGame,
+  type AmericanOdds,
+  type BasisPoints,
+  type Cents,
+  type EpochMs,
+  type LineHundredths,
   type PendingRow,
+  type SettledCents,
 } from "./live_bets.ts";
 import { agentLoginKey } from "./f402_hierarchy_agents.ts";
 import type { ListAgentsByAgentGeneralWireRow } from "./f402_list_agents_by_agent.ts";
@@ -455,5 +475,259 @@ describe("artifact with hierarchy", () => {
     const serialised = JSON.stringify(artifact);
     expect(serialised).not.toContain("not-a-real-secret");
     for (const key of PII_KEYS) expect(serialised).not.toContain(`"${key}"`);
+  });
+});
+
+describe("Pass 2 parlay deduplication, canonical brands & desk risk bridge", () => {
+  test("unifies branded types with design/domain-branded-types.ts", () => {
+    expectTypeOf<Cents>().toEqualTypeOf<CanonicalCents>();
+    expectTypeOf<SettledCents>().toEqualTypeOf<CanonicalSettledCents>();
+    expectTypeOf<AmericanOdds>().toEqualTypeOf<CanonicalAmericanOdds>();
+    expectTypeOf<BasisPoints>().toEqualTypeOf<CanonicalBasisPoints>();
+    expectTypeOf<LineHundredths>().toEqualTypeOf<CanonicalLineHundredths>();
+    expectTypeOf<EpochMs>().toEqualTypeOf<CanonicalEpochMs>();
+  });
+
+  test("dedupes 3-leg parlay with zero unresolved gap, preserves alt-spread 5000 rot & LineHundredths, and flags stake gaps", () => {
+    const legBase: PendingRow = {
+      TicketNumber: "55001",
+      WagerNumber: "1",
+      customerID: "CUST_A1",
+      WagerStatus: "P",
+      Outcome: "P",
+      WagerType: "P",
+      AmountWagered: 50000,
+      ToWinAmount: 300000,
+      FinalMoney: 600,
+      totalPicks: 3,
+      Team1ID: "Lakers",
+      Team2ID: "Celtics",
+      ChosenTeamID: "Lakers",
+      Team1RotNum: 5501,
+      Team2RotNum: 5502,
+      AdjSpread: -3.5,
+      SportType: "Basketball",
+      SportSubType: "NBA",
+    };
+
+    const parlay3Legs: PendingRow[] = [
+      legBase,
+      {
+        ...legBase,
+        Team1ID: "Chiefs",
+        Team2ID: "Bills",
+        ChosenTeamID: "Bills",
+        Team1RotNum: 101,
+        Team2RotNum: 102,
+        AdjSpread: 2.5,
+        SportType: "Football",
+        SportSubType: "NFL",
+      },
+      {
+        ...legBase,
+        Team1ID: "Arsenal",
+        Team2ID: "Chelsea",
+        ChosenTeamID: "Arsenal",
+        Team1RotNum: 2001,
+        Team2RotNum: 2002,
+        AdjSpread: -1.25,
+        SportType: "Soccer",
+        SportSubType: "ENG PREM",
+      },
+    ];
+
+    const mismatchParlay: PendingRow[] = [
+      {
+        ...legBase,
+        TicketNumber: "55002",
+        WagerNumber: "1",
+        totalPicks: 2,
+        AmountWagered: 50000,
+        ToWinAmount: 130000,
+        FinalMoney: 260,
+      },
+      {
+        ...legBase,
+        TicketNumber: "55002",
+        WagerNumber: "1",
+        totalPicks: 2,
+        AmountWagered: 45000,
+        ToWinAmount: 130000,
+        FinalMoney: 260,
+        Team1ID: "Arsenal",
+        Team2ID: "Chelsea",
+        ChosenTeamID: "Chelsea",
+        Team1RotNum: 2001,
+        Team2RotNum: 2002,
+        AdjSpread: 0.5,
+      },
+    ];
+
+    const deduped = dedupeParentPendingTickets([
+      ...parlay3Legs,
+      ...mismatchParlay,
+    ]);
+    expect(deduped.length).toBe(2);
+
+    const consistent = deduped.find((t) => t.ticketNumber === "55001")!;
+    expect(consistent).toBeDefined();
+    expect(consistent.observedLegs).toBe(3);
+    expect(consistent.totalPicks).toBe(3);
+    expect(consistent.stakeCents).toBe(50000 as Cents);
+    expect(consistent.priceOdds).toBe(600 as AmericanOdds);
+    expect(consistent.unresolvedGapCents).toBe(0n);
+    expect(consistent.hasCoercionError).toBe(false);
+    expect(consistent.legs.length).toBe(3);
+    expect(consistent.legs[0]?.rawRotNum).toBe(5501);
+    expect(consistent.legs[0]?.canonicalRotNum).toBe(501);
+    expect(consistent.legs[0]?.isAltSpreadRotation).toBe(true);
+    expect(consistent.legs[0]?.effectiveLineHundredths).toBe(
+      -350 as LineHundredths,
+    );
+    expect(consistent.legs[1]?.canonicalRotNum).toBe(102);
+    expect(consistent.legs[1]?.effectiveLineHundredths).toBe(
+      250 as LineHundredths,
+    );
+
+    const gapped = deduped.find((t) => t.ticketNumber === "55002")!;
+    expect(gapped).toBeDefined();
+    expect(gapped.unresolvedGapCents).toBe(5000n);
+    expect(gapped.hasCoercionError).toBe(true);
+
+    const bridged = bridgePendingRowsToDesk(mismatchParlay, {
+      maxStakeCents: parseAsCents(50000),
+    });
+    expect(bridged.unresolvedGapCentsTotal).toBe(5000n);
+    const gapEval = evaluateDeskRisk(bridged.desk);
+    expect(gapEval.degradedPending.length).toBe(1);
+    expect(gapEval.degradedPending[0]?.hasCoercionError).toBe(true);
+  });
+
+  test("flags a partially captured parlay instead of reading it as complete", () => {
+    const partial: PendingRow[] = [
+      {
+        TicketNumber: "88001",
+        WagerNumber: "1",
+        customerID: "CUST_PARTIAL",
+        WagerStatus: "P",
+        WagerType: "P",
+        AmountWagered: 25000,
+        ToWinAmount: 150000,
+        FinalMoney: 600,
+        totalPicks: 3,
+        Team1ID: "Lakers",
+        Team2ID: "Celtics",
+        ChosenTeamID: "Lakers",
+        Team1RotNum: 5501,
+        Team2RotNum: 5502,
+        AdjSpread: -3.5,
+      },
+    ];
+
+    const [ticket] = dedupeParentPendingTickets(partial);
+    expect(ticket).toBeDefined();
+    expect(ticket?.totalPicks).toBe(3);
+    expect(ticket?.observedLegs).toBe(1);
+    expect(ticket?.missingPicks).toBe(2);
+    expect(ticket?.hasCoercionError).toBe(true);
+
+    const bridged = bridgePendingRowsToDesk(partial, {
+      maxStakeCents: parseAsCents(50000),
+    });
+    const evaluation = evaluateDeskRisk(bridged.desk);
+    expect(evaluation.degradedPending).toHaveLength(1);
+    expect(evaluation.degradedPending[0]?.hasCoercionError).toBe(true);
+    // Under the limit, so it is degraded rather than reported at max — but never silent.
+    expect(evaluation.pendingAtMax).toHaveLength(0);
+  });
+
+  test("evaluates parent-level parlay exposure once with structured legs and Arsenal alert", () => {
+    const parlay2AtMax: PendingRow[] = [
+      {
+        TicketNumber: "77001",
+        WagerNumber: "1",
+        customerID: "CUST_B2",
+        WagerStatus: "P",
+        Outcome: "P",
+        WagerType: "P",
+        AmountWagered: 50000,
+        ToWinAmount: 130000,
+        FinalMoney: 260,
+        totalPicks: 2,
+        Team1ID: "Lakers",
+        Team2ID: "Celtics",
+        ChosenTeamID: "Lakers",
+        Team1RotNum: 5501,
+        Team2RotNum: 5502,
+        AdjSpread: -2.0,
+      },
+      {
+        TicketNumber: "77001",
+        WagerNumber: "1",
+        customerID: "CUST_B2",
+        WagerStatus: "P",
+        Outcome: "P",
+        WagerType: "P",
+        AmountWagered: 50000,
+        ToWinAmount: 130000,
+        FinalMoney: 260,
+        totalPicks: 2,
+        Team1ID: "Arsenal",
+        Team2ID: "Tottenham",
+        ChosenTeamID: "Arsenal",
+        Team1RotNum: 2011,
+        Team2RotNum: 2012,
+        AdjSpread: -0.5,
+      },
+    ];
+
+    const { desk, parentTickets, unresolvedGapCentsTotal } =
+      bridgePendingRowsToDesk(parlay2AtMax, {
+        customerId: "CUST_B2",
+        customerName: "Parlay Sharp",
+        maxStakeCents: parseAsCents(50000),
+      });
+
+    expect(unresolvedGapCentsTotal).toBe(0n);
+    expect(parentTickets.length).toBe(1);
+    expect(desk.positions.length).toBe(1);
+
+    const pos = desk.positions[0]!;
+    expect(pos.market).toBe("COMPOSITE:2-LEG");
+    expect(pos.side).toBe("PARLAY(2)");
+    expect(pos.exposureBps).toBe(10000 as BasisPoints);
+    expect(pos.legs?.length).toBe(2);
+    expect(pos.legs?.[1]?.market).toContain("Arsenal");
+
+    const risk = evaluateDeskRisk(desk);
+    expect(risk.pendingAtMax.length).toBe(1);
+    expect(risk.degradedPending.length).toBe(0);
+    expect(risk.requiresArsenalAlert).toBe(true);
+  });
+
+  test("dedupeLastByCompositeKey and dedupeParentPendingTickets contain zero new Map/Set or .push(", () => {
+    const src = readFileSync(join(import.meta.dir, "live_bets.ts"), "utf8");
+    const compStart = src.indexOf("function dedupeLastByCompositeKey(");
+    const compEnd = src.indexOf("export function buildArtifact(", compStart);
+    expect(compStart).toBeGreaterThan(-1);
+    expect(compEnd).toBeGreaterThan(compStart);
+    const compBody = src.slice(compStart, compEnd);
+    expect(compBody).not.toContain("new Map");
+    expect(compBody).not.toContain("new Set");
+    expect(compBody).not.toContain(".push(");
+
+    const parlayStart = src.indexOf(
+      "export function dedupeParentPendingTickets(",
+    );
+    const parlayEnd = src.indexOf(
+      "export interface BridgePendingToDeskOptions",
+      parlayStart,
+    );
+    expect(parlayStart).toBeGreaterThan(-1);
+    expect(parlayEnd).toBeGreaterThan(parlayStart);
+    const parlayBody = src.slice(parlayStart, parlayEnd);
+    expect(parlayBody).not.toContain("new Map");
+    expect(parlayBody).not.toContain("new Set");
+    expect(parlayBody).not.toContain(".push(");
   });
 });

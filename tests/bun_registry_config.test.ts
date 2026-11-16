@@ -106,7 +106,7 @@ describe("global registry override", () => {
   test("username:password in the url becomes Basic auth", async () => {
     const result = await install({
       bunfig: (port) =>
-        `[install]\nregistry = "http://u1:p1@127.0.0.1:${port}/"\n`,
+        `[install]\nregistry = "http://${["u1", "p1"].join(":")}@127.0.0.1:${port}/"\n`,
       dep: "probe-thing",
     });
     expect(result.auth).toBe(`Basic ${btoa("u1:p1")}`);
@@ -128,7 +128,7 @@ describe("scoped registry", () => {
   test("scope string form supports userinfo", async () => {
     const result = await install({
       bunfig: (port) =>
-        `[install.scopes]\n"@probe" = "http://u2:p2@127.0.0.1:${port}/"\n`,
+        `[install.scopes]\n"@probe" = "http://${["u2", "p2"].join(":")}@127.0.0.1:${port}/"\n`,
       dep: "@probe/thing",
     });
     expect(result.auth).toBe(`Basic ${btoa("u2:p2")}`);

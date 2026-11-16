@@ -22,6 +22,10 @@ import { TerminalSession, type SpawnInPtyOptions } from "./bun_terminal.ts";
 import { auditPty } from "./audit_log.ts";
 import { benchmarkResolverLatency, classifyIpAddress } from "./bun_dns.ts";
 import {
+  buildReverseDnsForensicsView,
+  formatReverseDnsForensicsAnsi,
+} from "./reverse_dns_forensics.ts";
+import {
   KEY_NUMBER_BUYER_PROFILES,
   HALF_POINT_HOOK_SYNDICATE_PROFILES,
 } from "./customer_profile.ts";
@@ -39,6 +43,15 @@ import {
 } from "./canonical_osc8_links.ts";
 import { formatHalfPointLine } from "../design/domain-branded-types.ts";
 import { padDisplay } from "./cli_inspect.ts";
+import {
+  buildDownlineTrunkDetailRows,
+  buildDownlineTrunkReport,
+  formatDownlineTrunksAnsi,
+  parseTrunksCliArgs,
+  staticNolawolfTrunkFixture,
+} from "./downline_trunks.ts";
+import { harvestLiveCustomerProfiles } from "./live_profile_harvester.ts";
+import { resolveTerminalCustomer } from "./terminal_customer_resolve.ts";
 import { TIER, SURFACE, composite, type WagerTier } from "./wager_tokens.ts";
 
 const FG = (c: string) =>
@@ -284,6 +297,9 @@ export const COMMAND_ALIASES: Readonly<Record<string, string>> = {
   capabilities: "capabilities",
   caps: "capabilities",
   features: "capabilities",
+  harvest: "harvest",
+  hv: "harvest",
+  anomalies: "harvest",
 };
 
 /**
@@ -292,6 +308,7 @@ export const COMMAND_ALIASES: Readonly<Record<string, string>> = {
 export const AUTOCOMPLETE_COMMANDS: readonly string[] = [
   "profile",
   "find",
+  "harvest",
   "sharps",
   "syndicates",
   "key-numbers",
@@ -1107,7 +1124,7 @@ export function getTerminalWelcomeBanner(): string {
     "  \x1b[1;32mbursts\x1b[0m (alias: \x1b[32mb, steam\x1b[0m)       Detected multi-account steam bursts (≤ 180s coordinated window)",
     "  \x1b[1;32mquarantine\x1b[0m (aliases: \x1b[32mq, guard\x1b[0m)   Real-time sliding window syndicate burst quarantine directives",
     "  \x1b[1;32mws\x1b[0m (alias: \x1b[32msubscriptions\x1b[0m)         Inspect connected WebSocket clients and active topic channels",
-    "  \x1b[1;32mtrunks\x1b[0m (alias: \x1b[32mt, trees\x1b[0m)        Two-trunk downline comparison (TRACKTHIS VIP vs NOLAPPH Retail)",
+    "  \x1b[1;32mtrunks\x1b[0m (alias: \x1b[32mt, trees\x1b[0m)        Two-trunk forest rollup (live corpus · detail · trackthis/nolapph)",
     "  \x1b[1;32mdns <host>\x1b[0m (alias: \x1b[32md\x1b[0m)         Benchmark c-ares vs system DNS resolver latency",
     "  \x1b[1;32mreverse <ip>\x1b[0m (alias: \x1b[32mr, ip\x1b[0m)     Reverse DNS forensics & datacenter/residential IP lookup",
     "  \x1b[1;32mcron <expr>\x1b[0m (alias: \x1b[32mcr\x1b[0m)        Inspect Bun.cron() schedule triggers",
@@ -1504,7 +1521,7 @@ async function executeTerminalQueryInner(
       KNOWN_CUSTOMER_MAP.has(upper) ||
       KEY_NUMBER_BUYER_PROFILES.has(upper) ||
       HALF_POINT_HOOK_SYNDICATE_PROFILES.has(upper) ||
-      /^(?:GP|BRT|ST|RF|BK|BGD|CCC|MJ|SYNTH|VIP)\d+/i.test(trimmed)
+      /^(?:GP|BRT|ST|RF|BK|BGD|CCC|MJ|DCC|SYNTH|VIP)\d+/i.test(trimmed)
     ) {
       canonicalCmd = "profile";
       cmdArgs.push(upper);
@@ -1620,13 +1637,88 @@ async function executeTerminalQueryInner(
     return await executeTerminalQuery("find -t syndicate", options);
   }
 
+  // Quick Command: Automated 24h Live Profile Harvester & Pattern Anomaly Scanner
+  if (canonicalCmd === "harvest") {
+    const limitIdx = cmdArgs.findIndex((a) => a === "--limit" || a === "-n");
+    const limit =
+      limitIdx >= 0 && cmdArgs[limitIdx + 1]
+        ? Math.max(1, Number(cmdArgs[limitIdx + 1]) || 15)
+        : 15;
+    const harvested = await harvestLiveCustomerProfiles({
+      onlyFlagged: !cmdArgs.includes("--all"),
+      limit,
+    });
+    if (cmdArgs.includes("--json")) {
+      return {
+        command: trimmed,
+        stdout: JSON.stringify(harvested, null, 2),
+        exitCode: 0,
+        durationMs: Date.now() - startedAt,
+        timestamp: startedAt,
+      };
+    }
+    const rows = [
+      `\x1b[1;36m⚡ AUTOMATED 24H LIVE PROFILE HARVESTER & PATTERN ANOMALY SCANNER\x1b[0m`,
+      `\x1b[90mScanned: ${harvested.totalUniqueCustomersScanned} active accounts · DOD6 v5.4 Spine Matched: ${harvested.dodSpineMatchedCount}/${harvested.totalUniqueCustomersScanned} (${harvested.dodSpineCustomerCount.toLocaleString()} total) · Flagged: ${harvested.flaggedProfilesCount}\x1b[0m`,
+      `\x1b[90mInputs: ${Object.entries(harvested.sources)
+        .map(([name, status]) => `${name}=${status}`)
+        .join(" ")}\x1b[0m`,
+      `  • Whale Single-Agent Conduits : \x1b[1;31m${harvested.patternCounts.WHALE_SINGLE_AGENT_CONDUIT}\x1b[0m   • Key-Number / Hook Buyers : \x1b[1;33m${harvested.patternCounts.KEY_NUMBER_HOOK_BUYER}\x1b[0m   • Velocity Burst Snipers : \x1b[1;35m${harvested.patternCounts.VELOCITY_BURST_SNIPER}\x1b[0m`,
+      `  • Positive CLV / Net Sharps   : \x1b[1;32m${harvested.patternCounts.POSITIVE_CLV_OR_NET_SHARP}\x1b[0m   • Sub-Account Splitters    : \x1b[1;36m${harvested.patternCounts.SUB_ACCOUNT_SUFFIX_SPLITTING}\x1b[0m`,
+      "┌────────────┬────────────┬────────────┬───────┬────────────┬──────────────┬─────────┬────────────────────────────────────────┐",
+      "│ Customer   │ Agent      │ Master     │ Score │ 24h Risk   │ DOD6 LT Net  │ CLV bps │ Detected Anomaly Flags                 │",
+      "├────────────┼────────────┼────────────┼───────┼────────────┼──────────────┼─────────┼────────────────────────────────────────┤",
+    ];
+    for (const p of harvested.profiles) {
+      const idLink = formatOsc8Hyperlink(
+        getCanonicalCustomerUrl(p.id),
+        padDisplay(p.id, 10),
+      );
+      const agLink = formatOsc8Hyperlink(
+        getCanonicalAgentUrl(p.agentId),
+        padDisplay(p.agentId.slice(0, 10), 10),
+      );
+      const maPad = padDisplay(p.masterAgent.slice(0, 10), 10);
+      const scPad = p.score.toFixed(1).padStart(5);
+      const riskPad = `$${p.openRisk24hUsd.toLocaleString()}`.padStart(10);
+      const netRaw = `${p.ltvUsd < 0 ? "-" : "+"}$${Math.abs(p.ltvUsd).toLocaleString()}`;
+      const netPad =
+        p.ltvUsd > 0
+          ? `\x1b[32m${netRaw.padStart(12)}\x1b[0m`
+          : `\x1b[31m${netRaw.padStart(12)}\x1b[0m`;
+      const clvStr =
+        p.dodClvBps !== null
+          ? `${p.dodClvBps >= 0 ? "+" : ""}${p.dodClvBps}`
+          : "—";
+      const clvPad = clvStr.padStart(7);
+      const flagsPad = padDisplay(p.anomalyFlags.join(", ").slice(0, 38), 38);
+      rows.push(
+        `│ \x1b[1;36m${idLink}\x1b[0m │ ${agLink} │ ${maPad} │ \x1b[1m${scPad}\x1b[0m │ ${riskPad} │ ${netPad} │ ${clvPad} │ ${flagsPad} │`,
+      );
+    }
+    rows.push(
+      "└────────────┴────────────┴────────────┴───────┴────────────┴──────────────┴─────────┴────────────────────────────────────────┘",
+      `\x1b[90mTip: Type 'p <ID>' to inspect a profile, or 'harvest --all' to widen the scan.\x1b[0m`,
+    );
+    return {
+      command: trimmed,
+      stdout: rows.join("\n"),
+      exitCode: 0,
+      durationMs: Date.now() - startedAt,
+      timestamp: startedAt,
+    };
+  }
+
   // Quick Command: Profile Inspector
   if (canonicalCmd === "profile") {
     const flags = new Set(cmdArgs.filter((a) => a.startsWith("-")));
     const idArg = cmdArgs.find((a) => !a.startsWith("-")) || "GP301";
     const upperId = idArg.toUpperCase();
 
-    const cust = KNOWN_CUSTOMER_MAP.get(upperId);
+    let cust = KNOWN_CUSTOMER_MAP.get(upperId);
+    if (!cust) {
+      cust = (await resolveTerminalCustomer(upperId)) ?? undefined;
+    }
     if (!cust) {
       // Check behavioral profiles
       const keyProf =
@@ -1656,7 +1748,7 @@ async function executeTerminalQueryInner(
 
       return {
         command: trimmed,
-        stdout: `\x1b[33mCustomer '${idArg}' not found in local active profile matrix.\x1b[0m\n\x1b[90mTry: profile GP301, profile BRT5229, profile ST100, or type 'find <query>'\x1b[0m`,
+        stdout: `\x1b[33mCustomer '${idArg}' not found in local active profile matrix.\x1b[0m\n\x1b[90mTry: profile GP301, profile BRT5229, or type 'harvest' / 'find <query>'\x1b[0m`,
         exitCode: 1,
         durationMs: Date.now() - startedAt,
         timestamp: startedAt,
@@ -1739,6 +1831,21 @@ async function executeTerminalQueryInner(
     };
   }
 
+  function formatBehavioralIntelligenceDetail(customer: {
+    readonly specialization: string;
+    readonly timingArchetype: string;
+    readonly sizingStrategy: string;
+    readonly inPlayDelaySec: number;
+  }): string {
+    const archetype = customer.timingArchetype.replace(/_/g, " ");
+    const sport =
+      customer.specialization.length > 16
+        ? `${customer.specialization.slice(0, 16)}…`
+        : customer.specialization;
+    const detail = `${archetype} · ${sport} · ${customer.inPlayDelaySec}s IP`;
+    return detail.length <= 38 ? detail : `${detail.slice(0, 35)}…`;
+  }
+
   // Quick Command: Find / Search across customer datasets
   if (canonicalCmd === "find") {
     let tierFilter: string | null = null;
@@ -1798,7 +1905,7 @@ async function executeTerminalQueryInner(
           tier: c.tier,
           score: c.score,
           action: c.action,
-          detail: `${c.specialization} (${c.sizingStrategy})`,
+          detail: formatBehavioralIntelligenceDetail(c),
         });
       }
     }
@@ -1838,7 +1945,7 @@ async function executeTerminalQueryInner(
                 tier: cTier,
                 score: scoreVal,
                 action: scoreVal >= 8.5 ? "ALERT_OPERATOR" : "MONITOR",
-                detail: `Backtest cohort record (${cSport})`,
+                detail: `Cohort ${cSport} · score ${scoreVal.toFixed(1)}`,
               });
             }
           }
@@ -1938,17 +2045,9 @@ async function executeTerminalQueryInner(
     const ip = cmdArgs[0] || "1.1.1.1";
     try {
       const res = await classifyIpAddress(ip);
-      const isDc = res.isDatacenterOrCloud;
-      const tag = isDc
-        ? "\x1b[1;41;37m DATACENTER / VPN \x1b[0m \x1b[31m🚨 HIGH RISK\x1b[0m"
-        : "\x1b[1;42;30m RESIDENTIAL \x1b[0m \x1b[32m🟢 NORMAL\x1b[0m";
-      const stdout = [
-        `\x1b[1;36m🌐 Reverse DNS Forensics: ${ip}\x1b[0m`,
-        `  Classification    : ${tag}`,
-        `  Resolved Hostname : \x1b[1;33m${res.primaryHostname ?? "None (NXDOMAIN)"}\x1b[0m`,
-        `  Organization      : \x1b[37m${res.organization}\x1b[0m`,
-        `  Suspicious Proxy  : ${res.isVpnOrProxySuspicious ? "\x1b[31mYES\x1b[0m" : "\x1b[32mNO\x1b[0m"}`,
-      ].join("\n");
+      const stdout = formatReverseDnsForensicsAnsi(
+        buildReverseDnsForensicsView(res),
+      );
       return {
         command: trimmed,
         stdout,
@@ -2341,26 +2440,51 @@ async function executeTerminalQueryInner(
 
   // Quick Command: Downline Trunk Comparison
   if (canonicalCmd === "trunks") {
-    const stdout = [
-      `\x1b[1;36m🌲 NOLAWOLF MASTER FOREST: TWO-TRUNK TOPOLOGY COMPARISON (30-DAY WINDOW)\x1b[0m`,
-      `\x1b[90mForest Total: $240,101,982.77 USD across 566 sub-agents and 7,435 active bettors\x1b[0m`,
-      "┌────────────────┬────────────────────┬──────────┬───────────┬──────────────┬────────────┬────────────────────────────────────────┐",
-      "│ Trunk Branch   │ 30d Handle (USD)   │ Wagers   │ Bettors   │ Avg Ticket   │ Alert Rate │ Operating Role & Profile               │",
-      "├────────────────┼────────────────────┼──────────┼───────────┼──────────────┼────────────┼────────────────────────────────────────┤",
-      "│ \x1b[1;33mTRACKTHIS      \x1b[0m │ \x1b[1m   $202,991,868.27\x1b[0m │  258,927 │     3,243 │ \x1b[1m     $783.97\x1b[0m │ \x1b[1;31m    33.35%\x1b[0m │ VIP / Syndicate Engine (1 in 3 Alerts) │",
-      "│ \x1b[1;32mNOLAPPH        \x1b[0m │    $37,450,599.89  │  247,056 │     4,198 │      $151.59 │      3.26% │ Retail PPH Downline (Recreational)     │",
-      "├────────────────┼────────────────────┼──────────┼───────────┼──────────────┼────────────┼────────────────────────────────────────┤",
-      "│ \x1b[1;36mOTHER FORESTS  \x1b[0m │    $28,883,488.77  │  122,616 │     1,712 │      $235.56 │ \x1b[1;33m    39.44%\x1b[0m │ CUB22A, DAN318, BIGDAD External Trees  │",
-      "└────────────────┴────────────────────┴──────────┴───────────┴──────────────┴────────────┴────────────────────────────────────────┘",
-      `\x1b[90mStructural Finding: TRACKTHIS generates 75.5% of desk volume with 10x higher alert frequency.\x1b[0m`,
-    ].join("\n");
-    return {
-      command: trimmed,
-      stdout,
-      exitCode: 0,
-      durationMs: Date.now() - startedAt,
-      timestamp: startedAt,
-    };
+    const trunkOpts = parseTrunksCliArgs(cmdArgs);
+    try {
+      const ranking = await getCachedRanking();
+      const report = buildDownlineTrunkReport(ranking);
+      if (trunkOpts.json) {
+        return {
+          command: trimmed,
+          stdout: JSON.stringify(report, null, 2),
+          exitCode: 0,
+          durationMs: Date.now() - startedAt,
+          timestamp: startedAt,
+        };
+      }
+      const linkAgent = (id: string, label: string) =>
+        formatOsc8Hyperlink(getCanonicalAgentUrl(id), label);
+      const sections = [
+        formatDownlineTrunksAnsi(report, {
+          branchFilter: trunkOpts.branchFilter,
+          linkAgent,
+        }),
+      ];
+      if (trunkOpts.detail) {
+        const trunk = trunkOpts.branchFilter ?? "TRACKTHIS";
+        sections.push(
+          ...buildDownlineTrunkDetailRows(ranking, trunk, linkAgent),
+        );
+      }
+      return {
+        command: trimmed,
+        stdout: sections.join("\n"),
+        exitCode: 0,
+        durationMs: Date.now() - startedAt,
+        timestamp: startedAt,
+      };
+    } catch (err) {
+      const report = staticNolawolfTrunkFixture();
+      const warn = `\x1b[33m[TRUNKS_FALLBACK] Live corpus unavailable (${err instanceof Error ? err.message : String(err)}); showing static NOLAWOLF fixture.\x1b[0m`;
+      return {
+        command: trimmed,
+        stdout: `${warn}\n${formatDownlineTrunksAnsi(report, { branchFilter: trunkOpts.branchFilter })}`,
+        exitCode: 0,
+        durationMs: Date.now() - startedAt,
+        timestamp: startedAt,
+      };
+    }
   }
 
   // Quick Command: Bun 1.4 Native Capabilities

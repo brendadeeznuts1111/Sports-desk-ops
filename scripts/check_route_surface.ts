@@ -20,6 +20,12 @@ import {
   readRouteSurfaceInputs,
   REQUIRED_LIVE_BETS_V2_PATH,
 } from "../lib/route_surface.ts";
+import {
+  daemonRoutesToSpecs,
+  renderRouteAuditTable,
+} from "../src/lib/route_audit_table.ts";
+
+const showTable = Bun.argv.includes("--table");
 
 const root = resolve(import.meta.dir, "..");
 // The table is the source. `readRouteSurfaceInputs` still reads the chain, but only so the test
@@ -50,6 +56,9 @@ if (findings.length === 0) {
   console.log(
     `check:route-surface: ok — ${served.size} served path(s) (${localDeclaredCount}/${localDeclaredCount} local-route + ${uiAliasCount} UI aliases), ${declared.size} declared (${localDeclaredCount} local-route, ${upstreamDeclaredCount} upstream-route, ${unimplementedDeclaredCount} documented-not-implemented); v2 registered (${REQUIRED_LIVE_BETS_V2_PATH}), v1 deprecated (${DEPRECATED_LIVE_BETS_V1_PATHS.join(", ")})`,
   );
+  if (showTable) {
+    console.log(renderRouteAuditTable(daemonRoutesToSpecs(DAEMON_ROUTES)));
+  }
   process.exit(0);
 }
 

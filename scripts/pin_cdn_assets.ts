@@ -46,6 +46,7 @@ import {
   sriFor,
 } from "../lib/f402_cdn_pin.ts";
 import type { CdnAssetPin, CdnManifest } from "../lib/f402_cdn_pin.ts";
+import { isToleratedVendorRotation } from "../lib/f402_cdn_pin.ts";
 
 const CONCURRENCY = 8;
 
@@ -297,6 +298,7 @@ async function check(): Promise<void> {
   const html = await fetchDocumentHtml();
   const coverage = checkDocumentCoverage(html, manifest);
   const details: string[] = [];
+  const warnings: string[] = [];
   let driftCount = 0;
   let infrastructureCount = 0;
 
@@ -339,6 +341,18 @@ async function check(): Promise<void> {
     if (outcome.kind === "ok") {
       const liveSha256 = await sha256Hex(outcome.bytes);
       if (liveSha256 !== pin.sha256) {
+        if (
+          isToleratedVendorRotation({
+            url,
+            pinnedBytes: pin.bytes,
+            liveBytes: outcome.bytes.length,
+          })
+        ) {
+          warnings.push(
+            `rotating_vendor_drift ${url}: live ${liveSha256.slice(0, 16)}… (${outcome.bytes.length}B, unchanged length) — tolerated (#267)`,
+          );
+          continue;
+        }
         driftCount += 1;
         details.push(
           `byte_drift ${url}: live ${liveSha256} (${outcome.bytes.length}B) != pinned ${pin.sha256} (${pin.bytes}B)`,
@@ -415,6 +429,8 @@ async function check(): Promise<void> {
       );
     }
   }
+
+  for (const warning of warnings) console.error(`  WARN ${warning}`);
 
   if (details.length > 0) {
     console.error(

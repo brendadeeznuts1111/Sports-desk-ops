@@ -1694,20 +1694,25 @@ function telegramAlertOperation(operation: LedgerOperation): JsonObject {
     tags: [TAG_DAEMON],
     summary: "Dispatch an instant Telegram alert",
     description:
-      "Request body {customerId?} defaults to RF2003; dispatches through telegramService.dispatchTestAlert and returns {success, ok, customerId} (services/sportsdesk_webview_server.ts). Admin-token gated (services/sportsdesk_webview_server.ts).",
+      "Request body {customerId, riskUSD} is required: customerId must be on the watch list and riskUSD positive, otherwise 400 TelegramTestAlertInputError. Dispatches a labelled synthetic test alert through telegramService.dispatchTestAlert and returns {success, ok, customerId} (services/sportsdesk_webview_server.ts). Admin-token gated (services/sportsdesk_webview_server.ts).",
     operationId: operationIdFor(operation.method, operation.path),
     security: [{ daemonBearer: [] }],
     requestBody: {
-      required: false,
+      required: true,
       content: {
         "application/json": {
           schema: {
             type: "object",
+            required: ["customerId", "riskUSD"],
             properties: {
               customerId: {
                 type: "string",
-                description: "Customer to alert; defaults to RF2003.",
-                example: "RF2003",
+                description: "Watch-list customer to alert.",
+              },
+              riskUSD: {
+                type: "number",
+                exclusiveMinimum: 0,
+                description: "Stake shown on the synthetic test alert.",
               },
             },
           },
@@ -1727,6 +1732,24 @@ function telegramAlertOperation(operation: LedgerOperation): JsonObject {
           customerId: { type: "string" },
         },
       }),
+      "400": {
+        description:
+          "TelegramTestAlertInputError: customerId missing or not on the watch list, or riskUSD not positive (services/sportsdesk_telegram_bot.ts).",
+        headers: daemonHeaders(),
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["success", "ok", "error"],
+              properties: {
+                success: { type: "boolean", const: false },
+                ok: { type: "boolean", const: false },
+                error: { type: "string" },
+              },
+            },
+          },
+        },
+      },
       "500": {
         description: "Dispatch threw (services/sportsdesk_webview_server.ts).",
         headers: daemonHeaders(),

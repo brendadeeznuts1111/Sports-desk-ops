@@ -78,6 +78,14 @@ describe("parseConfig", () => {
     expect(() => parseConfig("{a:", "json5")).toThrow(
       "config: JSON5 Parse error:",
     );
+    // Next-release contract: a NUL inside a number and a `\u` escape in an
+    // unquoted key are SyntaxErrors, never silently truncated or inferred.
+    expect(() => parseConfig("1\0 2", "json5")).toThrow(
+      "config: JSON5 Parse error:",
+    );
+    expect(() => parseConfig(String.raw`{a\u002d: 1}`, "json5")).toThrow(
+      "config: JSON5 Parse error:",
+    );
     expect(() => parseConfig("a = 1\na = 2\n", "toml", "desk.toml")).toThrow(
       "desk.toml: TOML Parse error: Cannot redefine key 'a'",
     );

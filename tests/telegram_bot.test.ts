@@ -10,6 +10,7 @@ import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import {
   SportsDeskTelegramService,
+  TelegramTestAlertInputError,
   type TelegramSendMessageOptions,
   type TelegramUpdate,
 } from "../services/sportsdesk_telegram_bot.ts";
@@ -121,8 +122,8 @@ describe("Telegram mini app buttons", () => {
       apiBaseUrl: `http://127.0.0.1:${stub.port}`,
       miniappUrl: "https://desk.example/miniapp",
     });
-    await bot.dispatchTestAlert("RF2003", "-100200");
-    await bot.dispatchTestAlert("RF2003", "555");
+    await bot.dispatchTestAlert("RF2003", 20000, "-100200");
+    await bot.dispatchTestAlert("RF2003", 20000, "555");
     const [group, priv] = calls.map(
       (c) => c.body.reply_markup?.inline_keyboard?.[0]?.[0],
     );
@@ -276,6 +277,22 @@ describe("Webview server Telegram endpoints", () => {
     expect(res.status).toBe(400);
   });
 
+  test("test_assert_alert_endpoint_requires_customer_and_stake", async () => {
+    env.SPORTSDESK_ADMIN_TOKEN = "admin-secret";
+    const res = await fetch(`${base}/api/telegram/alert`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer admin-secret",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { success: boolean; error: string };
+    expect(body.success).toBe(false);
+    expect(body.error).toStartWith("TelegramTestAlertInputError:");
+  });
+
   test("test_assert_webhook_rejects_wrong_secret", async () => {
     const res = await fetch(`${base}/telegram/webhook`, {
       method: "POST",
@@ -375,5 +392,49 @@ describe("Telegram FetchSession warm-up", () => {
       warmOnInit: false,
     });
     expect(await dryRunBot.warmSession(50)).toBe(false);
+  });
+});
+
+describe("Telegram test alerts and reports carry no invented figures", () => {
+  test("test_assert_test_alert_requires_watch_list_customer_and_stake", async () => {
+    const bot = makeBot();
+    await expect(bot.dispatchTestAlert("", 20000)).rejects.toThrow(
+      TelegramTestAlertInputError,
+    );
+    await expect(
+      bot.dispatchTestAlert("NOT_WATCHED_42", 20000),
+    ).rejects.toThrow("is not on the watch list");
+    await expect(bot.dispatchTestAlert("RF2003", Number.NaN)).rejects.toThrow(
+      "riskUSD must be a positive number",
+    );
+    await expect(bot.dispatchTestAlert("RF2003", 0)).rejects.toThrow(
+      TelegramTestAlertInputError,
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  test("test_assert_test_alert_is_labelled_synthetic_with_the_given_stake", async () => {
+    await makeBot().dispatchTestAlert("RF2003", 1100, AUTHORIZED);
+    const text = calls[0]!.body.text;
+    expect(text).toContain("TEST ALERT (synthetic payload, not a real wager)");
+    expect(text).toContain("$1,100.00");
+    expect(text).not.toContain("Kansas City Chiefs");
+  });
+
+  test("test_assert_alert_test_command_without_args_names_the_error", async () => {
+    await makeBot().handleUpdate(message(Number(AUTHORIZED), "/alert_test"));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.body.text).toContain("TelegramTestAlertInputError");
+    expect(calls[0]!.body.text).toContain("Usage: /alert_test");
+  });
+
+  test("test_assert_reports_mark_unsourced_sections_unmeasured", () => {
+    const scheduler = new ReportingSchedulerService(makeBot());
+    const midday = scheduler.generateReport("MIDDAY_STEAM").contentHtml;
+    const evening = scheduler.generateReport("EVENING_SETTLEMENT").contentHtml;
+    expect(midday).toContain("unmeasured (no per-customer intraday source");
+    expect(midday).not.toContain("+$33,858");
+    expect(evening).toContain("unmeasured (no per-sub-agent settlement source");
+    expect(evening).not.toContain("RF2003 whale swing");
   });
 });

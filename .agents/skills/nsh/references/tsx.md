@@ -523,7 +523,7 @@ An app with no `"capabilities"` key may do everything except `host`, raw sockets
 
 ## Who reports what
 
-Every row was run through `nsh build` and `nsh check` at `nsh 0.4.0`, and the run-time rows through `nsh test`. "Nothing" means every tool passes and the app is wrong.
+Every row was run through `nsh build` and `nsh check` at `nsh 0.5.0`, and the run-time rows through `nsh test`. "Nothing" means every tool passes and the app is wrong.
 
 | Mistake                                                                                                                   | What happens                               | Reported by                       |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | --------------------------------- |

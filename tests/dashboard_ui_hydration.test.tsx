@@ -14,8 +14,8 @@ import {
   hydrateDashboardFeeds,
   LiveWagersTabPanel,
   normalizeLiveWagersResponse,
-  SAMPLE_PROFILE_DATA,
 } from "@sportsdesk-ops/ui";
+import { FIXTURE_PROFILE_CUSTOMERS } from "./fixtures/dashboard_ui_fixtures.ts";
 
 function buildHydrationApi(options: {
   readonly wagerProvenanceKind?: "capture" | "fixture" | "fallback";
@@ -135,11 +135,49 @@ function buildHydrationApi(options: {
     },
     getTaxonomyCatalog: () => [],
     runShadowPricing: async () => ({}),
-    getBuildMatrix: async () => [],
+    getBuildMatrix: async () => ({
+      targets: [],
+      generatedAt: "2026-11-15T00:00:00.000Z",
+    }),
   });
 }
 
 describe("@sportsdesk-ops/ui live hydration & Signal-Honesty provenance (zero port bind)", () => {
+  test("normalizeLiveWagersResponse keeps the writer channel, volume and VIP", () => {
+    const payload = normalizeLiveWagersResponse({
+      wagers: [
+        {
+          ticketId: "W-1",
+          ticketWriter: "GSBUILDER   ",
+          volumeUsd: 2100,
+          vip: true,
+          riskUsd: 2000,
+          toWinUsd: 1800,
+        },
+        {
+          ticketId: "W-2",
+          ticketWriter: "GSLIVE",
+          riskUsd: 500,
+          toWinUsd: 450,
+        },
+        { ticketId: "W-3", riskUsd: 100, toWinUsd: 90 },
+      ],
+      provenance: {
+        kind: "capture",
+        label: "test capture",
+        sourcePath: "data/live-wagers.json",
+        observedAt: "2026-11-15T00:00:00Z",
+      },
+    });
+    expect(payload?.wagers[0]?.writer).toBe("gsbuilder");
+    expect(payload?.wagers[0]?.ticketWriter).toBe("GSBUILDER");
+    expect(payload?.wagers[0]?.volumeUsd).toBe(2100);
+    expect(payload?.wagers[0]?.vip).toBe(true);
+    expect(payload?.wagers[1]?.writer).toBe("gslive");
+    expect(payload?.wagers[2]?.writer).toBe("other");
+    expect(payload?.wagers[2]?.ticketWriter).toBeUndefined();
+  });
+
   test("normalizeLiveWagersResponse carries wire_contract, and drops a malformed block", () => {
     const base = {
       wagers: [],
@@ -241,7 +279,7 @@ describe("@sportsdesk-ops/ui live hydration & Signal-Honesty provenance (zero po
     expect(bundle.wagers.data.wagers[0]?.autoExecute).toBe(false);
     expect(bundle.wagers.data.provenance.kind).toBe("capture");
     expect(formatProvenanceBadge(bundle.wagers.data.provenance).badgeText).toBe(
-      "● LIVE CAPTURE",
+      "● LOCAL CAPTURE",
     );
 
     const noop = () => {};
@@ -257,14 +295,14 @@ describe("@sportsdesk-ops/ui live hydration & Signal-Honesty provenance (zero po
         onSearchQueryChange: noop,
         filterTier: "ALL",
         onFilterTierChange: noop,
-        sortedCustomers: SAMPLE_PROFILE_DATA,
+        sortedCustomers: FIXTURE_PROFILE_CUSTOMERS,
         customerSort: { key: "score", dir: -1 },
         onCustomerSort: noop,
-        selectedCustomer: SAMPLE_PROFILE_DATA[0] ?? null,
+        selectedCustomer: FIXTURE_PROFILE_CUSTOMERS[0] ?? null,
         onSelectCustomer: noop,
         copiedCliId: null,
         onCopyCli: noop,
-        customerForensicResult: null,
+        customerReverseForensics: null,
         onClearForensicResult: noop,
         onRunReverseLookup: noop,
         onOpenTerminalProfile: noop,
@@ -279,7 +317,7 @@ describe("@sportsdesk-ops/ui live hydration & Signal-Honesty provenance (zero po
     );
     expect(bundle.customers.data.cohorts.backtestCount).toBe(3);
     expect(bundle.customers.data.cohorts.uniqueSurveillanceCount).toBe(7);
-    expect(customersHtml).toContain("● LIVE CAPTURE");
+    expect(customersHtml).toContain("● LOCAL CAPTURE");
     expect(customersHtml).toContain("enriched_customers_full.json");
     expect(customersHtml).not.toContain("49 Accounts");
     expect(customersHtml).not.toContain("4,914 IDs");
@@ -310,7 +348,7 @@ describe("@sportsdesk-ops/ui live hydration & Signal-Honesty provenance (zero po
     );
 
     expect(wagersHtml).toContain("#W-88401");
-    expect(wagersHtml).toContain("● LIVE CAPTURE");
+    expect(wagersHtml).toContain("● LOCAL CAPTURE");
     expect(wagersHtml).toContain("data/live-wagers.json");
     expect(wagersHtml).toContain("1 Wagers");
   });
@@ -364,6 +402,7 @@ describe("@sportsdesk-ops/ui live hydration & Signal-Honesty provenance (zero po
           uniqueSurveillanceCount: 500,
         },
         backtestTop: [],
+        backtestAll: [],
         fixtures: [],
         provenance: {
           kind: "capture",
@@ -408,5 +447,77 @@ describe("@sportsdesk-ops/ui live hydration & Signal-Honesty provenance (zero po
         }),
       ),
     ).toEqual({ kind: "alerts-updated" });
+  });
+});
+
+describe("sport and subsport projection", () => {
+  const parseFootball = () => ({
+    isLive: false,
+    legs: [
+      {
+        sport: "Football",
+        game: "KC Chiefs @ BUF Bills",
+        pick: "Under 47.5",
+      },
+    ],
+  });
+
+  test("projectLiveWagerRow carries SubSport and never invents FOOTBALL", () => {
+    const withSub = projectLiveWagerRow(
+      {
+        WagerNumber: "W-90001",
+        CustomerID: "C1",
+        AgentID: "A1",
+        AgentLogin: "M1",
+        AmountWagered: 100,
+        ToWinAmount: 200,
+        ShortDesc: "Football - KC @ BUF",
+        SubSport: "NFL",
+      },
+      0,
+      { parseShortDesc: parseFootball, sharpCustomerIds: new Set() },
+    );
+    expect(withSub.sport).toBe("FOOTBALL");
+    expect(withSub.subSport).toBe("NFL");
+
+    const unknown = projectLiveWagerRow(
+      {
+        WagerNumber: "W-90002",
+        CustomerID: "C2",
+        AgentID: "A1",
+        AgentLogin: "M1",
+        AmountWagered: 100,
+        ToWinAmount: 200,
+        ShortDesc: "???",
+      },
+      0,
+      {
+        parseShortDesc: () => ({ isLive: false, legs: [] }),
+        sharpCustomerIds: new Set(),
+      },
+    );
+    expect(unknown.sport).toBe("");
+    expect(unknown.subSport).toBeNull();
+  });
+
+  test("normalizeLiveWagersResponse maps sport and subsport without conflating them", () => {
+    const normalized = normalizeLiveWagersResponse({
+      wagers: [
+        {
+          ticketId: "W-1",
+          sport: "basketball",
+          subSport: "nba",
+          betType: "Moneyline",
+        },
+      ],
+      provenance: {
+        kind: "capture",
+        label: "Local Capture",
+        sourcePath: "data/live-wagers.json",
+        observedAt: new Date().toISOString(),
+      },
+    });
+    expect(normalized?.wagers[0]?.sport).toBe("BASKETBALL");
+    expect(normalized?.wagers[0]?.subSport).toBe("NBA");
   });
 });

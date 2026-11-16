@@ -282,6 +282,12 @@ describe("SportsDesk Terminal Emulator & Query Engine", () => {
     expect(sportRes.exitCode).toBe(0);
     expect(sportRes.stdout).toContain("CFB");
 
+    const ncaabRes = await executeTerminalQuery("find -s ncaab");
+    expect(ncaabRes.exitCode).toBe(0);
+    expect(ncaabRes.stdout).toContain("Behavioral Intelligence Summary");
+    expect(ncaabRes.stdout).toContain("LIVE99");
+    expect(ncaabRes.stdout).toContain("HALFTIME");
+
     const actionRes = await executeTerminalQuery("f -a ALERT_OPERATOR");
     expect(actionRes.exitCode).toBe(0);
     expect(actionRes.stdout).toContain("ALERT_OPERATOR");
@@ -318,9 +324,13 @@ describe("SportsDesk Terminal Emulator & Query Engine", () => {
   test("executeTerminalQuery handles trunks query and alias 't'", async () => {
     const result = await executeTerminalQuery("t");
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("TWO-TRUNK TOPOLOGY COMPARISON");
+    expect(result.stdout).toContain("TWO-TRUNK TOPOLOGY");
     expect(result.stdout).toContain("TRACKTHIS");
     expect(result.stdout).toContain("NOLAPPH");
+    expect(
+      result.stdout.includes("LIVE CORPUS") ||
+        result.stdout.includes("STATIC FIXTURE"),
+    ).toBe(true);
   });
 
   test("executeTerminalQuery handles quarantine query and alias 'guard'", async () => {

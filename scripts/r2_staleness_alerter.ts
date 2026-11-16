@@ -24,11 +24,15 @@
  * `--probe-only` emits one JSONL line per probe and exits 0; no SLA evaluation.
  */
 
+import { appendFile } from "node:fs/promises";
+
 import {
   ALERTER_EXIT,
   BRIDGE_STALENESS_TARGETS,
   buildReport,
+  formatDeliveryLine,
   formatReport,
+  formatStepSummaryTable,
   parseLastModified,
   publicUrlFor,
   type AlerterExit,
@@ -144,6 +148,20 @@ function logRunLine(payload: Record<string, unknown>): void {
   process.stdout.write(`${JSON.stringify(payload)}\n`);
 }
 
+/** Append Markdown to the run page when GitHub provides a summary file. */
+async function appendSummary(markdown: string): Promise<void> {
+  const target = Bun.env.GITHUB_STEP_SUMMARY;
+  if (!target) return;
+  try {
+    await appendFile(target, markdown);
+  } catch (error) {
+    logRunLine({
+      kind: "alerter-error",
+      detail: `step summary write failed: ${error instanceof Error ? error.message : String(error)}`,
+    });
+  }
+}
+
 async function main(): Promise<AlerterExit> {
   const options = parseArgs(Bun.argv.slice(2));
   const nowMs = Date.now();
@@ -181,26 +199,37 @@ async function main(): Promise<AlerterExit> {
     })),
   });
 
+  // Write the table before any network attempt: a hung or failed Telegram POST
+  // must not erase the evidence that the probe ran.
+  await appendSummary(formatStepSummaryTable(report));
+
   if (report.degradedCount === 0) return ALERTER_EXIT.allFresh;
 
   if (options.dryRun) {
     process.stdout.write(`--- dry-run message ---\n${message}\n--- end ---\n`);
+    await appendSummary(
+      `\n${formatDeliveryLine({ state: "not-attempted", detail: "dry-run" })}`,
+    );
     return ALERTER_EXIT.degraded;
   }
 
   const botToken = Bun.env.TELEGRAM_BOT_TOKEN ?? "";
   const chatId = Bun.env.TELEGRAM_CHAT_ID ?? "";
   if (botToken === "" || chatId === "") {
-    logRunLine({
-      kind: "alerter-error",
-      detail:
-        "missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID; cannot send alert",
-    });
+    const detail =
+      "missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID; cannot send alert";
+    logRunLine({ kind: "alerter-error", detail });
+    await appendSummary(formatDeliveryLine({ state: "not-attempted", detail }));
     return ALERTER_EXIT.alerterError;
   }
 
   const send = await sendTelegram(botToken, chatId, message);
   logRunLine({ kind: "telegram", ...send });
+  await appendSummary(
+    `\n${formatDeliveryLine(
+      send.ok ? { state: "sent" } : { state: "failed", detail: send.detail },
+    )}`,
+  );
   if (!send.ok) return ALERTER_EXIT.alerterError;
   return ALERTER_EXIT.degraded;
 }

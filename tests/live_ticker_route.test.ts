@@ -67,6 +67,7 @@ interface LiveStatusBody {
 
 interface LiveWagersBody {
   success?: boolean;
+  servedFrom?: "live" | "file";
   error?: string;
   hint?: string;
   provenance?: {
@@ -181,6 +182,7 @@ describe("GET /api/live-wagers live-first", () => {
       `${server.url}api/live-wagers`,
     );
     expect(status).toBe(200);
+    expect(body.servedFrom).toBe("live");
     expect(body.provenance?.source.startsWith("live:")).toBe(true);
     expect(body.provenance?.partial).toBe(false);
     expect(body.freshness?.stale).toBe(false);
@@ -238,6 +240,7 @@ describe("GET /api/live-wagers live-first", () => {
       `${server.url}api/live-wagers?source=file`,
     );
     expect(status).toBe(200);
+    expect(body.servedFrom).toBe("file");
     expect(counted.calls()).toBe(before);
     expect(body.live?.status).toBe("disabled");
     expect(body.live?.ok).toBe(false);
@@ -300,6 +303,7 @@ describe("GET /api/live-wagers with an unavailable live read", () => {
       `${server.url}api/live-wagers?source=auto`,
     );
     expect(status).toBe(200);
+    expect(body.servedFrom).toBe("file");
     expect(body.provenance?.source.startsWith("capture:")).toBe(true);
     expect(body.wagers?.map((w) => w.wagerNumber)).toEqual(
       CAPTURE_ROWS.map((row) => row.WagerNumber),

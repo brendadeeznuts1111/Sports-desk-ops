@@ -2,7 +2,6 @@
 /**
  * @file sportsdesk_webview_server.ts
  * @description Native Bun (v1.4+) Webview Automation Server & Telegram Mini App Gateway.
- *
  * Implements native Bun HTTP server semantics:
  *  - Native port cascade: relies on Bun's BUN_PORT -> PORT -> NODE_PORT -> 3000 cascade
  *    (SportsDesk defaults to PORT=4020 via auto-loaded .env, overridable via options).
@@ -10,11 +9,11 @@
  *  - Unix domain socket support via `unix` option or `BUN_SOCKET` environment variable
  *    (removes TCP port exposure for local Nginx upstream proxying).
  *  - High-throughput Response.json() and lazy Response(Bun.file()) static file handle serving.
- *  - Standardized CORS and CSP frame-ancestors for Telegram Mini App embedding (no X-Frame-Options).
- *  - Robust error boundary handling via Bun.serve `error(err)` returning structured 500 JSON.
+ *  - Standardized CORS and CSP frame-ancestors for Telegram Mini App embedding (no X-Frame-Options) and structured 500 JSON errors.
  */
 
 import type { TrackerState } from "../lib/tracker_dashboard.ts";
+import { writeAuditEntry } from "../lib/audit_log.ts";
 import crypto from "node:crypto";
 import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -82,6 +81,7 @@ import {
   type ScoreboardFile,
 } from "../lib/scoreboard.ts";
 import {
+  sanitizeLiveBetGamesForPeer,
   summarizeGames,
   type AgentScope,
   type LiveBetGame,
@@ -110,6 +110,7 @@ import {
 import {
   REPORT_TYPES,
   SportsDeskTelegramService,
+  TelegramTestAlertInputError,
   isReportType,
   type TelegramUpdate,
 } from "./sportsdesk_telegram_bot.ts";
@@ -236,12 +237,8 @@ export function peerIsTrusted(
 }
 
 /**
- * Guards endpoints that carry customer or agent-identifying data.
- *
- * Loopback is allowed so the local scoreboard keeps working without a token. Any other peer
- * must present `SPORTSDESK_ADMIN_TOKEN`: a phone on the same Wi-Fi must not be able to read
- * customer ids from a dev server bound to 0.0.0.0. Behind a proxy the peer address is the
- * proxy's, which `peerIsTrusted` refuses unless the deployment said otherwise.
+ * Guards endpoints that carry customer or agent-identifying data. Loopback is allowed; any other
+ * peer must present SPORTSDESK_ADMIN_TOKEN (behind a proxy unless trusted by ingress config).
  */
 function piiRejection(
   req: Request,
@@ -249,7 +246,11 @@ function piiRejection(
   ingress: Ingress,
 ): { status: 401 | 403 | 503; error: string } | null {
   if (peerIsTrusted(address, ingress)) return null;
-  return adminRejection(req);
+  const rejected = adminRejection(req);
+  if (rejected !== null) {
+    recordPiiRejectionAudit(req, rejected, ingress);
+  }
+  return rejected;
 }
 
 /** `null` when the bearer token matches SPORTSDESK_ADMIN_TOKEN; otherwise the rejection status and reason. */
@@ -1467,16 +1468,16 @@ export function startServer(options?: ServerOptions) {
           readDb: () => deskLive.readLivePendingArtifact(),
           scoreboard,
         });
-        return respondLiveBetsV2(req, resolved, cors);
+        return respondLiveBetsV2(req, resolved, cors, server, ingress);
       }
 
+      // Sanitize non-loopback live-bets payloads.
+      //
       if (
         pathname === "/api/v1/live-bets" ||
         pathname === "/live-bets/summary" ||
         pathname === "/api/live-bets/summary"
       ) {
-        //
-        //
         const rejected = piiRejection(
           req,
           server.requestIP(req)?.address,
@@ -1564,7 +1565,7 @@ export function startServer(options?: ServerOptions) {
         return Response.json(
           {
             ...served.body,
-            games: withScores,
+            games: peerGames(req, server, ingress, withScores),
             agents,
             pendingCount: summary.totalPending,
             summary,
@@ -2769,6 +2770,7 @@ export function startServer(options?: ServerOptions) {
           asOfFrom: "artifact" as const,
         };
         const liveStatus = resolved.body.live;
+        const servedFrom = resolved.body.servedFrom;
 
         const writer = (url.searchParams.get("writer") ?? "")
           .trim()
@@ -2813,12 +2815,13 @@ export function startServer(options?: ServerOptions) {
         return encodedResponse(req, {
           // Every input to the bytes is in the version: the query, which file won, what was
           // skipped, and whether it has gone stale.
-          version: `live-wagers|${fileSelection.chosen?.path ?? "none"}|${fileSelection.chosen?.version ?? "none"}|${artifact.provenance.source}|${fresh.stale}|${JSON.stringify(skipped)}|${writer}|${type}|${JSON.stringify(liveStatus)}`,
+          version: `live-wagers|${String(servedFrom ?? "unknown")}|${fileSelection.chosen?.path ?? "none"}|${fileSelection.chosen?.version ?? "none"}|${artifact.provenance.source}|${fresh.stale}|${JSON.stringify(skipped)}|${writer}|${type}|${JSON.stringify(liveStatus)}`,
           contentType: "application/json; charset=utf-8",
           produce: () =>
             new TextEncoder().encode(
               JSON.stringify({
                 success: true,
+                ...(typeof servedFrom === "string" ? { servedFrom } : {}),
                 summary: summarizeLiveWagers(filtered),
                 all: summarizeLiveWagers(wagers),
                 writer: writer === "" ? null : writer,
@@ -3519,10 +3522,14 @@ export function startServer(options?: ServerOptions) {
       if (pathname === "/api/telegram/alert" && req.method === "POST") {
         try {
           const body = (await req.json().catch(() => ({}))) as {
-            customerId?: string;
+            customerId?: unknown;
+            riskUSD?: unknown;
           };
-          const custId = body.customerId || "RF2003";
-          const sent = await telegramService.dispatchTestAlert(custId);
+          const custId =
+            typeof body.customerId === "string" ? body.customerId.trim() : "";
+          const riskUSD =
+            typeof body.riskUSD === "number" ? body.riskUSD : Number.NaN;
+          const sent = await telegramService.dispatchTestAlert(custId, riskUSD);
           return Response.json(
             {
               success: true,
@@ -3532,13 +3539,18 @@ export function startServer(options?: ServerOptions) {
             { headers: cors },
           );
         } catch (err) {
+          const invalidInput = err instanceof TelegramTestAlertInputError;
           return Response.json(
             {
               success: false,
               ok: false,
-              error: err instanceof Error ? err.message : String(err),
+              error: invalidInput
+                ? `${err.name}: ${err.message}`
+                : err instanceof Error
+                  ? err.message
+                  : String(err),
             },
-            { status: 500, headers: cors },
+            { status: invalidInput ? 400 : 500, headers: cors },
           );
         }
       }
@@ -4297,6 +4309,66 @@ async function serveGovernanceRoute(
 type CustomerBookRow = import("../lib/customer_profile.ts").CustomerRow;
 
 /**
+ * `data/customer-profiles.json` stores built profiles, not book rows. Lift the book aggregates back
+ * into the row field names every other source uses; the ticket sample is not stored there, so it
+ * stays absent instead of being synthesized.
+ */
+function customerRowFromProfileDocument(
+  value: unknown,
+): CustomerBookRow | null {
+  const profile = value as {
+    customer_id?: unknown;
+    customerId?: unknown;
+    agentId?: unknown;
+    masterAgent?: unknown;
+    status?: unknown;
+    contextType?: unknown;
+    book?: Readonly<Record<string, unknown>>;
+  } | null;
+  const id =
+    typeof profile?.customer_id === "string"
+      ? profile.customer_id.trim()
+      : typeof profile?.customerId === "string"
+        ? profile.customerId.trim().toUpperCase()
+        : "";
+  if (id === "") return null;
+  const book = profile?.book;
+  if (typeof book !== "object" || book === null) {
+    // A row-shaped entry (fixture or older artifact): keep its fields as they are.
+    return { ...(value as CustomerBookRow), customer_id: id };
+  }
+  const number = (field: unknown): number | undefined =>
+    typeof field === "number" && Number.isFinite(field) ? field : undefined;
+  const volume = number(book.lifetimeVolumeUsd);
+  const net = number(book.lifetimeNetUsd);
+  const hold = number(book.holdPct);
+  const clv = number(book.clvBps);
+  const sharp = number(book.sharpScore);
+  const limit = number(book.wagerLimitUsd);
+  const delay = number(book.delaySeconds);
+  return {
+    customer_id: id,
+    ...(typeof profile?.agentId === "string"
+      ? { agent_id: profile.agentId }
+      : {}),
+    ...(typeof profile?.masterAgent === "string"
+      ? { master_agent: profile.masterAgent }
+      : {}),
+    ...(typeof profile?.status === "string" ? { status: profile.status } : {}),
+    ...(typeof profile?.contextType === "string"
+      ? { context_type: profile.contextType }
+      : {}),
+    ...(volume === undefined ? {} : { lifetime_volume_usd: volume }),
+    ...(net === undefined ? {} : { lifetime_net_usd: net }),
+    ...(hold === undefined ? {} : { hold_pct: hold }),
+    ...(clv === undefined ? {} : { clv_bps: clv }),
+    ...(sharp === undefined ? {} : { sharp_score: sharp }),
+    ...(limit === undefined ? {} : { wager_limit_usd: limit }),
+    ...(delay === undefined ? {} : { delay_seconds: delay }),
+  };
+}
+
+/**
  * Look up a customer record in enriched_customers_full.json, fixtures, or data/customer-profiles.json.
  */
 async function findCustomerRow(id: string): Promise<CustomerBookRow | null> {
@@ -4344,13 +4416,51 @@ async function findCustomerRow(id: string): Promise<CustomerBookRow | null> {
                 : "";
           return custId.trim().toUpperCase() === normId;
         });
-        if (found) return found;
+        const row = found ? customerRowFromProfileDocument(found) : null;
+        if (row !== null) return row;
       }
     } catch {
-      // ignore read/parse failure
+      // signal-honesty: an unreadable profiles artifact falls through to the live artifacts
     }
   }
-  return null;
+
+  // Loaded here (not at the top) so adding the fallback does not shift the cited line anchors for
+  // this file; the module is cached after the first lookup.
+  const {
+    customerRowFromHarvestedProfile,
+    customerRowFromLiveWagers,
+    liveWagerRows,
+  } = await import("../lib/customer_source_rows.ts");
+
+  // 3. A harvested 24h live profile: model-derived, and it publishes no lifetime volume, so the
+  // row omits that field instead of guessing one.
+  const harvestedFile = Bun.file(
+    resolve(repoRoot, "reports/harvested-live-profiles.json"),
+  );
+  if (await harvestedFile.exists()) {
+    try {
+      const data = (await harvestedFile.json()) as { profiles?: unknown[] };
+      if (Array.isArray(data?.profiles)) {
+        for (const profile of data.profiles) {
+          const row = customerRowFromHarvestedProfile(profile);
+          if (row !== null && row.customer_id === normId) return row;
+        }
+      }
+    } catch {
+      // signal-honesty: unreadable harvested profiles fall through to the open-wager capture
+    }
+  }
+
+  // 4. Open wagers captured tonight: identity and pending tickets, no lifetime aggregates.
+  try {
+    const liveRows = liveWagerRows(
+      await Bun.file(resolve(repoRoot, "data/live-wagers.json")).json(),
+    );
+    return customerRowFromLiveWagers(normId, liveRows);
+  } catch {
+    // signal-honesty: an unreadable capture is not a customer record
+    return null;
+  }
 }
 
 const ASSET_TEXT_MIMES: Readonly<Record<string, string>> = {
@@ -4517,33 +4627,55 @@ async function buildLogoMetaResponse(
   );
 }
 
+function peerGames<T extends LiveBetGame>(
+  req: Request,
+  server: Bun.Server<undefined>,
+  ingress: Ingress,
+  games: readonly T[],
+): readonly T[] {
+  return sanitizeLiveBetGamesForPeer(
+    games,
+    peerIsTrusted(server.requestIP(req)?.address, ingress),
+  );
+}
+
 function respondLiveBetsV2(
   req: Request,
   resolved: import("../src/contracts/live_bets.v2.ts").LiveBetsV2Response,
   cors: Record<string, string>,
+  server: Bun.Server<undefined>,
+  ingress: Ingress,
 ): Response {
+  const trustedPeer = peerIsTrusted(server.requestIP(req)?.address, ingress);
+  const safeResolved = trustedPeer
+    ? resolved
+    : {
+        ...resolved,
+        games: sanitizeLiveBetGamesForPeer(resolved.games, false),
+      };
   const headers: Record<string, string> = {
     ...cors,
     "Cache-Control": "no-store",
   };
-  if (resolved.provenance.hash !== null) {
-    const etag = `"${resolved.provenance.hash.slice(0, 24)}-${resolved.fallbackUsed ? 1 : 0}-${resolved.warnings.length}"`;
+  const peerBit = trustedPeer ? 1 : 0;
+  if (safeResolved.provenance.hash !== null) {
+    const etag = `"${safeResolved.provenance.hash.slice(0, 24)}-${safeResolved.fallbackUsed ? 1 : 0}-${safeResolved.warnings.length}-${peerBit}"`;
     headers["ETag"] = etag;
     if (req.headers.get("if-none-match") === etag) {
       return new Response(null, { status: 304, headers });
     }
   }
   if (negotiateEncoding(req.headers.get("accept-encoding")) === null) {
-    return Response.json(resolved, { headers });
+    return Response.json(safeResolved, { headers });
   }
   const versionKey =
-    resolved.provenance.hash !== null
-      ? `v2-live-bets|${resolved.dataSource}|${resolved.fallbackUsed ? 1 : 0}|${resolved.warnings.join("\n")}|${resolved.provenance.hash}`
-      : `v2-live-bets-dyn|${resolved.provenance.generatedAt}|${resolved.pendingCount}`;
+    safeResolved.provenance.hash !== null
+      ? `v2-live-bets|${safeResolved.dataSource}|${safeResolved.fallbackUsed ? 1 : 0}|${safeResolved.warnings.join("\n")}|${peerBit}|${safeResolved.provenance.hash}`
+      : `v2-live-bets-dyn|${safeResolved.provenance.generatedAt}|${safeResolved.pendingCount}|${peerBit}`;
   return encodedResponse(req, {
     version: versionKey,
     contentType: "application/json; charset=utf-8",
-    produce: () => new TextEncoder().encode(JSON.stringify(resolved)),
+    produce: () => new TextEncoder().encode(JSON.stringify(safeResolved)),
     headers,
   });
 }
@@ -4631,4 +4763,47 @@ function withMcpEndpoint(
     }
     return innerFetch(req);
   };
+}
+
+function recordPiiRejectionAudit(
+  req: Request,
+  rejected: { status: 401 | 403 | 503; error: string },
+  ingress: Ingress,
+): void {
+  if (rejected.status !== 401 && rejected.status !== 503) return;
+  let pathname = "/unknown";
+  try {
+    pathname = new URL(req.url).pathname;
+  } catch {
+    // signal-honesty: intentional-invalid-audit-url-fallback
+    pathname = "/invalid-url";
+  }
+  const upgrade = req.headers.get("upgrade")?.toLowerCase() ?? "";
+  const isWs =
+    upgrade === "websocket" ||
+    req.headers.has("sec-websocket-protocol") ||
+    req.headers.has("sec-websocket-key");
+  // Never log raw token values, cookies, query strings, or peer IP addresses.
+  const headerPresent =
+    req.headers.has("authorization") ||
+    req.headers.has("sec-websocket-protocol");
+  try {
+    writeAuditEntry({
+      ts: new Date().toISOString(),
+      category: "auth",
+      action: "pii_rejection",
+      success: false,
+      target: pathname,
+      details: {
+        status: rejected.status,
+        surface: isWs ? "ws_upgrade" : "http",
+        method: req.method,
+        headerPresent,
+        proxied: ingress.proxied,
+        reason: rejected.error,
+      },
+    });
+  } catch {
+    // signal-honesty: intentional-audit-fs-isolation
+  }
 }

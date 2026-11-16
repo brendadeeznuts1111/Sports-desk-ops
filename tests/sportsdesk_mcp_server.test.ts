@@ -1827,7 +1827,10 @@ describe("Mounted /mcp route on :4020 webview server and @sportsdesk-ops/api rou
       getTaxonomyCatalog: () => ({}),
       runShadowPricing: async () => ({}),
       executeTerminal: async () => ({ output: "" }),
-      getBuildMatrix: async () => [],
+      getBuildMatrix: async () => ({
+        targets: [],
+        generatedAt: "2026-11-15T00:00:00.000Z",
+      }),
       handleMcp: (req: Request) => mcpHandler.handleRequest(req),
     } as unknown as DashboardApiDeps;
 
@@ -2913,7 +2916,10 @@ describe("Adversarial Round 2 regression hardening", () => {
       getTaxonomyCatalog: () => ({}),
       runShadowPricing: async () => ({}),
       executeTerminal: async () => ({ output: "" }),
-      getBuildMatrix: async () => [],
+      getBuildMatrix: async () => ({
+        targets: [],
+        generatedAt: "2026-11-15T00:00:00.000Z",
+      }),
       handleMcp: (req: Request) => server.mcpHandler.handleRequest(req),
     } as unknown as DashboardApiDeps;
     const api = createDashboardApi(stubDeps, { clients: new Set<WsLike>() });

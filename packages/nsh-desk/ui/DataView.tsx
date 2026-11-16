@@ -12,9 +12,9 @@ import {
 } from "nsh/base";
 import { Bar, Grid, Plot, PlotAxis } from "nsh/base/plot";
 import {
+  currentWindow,
   isAvailable as isDesktopMenuAvailable,
   Menu as DesktopMenu,
-  Window as DesktopWindow,
 } from "nsh/desktop";
 import type { ExposurePlotPoint } from "../desk_model";
 import { FOCUS_RING_CLASS, SCRIM_BACKDROP_CLASS } from "./tokens";
@@ -229,8 +229,10 @@ export interface DesktopShellMenuOptions {
 export function bindDesktopShellMenu(opts: DesktopShellMenuOptions): void {
   if (!isDesktopMenuAvailable) return;
 
+  const windowRef = currentWindow();
+
   effect(() => {
-    DesktopWindow.setTitle(opts.windowTitle());
+    windowRef.set({ title: opts.windowTitle() });
   });
 
   effect(() => {

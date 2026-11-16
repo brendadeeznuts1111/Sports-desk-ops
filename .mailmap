@@ -1,0 +1,9 @@
+# Display-only identity mapping: no commit objects are rewritten, no SHAs change.
+#
+# `dev@duoplus.com` is not a domain this project controls (registered 2004 via
+# Gabia, parked on parkingcrew.net, no site). The forward git identity is now the
+# GitHub noreply address; this maps the old machine-wide identity for `git log`
+# and for GitHub's author display.
+Ash - BookDeskOps <342268653+bw496915-cmyk@users.noreply.github.com> DuoPlus Development Team <dev@duoplus.com>
+Ash - BookDeskOps <342268653+bw496915-cmyk@users.noreply.github.com> <bw496915@gmail.com>
+Ash - BookDeskOps <342268653+bw496915-cmyk@users.noreply.github.com> <bw496915-cmyk@users.noreply.github.com>

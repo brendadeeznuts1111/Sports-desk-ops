@@ -143,3 +143,11 @@ guard. File references are to the DSH checkout.
 5. **The inspector timeout should say “reconnect and retry” once.** 5 of 97 errors were
    `Slots.listSubTree` timeouts; the message already hints at the Harness page, but a single
    automatic retry after the page reconnects would remove the manual step.
+6. **Loopback `fetch()` must bypass the sandbox proxy (or fail legibly).** Measured 2026-11-15 on
+   this checkout: 6 of 120 `Bun.serve({ port: 0 })` → `fetch("http://127.0.0.1:<port>")` →
+   `stop()` iterations received `400` with the body _“This is an explicit proxy server. Does not
+   respond to relative URIs.”_ — a proxy answered a request addressed to a local listener. The
+   rate is low enough that long single-server loops look clean (0 of 300) and high enough to break
+   test suites that start a server per test: `scripts/wagers_by_state_history.test.ts` fails 0–1
+   of its 30 tests per run, and _which_ test fails moves between runs. Treat that pattern as an
+   environment flake, re-run to confirm, and do not “fix” the capture code for it.

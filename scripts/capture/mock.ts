@@ -114,18 +114,15 @@ function failFixture(file: string, field: string, expected: string): never {
 }
 
 function parseFixture(value: unknown, file: string): MockFixture {
-  if (!isPlainObject(value)) throw failFixture(file, "root", "an object");
-  if (value["fixtureVersion"] !== 1)
-    throw failFixture(file, "fixtureVersion", "1");
+  if (!isPlainObject(value)) failFixture(file, "root", "an object");
+  if (value["fixtureVersion"] !== 1) failFixture(file, "fixtureVersion", "1");
   const rawOperation = value["operation"];
-  if (!isPlainObject(rawOperation))
-    throw failFixture(file, "operation", "an object");
+  if (!isPlainObject(rawOperation)) failFixture(file, "operation", "an object");
   const path = rawOperation["path"];
   const method = rawOperation["method"];
-  if (typeof path !== "string")
-    throw failFixture(file, "operation.path", "a string");
+  if (typeof path !== "string") failFixture(file, "operation.path", "a string");
   if (method !== "GET" && method !== "POST") {
-    throw failFixture(file, "operation.method", "GET or POST");
+    failFixture(file, "operation.method", "GET or POST");
   }
   assertReadOnly(path);
   const operationId =
@@ -133,21 +130,20 @@ function parseFixture(value: unknown, file: string): MockFixture {
       ? rawOperation["operationId"]
       : undefined;
   if (typeof value["capturedAt"] !== "string") {
-    throw failFixture(file, "capturedAt", "an ISO date string");
+    failFixture(file, "capturedAt", "an ISO date string");
   }
   const rawRequest = value["request"];
-  if (!isPlainObject(rawRequest))
-    throw failFixture(file, "request", "an object");
+  if (!isPlainObject(rawRequest)) failFixture(file, "request", "an object");
   const contentType = rawRequest["contentType"];
   if (typeof contentType !== "string")
-    throw failFixture(file, "request.contentType", "a string");
+    failFixture(file, "request.contentType", "a string");
   const headers: Record<string, string> = {};
   if (rawRequest["headers"] !== undefined) {
     if (!isPlainObject(rawRequest["headers"]))
-      throw failFixture(file, "request.headers", "an object");
+      failFixture(file, "request.headers", "an object");
     for (const [name, headerValue] of Object.entries(rawRequest["headers"])) {
       if (typeof headerValue !== "string") {
-        throw failFixture(file, `request.headers.${name}`, "a string");
+        failFixture(file, `request.headers.${name}`, "a string");
       }
       headers[name] = headerValue;
     }
@@ -156,11 +152,11 @@ function parseFixture(value: unknown, file: string): MockFixture {
   if (Object.keys(headers).length > 0) request.headers = headers;
   if (rawRequest["form"] !== undefined) {
     if (!isPlainObject(rawRequest["form"]))
-      throw failFixture(file, "request.form", "an object");
+      failFixture(file, "request.form", "an object");
     const form: Record<string, string> = {};
     for (const [key, formValue] of Object.entries(rawRequest["form"])) {
       if (typeof formValue !== "string") {
-        throw failFixture(file, `request.form.${key}`, "a string");
+        failFixture(file, `request.form.${key}`, "a string");
       }
       form[key] = formValue;
     }
@@ -172,31 +168,31 @@ function parseFixture(value: unknown, file: string): MockFixture {
   let response: MockFixtureResponse | null = null;
   if (rawResponse !== null) {
     if (!isPlainObject(rawResponse))
-      throw failFixture(file, "response", "an object or null");
+      failFixture(file, "response", "an object or null");
     const status = rawResponse["status"];
     if (typeof status !== "number" || !Number.isInteger(status)) {
-      throw failFixture(file, "response.status", "an integer");
+      failFixture(file, "response.status", "an integer");
     }
     const responseContentType = rawResponse["contentType"];
     if (typeof responseContentType !== "string") {
-      throw failFixture(file, "response.contentType", "a string");
+      failFixture(file, "response.contentType", "a string");
     }
     const responseHeaders: Record<string, string> = {};
     if (rawResponse["headers"] !== undefined) {
       if (!isPlainObject(rawResponse["headers"])) {
-        throw failFixture(file, "response.headers", "an object");
+        failFixture(file, "response.headers", "an object");
       }
       for (const [name, headerValue] of Object.entries(
         rawResponse["headers"],
       )) {
         if (typeof headerValue !== "string") {
-          throw failFixture(file, `response.headers.${name}`, "a string");
+          failFixture(file, `response.headers.${name}`, "a string");
         }
         responseHeaders[name] = headerValue;
       }
     }
     if (!("body" in rawResponse))
-      throw failFixture(file, "response.body", "present (may be null)");
+      failFixture(file, "response.body", "present (may be null)");
     response = {
       status,
       contentType: responseContentType,
@@ -217,7 +213,7 @@ function parseFixture(value: unknown, file: string): MockFixture {
   if (operationId !== undefined) fixture.operation.operationId = operationId;
   if (typeof value["samples"] === "number") {
     if (!Number.isInteger(value["samples"]) || value["samples"] < 1) {
-      throw failFixture(file, "samples", "a positive integer");
+      failFixture(file, "samples", "a positive integer");
     }
     fixture.samples = value["samples"];
   }
