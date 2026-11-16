@@ -1,4 +1,5 @@
 import { resolveDaemon4020State } from "@sportsdesk-ops/contracts";
+import { copyText } from "../clipboard.ts";
 import type React from "react";
 import { useState } from "react";
 import { styles } from "../dashboard_styles.ts";
@@ -460,9 +461,7 @@ export function R2PipelineTabPanel({
                     fontFamily: "monospace",
                   }}
                   onClick={() => {
-                    void navigator.clipboard?.writeText(
-                      sink.remediationCommand,
-                    );
+                    void copyText(sink.remediationCommand);
                     setCopiedCmdId(sink.id);
                     setTimeout(() => setCopiedCmdId(null), 1800);
                   }}

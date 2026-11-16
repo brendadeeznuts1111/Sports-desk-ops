@@ -1,4 +1,5 @@
 import type React from "react";
+import { copyText } from "./clipboard.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   parseDashboardWsSignal,
@@ -1638,7 +1639,7 @@ export function App(): React.ReactElement {
             copiedCliId={copiedCliId}
             onCopyCli={(customerId) => {
               const cmd = `bun run cli -C ${customerId}`;
-              void navigator.clipboard.writeText(cmd);
+              void copyText(cmd);
               setCopiedCliId(customerId);
               setTimeout(() => setCopiedCliId(null), 2000);
             }}
@@ -1699,7 +1700,7 @@ export function App(): React.ReactElement {
             onClearHistory={() => setTerminalHistory([])}
             copiedTerminalIdx={copiedTerminalIdx}
             onCopyOutput={(idx, stdout) => {
-              void navigator.clipboard.writeText(stdout);
+              void copyText(stdout);
               setCopiedTerminalIdx(idx);
               setTimeout(() => setCopiedTerminalIdx(null), 1500);
             }}
@@ -1736,7 +1737,7 @@ export function App(): React.ReactElement {
             alertToast={alertToast}
             onDismissToast={() => setAlertToast(null)}
             onCopyDeliveryId={(deliveryId) => {
-              void navigator.clipboard?.writeText(deliveryId);
+              void copyText(deliveryId);
               setAlertToast({
                 message: `Copied delivery UUID: ${deliveryId}`,
                 type: "info",
@@ -1832,7 +1833,7 @@ export function App(): React.ReactElement {
             onSelectWager={setSelectedWager}
             copiedTicketId={copiedTicketId}
             onCopyText={(ticketId, text) => {
-              void navigator.clipboard.writeText(text);
+              void copyText(text);
               setCopiedTicketId(ticketId);
               setTimeout(() => setCopiedTicketId(null), 1500);
             }}

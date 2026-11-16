@@ -8,6 +8,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from "react";
+import { copyText } from "./clipboard.ts";
 import type {
   MarketCode,
   MarketFilter,
@@ -293,7 +294,7 @@ export function ShadowPricingPanel({
   const cliCommand = `./bin/dx shadow-price --ladder-3=${ladderKey3} --ladder-7=${ladderKey7} --ladder-other=${ladderKey14_21} --min-volume=${minVolume} --elasticity=${retailElasticity.toFixed(2)}`;
 
   const copyCli = () => {
-    void navigator.clipboard?.writeText(cliCommand);
+    void copyText(cliCommand);
     setCopiedCli(true);
     setTimeout(() => setCopiedCli(false), 1600);
   };
