@@ -54,6 +54,11 @@ Tested: pass (exit 0), fake pin (exit 1), jq-less fallback via python3, no bun o
 running the canary instead of the pinned 1.4.4. That is exactly the silent runtime swap this
 guard exists to catch.
 
+Resolved the same day (2026-11-15, about 6 PM CST): the canary was renamed to
+`~/.bun/bin/bun-1.4.5-canary` (kept, not deleted). dx now resolves `/usr/local/bin/bun`, the pnpm
+shim for the pinned binary, and `DX_VERIFY_RUNTIME=1 ./bin/dx exec -- bun --revision` prints
+`verify-bun: OK bun 1.4.4 … sha256=10702245…` and `1.4.4+38afee6c8`.
+
 ## 2. bun.lock graph
 
 `python3 scripts/supply-chain/lock_graph.py bun.lock [--spot-check N]`
@@ -121,16 +126,24 @@ rules_js plus a Bun toolchain rule, and Nix already pins by hash natively.
 
 A JS repo has no compile step, so the reproduced artifacts are:
 
-| Output          | What                                                                                                                                           | Result                                                                                                                                                                               |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `.#bun`         | `fetchurl` by the pinned zip sha256. Asserts the extracted binary == the pinned upstream sha256 (`10702245…`), then autoPatchelf for Nix glibc | built, `--rebuild` bit-identical. Patched binary `edfe05db…` (differs from upstream by design), runs as `1.4.4+38afee6c8`                                                            |
-| `.#nodeModules` | fixed-output derivation: `bun install --frozen-lockfile` from bun.lock + package.json files (+ the workspace bin link targets)                 | NAR `sha256-064DfXmd…Lbc=` pinned in flake.nix. `--rebuild` matches. Root tree manifest `9f284b14…` = **the same bytes as the host's clean installs** (all 5 trees)                  |
-| `.#regression`  | `toolchain/steps/regression-suite.step.json` in the Nix sandbox (no network) with `.#bun`                                                      | 191 pass / 0 fail. `--rebuild` bit-identical. Normalized result `2c2b7c51…7b99a` = **the same hash as the host envelope**, from a different builder and a differently patched binary |
+| Output          | What                                                                                                                                           | Result                                                                                                                                                                                |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.#bun`         | `fetchurl` by the pinned zip sha256. Asserts the extracted binary == the pinned upstream sha256 (`10702245…`), then autoPatchelf for Nix glibc | built, `--rebuild` bit-identical. Patched binary `edfe05db…` (differs from upstream by design), runs as `1.4.4+38afee6c8`                                                             |
+| `.#nodeModules` | fixed-output derivation: `bun install --frozen-lockfile` from bun.lock + package.json files (+ the workspace bin link targets)                 | NAR `sha256-064DfXmd…Lbc=` at the original base (742f836); refreshed to `sha256-vDK95epj…` after the rebase (see below). Root tree manifest = the host's clean installs (all 5 trees) |
+| `.#regression`  | `toolchain/steps/regression-suite.step.json` in the Nix sandbox (no network) with `.#bun`                                                      | 191 pass / 0 fail. `--rebuild` bit-identical. Normalized result `2c2b7c51…7b99a` = **the same hash as the host envelope**, from a different builder and a differently patched binary  |
 
 To make the sandbox run green: `procps` (dx monitor calls `ps`) and a throwaway `git init`
 (one test enumerates tracked files) are added inside the build. nixpkgs is pinned to
 `nixos-26.05` rev `f1e5c356…` in `flake.lock`. `diffoscope` was not run: Nix's `--rebuild`
 comparison found no differences, so there was nothing to diff.
+
+**After the rebase onto a newer `main` (2026-11-15).** `bun.lock` had changed upstream, and Nix
+silently reused the old store path for the unchanged FOD hash until `--rebuild` exposed the
+mismatch, so the hash was refreshed. Repeated builds then showed that Bun 1.4.4 does not install
+the new lockfile reproducibly: in about 1 of 4 clean installs (Nix sandbox and host alike) the
+nested link `.bun/update-browserslist-db@1.3.4+…/node_modules/.bin/browserslist` is missing. The
+pinned hash is the majority result, so `nix build .#nodeModules` can fail intermittently until
+that link is normalized (or Bun fixes the race). `.#regression` was not re-run after the rebase.
 
 ## 5. Agent-step envelopes
 

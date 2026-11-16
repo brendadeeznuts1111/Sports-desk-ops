@@ -1,5 +1,11 @@
 # Replay report: envelopes captured at 54d5fff
 
+**Historical capture.** These envelopes pin the tree at 54d5fff, before the branch was rebased
+onto a newer `main`. On the rebased tree `rerun.py verify-all` reports input DRIFT (worktree, and
+the lock/node_modules inputs) for all six, which is the envelopes doing their job. Re-capture
+them after merge, from a fresh `bun install --frozen-lockfile` (see docs/supply-chain.md §4 for
+the install race that makes `install-repro` flaky on the current lockfile).
+
 Captured with the pinned runtime (bun 1.4.4, binary sha256 `10702245…7ac235`) on 2026-11-15,
 Linux x86_64 agent box. This directory is excluded from the envelopes' worktree digest, so
 committing it does not invalidate them.
