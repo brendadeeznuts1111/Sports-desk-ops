@@ -432,23 +432,17 @@ export function startDashboardServer(
         jsOutput.arrayBuffer(),
         cssOutput ? cssOutput.arrayBuffer() : Promise.resolve(null),
       ]);
+      // Cache-key / ETag fallback — xxHash64 is fast and ephemeral to this process.
+      const bundleCacheHash = (
+        output: { hash?: string | null },
+        bytes: Uint8Array,
+      ): string => output.hash ?? Bun.hash(bytes).toString(16);
       const jsBytes = new Uint8Array<ArrayBuffer>(jsBuf);
-      const jsHash =
-        jsOutput.hash ??
-        new Bun.CryptoHasher("sha256")
-          .update(jsBytes)
-          .digest("hex")
-          .slice(0, 16);
+      const jsHash = bundleCacheHash(jsOutput, jsBytes);
       const cssBytes =
         cssBuf !== null ? new Uint8Array<ArrayBuffer>(cssBuf) : null;
       const cssHash =
-        cssOutput && cssBytes
-          ? (cssOutput.hash ??
-            new Bun.CryptoHasher("sha256")
-              .update(cssBytes)
-              .digest("hex")
-              .slice(0, 16))
-          : null;
+        cssOutput && cssBytes ? bundleCacheHash(cssOutput, cssBytes) : null;
 
       const bundle: CachedLegacyBundle = {
         jsBytes,

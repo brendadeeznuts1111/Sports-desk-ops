@@ -1225,20 +1225,36 @@ export function CustomersTabPanel({
                         💰 Stake Sizing & Variance
                       </h4>
                       <div>
-                        Strategy: <b>{selectedCustomer.sizingStrategy}</b>
+                        Strategy:{" "}
+                        <b>
+                          {isUnknown(selectedCustomer, "sizing")
+                            ? "—"
+                            : selectedCustomer.sizingStrategy}
+                        </b>
                       </div>
                       <div>
-                        Gini Inequality: <b>{selectedCustomer.gini}</b>
+                        Gini Inequality:{" "}
+                        <b>
+                          {isUnknown(selectedCustomer, "gini")
+                            ? "—"
+                            : selectedCustomer.gini}
+                        </b>
                       </div>
                       <div>
                         Mean Stake:{" "}
-                        <b>${selectedCustomer.meanStake.toLocaleString()}</b>
+                        <b>
+                          {isUnknown(selectedCustomer, "meanStake")
+                            ? "—"
+                            : `$${selectedCustomer.meanStake.toLocaleString()}`}
+                        </b>
                       </div>
                       <div>
                         VaR / Max Cap:{" "}
                         <b
                           style={{
                             color:
+                              !isUnknown(selectedCustomer, "var95") &&
+                              !isUnknown(selectedCustomer, "limit") &&
                               selectedCustomer.recommendedLimitUsd > 0 &&
                               selectedCustomer.var95Usd >
                                 selectedCustomer.recommendedLimitUsd
@@ -1246,7 +1262,9 @@ export function CustomersTabPanel({
                                 : "#7dd3fc",
                           }}
                         >
-                          {selectedCustomer.recommendedLimitUsd > 0
+                          {!isUnknown(selectedCustomer, "var95") &&
+                          !isUnknown(selectedCustomer, "limit") &&
+                          selectedCustomer.recommendedLimitUsd > 0
                             ? `${Math.round((selectedCustomer.var95Usd / selectedCustomer.recommendedLimitUsd) * 100)}%`
                             : "n/a"}
                         </b>
@@ -1258,32 +1276,46 @@ export function CustomersTabPanel({
                       </h4>
                       <div>
                         7d 95% VaR:{" "}
-                        <b>${selectedCustomer.var95Usd.toLocaleString()}</b>
+                        <b>
+                          {isUnknown(selectedCustomer, "var95")
+                            ? "—"
+                            : `$${selectedCustomer.var95Usd.toLocaleString()}`}
+                        </b>
                       </div>
                       <div>
                         Expected Shortfall (CVaR):{" "}
-                        <b>${selectedCustomer.cvar95Usd.toLocaleString()}</b>
+                        <b>
+                          {isUnknown(selectedCustomer, "var95")
+                            ? "—"
+                            : `$${selectedCustomer.cvar95Usd.toLocaleString()}`}
+                        </b>
                       </div>
                       <div>
                         Lifetime Hold:{" "}
                         <b
                           style={{
-                            color:
-                              selectedCustomer.holdPct < 0
+                            color: isUnknown(selectedCustomer, "holdPct")
+                              ? "#94a3b8"
+                              : selectedCustomer.holdPct < 0
                                 ? "#f87171"
                                 : "#4ade80",
                           }}
                         >
-                          {selectedCustomer.holdPct}%
+                          {isUnknown(selectedCustomer, "holdPct")
+                            ? "—"
+                            : `${selectedCustomer.holdPct}%`}
                         </b>
                       </div>
                       <div>
                         Projected LTV:{" "}
                         <b>
-                          ${Math.abs(selectedCustomer.ltvUsd).toLocaleString()}
-                          {selectedCustomer.ltvUsd < 0
-                            ? " (Loss to Desk)"
-                            : " (Desk Hold)"}
+                          {isUnknown(selectedCustomer, "ltv")
+                            ? "—"
+                            : `$${Math.abs(selectedCustomer.ltvUsd).toLocaleString()}${
+                                selectedCustomer.ltvUsd < 0
+                                  ? " (Loss to Desk)"
+                                  : " (Desk Hold)"
+                              }`}
                         </b>
                       </div>
                     </div>
@@ -1342,12 +1374,18 @@ export function CustomersTabPanel({
                     <div style={styles.directiveRow}>
                       <span>Max Stake Ceiling:</span>
                       <b>
-                        ${selectedCustomer.recommendedLimitUsd.toLocaleString()}
+                        {isUnknown(selectedCustomer, "limit")
+                          ? "—"
+                          : `$${selectedCustomer.recommendedLimitUsd.toLocaleString()}`}
                       </b>
                     </div>
                     <div style={styles.directiveRow}>
                       <span>In-Play Submission Delay:</span>
-                      <b>{selectedCustomer.inPlayDelaySec} seconds</b>
+                      <b>
+                        {isUnknown(selectedCustomer, "delay")
+                          ? "—"
+                          : `${selectedCustomer.inPlayDelaySec} seconds`}
+                      </b>
                     </div>
                     <div style={styles.directiveRow}>
                       <span>Line Shading:</span>
