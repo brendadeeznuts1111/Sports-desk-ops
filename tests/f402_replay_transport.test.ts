@@ -101,7 +101,7 @@ describe("createF402ReplayTransport", () => {
   });
 
   test("attaches the Bearer token when the caller omitted Authorization", async () => {
-    let authorization: string | null = null;
+    const seenAuth: (string | null)[] = [];
     const transport = await createF402ReplayTransport({
       env: { ...baseEnv },
       readSession: () => ({
@@ -114,17 +114,17 @@ describe("createF402ReplayTransport", () => {
         expiresAtIso: new Date(Date.now() + 3_600_000).toISOString(),
       }),
       fetchImpl: async (_url, init) => {
-        authorization = new Headers(init.headers).get("authorization");
+        seenAuth.push(new Headers(init.headers).get("authorization"));
         return new Response("ok", { status: 200 });
       },
     });
     await transport.fetch("https://f402.example/x", {});
-    expect(authorization).toBe("Bearer jwt-value");
+    expect(seenAuth[0]).toBe("Bearer jwt-value");
     await transport.close();
   });
 
   test("does not overwrite a caller-supplied Authorization header", async () => {
-    let authorization: string | null = null;
+    const seenAuth: (string | null)[] = [];
     const transport = await createF402ReplayTransport({
       env: { ...baseEnv },
       readSession: () => ({
@@ -135,14 +135,14 @@ describe("createF402ReplayTransport", () => {
         expiresAtIso: new Date(Date.now() + 3_600_000).toISOString(),
       }),
       fetchImpl: async (_url, init) => {
-        authorization = new Headers(init.headers).get("authorization");
+        seenAuth.push(new Headers(init.headers).get("authorization"));
         return new Response("ok", { status: 200 });
       },
     });
     await transport.fetch("https://f402.example/x", {
       headers: { authorization: "Bearer from-caller" },
     });
-    expect(authorization).toBe("Bearer from-caller");
+    expect(seenAuth[0]).toBe("Bearer from-caller");
     await transport.close();
   });
 
