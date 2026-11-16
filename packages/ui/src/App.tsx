@@ -48,12 +48,10 @@ import {
 } from "./terminal_catalog.ts";
 import {
   DASHBOARD_API,
-  DASHBOARD_DEFAULT_TAB,
   DASHBOARD_META,
   dashboardApiUrl,
 } from "./config/dashboard.ts";
 import { TOKENS_TOML_VERSION } from "./tokens.registry.generated.ts";
-import { WAGERS_DEFAULTS } from "./config/wagers.ts";
 import {
   applyShadowSliceToLocation,
   buildBookdeskopsTokensDeskHref,
@@ -71,7 +69,14 @@ import {
   type ReverseDnsForensicsView,
 } from "../../../lib/reverse_dns_forensics.ts";
 import { useActiveShadowSlice } from "./use_active_shadow_slice.ts";
+import { getDashboardBuildInfo } from "./build_info.ts";
 import { feedFreshnessTitle, quickJumpFeedState } from "./quick_jump_feed.ts";
+import {
+  DEFAULT_DASHBOARD_URL_STATE,
+  readDashboardUrlState,
+  writeDashboardUrl,
+  type DashboardUrlState,
+} from "./url_state.ts";
 import {
   findWagerByTicketParam,
   syncTicketInspectorToLocation,
@@ -94,7 +99,6 @@ import {
   type LiveWager,
   type R2PipelineApiResponse,
   type RankingsFilter,
-  resolveDashboardTabId,
   type ShiftSummaryData,
   type ShowcaseCustomer,
   type TerminalCategory,
@@ -137,25 +141,13 @@ function apiPostHeaders(): HeadersInit {
   return headers;
 }
 
-function resolveInitialTab(): DashboardTabId {
-  if (typeof window === "undefined") return DASHBOARD_DEFAULT_TAB;
-  const params = new URLSearchParams(window.location.search);
-  const queryTab = params.get("tab");
-  if (queryTab) {
-    return resolveDashboardTabId(queryTab, DASHBOARD_DEFAULT_TAB);
-  }
-  const sport = params.get("sport")?.trim();
-  const subSport = params.get("subSport")?.trim();
-  if (
-    (sport && sport.length > 0 && sport.toUpperCase() !== "ALL") ||
-    (subSport && subSport.length > 0 && subSport.toUpperCase() !== "ALL")
-  ) {
-    return "shadow";
-  }
-  if (window.location.hash) {
-    return resolveDashboardTabId(window.location.hash, DASHBOARD_DEFAULT_TAB);
-  }
-  return DASHBOARD_DEFAULT_TAB;
+function initialDashboardUrlState(): DashboardUrlState {
+  if (typeof window === "undefined") return DEFAULT_DASHBOARD_URL_STATE;
+  return readDashboardUrlState(
+    window.location.search,
+    window.location.pathname,
+    window.location.hash,
+  );
 }
 
 function resolveInitialUrlParam(name: string): string {
@@ -165,11 +157,13 @@ function resolveInitialUrlParam(name: string): string {
 
 export function App(): React.ReactElement {
   const runtimeFlags = getDashboardRuntimeFlags();
-  const [activeTab, setActiveTab] = useState<DashboardTabId>(resolveInitialTab);
-  const [showBuildMatrix, setShowBuildMatrix] = useState<boolean>(() =>
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("matrix") === "1"
-      : false,
+  const buildInfo = getDashboardBuildInfo();
+  const initialUrl = initialDashboardUrlState();
+  const [activeTab, setActiveTab] = useState<DashboardTabId>(
+    () => initialUrl.tab,
+  );
+  const [showBuildMatrix, setShowBuildMatrix] = useState<boolean>(
+    () => initialUrl.matrix,
   );
   const [buildMatrixRows, setBuildMatrixRows] = useState<
     readonly BuildMatrixRow[] | null
@@ -183,26 +177,33 @@ export function App(): React.ReactElement {
     number | null
   >(null);
   const [rankingsFilter, setRankingsFilter] = useState<RankingsFilter>("ALL");
-  const [rankingsSearch, setRankingsSearch] = useState<string>(() =>
-    resolveInitialUrlParam("agent"),
+  const [rankingsSearch, setRankingsSearch] = useState<string>(
+    () => initialUrl.agent,
   );
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(() => {
-    const a = resolveInitialUrlParam("agent");
-    return a ? a.toUpperCase() : null;
-  });
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(() =>
+    initialUrl.agent ? initialUrl.agent.toUpperCase() : null,
+  );
   const [wagerSearch, setWagerSearch] = useState("");
-  const [wagerSportFilter, setWagerSportFilter] = useState<string>("ALL");
-  const [wagerAlertFilter, setWagerAlertFilter] = useState<string>("ALL");
-  const [wagerTypeFilter, setWagerTypeFilter] = useState<string>("ALL");
-  const [wagerChannelFilter, setWagerChannelFilter] = useState<string>("ALL");
+  const [wagerSportFilter, setWagerSportFilter] = useState<string>(
+    () => initialUrl.wSport,
+  );
+  const [wagerAlertFilter, setWagerAlertFilter] = useState<string>(
+    () => initialUrl.wAlert,
+  );
+  const [wagerTypeFilter, setWagerTypeFilter] = useState<string>(
+    () => initialUrl.wType,
+  );
+  const [wagerChannelFilter, setWagerChannelFilter] = useState<string>(
+    () => initialUrl.wChannel,
+  );
   const [copiedTicketId, setCopiedTicketId] = useState<string | null>(null);
   const [selectedWager, setSelectedWager] = useState<LiveWager | null>(null);
   // Default sort comes from packages/ui/src/config/wagers.toml ([table] table).
   const [wagerSortField, setWagerSortField] = useState<WagerSortField>(
-    WAGERS_DEFAULTS.sort_field,
+    () => initialUrl.wSort,
   );
   const [wagerSortDir, setWagerSortDir] = useState<"asc" | "desc">(
-    WAGERS_DEFAULTS.sort_dir,
+    () => initialUrl.wDir,
   );
   const [clockTime, setClockTime] = useState<string>("");
   const [terminalCategory, setTerminalCategory] =
@@ -325,6 +326,30 @@ export function App(): React.ReactElement {
         1_800,
       );
     });
+  };
+
+  const viewIsDefault =
+    activeTab === DEFAULT_DASHBOARD_URL_STATE.tab &&
+    !showBuildMatrix &&
+    (selectedAgentId ?? "") === "" &&
+    wagerSportFilter === DEFAULT_DASHBOARD_URL_STATE.wSport &&
+    wagerAlertFilter === DEFAULT_DASHBOARD_URL_STATE.wAlert &&
+    wagerTypeFilter === DEFAULT_DASHBOARD_URL_STATE.wType &&
+    wagerChannelFilter === DEFAULT_DASHBOARD_URL_STATE.wChannel &&
+    wagerSortField === DEFAULT_DASHBOARD_URL_STATE.wSort &&
+    wagerSortDir === DEFAULT_DASHBOARD_URL_STATE.wDir;
+
+  const handleResetView = () => {
+    setActiveTab(DEFAULT_DASHBOARD_URL_STATE.tab);
+    setShowBuildMatrix(false);
+    setWagerSportFilter(DEFAULT_DASHBOARD_URL_STATE.wSport);
+    setWagerAlertFilter(DEFAULT_DASHBOARD_URL_STATE.wAlert);
+    setWagerTypeFilter(DEFAULT_DASHBOARD_URL_STATE.wType);
+    setWagerChannelFilter(DEFAULT_DASHBOARD_URL_STATE.wChannel);
+    setWagerSortField(DEFAULT_DASHBOARD_URL_STATE.wSort);
+    setWagerSortDir(DEFAULT_DASHBOARD_URL_STATE.wDir);
+    setSelectedAgentId(null);
+    setRankingsSearch("");
   };
 
   const openWagersForShadowSlice = () => {
@@ -1353,17 +1378,91 @@ export function App(): React.ReactElement {
     }
   }, [profileCustomers]);
 
+  const previousTabRef = useRef(activeTab);
   useEffect(() => {
-    if (!showBuildMatrix || typeof window === "undefined") return;
-    if (activeTab !== "customers") return;
+    if (typeof window === "undefined") return;
+    const tabChanged = previousTabRef.current !== activeTab;
+    previousTabRef.current = activeTab;
+    writeDashboardUrl(
+      {
+        tab: activeTab,
+        matrix: showBuildMatrix,
+        agent: selectedAgentId ?? "",
+        wSport: wagerSportFilter,
+        wAlert: wagerAlertFilter,
+        wType: wagerTypeFilter,
+        wChannel: wagerChannelFilter,
+        wSort: wagerSortField,
+        wDir: wagerSortDir,
+      },
+      window,
+      { push: tabChanged },
+    );
+  }, [
+    activeTab,
+    showBuildMatrix,
+    selectedAgentId,
+    wagerSportFilter,
+    wagerAlertFilter,
+    wagerTypeFilter,
+    wagerChannelFilter,
+    wagerSortField,
+    wagerSortDir,
+  ]);
+
+  // Customer/ticket links are read elsewhere; only append the customer when the
+  // matrix overlay is open, never delete an inbound deep link.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!showBuildMatrix || activeTab !== "customers" || !selectedCustomer)
+      return;
     const url = new URL(window.location.href);
-    url.searchParams.set("matrix", "1");
-    url.searchParams.set("tab", "customers");
-    if (selectedCustomer) {
-      url.searchParams.set("customer", selectedCustomer.id);
-    }
+    if (url.searchParams.get("customer") === selectedCustomer.id) return;
+    url.searchParams.set("customer", selectedCustomer.id);
     window.history.replaceState(null, "", `${url.pathname}${url.search}`);
   }, [showBuildMatrix, activeTab, selectedCustomer]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const apply = () => {
+      const next = readDashboardUrlState(
+        window.location.search,
+        window.location.pathname,
+        window.location.hash,
+      );
+      setActiveTab(next.tab);
+      setShowBuildMatrix(next.matrix);
+      setWagerSportFilter(next.wSport);
+      setWagerAlertFilter(next.wAlert);
+      setWagerTypeFilter(next.wType);
+      setWagerChannelFilter(next.wChannel);
+      setWagerSortField(next.wSort);
+      setWagerSortDir(next.wDir);
+      setSelectedAgentId(next.agent ? next.agent.toUpperCase() : null);
+      setRankingsSearch(next.agent);
+
+      // Deep links are not part of the rebuildable state; resolve them against
+      // the data already loaded when a navigation lands on one.
+      const params = new URLSearchParams(window.location.search);
+      const customerId = params.get("customer")?.trim() ?? "";
+      if (customerId !== "") {
+        const found = profileCustomers.find(
+          (customer) => customer.id.toUpperCase() === customerId.toUpperCase(),
+        );
+        if (found) {
+          setSelectedCustomer(found);
+          setSearchQuery(customerId);
+        }
+      }
+      const ticketId = params.get("ticket")?.trim() ?? "";
+      if (ticketId !== "") {
+        const pick = findWagerByTicketParam(liveWagers, ticketId);
+        if (pick !== null) setSelectedWager(pick);
+      }
+    };
+    window.addEventListener("popstate", apply);
+    return () => window.removeEventListener("popstate", apply);
+  }, [profileCustomers, liveWagers]);
 
   const daemon4020 = r2PipelineData?.daemon4020;
   const daemonState = resolveDaemon4020State(daemon4020);
@@ -1598,6 +1697,48 @@ export function App(): React.ReactElement {
           >
             📋 Shift Handoff
           </button>
+          <button
+            type="button"
+            data-copy-view-link="true"
+            onClick={handleCopyQuickLink}
+            style={{
+              padding: "4px 9px",
+              borderRadius: "6px",
+              fontSize: "11px",
+              fontWeight: 600,
+              background: "#1e293b",
+              color: quickLinkCopyState === "failed" ? "#fca5a5" : "#4ade80",
+              border: "1px solid #334155",
+              cursor: "pointer",
+            }}
+            title="Copy this exact view — tab, filters, sort and overlay — as a shareable link"
+          >
+            {quickLinkCopyState === "copied"
+              ? "✓ View link copied"
+              : quickLinkCopyState === "failed"
+                ? "⚠ Copy failed"
+                : "⧉ Copy view"}
+          </button>
+          {!viewIsDefault && (
+            <button
+              type="button"
+              data-reset-view="true"
+              onClick={handleResetView}
+              style={{
+                padding: "4px 9px",
+                borderRadius: "6px",
+                fontSize: "11px",
+                fontWeight: 600,
+                background: "#1e293b",
+                color: "#94a3b8",
+                border: "1px solid #334155",
+                cursor: "pointer",
+              }}
+              title="Reset tab, filters, sort and overlays to defaults"
+            >
+              ↺ Reset view
+            </button>
+          )}
           <button
             type="button"
             className="sd-pill sd-mono"
@@ -2394,8 +2535,11 @@ export function App(): React.ReactElement {
         <span>
           Native Bun HTML Bundler + Bun.serve Routes + bun:bundle (
           {runtimeFlags.target}) + tokens.toml v{TOKENS_TOML_VERSION} ·
-          dashboard.toml v{DASHBOARD_META.version} · autoExecute: false
-          invariant active
+          dashboard.toml v{DASHBOARD_META.version}
+          {buildInfo
+            ? ` · build ${buildInfo.target}@${buildInfo.commit} · ${buildInfo.builtAt}`
+            : ""}{" "}
+          · autoExecute: false invariant active
         </span>
       </footer>
 

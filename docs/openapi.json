@@ -1634,7 +1634,7 @@
           "tier": "C",
           "sources": [
             "main:scripts/portal_tile_crawler.ts:57-66",
-            "main:scripts/portal_tile_crawler.ts:545-670",
+            "main:scripts/portal_tile_crawler.ts:543-668",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1668,7 +1668,7 @@
           "tier": "C",
           "sources": [
             "main:scripts/portal_tile_crawler.ts:68-77",
-            "main:scripts/portal_tile_crawler.ts:545-670",
+            "main:scripts/portal_tile_crawler.ts:543-668",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1702,7 +1702,7 @@
           "tier": "C",
           "sources": [
             "main:scripts/portal_tile_crawler.ts:79-89",
-            "main:scripts/portal_tile_crawler.ts:545-670",
+            "main:scripts/portal_tile_crawler.ts:543-668",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1736,7 +1736,7 @@
           "tier": "C",
           "sources": [
             "main:scripts/portal_tile_crawler.ts:91-107",
-            "main:scripts/portal_tile_crawler.ts:545-670",
+            "main:scripts/portal_tile_crawler.ts:543-668",
             "docs/openapi.json",
             "docs/runbooks/operational_guardrails_runbook.md:213"
           ],
@@ -1772,7 +1772,7 @@
           "tier": "C",
           "sources": [
             "main:scripts/portal_tile_crawler.ts:109-120",
-            "main:scripts/portal_tile_crawler.ts:545-670",
+            "main:scripts/portal_tile_crawler.ts:543-668",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1801,7 +1801,7 @@
           "tier": "C",
           "sources": [
             "main:scripts/portal_tile_crawler.ts:122-132",
-            "main:scripts/portal_tile_crawler.ts:545-670",
+            "main:scripts/portal_tile_crawler.ts:543-668",
             "docs/openapi.json",
             "docs/runbooks/operational_guardrails_runbook.md:166"
           ],
@@ -2025,7 +2025,7 @@
           "tier": "B",
           "sources": [
             "main:scripts/portal_tile_crawler.ts:134-149",
-            "main:scripts/portal_tile_crawler.ts:545-670",
+            "main:scripts/portal_tile_crawler.ts:543-668",
             "docs/openapi.json",
             "docs/evidence/capture-requests.md"
           ],
@@ -2050,7 +2050,7 @@
           "tier": "C",
           "sources": [
             "main:scripts/portal_tile_crawler.ts:151-161",
-            "main:scripts/portal_tile_crawler.ts:545-670",
+            "main:scripts/portal_tile_crawler.ts:543-668",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -2083,7 +2083,7 @@
           "tier": "C",
           "sources": [
             "main:scripts/portal_tile_crawler.ts:163-172",
-            "main:scripts/portal_tile_crawler.ts:545-670",
+            "main:scripts/portal_tile_crawler.ts:543-668",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -2116,7 +2116,7 @@
           "tier": "C",
           "sources": [
             "main:scripts/portal_tile_crawler.ts:174-188",
-            "main:scripts/portal_tile_crawler.ts:545-670",
+            "main:scripts/portal_tile_crawler.ts:543-668",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -2149,7 +2149,7 @@
           "tier": "C",
           "sources": [
             "main:scripts/portal_tile_crawler.ts:190-205",
-            "main:scripts/portal_tile_crawler.ts:545-670",
+            "main:scripts/portal_tile_crawler.ts:543-668",
             "docs/openapi.json",
             "docs/runbooks/operational_guardrails_runbook.md:167"
           ],
@@ -3124,7 +3124,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:517-600"],
+          "sources": ["services/blob_and_live_bets_server.ts:516-599"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3355,7 +3355,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:517-600"],
+          "sources": ["services/blob_and_live_bets_server.ts:516-599"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3488,7 +3488,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:601-619"],
+          "sources": ["services/blob_and_live_bets_server.ts:600-618"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3585,7 +3585,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:432-456"],
+          "sources": ["services/blob_and_live_bets_server.ts:431-455"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3754,7 +3754,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:457-503"],
+          "sources": ["services/blob_and_live_bets_server.ts:456-502"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3903,7 +3903,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:620-649"],
+          "sources": ["services/blob_and_live_bets_server.ts:619-648"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }

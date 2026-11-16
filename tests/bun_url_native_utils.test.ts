@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath as nodeFileURLToPath } from "node:url";
 import {
   BUN_UTILS_DOC_PATH,
   buildRuntimePinnedDocUrl,
@@ -161,5 +162,22 @@ describe("route_audit_table (URL.parse, URLPattern, Bun.inspect.table)", () => {
     }
     const table = renderRouteAuditTable(specs, { colors: false });
     expect(table).toContain("/api/v2/live-bets");
+  });
+});
+
+describe("Bun.fileURLToPath", () => {
+  test("decodes a file URL exactly like node:url", () => {
+    const encoded = new URL("file:///tmp/a%20b/unicod%C3%A9.txt");
+    expect(Bun.fileURLToPath(encoded)).toBe(nodeFileURLToPath(encoded));
+    expect(Bun.fileURLToPath("file:///path/to/file.txt")).toBe(
+      nodeFileURLToPath("file:///path/to/file.txt"),
+    );
+  });
+
+  test("refuses a non-file URL instead of returning a pathname", () => {
+    expect(() => Bun.fileURLToPath("https://example.com/x")).toThrow(TypeError);
+    expect(() => Bun.fileURLToPath(new URL("sqlite:///tmp/db"))).toThrow(
+      TypeError,
+    );
   });
 });

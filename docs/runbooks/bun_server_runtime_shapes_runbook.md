@@ -161,6 +161,46 @@ export interface Server extends Disposable {
 - By default, `Bun.serve()` calls `ref()`, keeping the Bun process alive indefinitely.
 - Calling `server.unref()` permits background reporting daemons or CLI commands to serve transient health probes or webhooks while allowing the process to terminate naturally when batch workloads complete.
 
+### 2.3 Route Table Dispatch: `BunRequest<T>` vs Fallback `fetch`
+
+`Bun.serve({ routes })` resolves a path with the uWebSockets radix router before the
+`fetch` fallback runs. The two branches receive different request types, and that
+difference is what makes route-level typing useful:
+
+- **Hit:** a matching route receives `BunRequest<"/path/:param">`, with
+  `params` from `Serve.ExtractRouteParams<T>`, `cookies` as a `Bun.CookieMap`,
+  the absolute `url` string, and Bun body helpers (`bytes`, `textStream`).
+  Cookie mutations via `req.cookies.set()` / `req.cookies.delete()` are serialized
+  onto the handler's `Response` as `Set-Cookie`.
+- **Miss:** the request falls through to `fetch(req, srv)`, where `req` is a plain
+  `Request`. There are no route params and no `req.cookies`; use
+  `new URL(req.url)` and the `Cookie` header instead.
+
+![Bun.serve route table: BunRequest on a hit, plain Request on the fetch fallback](../assets/bun-serve-bunrequest-routing.svg)
+
+Boundary rules for this split:
+
+- `BunRequest<T>.params` is percent-decoded; malformed `%XX` sequences become
+  `\uFFFD` rather than throwing. Reject `\uFFFD` (or gate to ASCII) before using
+  a param as a key — `services/downline_risk_route.ts` does both.
+- A `__Host-` cookie set from a route must pass `secure`, `httpOnly`,
+  `sameSite: "strict"`, `path: "/"`, and omit `domain`; the runtime appends the
+  `Set-Cookie` to the handler's `Response`.
+- A non-upgrade route must return an explicit `Response` on every path: a
+  `void`/`undefined` return makes the route typing assume `server.upgrade()`.
+  Method maps should answer non-GET methods with `405` and `Allow: GET` rather
+  than falling through to the `fetch` miss path.
+- A sensitive binary route response should set `Content-Type` explicitly and
+  `Cache-Control: no-store`; assert `X-Match-Count` equals the post-copy buffer
+  length. Cookie mutations must be verified on the binary response, not only on
+  JSON responses.
+
+The typed slice in `services/live_bets_typed_server.ts` exercises both sides:
+`withAuthenticatedRoute` reads `req.cookies`, `SanitizedRequestAuditView` reports
+only header names and a redacted client IP, and the route map falls through to a
+JSON 404 `fetch` when no route matches. Its contract is
+`tests/live_bets_typed_server.test.ts`.
+
 ---
 
 ## 3. Interface Shape 2: `WebSocketHandler<T = undefined>`

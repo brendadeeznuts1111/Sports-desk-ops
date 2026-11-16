@@ -73,7 +73,7 @@ function encode(
   bytes: Uint8Array<ArrayBuffer>,
   encoding: ArtifactEncoding,
 ): Uint8Array<ArrayBuffer> {
-  // Bun returns a Buffer (ArrayBufferLike); copy into a plain view so the cached type is exact.
+  // Bun returns a Uint8Array (ArrayBufferLike); copy into a plain view so the cached type is exact.
   return encoding === "zstd"
     ? new Uint8Array(Bun.zstdCompressSync(bytes))
     : new Uint8Array(Bun.gzipSync(bytes));

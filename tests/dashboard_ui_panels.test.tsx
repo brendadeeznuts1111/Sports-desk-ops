@@ -71,6 +71,10 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(html).toContain("feed: Pending Hydration · pending");
     expect(html).toContain('data-desk-quickjump="copy-link"');
     expect(html).toContain("⧉ Copy link");
+    expect(html).toContain('data-copy-view-link="true"');
+    expect(html).toContain("⧉ Copy view");
+    // Default SSR view: reset is only offered when the view is non-default.
+    expect(html).not.toContain('data-reset-view="true"');
     expect(html).not.toContain("GP301");
     expect(html).not.toContain("+$76,950");
   });

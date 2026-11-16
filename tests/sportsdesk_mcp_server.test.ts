@@ -2325,8 +2325,9 @@ describe("Standalone CLI cli/sportsdesk_mcp_cli.ts", () => {
   });
 
   test("spawns cli/sportsdesk_mcp_cli.ts --stateless --json-response --json and serves /health + /mcp", async () => {
-    const cliPath = new URL("../cli/sportsdesk_mcp_cli.ts", import.meta.url)
-      .pathname;
+    const cliPath = Bun.fileURLToPath(
+      new URL("../cli/sportsdesk_mcp_cli.ts", import.meta.url),
+    );
     const proc = Bun.spawn(
       [
         process.execPath,

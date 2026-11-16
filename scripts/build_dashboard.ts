@@ -52,6 +52,23 @@ function isValidTarget(raw: string | undefined): raw is BuildTarget {
   return raw === "prod" || raw === "dev" || raw === "test";
 }
 
+/** Short commit for the build footer; "unknown" outside a git checkout. */
+function resolveGitCommit(): string {
+  try {
+    const result = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode === 0) {
+      const commit = result.stdout.toString().trim();
+      if (commit !== "") return commit;
+    }
+  } catch {
+    // A source archive has no .git; the build must still succeed.
+  }
+  return "unknown";
+}
+
 export async function buildEnhancedDashboard(
   options: DashboardBuildOptions = {},
 ): Promise<DashboardBuildManifest> {
@@ -59,6 +76,7 @@ export async function buildEnhancedDashboard(
   const outdir = options.outdir ?? DEFAULT_OUT_DIR;
   const minify = options.minify ?? target === "prod";
   const enabledFeatures = [...BUILD_FEATURES[target]];
+  const builtAt = new Date().toISOString();
 
   mkdirSync(outdir, { recursive: true });
 
@@ -71,6 +89,11 @@ export async function buildEnhancedDashboard(
     plugins: [slabConfigGuard],
     minify,
     sourcemap: target === "prod" ? "external" : "inline",
+    define: {
+      __DASHBOARD_BUILD_TARGET__: JSON.stringify(target),
+      __DASHBOARD_BUILD_TIME__: JSON.stringify(builtAt),
+      __DASHBOARD_BUILD_COMMIT__: JSON.stringify(resolveGitCommit()),
+    },
   });
 
   if (!result.success) {
@@ -119,7 +142,7 @@ export async function buildEnhancedDashboard(
   const elapsedMs = Number((performance.now() - start).toFixed(2));
   const manifest: DashboardBuildManifest = {
     schemaVersion: 1,
-    builtAt: new Date().toISOString(),
+    builtAt,
     target,
     enabledFeatures,
     minify,

@@ -6,7 +6,9 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 
-const CLI_PATH = new URL("../bin/bun_pr_cli.ts", import.meta.url).pathname;
+const CLI_PATH = Bun.fileURLToPath(
+  new URL("../bin/bun_pr_cli.ts", import.meta.url),
+);
 
 describe("dx pr / bun_pr_cli", () => {
   test("displays help message when called with --help", () => {

@@ -3,7 +3,6 @@
  * @description Operator credentials authentication, Argon2id hashing, and high-entropy token verification.
  */
 
-import { Buffer } from "node:buffer";
 import { timingSafeEqual } from "node:crypto";
 import { password, type Password } from "bun";
 import { loginKey, loginLimiter } from "./rate_limit.ts";

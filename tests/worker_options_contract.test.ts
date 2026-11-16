@@ -9,7 +9,6 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { SHARE_ENV } from "node:worker_threads";
 
 interface WorkerProbe {
@@ -53,7 +52,7 @@ describe("WorkerOptions contract", () => {
         ].join("\n"),
       );
 
-      const worker = new Worker(pathToFileURL(workerPath), {
+      const worker = new Worker(Bun.pathToFileURL(workerPath), {
         argv: ["--alpha", 42, true, null, { x: 1 }],
         env: { ...Bun.env, WORKER_TEST: "yes" },
         preload: [preloadPath],
@@ -99,7 +98,7 @@ describe("WorkerOptions contract", () => {
           "});",
         ].join("\n"),
       );
-      const worker = new Worker(pathToFileURL(workerPath), {
+      const worker = new Worker(Bun.pathToFileURL(workerPath), {
         name: "probe",
         ref: false,
       });
@@ -149,7 +148,7 @@ describe("WorkerOptions contract", () => {
       Bun.env.WORKER_DEFAULT = "parent";
       Bun.env.PARENT_ONLY = "parent-only";
 
-      const defaultWorker = new Worker(pathToFileURL(workerPath), {
+      const defaultWorker = new Worker(Bun.pathToFileURL(workerPath), {
         ref: false,
       });
       Bun.env.WORKER_DEFAULT = "changed";
@@ -165,7 +164,7 @@ describe("WorkerOptions contract", () => {
         defaultWorker.terminate();
       }
 
-      const explicitWorker = new Worker(pathToFileURL(workerPath), {
+      const explicitWorker = new Worker(Bun.pathToFileURL(workerPath), {
         env: { WORKER_ONLY: "worker-only" },
         ref: false,
       });
@@ -185,7 +184,7 @@ describe("WorkerOptions contract", () => {
         explicitWorker.terminate();
       }
 
-      const emptyWorker = new Worker(pathToFileURL(workerPath), {
+      const emptyWorker = new Worker(Bun.pathToFileURL(workerPath), {
         env: {},
         ref: false,
       });
@@ -307,7 +306,7 @@ describe("WorkerOptions contract", () => {
       );
       Bun.env.WORKER_SHARED = "parent";
 
-      const worker = new Worker(pathToFileURL(workerPath), {
+      const worker = new Worker(Bun.pathToFileURL(workerPath), {
         env: SHARE_ENV,
         ref: false,
       });

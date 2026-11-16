@@ -150,8 +150,7 @@ export function decideCredentials(input: {
 
 /* ------------------------------- delivery -------------------------------- */
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> => Bun.sleep(ms);
 
 /** Reads `retry_after` from a 429 body when Telegram sends one. */
 async function retryAfterMs(res: Response): Promise<number | null> {

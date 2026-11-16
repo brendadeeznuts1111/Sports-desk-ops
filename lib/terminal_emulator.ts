@@ -1056,12 +1056,7 @@ export function parseAnsiSegments(raw: string): AnsiSegment[] {
 
 /** Escapes special HTML characters. */
 function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+  return Bun.escapeHTML(str);
 }
 
 /**

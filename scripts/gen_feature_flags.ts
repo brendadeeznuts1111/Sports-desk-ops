@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { FEATURES, BUILD_FEATURES, DESCRIPTIONS } from "../types/features.ts";
 
 for (const f of FEATURES) {
@@ -9,7 +8,7 @@ for (const f of FEATURES) {
 
 const START = "<!-- FLAGS:START -->";
 const END = "<!-- FLAGS:END -->";
-const scriptDir = dirname(fileURLToPath(import.meta.url));
+const scriptDir = dirname(Bun.fileURLToPath(import.meta.url));
 const readmePath = join(scriptDir, "../types/README.md");
 const readme = readFileSync(readmePath, "utf8");
 

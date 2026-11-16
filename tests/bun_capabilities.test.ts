@@ -764,6 +764,39 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(usage.cpuTime.user >= 0n).toBe(true);
   });
 
+  test("standard Web APIs are global and interoperate", async () => {
+    expect(typeof Blob).toBe("function");
+    expect(typeof URL).toBe("function");
+    expect(typeof Request).toBe("function");
+    expect(typeof Response).toBe("function");
+    expect(typeof Headers).toBe("function");
+
+    const request = new Request("https://example.test/x?q=1", {
+      method: "POST",
+      body: new Blob(["hi"], { type: "text/plain" }),
+    });
+    expect(await request.text()).toBe("hi");
+    expect(new URL(request.url).searchParams.get("q")).toBe("1");
+
+    const response = new Response(new Blob(["ok"]));
+    expect(await response.text()).toBe("ok");
+    expect(new URL("/a", "https://example.test").href).toBe(
+      "https://example.test/a",
+    );
+  });
+
+  test("Bun.escapeHTML replaces the five HTML characters and stringifies values", () => {
+    expect(Bun.escapeHTML("<script>alert('Hello World!')</script>")).toBe(
+      "&lt;script&gt;alert(&#x27;Hello World!&#x27;)&lt;/script&gt;",
+    );
+    expect(Bun.escapeHTML("a & b < c > d \" e ' f")).toBe(
+      "a &amp; b &lt; c &gt; d &quot; e &#x27; f",
+    );
+    // Non-strings are converted before escaping.
+    expect(Bun.escapeHTML(42)).toBe("42");
+    expect(Bun.escapeHTML(true)).toBe("true");
+  });
+
   test("Bun.allocUnsafe returns a Uint8Array of the requested length (unzeroed)", () => {
     // bun.com/reference/bun#bun.allocUnsafe: up to 3.5x faster than `new Uint8Array(n)`
     // because the bytes are not zeroed. The two production call sites
