@@ -10,6 +10,7 @@ import * as uiBarrel from "../packages/ui/src/index.ts";
 import {
   AlertAuditDetail,
   AlertsTabPanel,
+  ApiUsageCard,
   BetTickerTabPanel,
   buildRegistryRootCss,
   BuildMatrixDrawer,
@@ -35,6 +36,11 @@ import {
   TOKENS_TOML_VERSION,
 } from "../packages/ui/src/tokens.registry.generated.ts";
 import { backtestRowsToProfiles } from "../packages/ui/src/profile_rows.ts";
+import {
+  beginApiCall,
+  endApiCall,
+  resetApiUsage,
+} from "../packages/ui/src/api_usage.ts";
 import {
   FIXTURE_LIVE_WAGERS,
   FIXTURE_PROFILE_CUSTOMERS,
@@ -1274,6 +1280,42 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(html).toContain("Show all 130 rows");
     expect(html).toContain("⧉ Copy rows (130)");
     expect((html.match(/Team -3/g) ?? []).length).toBe(120);
+  });
+
+  test("ApiUsageCard reports coalesced requests separately from network calls", () => {
+    resetApiUsage();
+    try {
+      endApiCall(beginApiCall("GET /api/kpis"), 200);
+      endApiCall(beginApiCall("GET /api/kpis", true), 200);
+      const html = renderToStaticMarkup(React.createElement(ApiUsageCard));
+      expect(html).toContain("2 calls");
+      expect(html).toContain("1 network");
+      expect(html).toContain("1 coalesced");
+    } finally {
+      resetApiUsage();
+    }
+  });
+
+  test("ApiUsageCard renders the empty state and normalized session rows", () => {
+    resetApiUsage();
+    try {
+      const empty = renderToStaticMarkup(React.createElement(ApiUsageCard));
+      expect(empty).toContain('data-api-usage-card="true"');
+      expect(empty).toContain("No API calls recorded this session");
+
+      endApiCall(beginApiCall("GET /api/kpis"), 200);
+      endApiCall(beginApiCall("GET /api/kpis"), 503);
+      const html = renderToStaticMarkup(React.createElement(ApiUsageCard));
+      expect(html).toContain("GET /api/kpis");
+      expect(html).toContain("2 calls");
+      expect(html).toContain("1 ok");
+      expect(html).toContain("1 failed");
+      expect(html).toContain("Reset meter");
+      // No request-specific values leak into the meter.
+      expect(html).not.toContain("window=24");
+    } finally {
+      resetApiUsage();
+    }
   });
 
   test("BetTickerTabPanel sanitizes portal markup in channels and selections", () => {

@@ -77,6 +77,7 @@ import {
   syncTicketInspectorToLocation,
 } from "./ticket_inspector.ts";
 import { DEMO_CUSTOMER_COUNT } from "./data/demo_customers.ts";
+import { trackedFetch } from "./api_usage.ts";
 import {
   type AlertFilter,
   type AlertToastState,
@@ -398,7 +399,7 @@ export function App(): React.ReactElement {
 
   const fetchTiersConfig = async () => {
     try {
-      const res = await fetch(dashboardApiUrl(DASHBOARD_API.tiers));
+      const res = await trackedFetch(dashboardApiUrl(DASHBOARD_API.tiers));
       if (!res.ok) return;
       const cfg = (await res.json()) as { tiers?: TierStyleConfig } | null;
       if (cfg?.tiers) {
@@ -419,7 +420,7 @@ export function App(): React.ReactElement {
 
   const fetchLiveWagers = async () => {
     try {
-      const res = await fetch(dashboardApiUrl(DASHBOARD_API.wagers));
+      const res = await trackedFetch(dashboardApiUrl(DASHBOARD_API.wagers));
       if (!res.ok) {
         failLiveWagers(
           `GET /api/wagers returned HTTP ${res.status} (${res.statusText || "error"})`,
@@ -491,7 +492,7 @@ export function App(): React.ReactElement {
 
   const fetchCustomersCohorts = async () => {
     try {
-      const res = await fetch(dashboardApiUrl(DASHBOARD_API.customers));
+      const res = await trackedFetch(dashboardApiUrl(DASHBOARD_API.customers));
       if (!res.ok) {
         setCohortsStatus("unavailable");
         setCohortsError(
@@ -533,7 +534,7 @@ export function App(): React.ReactElement {
   const fetchBetTicker = async () => {
     setBetTickerLoading(true);
     try {
-      const res = await fetch(dashboardApiUrl(DASHBOARD_API.bet_ticker));
+      const res = await trackedFetch(dashboardApiUrl(DASHBOARD_API.bet_ticker));
       if (!res.ok) {
         setBetTickerError(
           `GET /api/bet-ticker returned HTTP ${res.status} (${res.statusText || "error"})`,
@@ -555,7 +556,7 @@ export function App(): React.ReactElement {
   const fetchR2Pipeline = async (force = false) => {
     setR2PipelineLoading(true);
     try {
-      const res = await fetch(
+      const res = await trackedFetch(
         force ? "/api/r2/pipeline?refresh=1" : "/api/r2/pipeline",
       );
       if (!res.ok) {
@@ -579,7 +580,7 @@ export function App(): React.ReactElement {
   const runTicketVerification = async (dryRun = true) => {
     setVerifyingTickets(true);
     try {
-      const res = await fetch("/api/gslive/verify-tickets", {
+      const res = await trackedFetch("/api/gslive/verify-tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dryRun }),
@@ -605,7 +606,7 @@ export function App(): React.ReactElement {
     setBuildMatrixLoading(true);
     setBuildMatrixError(null);
     const startedAt = performance.now();
-    fetch(force ? "/api/build-matrix?refresh=1" : "/api/build-matrix")
+    trackedFetch(force ? "/api/build-matrix?refresh=1" : "/api/build-matrix")
       .then(async (r) => {
         if (!r.ok) {
           throw new Error(
@@ -678,7 +679,7 @@ export function App(): React.ReactElement {
   const [shiftLoading, setShiftLoading] = useState(false);
 
   const fetchHealth = () => {
-    fetch("/health")
+    trackedFetch("/health")
       .then(async (res) => {
         const contentType = res.headers.get("content-type") ?? "";
         if (contentType !== "" && !contentType.toLowerCase().includes("json")) {
@@ -697,7 +698,7 @@ export function App(): React.ReactElement {
   const fetchAlerts = (filter = alertFilter) => {
     setAlertLoading(true);
     const param = filter.toLowerCase();
-    fetch(`/api/alerts?status=${param}`)
+    trackedFetch(`/api/alerts?status=${param}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((res) => {
         if (res?.alerts) {
@@ -713,7 +714,7 @@ export function App(): React.ReactElement {
   const fetchShiftSummary = async (operatorId = shiftOperator) => {
     setShiftLoading(true);
     try {
-      const res = await fetch(
+      const res = await trackedFetch(
         `/api/shift/summary?operatorId=${encodeURIComponent(operatorId)}`,
       );
       if (res.ok) {
@@ -729,7 +730,7 @@ export function App(): React.ReactElement {
 
   const handleAckAlert = async (deliveryId: string, notes?: string) => {
     try {
-      const res = await fetch(`/api/alerts/${deliveryId}/ack`, {
+      const res = await trackedFetch(`/api/alerts/${deliveryId}/ack`, {
         method: "POST",
         headers: apiPostHeaders(),
         body: JSON.stringify({ operatorId: shiftOperator, notes }),
@@ -755,7 +756,7 @@ export function App(): React.ReactElement {
 
   const handleRetryAlert = async (deliveryId: string) => {
     try {
-      const res = await fetch(`/api/alerts/${deliveryId}/retry`, {
+      const res = await trackedFetch(`/api/alerts/${deliveryId}/retry`, {
         method: "POST",
         headers: apiPostHeaders(),
         body: JSON.stringify({ operatorId: shiftOperator }),
@@ -782,7 +783,7 @@ export function App(): React.ReactElement {
 
   const handleSweepAlerts = async () => {
     try {
-      const res = await fetch(`/api/alerts/sweep`, {
+      const res = await trackedFetch(`/api/alerts/sweep`, {
         method: "POST",
         headers: apiPostHeaders(),
       });
@@ -1010,7 +1011,7 @@ export function App(): React.ReactElement {
     setTerminalLoading(true);
 
     try {
-      const res = await fetch("/api/terminal/exec", {
+      const res = await trackedFetch("/api/terminal/exec", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: trimmed, cols: 100, rows: 30 }),
@@ -1095,7 +1096,7 @@ export function App(): React.ReactElement {
   const runBenchmark = async () => {
     setBenchLoading(true);
     try {
-      const res = await fetch("/api/dns/benchmark?host=fantasy402.com");
+      const res = await trackedFetch("/api/dns/benchmark?host=fantasy402.com");
       if (res.ok) {
         const json = await res.json();
         const metricsStr = (
@@ -1117,7 +1118,9 @@ export function App(): React.ReactElement {
   const runReverseLookup = async (ipToLookup?: string) => {
     const ip = ipToLookup || reverseIp;
     try {
-      const res = await fetch(`/api/dns/reverse?ip=${encodeURIComponent(ip)}`);
+      const res = await trackedFetch(
+        `/api/dns/reverse?ip=${encodeURIComponent(ip)}`,
+      );
       if (res.ok) {
         const json = (await res.json()) as ReverseDnsClassification;
         const view = buildReverseDnsForensicsView(json);
@@ -1140,10 +1143,12 @@ export function App(): React.ReactElement {
     setDnsRefreshing(true);
     setDnsError(null);
     try {
-      const dnsRes = await fetch("/api/dns/telemetry").then(async (res) => {
-        if (!res.ok) return fetch("/api/dns");
-        return res;
-      });
+      const dnsRes = await trackedFetch("/api/dns/telemetry").then(
+        async (res) => {
+          if (!res.ok) return trackedFetch("/api/dns");
+          return res;
+        },
+      );
       if (dnsRes.ok) {
         const json = (await dnsRes.json()) as DnsData;
         setDnsData(json);
@@ -1160,7 +1165,7 @@ export function App(): React.ReactElement {
   const fetchDashboard = async () => {
     try {
       const [dashRes] = await Promise.all([
-        fetch("/api/dashboard"),
+        trackedFetch("/api/dashboard"),
         fetchDnsTelemetry(),
       ]);
       if (dashRes.ok) {

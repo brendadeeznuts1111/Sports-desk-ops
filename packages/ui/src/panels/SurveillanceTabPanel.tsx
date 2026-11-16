@@ -5,6 +5,7 @@ import { DASHBOARD_PANELS } from "../config/dashboard.ts";
 import { styles } from "../dashboard_styles.ts";
 import type { DashboardData, DnsData } from "../types.ts";
 import type { ReverseDnsForensicsView } from "../../../../lib/reverse_dns_forensics.ts";
+import { ApiUsageCard } from "./ApiUsageCard.tsx";
 import { ReverseDnsForensicsCard } from "./ReverseDnsForensicsCard.tsx";
 import { ThresholdsPanel } from "./ThresholdsPanel.tsx";
 import { VIZ_COLORS } from "../viz/perceptual.ts";
@@ -213,6 +214,7 @@ export function SurveillanceTabPanel({
   return (
     <div>
       <ThresholdsPanel dataUpdatedAt={data?.updatedAt} />
+      <ApiUsageCard />
       {/* Existing Surveillance & Telemetry View */}
       {dnsData && dnsSummary && (
         <div

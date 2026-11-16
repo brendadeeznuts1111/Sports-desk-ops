@@ -38,6 +38,7 @@ import {
   ShadowTaxonomyCubeSection,
 } from "./shadow_pricing/index.tsx";
 import { SliceMetricsViews } from "./SliceMetricsViews.tsx";
+import { trackedFetch } from "./api_usage.ts";
 
 export interface ShadowPricingPanelProps {
   readonly onInspectAccount?: ((accountId: string) => void) | undefined;
@@ -159,7 +160,7 @@ export function ShadowPricingPanel({
           mode: params.repriceMode,
           routerAudit: params.routerAuditMode,
         });
-        const res = await fetch(`/api/shadow-pricing?${qs.toString()}`);
+        const res = await trackedFetch(`/api/shadow-pricing?${qs.toString()}`);
         if (!res.ok) {
           const errJson = (await res
             .json()

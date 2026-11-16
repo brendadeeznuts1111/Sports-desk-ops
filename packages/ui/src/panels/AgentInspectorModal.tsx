@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { styles } from "../dashboard_styles.ts";
 import { getLocalAgentHref } from "../links.ts";
 import type { AgentDetailApiResponse } from "../types.ts";
+import { trackedFetch } from "../api_usage.ts";
 
 export interface AgentInspectorModalProps {
   readonly agentId: string;
@@ -27,7 +28,7 @@ export function AgentInspectorModal({
     let active = true;
     setLoading(true);
     setError(null);
-    fetch(`/api/agent/${encodeURIComponent(agentId)}`)
+    trackedFetch(`/api/agent/${encodeURIComponent(agentId)}`)
       .then(async (res) => {
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
