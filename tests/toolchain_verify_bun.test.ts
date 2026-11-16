@@ -9,6 +9,7 @@ import {
   writeFileSync,
   chmodSync,
   mkdirSync,
+  symlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -115,6 +116,24 @@ describe("bin/dx DX_VERIFY_RUNTIME guard", () => {
 
   test("off by default: a bad pin does not affect dx", () => {
     expect(dx({ DX_BUN_PIN: badPin }).exitCode).toBe(0);
+  });
+
+  test("on: a matching runtime lets dx run and names the verified binary", () => {
+    // Pin the bun running this test, and put exactly that binary first on PATH.
+    const bunDir = join(dir, "pinned-bin");
+    mkdirSync(bunDir, { recursive: true });
+    symlinkSync(process.execPath, join(bunDir, "bun"));
+    const realPin = writePin(
+      "real.pin.json",
+      sha256(new Uint8Array(readFileSync(process.execPath))),
+    );
+    const r = dx({
+      DX_VERIFY_RUNTIME: "1",
+      DX_BUN_PIN: realPin,
+      PATH: `${bunDir}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+    });
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr.toString()).toContain("verify-bun: OK");
   });
 
   test("on: a mismatching runtime stops dx with exit 70 before it runs anything", () => {
