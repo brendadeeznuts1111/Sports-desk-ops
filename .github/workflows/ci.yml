@@ -163,6 +163,12 @@ jobs:
       # The projection's staleness check needs the f402 artifact, which is gitignored, so CI can
       # never run it. This checks what a PR CAN break: the committed projection still carries the
       # population block and no customer-identifying key (#279).
+      # Four committed synthetic rows. Permitted-keys-only means a new field is a decision in
+      # check_demo_fixture.ts, not something that rides along (#283).
+      - name: Demo customer fixture policy
+        timeout-minutes: 1
+        run: bun run scripts/check_demo_fixture.ts
+
       - name: Rankings summary projection policy
         timeout-minutes: 1
         run: bun run scripts/project_rankings_summary.ts --policy

@@ -43,6 +43,7 @@ import {
   dashboardApiUrl,
 } from "./config/dashboard.ts";
 import { WAGERS_DEFAULTS } from "./config/wagers.ts";
+import { DEMO_CUSTOMER_COUNT } from "./data/demo_customers.ts";
 import {
   type AlertFilter,
   type AlertToastState,
@@ -82,7 +83,7 @@ export * from "./types.ts";
 export const PROFILES_UNAVAILABLE_REASON =
   "Profile cards are limited to what the curated cohort file records: wager limit, delay, CLV and " +
   "sharpness score. VaR and sharpness components have no source yet, so they stay blank rather than " +
-  "computed from nothing. The cohort is 4 synthetic fixtures — a demo surface, not the book. " +
+  `computed from nothing. The cohort is ${DEMO_CUSTOMER_COUNT} synthetic fixtures — a demo surface, not the book. ` +
   "Real-account profiles are a separate surface, blocked on the same exposure constraint as #242.";
 
 const PROFILE_CUSTOMERS: readonly ShowcaseCustomer[] = [];
