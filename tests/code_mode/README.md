@@ -87,7 +87,7 @@ Two Code Mode runtimes coexist:
 
 | Path                            | Realm                                                 | Compile / trim                                                                                                                                                                         |
 | ------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lib/code_mode_host.ts`         | Host desk spine (`Bun.Transpiler`, `AsyncFunction`)   | Full Bun; see [Smaller executables](https://bun.com/docs/compiler/size). `--trim` drops unused APIs; **not** guest-safe. No profile tools.                                             |
+| `lib/code_mode_host.ts`         | Host desk spine (`Bun.Transpiler`, `AsyncFunction`)   | Full Bun; see [Smaller executables](https://bun.com/docs/compiler/size). `--trim` (1.4.5 canary only) drops unused APIs; **not** guest-safe. No profile tools.                         |
 | `lib/profile_code_mode_host.ts` | Profile tools on insecure host                        | Env `SPORTSDESK_PROFILE_CODE_MODE_HOST=1`; not mixed into desk host.                                                                                                                   |
 | `lib/code_mode_profile.ts`      | Profile API (`PROFILE_CODE_MODE_DEFAULT_REALM=guest`) | `executeProfileCodeMode(code)` / `bun run code-mode:profile`.                                                                                                                          |
 | `lib/quickjs_code_mode.ts`      | QuickJS WASM guest                                    | No `bun:ffi`; fits **`remove: ["native-code"]`** AOT profiles. FFI QuickJS (`@tanstack/ai-isolate-quickjs-bun`) is a separate, faster lane that **requires** `allow: ["native-code"]`. |
@@ -104,7 +104,8 @@ bun run code-mode:binary-reference --offline
 ```
 
 Official trim feature name for FFI sandboxes: **`native-code`** (~0.7 MB) — see
-`bun check --aot --explain=trim` on Bun builds that support it ([compiler/size](https://bun.com/docs/compiler/size)).
+`bun check --aot --explain=trim` on Bun builds that support it — the 1.4.5 canary, not the pinned
+1.4.4, which rejects `--aot` as an unknown flag ([compiler/size](https://bun.com/docs/compiler/size)).
 
 ## Sandbox boundary
 
