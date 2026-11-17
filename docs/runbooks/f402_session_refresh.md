@@ -79,10 +79,12 @@ scripts/install_session_refresh_agent.sh install
 # -> watch: tail -f scratch/f402-session-watch.stderr.log
 ```
 
-The installer substitutes `__OPERATOR_HOME__`, `__REPO_PATH__`, `__BUN_BIN__`, and the
-`op` placeholders in both templates under `infra/launchd/`, writes them to
-`~/Library/LaunchAgents/`, and bootstraps them. `--target session-refresh` installs the
-refresher **and** the independent watchdog; `--target both` adds the webview daemon.
+The installer substitutes the machine paths and Bun binary into the templates under
+`infra/launchd/`, writes them to `~/Library/LaunchAgents/`, and bootstraps them.
+`--target session-refresh` installs the **keychain-direct** refresher and the independent
+watchdog; it needs no `.env.op`, `op`, or `OP_SERVICE_ACCOUNT_TOKEN`. `--target daemon` (or
+`both`) also installs the op-wrapped webview daemon and requires `.env.op` plus
+`OP_SERVICE_ACCOUNT_TOKEN` in the calling shell.
 
 ## Verify
 
