@@ -30,11 +30,14 @@ import { readF402Session } from "../lib/f402_session.ts";
 import {
   DEFAULT_REFRESH_GRACE_MS,
   DEFAULT_REFRESH_TTL_MINUTES,
+  EXPECTED_TOKEN_WINDOW_MINUTES,
   REFRESH_EXIT,
+  TOKEN_WINDOW_TOLERANCE_MINUTES,
   buildMintCommand,
   decideRefresh,
   hasEnvLoginCredentials,
   journalLine,
+  tokenWindowFromSession,
   type RefreshErrorKind,
   type RefreshExit,
   type RefreshOutcome,
@@ -169,6 +172,7 @@ async function main(): Promise<RefreshExit> {
   const mint = await spawnMint(options.ttlMinutes);
   const postRead = readF402Session();
   const postDecision = decideRefresh(postRead, Date.now(), options.graceMs);
+  const postWindow = tokenWindowFromSession(postRead);
 
   let outcome: RefreshOutcome;
   let exit: RefreshExit;
@@ -180,6 +184,7 @@ async function main(): Promise<RefreshExit> {
       attempted: true,
       ok: true,
       mintDurationMs: mint.durationMs,
+      ...(postWindow === null ? {} : { tokenWindow: postWindow }),
     };
     exit = REFRESH_EXIT.ok;
   } else {
@@ -197,6 +202,27 @@ async function main(): Promise<RefreshExit> {
       error,
     };
     exit = REFRESH_EXIT.refreshFailed;
+  }
+
+  if (
+    postWindow !== null &&
+    Math.abs(postWindow.windowMinutes - EXPECTED_TOKEN_WINDOW_MINUTES) >
+      TOKEN_WINDOW_TOLERANCE_MINUTES
+  ) {
+    await appendJournal(
+      options.journalPath,
+      `${JSON.stringify({
+        kind: "f402-token-window-alert",
+        observedAtMs: nowMs,
+        expectedMin: EXPECTED_TOKEN_WINDOW_MINUTES,
+        observedMin: postWindow.windowMinutes,
+        nbfIso: postWindow.nbfIso,
+        expIso: postWindow.expIso,
+      })}\n`,
+    );
+    console.error(
+      `[f402-session-refresh] bearer window ${postWindow.windowMinutes} min deviates from expected ${EXPECTED_TOKEN_WINDOW_MINUTES} min (exp ${postWindow.expIso})`,
+    );
   }
 
   await appendJournal(options.journalPath, journalLine(outcome));
