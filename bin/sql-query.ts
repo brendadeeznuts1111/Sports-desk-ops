@@ -16,7 +16,12 @@
 import { isAbsolute, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
-import { resolveDbConnectionTimeout } from "../lib/db.ts";
+import {
+  isLocalDbHost,
+  resolveDbChannelBinding,
+  resolveDbConnectionTimeout,
+  resolveDbTlsConfig,
+} from "../lib/db.ts";
 
 const HELP = `sql-query — read-only unified SQL inspector (Bun.SQL / Bun.sql)
 
@@ -127,17 +132,26 @@ export async function runReadOnlySql(options: {
   const target = normalizeSqlTarget(options.url);
   const limit = Math.max(1, Math.trunc(options.limit ?? 200));
   const timeoutSeconds = Math.max(0, options.timeoutSeconds ?? 30);
-  const db =
-    target.mode === "default-bun-sql"
-      ? Bun.sql
-      : target.sqliteKind
-        ? new Bun.SQL(target.url as string)
-        : new Bun.SQL(target.url as string, {
-            connectionTimeout: resolveDbConnectionTimeout(
-              Bun.env,
-              new URL(target.url as string).searchParams.get("connect_timeout"),
-            ),
-          });
+  let db: InstanceType<typeof Bun.SQL>;
+  if (target.mode === "default-bun-sql") {
+    db = Bun.sql;
+  } else if (target.sqliteKind) {
+    db = new Bun.SQL(target.url as string);
+  } else {
+    const url = new URL(target.url as string);
+    const local = isLocalDbHost(url.hostname);
+    const forceTls = Bun.env.SPORTSDESK_DB_TLS === "1";
+    const tls = resolveDbTlsConfig(Bun.env, { local, forceTls });
+    const channelBinding = resolveDbChannelBinding(Bun.env);
+    db = new Bun.SQL(target.url as string, {
+      connectionTimeout: resolveDbConnectionTimeout(
+        Bun.env,
+        url.searchParams.get("connect_timeout"),
+      ),
+      ...(tls === false ? {} : { tls }),
+      ...(channelBinding === undefined ? {} : { channelBinding }),
+    });
+  }
 
   try {
     let sqlText: string;

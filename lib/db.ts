@@ -10,7 +10,14 @@
  *
  * Connect timeout precedence: `?connect_timeout=` in `DATABASE_URL`, then
  * `SPORTSDESK_DB_CONNECT_TIMEOUT`, then libpq's `PGCONNECT_TIMEOUT`, then 10 s.
+ *
+ * TLS hardening (non-local, or `SPORTSDESK_DB_TLS=1`): `SPORTSDESK_DB_CERT_FINGERPRINT`
+ * pins the server certificate's SHA-256 (with the hostname check still applied), and
+ * `SPORTSDESK_DB_CHANNEL_BINDING` selects SCRAM channel binding (disable|prefer|require).
  */
+import { checkServerIdentity as nodeCheckServerIdentity } from "node:tls";
+import type { PeerCertificate } from "node:tls";
+
 import { env, sql as defaultBunSql, SQL } from "bun";
 
 export const isLocalDbHost = (host: string): boolean =>
@@ -41,6 +48,70 @@ export function resolveDbConnectionTimeout(
     positiveSeconds(source.PGCONNECT_TIMEOUT) ??
     DEFAULT_DB_CONNECT_TIMEOUT_SECONDS
   );
+}
+
+export type DbChannelBinding = "disable" | "prefer" | "require";
+
+export function resolveDbChannelBinding(
+  source: Record<string, string | undefined> = env,
+): DbChannelBinding | undefined {
+  const raw = source.SPORTSDESK_DB_CHANNEL_BINDING?.trim().toLowerCase();
+  if (raw === undefined || raw === "") return undefined;
+  if (raw === "disable" || raw === "prefer" || raw === "require") return raw;
+  throw new Error(
+    "lib/db.ts: SPORTSDESK_DB_CHANNEL_BINDING must be disable, prefer or require",
+  );
+}
+
+export interface DbTlsOptions {
+  readonly rejectUnauthorized: true;
+  readonly checkServerIdentity?: (
+    hostname: string,
+    cert: PeerCertificate,
+  ) => Error | undefined;
+}
+
+function normalizeFingerprint(raw: string | undefined): string | null {
+  const compact = raw?.replace(/[^0-9a-f]/gi, "") ?? "";
+  return /^[0-9a-f]{64}$/i.test(compact) ? compact.toUpperCase() : null;
+}
+
+/**
+ * TLS policy for PostgreSQL/MySQL. Localhost stays plaintext unless
+ * `SPORTSDESK_DB_TLS=1`. A non-empty `SPORTSDESK_DB_CERT_FINGERPRINT` pins the
+ * server certificate's SHA-256 (colon-separated or bare, 64 hex chars) and still
+ * runs the hostname check; a malformed pin fails closed rather than silently
+ * disabling the pin.
+ */
+export function resolveDbTlsConfig(
+  source: Record<string, string | undefined> = env,
+  options: { readonly local: boolean; readonly forceTls: boolean },
+): false | DbTlsOptions {
+  if (options.local && !options.forceTls) return false;
+  const rawPin = source.SPORTSDESK_DB_CERT_FINGERPRINT?.trim();
+  let expected: string | null = null;
+  if (rawPin !== undefined && rawPin !== "") {
+    expected = normalizeFingerprint(rawPin);
+    if (expected === null) {
+      throw new Error(
+        "lib/db.ts: SPORTSDESK_DB_CERT_FINGERPRINT must be a SHA-256 fingerprint (64 hex chars)",
+      );
+    }
+  }
+  if (expected === null) return { rejectUnauthorized: true };
+  const pin = expected;
+  return {
+    rejectUnauthorized: true,
+    checkServerIdentity: (hostname, cert) => {
+      const actual = normalizeFingerprint(cert.fingerprint256);
+      if (actual === null || actual !== pin) {
+        return new Error(
+          "lib/db.ts: database certificate fingerprint mismatch",
+        );
+      }
+      return nodeCheckServerIdentity(hostname, cert);
+    },
+  };
 }
 
 const required = (k: keyof Bun.Env): string => {
@@ -79,7 +150,8 @@ export function createConfiguredSql(): {
     if (local && !forceTls) {
       return { db: defaultBunSql, isDefaultGlobal: true };
     }
-    const tls = local && !forceTls ? false : { rejectUnauthorized: true };
+    const tls = resolveDbTlsConfig(env, { local, forceTls });
+    const channelBinding = resolveDbChannelBinding(env);
     const connectionTimeout = resolveDbConnectionTimeout(
       env,
       parsed.searchParams.get("connect_timeout"),
@@ -90,6 +162,7 @@ export function createConfiguredSql(): {
         idleTimeout: 30,
         max: 20,
         connectionTimeout,
+        ...(channelBinding === undefined ? {} : { channelBinding }),
         onconnect: (err) => {
           if (err) console.error("[db] connect failed:", err.message);
         },
@@ -110,12 +183,9 @@ export function createConfiguredSql(): {
     );
   }
 
-  // TLS: forced off for localhost (dev), required everywhere else.
-  // SPORTSDESK_DB_TLS=1 flips it on even for local (e.g. docker with certs).
-  const tls =
-    local && env.SPORTSDESK_DB_TLS !== "1"
-      ? false
-      : { rejectUnauthorized: true };
+  const forceTls = env.SPORTSDESK_DB_TLS === "1";
+  const tls = resolveDbTlsConfig(env, { local, forceTls });
+  const channelBinding = resolveDbChannelBinding(env);
   const connectionTimeout = resolveDbConnectionTimeout(env);
 
   return {
@@ -129,6 +199,7 @@ export function createConfiguredSql(): {
       idleTimeout: 30, // seconds
       max: 20,
       connectionTimeout,
+      ...(channelBinding === undefined ? {} : { channelBinding }),
       onconnect: (err) => {
         if (err) console.error("[db] connect failed:", err.message);
       },
