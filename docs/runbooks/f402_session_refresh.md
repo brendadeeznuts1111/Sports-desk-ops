@@ -74,12 +74,15 @@ non-credential reason (e.g. headless Chrome backend not available), the JSONL ca
 ```sh
 scripts/install_session_refresh_agent.sh install
 # -> installed: ~/Library/LaunchAgents/com.bookdeskops.sportsdesk.session-refresh.plist
+# -> installed: ~/Library/LaunchAgents/com.bookdeskops.sportsdesk.session-watch.plist
 # -> next: tail -f scratch/f402-session-refresh.jsonl
+# -> watch: tail -f scratch/f402-session-watch.stderr.log
 ```
 
-The installer substitutes `__OPERATOR_HOME__`, `__REPO_PATH__`, and `__BUN_BIN__` in the
-template at `infra/launchd/com.bookdeskops.sportsdesk.session-refresh.plist`, writes the
-result to `~/Library/LaunchAgents/`, and `launchctl load -w`s it.
+The installer substitutes `__OPERATOR_HOME__`, `__REPO_PATH__`, `__BUN_BIN__`, and the
+`op` placeholders in both templates under `infra/launchd/`, writes them to
+`~/Library/LaunchAgents/`, and bootstraps them. `--target session-refresh` installs the
+refresher **and** the independent watchdog; `--target both` adds the webview daemon.
 
 ## Verify
 
@@ -103,8 +106,12 @@ bun run scripts/f402_session_refresh.ts --dry-run
 #    Expected: "dry-run: would refresh (<reason>)" OR silent (exit 0 fresh).
 
 # 5. Full tests:
-bun test tests/f402_session_refresh.test.ts
+bun test tests/f402_session_refresh.test.ts tests/f402_session_watch.test.ts
 #    Expected: 0 fail.
+
+# 6. Watchdog dry-run (prints the verdict, never calls Telegram):
+bun run scripts/f402_session_watch.ts --dry-run
+#    Expected: "F402 session refresh is healthy." OR the missing/stale/failing verdict.
 ```
 
 ## Uninstall
@@ -138,6 +145,30 @@ A window outside 21 ± 2 minutes also appends a separate
 `{"kind":"f402-token-window-alert", ...}` line. `error` is a stable classifier string, never a
 message from the child. Nothing in this journal is a cookie, password, or session value.
 
+## Silence watchdog
+
+`scripts/f402_session_watch.ts` is installed alongside the refresher (same installer,
+`--target session-refresh`) and runs on its own 5-minute LaunchAgent. It reads the journal mtime
+and its last few ticks, and pages Telegram when:
+
+- the journal is missing (the agent is not installed or has never run),
+- the journal mtime is older than 12 minutes (two missed ticks),
+- the last tick reports `ok:false`, or
+- the last two ticks both report `ok:false`.
+
+It shares no process with the refresher, so a dead agent cannot silence its own alarm. The alert
+includes the journal path, age, threshold, and the last tick's classifier fields — never a
+cookie or token.
+
+Exit codes: `0` healthy (or `--dry-run`), `1` alert detected and sent, `2` could not alert
+(no Telegram credentials or a send failure). In the `2` case the alert is still printed to
+stderr, which the plist captures in `scratch/f402-session-watch.stderr.log`.
+
+```sh
+bun run scripts/f402_session_watch.ts --dry-run   # print the verdict, no Telegram
+bun run scripts/f402_session_watch.ts --json      # machine-readable verdict
+```
+
 ## Interaction with the R2 staleness alerter
 
 The staleness alerter (`.github/workflows/r2-staleness-alert.yml`) is the _external_ monitor:
@@ -150,8 +181,8 @@ the keychain is stale).
 ## Known limitations
 
 - **The server token lives 21 minutes.** The refresher closes that gap; the file cannot extend
-  it. A stopped LaunchAgent means a dead session within ~21 minutes, not 24 hours. The 5-minute
-  journal watchdog (issue #310) is the intended detector for that case.
+  it. A stopped LaunchAgent means a dead session within ~21 minutes, not 24 hours.
+  `scripts/f402_session_watch.ts` (above) detects that case.
 - **macOS only.** The LaunchAgent is a plist; Linux hosts would use systemd user units with
   `OnCalendar` instead. The pure library (`lib/f402_session_refresh.ts`) is cross-platform;
   only the supervision wrapper is Mac-specific.

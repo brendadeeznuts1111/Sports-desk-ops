@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  F402 session-refresh silence watchdog LaunchAgent (template).
+
+  Runs `scripts/f402_session_watch.ts` every 5 minutes. It is independent of the refresher so a
+  dead refresher cannot silence its own alarm. It reads `scratch/f402-session-refresh.jsonl` and
+  pages Telegram when the journal is missing, older than 12 minutes, or its last ticks report
+  `ok:false`. Telegram credentials come from `.env.op` via `op run` (same wrapper as the
+  refresher) or the keychain fallback in `resolveTelegramCredentials`.
+
+  Substitute these placeholders before loading (see `scripts/install_session_refresh_agent.sh`):
+    __OPERATOR_HOME__             absolute path to $HOME on the target machine
+    __REPO_PATH__                 absolute path to the sportsdesk-ops working copy
+    __OP_BIN__                    absolute path to the 1Password CLI
+    __BUN_BIN__                   absolute path to the pinned Bun binary
+    __BUN_BIN_DIR__               directory containing that Bun binary
+    __OP_SERVICE_ACCOUNT_TOKEN__  service-account token used by `op run`
+
+  The installer writes this file with mode 0600 because it contains the service-account token.
+-->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.bookdeskops.sportsdesk.session-watch</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>__OP_BIN__</string>
+      <string>run</string>
+      <string>--env-file=__REPO_PATH__/.env.op</string>
+      <string>--</string>
+      <string>__BUN_BIN__</string>
+      <string>--no-env-file</string>
+      <string>run</string>
+      <string>scripts/f402_session_watch.ts</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO_PATH__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>HOME</key>
+      <string>__OPERATOR_HOME__</string>
+      <!-- Include __BUN_BIN_DIR__ and Homebrew so both `op` and `bun` resolve. -->
+      <key>PATH</key>
+      <string>__BUN_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+      <key>NO_PROXY</key>
+      <string>127.0.0.1,localhost,::1</string>
+      <key>OP_SERVICE_ACCOUNT_TOKEN</key>
+      <string>__OP_SERVICE_ACCOUNT_TOKEN__</string>
+    </dict>
+
+    <!-- Fire every 5 minutes. StartInterval is wall-clock seconds, not elapsed. -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <!-- Also run once immediately after `launchctl load` so the first check is not 5 min away. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Rate-limit retries if `op run` or the Telegram API fails. -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <!--
+      KeepAlive would be wrong here: this is a one-shot per tick, not a long-running daemon.
+      StartInterval + RunAtLoad is the correct supervision shape for an idempotent check.
+    -->
+
+    <!--
+      Logs land in scratch/. The stdout/stderr files are the local record of an alert when
+      Telegram credentials are unavailable, so the condition is visible on the host too.
+    -->
+    <key>StandardOutPath</key>
+    <string>__REPO_PATH__/scratch/f402-session-watch.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>__REPO_PATH__/scratch/f402-session-watch.stderr.log</string>
+
+    <key>Nice</key>
+    <integer>5</integer>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+  </dict>
+</plist>

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Install, remove, or inspect the SportsDesk LaunchAgents (`session-refresh` and/or `daemon`).
+# Install, remove, or inspect the SportsDesk LaunchAgents (`session-refresh` + its silence
+# watchdog, and/or `daemon`).
 #
 # Both plists use Option A (`op run --env-file=__REPO_PATH__/.env.op -- __BUN_BIN__ --no-env-file
 # run ...`) with `OP_SERVICE_ACCOUNT_TOKEN` stored inside a `chmod 0600` LaunchAgent plist so
@@ -18,6 +19,7 @@ set -euo pipefail
 
 REPO_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SESSION_REFRESH_LABEL="com.bookdeskops.sportsdesk.session-refresh"
+SESSION_WATCH_LABEL="com.bookdeskops.sportsdesk.session-watch"
 DAEMON_LABEL="com.bookdeskops.sportsdesk.daemon"
 
 TARGET="session-refresh"
@@ -29,6 +31,7 @@ install_session_refresh_agent.sh install|uninstall|status [--target session-refr
 
   install    Substitute placeholders in the selected template(s), write chmod 0600 plist(s) to
              ~/Library/LaunchAgents/, run `plutil -lint`, and `launchctl bootstrap` them.
+             `--target session-refresh` installs the refresher and its independent watchdog.
              Requires `${REPO_PATH}/.env.op` and `OP_SERVICE_ACCOUNT_TOKEN` in the environment.
   uninstall  `launchctl bootout` the selected agent(s) and remove the installed plist(s).
   status     Print `launchctl print` / `launchctl list` state for the selected agent(s).
@@ -87,9 +90,11 @@ parse_args() {
 
 selected_labels() {
   case "${TARGET}" in
-    session-refresh) printf '%s\n' "${SESSION_REFRESH_LABEL}" ;;
+    session-refresh) printf '%s\n%s\n' "${SESSION_REFRESH_LABEL}" "${SESSION_WATCH_LABEL}" ;;
     daemon) printf '%s\n' "${DAEMON_LABEL}" ;;
-    both) printf '%s\n%s\n' "${DAEMON_LABEL}" "${SESSION_REFRESH_LABEL}" ;;
+    both)
+      printf '%s\n%s\n%s\n' "${DAEMON_LABEL}" "${SESSION_REFRESH_LABEL}" "${SESSION_WATCH_LABEL}"
+      ;;
   esac
 }
 
@@ -202,6 +207,7 @@ cmd_install() {
 
   if [[ "${TARGET}" == "session-refresh" || "${TARGET}" == "both" ]]; then
     echo "next: tail -f ${REPO_PATH}/scratch/f402-session-refresh.jsonl"
+    echo "watch: tail -f ${REPO_PATH}/scratch/f402-session-watch.stderr.log"
   fi
   if [[ "${TARGET}" == "daemon" || "${TARGET}" == "both" ]]; then
     echo "next: curl -fsS http://127.0.0.1:4020/health"
