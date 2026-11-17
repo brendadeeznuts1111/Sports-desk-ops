@@ -1,0 +1,5 @@
+#!/bin/sh
+# Format the files in the index and re-stage them (Bun 1.4.4 --staged).
+# Install with: sh scripts/install-git-hooks.sh
+set -e
+exec bun fmt --staged

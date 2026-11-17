@@ -66,6 +66,7 @@ const EXACT_FILES: Readonly<Record<string, string>> = {
   "bin/wrangler": "bash -n",
   "packages/sportsdesk-ops/bin/dx": "bash -n",
   "packages/sportsdesk-ops/bin/wrangler": "bash -n",
+  ".githooks/pre-commit": "bash -n",
 };
 
 function trackedFiles(): string[] {
