@@ -470,6 +470,20 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(matches("!(a|b).ts", "c.ts")).toBe(true);
     expect(matches("!(a|b).ts", "a.ts")).toBe(false);
 
+    // 1.4.4 documented examples: nested negative group and path-segment alternation.
+    expect(matches("**/!(*.test).ts", "src/cart.ts")).toBe(true);
+    expect(matches("**/!(*.test).ts", "src/cart.test.ts")).toBe(false);
+    expect(matches("src/@(app|lib)/**/*.ts", "src/app/a/b.ts")).toBe(true);
+    expect(matches("shard-{1..3}.json", "shard-2.json")).toBe(true);
+
+    // Literal-looking groups now parse as extglob: copy(1).txt no longer matches.
+    expect(matches("*(1).txt", "1.txt")).toBe(true);
+    expect(matches("*(1).txt", "copy(1).txt")).toBe(false);
+
+    // A leading negative extglob is a pattern; it is not a package-negation string.
+    expect(matches("!(g)/a.ts", "x/a.ts")).toBe(true);
+    expect(matches("!(g)/a.ts", "g/a.ts")).toBe(false);
+
     // A leading `!` negates the whole pattern: it matches what the inner pattern does not.
     // Both inputs must be tested, or a `.ts`-vs-`.ts` pair looks like "matches nothing".
     expect(matches("!*.ts", "a.ts")).toBe(false);
