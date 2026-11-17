@@ -347,6 +347,8 @@ export interface CustomersCohortInput {
 export interface CustomersCohortPayload {
   readonly cohorts: CustomersCohortsSummary;
   readonly backtestTop: ReadonlyArray<Record<string, unknown>>;
+  /** Every backtest-cohort customer, not just the leaderboard's top 20. */
+  readonly backtestAll: ReadonlyArray<Record<string, unknown>>;
   readonly fixtures: ReadonlyArray<Record<string, unknown>>;
   readonly provenance: DashboardSourceProvenance;
 }
@@ -427,6 +429,7 @@ export function computeCustomersCohortPayload(
       uniqueSurveillanceCount: uniqueSurveillanceIds.size,
     },
     backtestTop: input.backtestLeaderboard.slice(0, 20),
+    backtestAll: input.backtestLeaderboard,
     fixtures: input.fixtures,
     provenance,
   };

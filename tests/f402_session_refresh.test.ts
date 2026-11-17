@@ -18,6 +18,7 @@ import {
   decideRefresh,
   hasEnvLoginCredentials,
   journalLine,
+  tokenWindowFromSession,
   type RefreshOutcome,
 } from "../lib/f402_session_refresh.ts";
 
@@ -248,5 +249,44 @@ describe("hasEnvLoginCredentials", () => {
     ).toBe(false);
     expect(hasEnvLoginCredentials({ F402_AGENT_ID: "AGENT1" })).toBe(false);
     expect(hasEnvLoginCredentials({})).toBe(false);
+  });
+});
+
+describe("tokenWindowFromSession", () => {
+  const b64 = (value: unknown): string =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+  const jwt = (payload: Record<string, unknown>): string =>
+    `Bearer ${b64({ alg: "none" })}.${b64(payload)}.sig`;
+
+  test("decodes a 21-minute bearer window", () => {
+    const session: F402Session = {
+      ...sessionExpiringAt(NOW),
+      authorizationHeader: jwt({ nbf: 1_000, exp: 2_260 }),
+    };
+    const window = tokenWindowFromSession(session);
+    expect(window?.windowMinutes).toBe(21);
+    expect(window?.nbfIso).toBe("1970-01-01T00:16:40.000Z");
+    expect(window?.expIso).toBe("1970-01-01T00:37:40.000Z");
+  });
+
+  test("returns null for an opaque token", () => {
+    const session: F402Session = {
+      ...sessionExpiringAt(NOW),
+      authorizationHeader: "Bearer opaque-token",
+    };
+    expect(tokenWindowFromSession(session)).toBeNull();
+  });
+
+  test("returns null when nbf/exp are missing", () => {
+    const session: F402Session = {
+      ...sessionExpiringAt(NOW),
+      authorizationHeader: jwt({ sub: "x" }),
+    };
+    expect(tokenWindowFromSession(session)).toBeNull();
+  });
+
+  test("returns null for a missing session or header", () => {
+    expect(tokenWindowFromSession(null)).toBeNull();
+    expect(tokenWindowFromSession(sessionExpiringAt(NOW))).toBeNull();
   });
 });

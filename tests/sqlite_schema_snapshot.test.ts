@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { pathToFileURL } from "node:url";
 import { buildSqliteSchemaReportForTable } from "../lib/schema_report.ts";
 import { MATCH_EVALUATIONS_TABLE } from "../lib/sqlite_schema_registry.ts";
 import {
@@ -14,7 +13,7 @@ import { decodeManifest } from "../lib/schema_binary.ts";
 describe("sqlite_schema_snapshot", () => {
   test("emitSnapshot writes via file URL (Bun.write accepts URL)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "schema-snap-"));
-    const outUrl = pathToFileURL(join(dir, "manifest.bin"));
+    const outUrl = Bun.pathToFileURL(join(dir, "manifest.bin"));
     const report = buildSqliteSchemaReportForTable(MATCH_EVALUATIONS_TABLE)!;
     const returned = await emitSnapshot(report, outUrl);
     expect(returned.href).toBe(outUrl.href);
@@ -24,7 +23,7 @@ describe("sqlite_schema_snapshot", () => {
 
   test("schemaReportJsonDocument serializes docsUrl.href", () => {
     const report = buildSqliteSchemaReportForTable(MATCH_EVALUATIONS_TABLE)!;
-    const manifestUrl = pathToFileURL("/tmp/schema.manifest.bin");
+    const manifestUrl = Bun.pathToFileURL("/tmp/schema.manifest.bin");
     const doc = schemaReportJsonDocument(report, manifestUrl);
     expect(doc.manifestUrl).toBe(manifestUrl.href);
     expect(doc.summary[0]?.docsUrl).toContain("sqlite_schema_registry.ts");

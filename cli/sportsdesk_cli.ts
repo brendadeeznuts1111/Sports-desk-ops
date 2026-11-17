@@ -2597,42 +2597,36 @@ export async function main(): Promise<void> {
   }
 
   if (cmd === "trunks" || cmd === "trunk" || cmd === "trees") {
-    console.log(`\n🌲 NOLAWOLF MASTER FOREST: TWO-TRUNK TOPOLOGY COMPARISON`);
-    console.log(
-      `   30-Day Window: Oct 10, 2026 – Nov 09, 2026 | Total Forest: $240,101,982.77 USD\n`,
-    );
-    console.log(
-      "Trunk Branch".padEnd(16) +
-        "30d Handle (USD)".padStart(18) +
-        "Wagers".padStart(10) +
-        "Bettors".padStart(10) +
-        "Avg Stake".padStart(14) +
-        "Alert Rate".padStart(14) +
-        "  Operating Role",
-    );
-    console.log("-".repeat(95));
-    console.log(
-      "TRACKTHIS".padEnd(16) +
-        "$202,991,868.27".padStart(18) +
-        "258,927".padStart(10) +
-        "3,243".padStart(10) +
-        "$783.97".padStart(14) +
-        "33.35%".padStart(14) +
-        "  VIP / Syndicate Engine (1 in 3 Alerts)",
-    );
-    console.log(
-      "NOLAPPH".padEnd(16) +
-        "$37,450,599.89".padStart(18) +
-        "247,056".padStart(10) +
-        "4,198".padStart(10) +
-        "$151.59".padStart(14) +
-        "3.26%".padStart(14) +
-        "  Retail PPH Downline (Recreational)",
-    );
-    console.log("-".repeat(95));
-    console.log(
-      `\nObservation: TRACKTHIS drives 75.5% of total desk turnover with 10x higher alert frequency.\n`,
-    );
+    const { runBatchedRanking } = await import("../lib/customer_rankings.ts");
+    const {
+      buildDownlineTrunkReport,
+      formatDownlineTrunksAnsi,
+      parseTrunksCliArgs,
+      staticNolawolfTrunkFixture,
+    } = await import("../lib/downline_trunks.ts");
+    const trunkOpts = parseTrunksCliArgs(rawArgs.slice(1));
+    try {
+      const data = await runBatchedRanking({ limitPlayers: 100 });
+      const report = buildDownlineTrunkReport(data);
+      if (trunkOpts.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(
+          formatDownlineTrunksAnsi(report, {
+            branchFilter: trunkOpts.branchFilter,
+          }),
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `[trunks] corpus unavailable: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      console.log(
+        formatDownlineTrunksAnsi(staticNolawolfTrunkFixture(), {
+          branchFilter: trunkOpts.branchFilter,
+        }),
+      );
+    }
     return;
   }
 

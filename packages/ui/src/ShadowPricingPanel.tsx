@@ -9,11 +9,14 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { copyText } from "./clipboard.ts";
+import { notifyShadowSliceUrlChanged } from "./desk_quick_jump.ts";
 import type {
   MarketCode,
   MarketFilter,
   PeriodCode,
   PeriodFilter,
+  RegimeCode,
+  RegimeFilter,
   RouterAuditMode,
   ShadowPricingDashboardPayload,
   ShadowRepriceMode,
@@ -35,6 +38,7 @@ import {
   ShadowTaxonomyCubeSection,
 } from "./shadow_pricing/index.tsx";
 import { SliceMetricsViews } from "./SliceMetricsViews.tsx";
+import { trackedFetch } from "./api_usage.ts";
 
 export interface ShadowPricingPanelProps {
   readonly onInspectAccount?: ((accountId: string) => void) | undefined;
@@ -74,6 +78,11 @@ export function ShadowPricingPanel({
       initialPayload?.taxonomy.activeFilters.market ??
       (readInitialUrlParam("market", "ALL") as MarketFilter),
   );
+  const [regime, setRegime] = useState<RegimeFilter>(
+    () =>
+      initialPayload?.taxonomy.activeFilters.regime ??
+      (readInitialUrlParam("regime", "ALL") as RegimeFilter),
+  );
   const [cubeTab, setCubeTab] = useState<CubeTab>("sport");
 
   // Shadow-Pricing Counterfactual Parameters
@@ -96,7 +105,7 @@ export function ShadowPricingPanel({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedCli, setCopiedCli] = useState<boolean>(false);
 
-  // Sync active 4-level slice to URL query string for deep-linking
+  // Sync active 5-level slice to URL query string for deep-linking
   useEffect(() => {
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
@@ -112,8 +121,12 @@ export function ShadowPricingPanel({
     if (market === "ALL") url.searchParams.delete("market");
     else url.searchParams.set("market", market);
 
+    if (regime === "ALL") url.searchParams.delete("regime");
+    else url.searchParams.set("regime", regime);
+
     window.history.replaceState({}, "", url.toString());
-  }, [sport, subSport, period, market]);
+    notifyShadowSliceUrlChanged();
+  }, [sport, subSport, period, market, regime]);
 
   const fetchSimulation = useCallback(
     async (params: {
@@ -121,6 +134,7 @@ export function ShadowPricingPanel({
       subSport: SubSportFilter;
       period: PeriodFilter;
       market: MarketFilter;
+      regime: RegimeFilter;
       ladderKey3: number;
       ladderKey7: number;
       ladderKey14_21: number;
@@ -137,6 +151,7 @@ export function ShadowPricingPanel({
           subSport: params.subSport,
           period: params.period,
           market: params.market,
+          regime: params.regime,
           ladder3: String(params.ladderKey3),
           ladder7: String(params.ladderKey7),
           ladderOther: String(params.ladderKey14_21),
@@ -145,7 +160,7 @@ export function ShadowPricingPanel({
           mode: params.repriceMode,
           routerAudit: params.routerAuditMode,
         });
-        const res = await fetch(`/api/shadow-pricing?${qs.toString()}`);
+        const res = await trackedFetch(`/api/shadow-pricing?${qs.toString()}`);
         if (!res.ok) {
           const errJson = (await res
             .json()
@@ -185,6 +200,7 @@ export function ShadowPricingPanel({
         subSport,
         period,
         market,
+        regime,
         ladderKey3,
         ladderKey7,
         ladderKey14_21,
@@ -200,6 +216,7 @@ export function ShadowPricingPanel({
     subSport,
     period,
     market,
+    regime,
     ladderKey3,
     ladderKey7,
     ladderKey14_21,
@@ -250,6 +267,9 @@ export function ShadowPricingPanel({
       setCubeTab("market");
     } else if (row.dimension === "market") {
       setMarket(row.code as MarketCode);
+      setCubeTab("regime");
+    } else if (row.dimension === "regime") {
+      setRegime(row.code as RegimeCode);
     }
   };
 
@@ -264,6 +284,7 @@ export function ShadowPricingPanel({
     setSubSport(qp.subSport);
     setPeriod(qp.period);
     setMarket(qp.market);
+    setRegime(qp.regime ?? "ALL");
     setCubeTab(qp.cubeTab);
   };
 
@@ -272,6 +293,7 @@ export function ShadowPricingPanel({
     setSubSport("ALL");
     setPeriod("ALL");
     setMarket("ALL");
+    setRegime("ALL");
     setCubeTab("sport");
   };
 
@@ -283,13 +305,15 @@ export function ShadowPricingPanel({
     setSubSport(nextSubSport);
     setPeriod("game");
     setMarket("spread");
+    setRegime("ALL");
   };
 
   const hasAnyDimensionFilter =
     sport !== "ALL" ||
     subSport !== "ALL" ||
     period !== "ALL" ||
-    market !== "ALL";
+    market !== "ALL" ||
+    regime !== "ALL";
 
   const cliCommand = `./bin/dx shadow-price --ladder-3=${ladderKey3} --ladder-7=${ladderKey7} --ladder-other=${ladderKey14_21} --min-volume=${minVolume} --elasticity=${retailElasticity.toFixed(2)}`;
 
@@ -389,13 +413,25 @@ export function ShadowPricingPanel({
             {copiedCli ? "✅ Copied dx CLI" : "📋 Copy ./bin/dx shadow-price"}
           </button>
           {onRunPtyCommand ? (
-            <button
-              type="button"
-              className="sd-preset-btn"
-              onClick={() => onRunPtyCommand("key-numbers")}
-            >
-              💻 Inspect Key Buyers in PTY
-            </button>
+            <>
+              <button
+                type="button"
+                className="sd-preset-btn"
+                onClick={() => onRunPtyCommand("key-numbers")}
+              >
+                💻 Inspect Key Buyers in PTY
+              </button>
+              {subSport === "NCAAB" ? (
+                <button
+                  type="button"
+                  className="sd-preset-btn"
+                  title="PTY find -s ncaab — Behavioral Intelligence Summary table (e.g. LIVE99)"
+                  onClick={() => onRunPtyCommand("find -s ncaab")}
+                >
+                  🎓 Behavioral Intelligence Summary
+                </button>
+              ) : null}
+            </>
           ) : null}
         </div>
       </div>
@@ -419,12 +455,14 @@ export function ShadowPricingPanel({
         subSport={subSport}
         period={period}
         market={market}
+        regime={regime}
         cubeTab={cubeTab}
         hasAnyDimensionFilter={hasAnyDimensionFilter}
         onSelectSport={handleSelectSport}
         onSelectSubSport={handleSelectSubSport}
         onSelectPeriod={setPeriod}
         onSelectMarket={setMarket}
+        onSelectRegime={setRegime}
         onSelectCubeTab={setCubeTab}
         onApplyQuickPreset={applyQuickPreset}
         onResetSlice={resetSlice}

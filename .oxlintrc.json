@@ -7,7 +7,8 @@
     "eqeqeq": ["error", "smart"],
     "typescript/no-explicit-any": "error",
     "typescript/no-require-imports": "error",
-    "preserve-caught-error": "warn"
+    "preserve-caught-error": "warn",
+    "unicorn/prefer-array-flat-map": "error"
   },
   "ignorePatterns": [
     "**/node_modules/**",

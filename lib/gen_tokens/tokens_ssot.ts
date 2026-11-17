@@ -140,6 +140,21 @@ export type KeymapSlotToml = {
   readonly label: string;
 };
 
+/** One `:root` alias. Never emitted as an `@property`; never introduces a color. */
+export type AliasToml = {
+  /** `--kebab-case` custom property emitted as `<alias>: var(<target>);`. */
+  readonly alias: string;
+  /** Canonical `--sd-*` token the alias resolves to. */
+  readonly target: string;
+};
+
+export type TokenAliasesToml = {
+  /** Emitted into every generated stylesheet (dashboard + static snapshots). */
+  readonly legacy: readonly AliasToml[];
+  /** Emitted into `src/dashboard/tokens.generated.css` only. */
+  readonly dashboard: readonly AliasToml[];
+};
+
 export type TokensSsot = {
   meta: TokensMeta;
   gates: TokensGatesToml;
@@ -149,6 +164,7 @@ export type TokensSsot = {
   bridges: Readonly<Record<string, number>>;
   ingestion: IngestionChannelToml[];
   routes: RouteToml[];
+  aliases: TokenAliasesToml;
   bitmasks: BitmasksToml;
   keymap: KeymapSlotToml[];
   tokens: Readonly<Record<string, string>>;
@@ -723,6 +739,91 @@ function parseTokensMap(raw: unknown): Readonly<Record<string, string>> {
   return out;
 }
 
+const CUSTOM_PROPERTY_RE = /^--[a-z0-9][a-z0-9-]*$/;
+
+function parseAliasGroup(raw: unknown, ctx: string): AliasToml[] {
+  if (raw === undefined) return [];
+  if (!isRecord(raw)) {
+    throw new Error(`[tokens_ssot] ${ctx} must be a table`);
+  }
+  const out: AliasToml[] = [];
+  for (const [alias, target] of Object.entries(raw)) {
+    if (!CUSTOM_PROPERTY_RE.test(alias)) {
+      throw new Error(
+        `[tokens_ssot] ${ctx}: alias must be a --kebab-case custom property (got ${JSON.stringify(alias)})`,
+      );
+    }
+    if (typeof target !== "string" || !CUSTOM_PROPERTY_RE.test(target)) {
+      throw new Error(
+        `[tokens_ssot] ${ctx}.${alias}: target must be a --kebab-case token name (got ${String(target)})`,
+      );
+    }
+    out.push({ alias, target });
+  }
+  return out;
+}
+
+/** Every custom property the generator can emit as a canonical token. */
+function canonicalTokenNames(ssot: TokensSsot): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const surface of ssot.surfaces) names.add(surface.token_name);
+  for (const uiToken of ssot.ui) names.add(uiToken.token_name);
+  for (const slaState of ssot.sla) {
+    names.add(slaState.token_name);
+    names.add(`${slaState.token_name}-bg`);
+    names.add(`${slaState.token_name}-border`);
+  }
+  for (const channel of ssot.ingestion) names.add(channel.token_name);
+  for (const route of ssot.routes) names.add(route.token_name);
+  return names;
+}
+
+function validateAliases(ssot: TokensSsot): void {
+  const canonical = canonicalTokenNames(ssot);
+  const seen = new Set<string>();
+  const groups = [
+    ["legacy", ssot.aliases.legacy],
+    ["dashboard", ssot.aliases.dashboard],
+  ] as const;
+  for (const [groupName, group] of groups) {
+    for (const entry of group) {
+      if (canonical.has(entry.alias)) {
+        throw new Error(
+          `ERR_TOKEN_ALIAS_SHADOWS_TOKEN: aliases.${groupName}.${entry.alias} collides with a canonical token`,
+        );
+      }
+      if (!canonical.has(entry.target)) {
+        throw new Error(
+          `ERR_TOKEN_ALIAS_TARGET_UNKNOWN: aliases.${groupName}.${entry.alias} -> ${entry.target}`,
+        );
+      }
+      if (seen.has(entry.alias)) {
+        throw new Error(
+          `ERR_TOKEN_ALIAS_DUPLICATE: aliases define ${entry.alias} more than once`,
+        );
+      }
+      seen.add(entry.alias);
+    }
+  }
+  for (const channel of ssot.ingestion) {
+    const legacyToken = channel.legacy_token_name;
+    if (legacyToken === undefined) continue;
+    const alias = ssot.aliases.legacy.find(
+      (entry) => entry.alias === legacyToken,
+    );
+    if (alias === undefined) {
+      throw new Error(
+        `ERR_TOKEN_LEGACY_ALIAS_MISSING: ingestion ${channel.layer_id} declares ${legacyToken} but aliases.legacy does not define it`,
+      );
+    }
+    if (alias.target !== channel.token_name) {
+      throw new Error(
+        `ERR_TOKEN_LEGACY_ALIAS_MISMATCH: aliases.legacy.${legacyToken} -> ${alias.target}, ingestion ${channel.layer_id} -> ${channel.token_name}`,
+      );
+    }
+  }
+}
+
 function tableValues(section: string, raw: unknown): [string, unknown][] {
   if (!isRecord(raw)) {
     throw new Error(`[tokens_ssot] ${section} must be a table`);
@@ -769,8 +870,22 @@ export function parseTokensTomlFromParsed(parsed: unknown): TokensSsot {
   const bitmasks = parseBitmasks(parsed.bitmasks);
   const keymap = parseKeymap(parsed.keymap);
   const tokens = parseTokensMap(parsed.tokens);
+  const rawAliases = parsed.aliases;
+  if (rawAliases !== undefined && !isRecord(rawAliases)) {
+    throw new Error("[tokens_ssot] aliases must be a table");
+  }
+  const aliases: TokenAliasesToml = {
+    legacy: parseAliasGroup(
+      isRecord(rawAliases) ? rawAliases.legacy : undefined,
+      "aliases.legacy",
+    ),
+    dashboard: parseAliasGroup(
+      isRecord(rawAliases) ? rawAliases.dashboard : undefined,
+      "aliases.dashboard",
+    ),
+  };
 
-  return {
+  const ssot: TokensSsot = {
     meta,
     gates,
     surfaces,
@@ -779,10 +894,13 @@ export function parseTokensTomlFromParsed(parsed: unknown): TokensSsot {
     bridges,
     ingestion,
     routes,
+    aliases,
     bitmasks,
     keymap,
     tokens,
   };
+  validateAliases(ssot);
+  return ssot;
 }
 
 /** Row shape accepted by formatRouteThreshold (threshold fields only). */

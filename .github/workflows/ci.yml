@@ -196,6 +196,27 @@ jobs:
           GITHUB_BASE_REF: ${{ github.base_ref }}
         run: bash scripts/ci/test-changed-nsh.sh
 
+  lint-native:
+    # Native `bun lint` ships in the canary channel, not in the pinned 1.4.4 runtime (and the
+    # migrated `"lint": "bun lint"` script recurses there). This job is the parity check against
+    # .oxlintrc.json; the repo pin and every other job stay on .bun-version.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: canary
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bun install --frozen-lockfile --no-env-file
+      - name: Native lint (oxlint config parity)
+        timeout-minutes: 3
+        run: bun run lint:native
+      - name: Native lint (type-aware)
+        timeout-minutes: 5
+        run: bun run lint:native:type-aware
+
   code-mode:
     # Property-based + mutation gate for the Code Mode profile tools. Unlike the PR ratchet this
     # runs the full sequential gate on both PRs and main: mutation survivors are the regression.

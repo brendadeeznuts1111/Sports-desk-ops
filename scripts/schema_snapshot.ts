@@ -5,7 +5,6 @@
 
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import {
   buildSqliteSchemaReport,
   defaultSchemaReportProvenance,
@@ -82,7 +81,7 @@ async function main(): Promise<number> {
 
   const payload = reportToJsonWithBinary(report);
   await Bun.write(outJson, JSON.stringify(payload, null, 2));
-  await emitSnapshot(report, pathToFileURL(outBin));
+  await emitSnapshot(report, Bun.pathToFileURL(outBin));
 
   const manifestBytes = await Bun.file(outBin).bytes();
   assertManifestRoundTrip(manifestBytes, report);

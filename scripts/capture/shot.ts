@@ -5,7 +5,6 @@
  */
 
 import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import {
   ManagedWebView,
   WebViewError,
@@ -288,7 +287,7 @@ export async function captureShotFile(
       : await writeThumb(screenshot.path, request.thumb);
   return {
     screenshot: screenshot.path,
-    screenshotUrl: pathToFileURL(resolve(screenshot.path)).href,
+    screenshotUrl: Bun.pathToFileURL(resolve(screenshot.path)).href,
     bytes: screenshot.bytes,
     sha256: screenshot.sha256,
     mimeType: screenshot.mimeType,

@@ -1,6 +1,6 @@
 /**
  * @file tests/verify_tokens.test.ts
- * @description Formal Specification & Invariant Verification Suite for Qwen3.5-4B Tokens (v1.3.0).
+ * @description Formal Specification & Invariant Verification Suite for Qwen3.5-4B Tokens (v1.4.0).
  */
 
 import { describe, it, expect } from "bun:test";
@@ -114,7 +114,7 @@ describe("1. Single Source of Truth & Zero-Drift Regeneration", () => {
       await import("../lib/gen_tokens/tokens_ssot.ts");
     const ssot = parseTokensToml(tomlText);
 
-    expect(ssot.meta.version).toBe("1.3.0");
+    expect(ssot.meta.version).toBe("1.4.0");
     expect(ssot.meta.schema).toBe("sportsdesk-tokens/v1");
 
     const surfaces = ssot.surfaces;
@@ -699,6 +699,28 @@ describe("5. Dead-Token & Bi-Directional Reference Consistency", () => {
         .map(([name, value]) => `${file}: ${name}: ${value}`);
       expect(nonAliases).toEqual([]);
     }
+  });
+
+  it("test_assert_generated_root_aliases_match_tokens_toml_aliases", async () => {
+    const { parseTokensToml } =
+      await import("../lib/gen_tokens/tokens_ssot.ts");
+    const ssot = parseTokensToml(
+      await Bun.file(resolve(rootDir, "design/tokens.toml")).text(),
+    );
+    const css = await Bun.file(
+      resolve(rootDir, "src/dashboard/tokens.generated.css"),
+    ).text();
+
+    const emitted = [
+      ...css.matchAll(
+        /^\s*(--[a-z0-9][a-z0-9-]*):\s*var\((--[a-z0-9][a-z0-9-]*)\);/gm,
+      ),
+    ].map((match) => `${match[1]} -> ${match[2]}`);
+    const expected = [...ssot.aliases.legacy, ...ssot.aliases.dashboard].map(
+      (alias) => `${alias.alias} -> ${alias.target}`,
+    );
+
+    expect(emitted).toEqual(expected);
   });
 
   it("test_assert_every_referenced_sd_property_is_defined", async () => {

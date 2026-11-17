@@ -41,11 +41,16 @@ describe("configFormat", () => {
 
 describe("parseConfig", () => {
   test("JSON5 takes comments and trailing commas; YAML takes block style", () => {
-    expect(parseConfig("{a: 1, // note\n b: [1, 2,],}", "json5")).toEqual({
+    expect(parseConfig("{a: 1, // note\n b: [1, 2,],}", "json5")).toStrictEqual(
+      {
+        a: 1,
+        b: [1, 2],
+      },
+    );
+    expect(parseConfig("a: 1\nb:\n  - 2\n", "yaml")).toStrictEqual({
       a: 1,
-      b: [1, 2],
+      b: [2],
     });
-    expect(parseConfig("a: 1\nb:\n  - 2\n", "yaml")).toEqual({ a: 1, b: [2] });
   });
 
   test("YAML 1.2: yes/no/on/off are strings, and an Actions `on:` key stays a string", () => {
@@ -53,14 +58,14 @@ describe("parseConfig", () => {
     // than booleans, and a GitHub Actions workflow's `on:` key parses as "on".
     expect(
       parseConfig("on: push\na: yes\nb: no\nc: on\nd: off", "yaml"),
-    ).toEqual({ on: "push", a: "yes", b: "no", c: "on", d: "off" });
+    ).toStrictEqual({ on: "push", a: "yes", b: "no", c: "on", d: "off" });
 
     const workflow = parseConfig(
       "on:\n  push:\n    branches: [main]\njobs:\n  test:\n    runs-on: ubuntu-latest",
       "yaml",
     ) as Record<string, unknown>;
     expect(Object.keys(workflow)).toContain("on");
-    expect(workflow["on"]).toEqual({ push: { branches: ["main"] } });
+    expect(workflow["on"]).toStrictEqual({ push: { branches: ["main"] } });
   });
 
   test("a syntax error becomes a UsageError led by the source, with the parser error as cause", () => {
@@ -76,6 +81,14 @@ describe("parseConfig", () => {
     );
     expect((caught as UsageError).cause).toBeInstanceOf(SyntaxError);
     expect(() => parseConfig("{a:", "json5")).toThrow(
+      "config: JSON5 Parse error:",
+    );
+    // Next-release contract: a NUL inside a number and a `\u` escape in an
+    // unquoted key are SyntaxErrors, never silently truncated or inferred.
+    expect(() => parseConfig("1\0 2", "json5")).toThrow(
+      "config: JSON5 Parse error:",
+    );
+    expect(() => parseConfig(String.raw`{a\u002d: 1}`, "json5")).toThrow(
       "config: JSON5 Parse error:",
     );
     expect(() => parseConfig("a = 1\na = 2\n", "toml", "desk.toml")).toThrow(
@@ -111,8 +124,8 @@ describe("parseConfig", () => {
   test("a multi-document YAML stream comes back as an array, which an array schema cannot tell from one list", () => {
     const stream = parseConfig("a: 1\n---\nb: 2\n", "yaml");
     const list = parseConfig("- a: 1\n- b: 2\n", "yaml");
-    expect(stream).toEqual([{ a: 1 }, { b: 2 }]);
-    expect(list).toEqual(stream);
+    expect(stream).toStrictEqual([{ a: 1 }, { b: 2 }]);
+    expect(list).toStrictEqual(stream);
   });
 });
 
@@ -140,9 +153,9 @@ describe("readConfig", () => {
     await Bun.write(json5, "{name: 'desk', timeoutMs: 20000, enabled: true,}");
     await Bun.write(toml, 'name = "desk"\ntimeoutMs = 20000\nenabled = true\n');
     const expected = { name: "desk", timeoutMs: 20_000, enabled: true };
-    expect(await readConfig(yaml, Desk)).toEqual(expected);
-    expect(await readConfig(json5, Desk)).toEqual(expected);
-    expect(await readConfig(toml, Desk)).toEqual(expected);
+    expect(await readConfig(yaml, Desk)).toStrictEqual(expected);
+    expect(await readConfig(json5, Desk)).toStrictEqual(expected);
+    expect(await readConfig(toml, Desk)).toStrictEqual(expected);
   });
 
   test("schema failures name the file and every bad field", async () => {
@@ -177,7 +190,7 @@ describe("readConfig", () => {
     expect(() => validateConfig({}, z.object({}))).toThrow(
       "use z.strictObject, not z.object",
     );
-    expect(validateConfig({ a: 1 }, z.looseObject({}))).toEqual({ a: 1 });
+    expect(validateConfig({ a: 1 }, z.looseObject({}))).toStrictEqual({ a: 1 });
   });
 
   test("a nested failure names the full field path", async () => {

@@ -132,6 +132,35 @@ describe("buildDeskEnhancedHealth", () => {
     expect(payload.checks.auth.gslive.automintBlocked).toBe("cloudflare");
   });
 
+  test("does not report a Cloudflare-only F402 session as ok", async () => {
+    const payload = await buildDeskEnhancedHealth({
+      port: 4020,
+      hostname: "localhost",
+      url: "http://localhost:4020/",
+      runtime: "Bun",
+      ingress: {},
+      nodeEnv: "test",
+      uptimeSeconds: 1,
+      readF402: () => ({
+        cookieHeader: "cf_clearance=x; __cf_bm=y",
+        cookieNames: ["cf_clearance", "__cf_bm"],
+        obtainedAtIso: new Date().toISOString(),
+        expiresAtIso: new Date(Date.now() + 3_600_000).toISOString(),
+      }),
+      readGsliveHealth: async () => gsliveOk(),
+      probeR2: async () => ({}),
+    });
+    expect(payload.checks.auth.f402.status).toBe("unverified");
+    expect(payload.degradedReasons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "auth",
+          message: expect.stringContaining("Cloudflare-only"),
+        }),
+      ]),
+    );
+  });
+
   test("surfaces GSLive identity from session metadata file", async () => {
     const prevMeta = Bun.env.GSLIVE_SESSION_META_FILE;
     const metaPath = `${import.meta.dir}/../scratch/desk-health-gslive-meta.json`;

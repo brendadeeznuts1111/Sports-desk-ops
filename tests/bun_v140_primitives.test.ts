@@ -75,6 +75,10 @@ describe("Bun v1.4.0 primitives", () => {
     expect(Bun.stringWidth("👍🏽")).toBe(2);
     expect(Bun.stringWidth("1️⃣")).toBe(2);
     expect(Bun.stringWidth("中文")).toBe(4);
+    // East Asian ambiguous characters are one narrow column by default, two
+    // when explicitly requested wide.
+    expect(Bun.stringWidth("·", { ambiguousIsNarrow: true })).toBe(1);
+    expect(Bun.stringWidth("·", { ambiguousIsNarrow: false })).toBe(2);
     expect(Bun.wrapAnsi("The quick brown fox", 10)).toBe(
       "The quick\nbrown fox",
     );

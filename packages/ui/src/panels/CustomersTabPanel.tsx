@@ -8,6 +8,8 @@ import {
   PENDING_COHORTS_PROVENANCE,
 } from "../hydration.ts";
 import { getLocalAgentHref } from "../links.ts";
+import type { ReverseDnsForensicsView } from "../../../../lib/reverse_dns_forensics.ts";
+import { ReverseDnsForensicsCard } from "./ReverseDnsForensicsCard.tsx";
 import { SharpnessDecomposition } from "../viz/SharpnessDecomposition.tsx";
 import type {
   CustomersApiResponse,
@@ -35,9 +37,13 @@ export interface CustomersTabPanelProps {
   readonly onCustomerSort: (key: CustomerSortKey) => void;
   readonly selectedCustomer: ShowcaseCustomer | null;
   readonly onSelectCustomer: (cust: ShowcaseCustomer) => void;
+  /** Account id the operator tried to inspect but the curated cohort lacks. */
+  readonly customerLookupNotice?: string | null | undefined;
+  readonly onClearCustomerLookupNotice?: (() => void) | undefined;
   readonly copiedCliId: string | null;
   readonly onCopyCli: (customerId: string) => void;
-  readonly customerForensicResult: string | null;
+  readonly customerReverseForensics?:
+    ReverseDnsForensicsView | null | undefined;
   readonly onClearForensicResult: () => void;
   readonly onRunReverseLookup: (ipAddress: string) => void;
   readonly onOpenTerminalProfile: (customerId: string) => void;
@@ -45,11 +51,28 @@ export interface CustomersTabPanelProps {
   readonly onViewCustomerWagers?: ((customerId: string) => void) | undefined;
   /** Set when no live per-customer profile source exists; replaces the table and inspector. */
   readonly profilesUnavailableReason?: string | null | undefined;
+  /** One-line provenance for the rows on screen (counts + source endpoint). */
+  readonly profilesProvenance?: string | null | undefined;
+  readonly matrixMode?: boolean | undefined;
+  readonly matrixProfileOverlay?:
+    | {
+        readonly total: number;
+        readonly liveOpen: number;
+        readonly ranked: number;
+        readonly cohort: number;
+        readonly liveWagersDistinct: number;
+      }
+    | null
+    | undefined;
+  readonly onOpenTerminalRadar?: ((customerId: string) => void) | undefined;
 }
 
 interface CustomerCohortSummary {
   readonly totalVarUsd: number;
   readonly totalCapUsd: number;
+  /** Rows that actually carry a measured VaR / cap; the rest list them in `unknown`. */
+  readonly varRows: number;
+  readonly capRows: number;
   readonly alertCount: number;
   readonly avgSharpness: string;
 }
@@ -59,17 +82,29 @@ function summarizeDisplayedCustomers(
 ): CustomerCohortSummary {
   let totalVarUsd = 0;
   let totalCapUsd = 0;
+  let varRows = 0;
+  let capRows = 0;
   let alertCount = 0;
   let sharpSum = 0;
   for (const row of rows) {
-    totalVarUsd += row.var95Usd;
-    totalCapUsd += row.recommendedLimitUsd;
+    const unknown = row.unknown ?? [];
+    // A row that never measured VaR or a limit is not a zero-dollar contribution.
+    if (!unknown.includes("var95")) {
+      totalVarUsd += row.var95Usd;
+      varRows += 1;
+    }
+    if (!unknown.includes("limit")) {
+      totalCapUsd += row.recommendedLimitUsd;
+      capRows += 1;
+    }
     if (row.action.includes("ALERT")) alertCount++;
     sharpSum += row.score;
   }
   return {
     totalVarUsd,
     totalCapUsd,
+    varRows,
+    capRows,
     alertCount,
     avgSharpness: rows.length > 0 ? (sharpSum / rows.length).toFixed(1) : "n/a",
   };
@@ -136,16 +171,24 @@ export function CustomersTabPanel({
   onCustomerSort,
   selectedCustomer,
   onSelectCustomer,
+  customerLookupNotice = null,
+  onClearCustomerLookupNotice,
   copiedCliId,
   onCopyCli,
-  customerForensicResult,
+  customerReverseForensics = null,
   onClearForensicResult,
   onRunReverseLookup,
   onOpenTerminalProfile,
   onSelectAgent,
   onViewCustomerWagers,
   profilesUnavailableReason = null,
+  profilesProvenance = null,
+  matrixMode = false,
+  matrixProfileOverlay = null,
+  onOpenTerminalRadar,
 }: CustomersTabPanelProps): React.ReactElement {
+  const showOpenRisk =
+    matrixMode && sortedCustomers.some((c) => (c.openRiskUsd ?? 0) > 0);
   const effectiveStatus: "pending" | "ready" | "unavailable" =
     cohortsStatus ?? (cohortsReport !== null ? "ready" : "pending");
   const kpiCards = deriveCustomerCohortKpiCards({
@@ -153,6 +196,8 @@ export function CustomersTabPanel({
     status: effectiveStatus,
     error: cohortsError,
   });
+  const isUnknown = (cust: ShowcaseCustomer, field: string): boolean =>
+    cust.unknown?.includes(field) ?? false;
   const provenanceBadge = formatProvenanceBadge(
     effectiveStatus === "unavailable"
       ? {
@@ -421,12 +466,109 @@ export function CustomersTabPanel({
           >
             ✅ High-Hold Whales
           </button>
+          {matrixMode ? (
+            <>
+              {(
+                ["TIER_1", "TIER_2", "TIER_3", "TIER_4", "TIER_5"] as const
+              ).map((tier) => (
+                <button
+                  key={tier}
+                  type="button"
+                  style={styles.pill(filterTier === tier)}
+                  onClick={() => onFilterTierChange(tier)}
+                  title={`Filter by data tier ${tier} (30d rankings)`}
+                >
+                  {tier.replace("TIER_", "T")}
+                </button>
+              ))}
+            </>
+          ) : null}
         </div>
       </div>
 
+      {matrixMode && matrixProfileOverlay ? (
+        <div
+          data-customers-matrix="overlay"
+          style={{
+            margin: "0 12px 10px",
+            padding: "10px 12px",
+            borderRadius: "8px",
+            border: "1px solid rgba(56, 189, 248, 0.35)",
+            background:
+              "linear-gradient(90deg, rgba(56, 189, 248, 0.1), rgba(168, 85, 247, 0.08))",
+            fontSize: "12px",
+            color: "#cbd5e1",
+          }}
+        >
+          <strong style={{ color: "#7dd3fc" }}>Matrix overlay</strong> merges{" "}
+          <b>{matrixProfileOverlay.cohort}</b> cohort rows,{" "}
+          <b>{matrixProfileOverlay.ranked}</b> ranked players, and{" "}
+          <b>{matrixProfileOverlay.liveOpen}</b> live-open customers (
+          {matrixProfileOverlay.liveWagersDistinct} on the wager tape). Tiers
+          and scores follow API payloads — not hardcoded cutoffs.
+        </div>
+      ) : null}
+
+      {profilesProvenance !== null && (
+        <div
+          role="status"
+          data-profiles-source="cohort"
+          style={{
+            margin: "0 12px 8px",
+            fontSize: "11px",
+            color: "#94a3b8",
+          }}
+        >
+          {profilesProvenance}
+        </div>
+      )}
+
+      {customerLookupNotice !== null ? (
+        <div
+          role="status"
+          data-customer-lookup-notice={customerLookupNotice}
+          className="sd-card"
+          style={{
+            margin: "0 12px 10px",
+            padding: "10px 14px",
+            border: "1px solid rgba(245, 158, 11, 0.45)",
+            backgroundColor: "rgba(245, 158, 11, 0.10)",
+            color: "#fcd34d",
+            fontSize: "12px",
+          }}
+        >
+          <strong>
+            No curated cohort profile for <code>{customerLookupNotice}</code>.
+          </strong>{" "}
+          The shadow buyer table contains accounts outside the profile cohort;
+          the search is set to this id so a partial match is still visible.
+          <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
+            <button
+              type="button"
+              className="sd-preset-btn"
+              onClick={() => onOpenTerminalProfile(customerLookupNotice)}
+            >
+              💻 Open terminal profile
+            </button>
+            {onClearCustomerLookupNotice ? (
+              <button
+                type="button"
+                className="sd-preset-btn"
+                onClick={onClearCustomerLookupNotice}
+              >
+                Dismiss
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {/* Two-Column Grid: Customer Table & Deep Inspector */}
       {(() => {
-        if (profilesUnavailableReason !== null) {
+        if (
+          profilesUnavailableReason !== null &&
+          !(matrixMode && sortedCustomers.length > 0)
+        ) {
           return (
             <div
               role="status"
@@ -530,9 +672,10 @@ export function CustomersTabPanel({
                     {cohortSummary.alertCount} Alerts
                   </span>
                   <span style={{ fontSize: "11px", color: "#94a3b8" }}>
-                    Σ VaR: <b>${cohortSummary.totalVarUsd.toLocaleString()}</b>{" "}
-                    · Σ Caps:{" "}
-                    <b>${cohortSummary.totalCapUsd.toLocaleString()}</b>
+                    Σ VaR ({cohortSummary.varRows}/{sortedCustomers.length}
+                    ): <b>${cohortSummary.totalVarUsd.toLocaleString()}</b> · Σ
+                    Caps ({cohortSummary.capRows}/{sortedCustomers.length}
+                    ): <b>${cohortSummary.totalCapUsd.toLocaleString()}</b>
                   </span>
                 </div>
                 <div
@@ -608,6 +751,11 @@ export function CustomersTabPanel({
                         </span>
                       </th>
                       <th style={styles.th}>Specialization</th>
+                      {showOpenRisk ? (
+                        <th style={styles.th} title="Open risk from live tape">
+                          24h Open
+                        </th>
+                      ) : null}
                       <th style={styles.th}>Correlated Par</th>
                       <th
                         className="sortable"
@@ -697,6 +845,18 @@ export function CustomersTabPanel({
                               >
                                 ↗
                               </a>
+                              {cust.source !== undefined && (
+                                <span
+                                  style={{
+                                    ...styles.subBadge,
+                                    backgroundColor: "rgba(56, 189, 248, 0.14)",
+                                    color: "#7dd3fc",
+                                  }}
+                                  title={`Row source: ${cust.source}`}
+                                >
+                                  {cust.source.toUpperCase()}
+                                </span>
+                              )}
                               {cust.subAccountIndex !== null && (
                                 <span style={styles.subBadge}>
                                   Seat #{cust.subAccountIndex}
@@ -741,11 +901,24 @@ export function CustomersTabPanel({
                               {cust.score.toFixed(1)} ·{" "}
                               {cust.tier.replace("TIER_", "T")}
                             </span>
+                            {cust.tierLabel ? (
+                              <div
+                                style={{
+                                  fontSize: "10px",
+                                  color: "#94a3b8",
+                                  marginTop: "2px",
+                                }}
+                              >
+                                {cust.tierLabel}
+                              </div>
+                            ) : null}
                           </td>
                           <td style={styles.td}>
                             <div>{cust.sizingStrategy}</div>
                             <div style={styles.custSub}>
-                              Gini: {cust.gini.toFixed(3)}
+                              {isUnknown(cust, "gini")
+                                ? "Gini: —"
+                                : `Gini: ${cust.gini.toFixed(3)}`}
                             </div>
                           </td>
                           <td
@@ -761,20 +934,39 @@ export function CustomersTabPanel({
                               {cust.timingArchetype}
                             </div>
                           </td>
+                          {showOpenRisk ? (
+                            <td style={styles.td}>
+                              {(cust.openRiskUsd ?? 0) > 0
+                                ? `$${cust.openRiskUsd!.toLocaleString()}`
+                                : "—"}
+                            </td>
+                          ) : null}
                           <td style={styles.td}>
-                            <span style={styles.corrBadge(cust.correlatedRisk)}>
-                              {cust.correlatedRisk}
-                            </span>
+                            {isUnknown(cust, "correlation") ? (
+                              <span style={{ color: "#64748b" }}>—</span>
+                            ) : (
+                              <span
+                                style={styles.corrBadge(cust.correlatedRisk)}
+                              >
+                                {cust.correlatedRisk}
+                              </span>
+                            )}
                           </td>
                           <td style={styles.td}>
-                            <div>${cust.var95Usd.toLocaleString()}</div>
+                            <div>
+                              {isUnknown(cust, "var95")
+                                ? "—"
+                                : `$${cust.var95Usd.toLocaleString()}`}
+                            </div>
                             <div
                               className={
                                 cust.holdPct < 0 ? "hold-neg" : "hold-pos"
                               }
                               style={{ fontSize: "11px" }}
                             >
-                              Hold: {cust.holdPct}%
+                              {isUnknown(cust, "holdPct")
+                                ? "Hold: —"
+                                : `Hold: ${cust.holdPct}%`}
                             </div>
                           </td>
                           <td className="directive" style={styles.td}>
@@ -782,7 +974,9 @@ export function CustomersTabPanel({
                               {cust.action}
                             </span>
                             <div style={styles.custSub}>
-                              Cap: ${cust.recommendedLimitUsd.toLocaleString()}
+                              {isUnknown(cust, "limit")
+                                ? "Cap: —"
+                                : `Cap: $${cust.recommendedLimitUsd.toLocaleString()}`}
                             </div>
                           </td>
                         </tr>
@@ -924,6 +1118,23 @@ export function CustomersTabPanel({
                       >
                         💻 Terminal
                       </button>
+                      {onOpenTerminalRadar ? (
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.actionBtn,
+                            padding: "4px 8px",
+                            fontSize: "11px",
+                            cursor: "pointer",
+                          }}
+                          onClick={() =>
+                            onOpenTerminalRadar(selectedCustomer.id)
+                          }
+                          title="Run profile &lt;id&gt; --radar in Bun.Terminal"
+                        >
+                          📊 Radar
+                        </button>
+                      ) : null}
                       {onViewCustomerWagers && (
                         <button
                           type="button"
@@ -972,9 +1183,22 @@ export function CustomersTabPanel({
                         Portal ↗
                       </a>
                       <span style={styles.tierBadge(selectedCustomer.tier)}>
-                        {selectedCustomer.tier} (Score:{" "}
-                        {selectedCustomer.score.toFixed(1)}/10.0)
+                        {selectedCustomer.tierLabel ?? selectedCustomer.tier}{" "}
+                        (Score: {selectedCustomer.score.toFixed(1)}/10.0)
                       </span>
+                      {selectedCustomer.source ? (
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            backgroundColor: "rgba(148, 163, 184, 0.15)",
+                            color: "#94a3b8",
+                          }}
+                        >
+                          source: {selectedCustomer.source}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -1001,20 +1225,36 @@ export function CustomersTabPanel({
                         💰 Stake Sizing & Variance
                       </h4>
                       <div>
-                        Strategy: <b>{selectedCustomer.sizingStrategy}</b>
+                        Strategy:{" "}
+                        <b>
+                          {isUnknown(selectedCustomer, "sizing")
+                            ? "—"
+                            : selectedCustomer.sizingStrategy}
+                        </b>
                       </div>
                       <div>
-                        Gini Inequality: <b>{selectedCustomer.gini}</b>
+                        Gini Inequality:{" "}
+                        <b>
+                          {isUnknown(selectedCustomer, "gini")
+                            ? "—"
+                            : selectedCustomer.gini}
+                        </b>
                       </div>
                       <div>
                         Mean Stake:{" "}
-                        <b>${selectedCustomer.meanStake.toLocaleString()}</b>
+                        <b>
+                          {isUnknown(selectedCustomer, "meanStake")
+                            ? "—"
+                            : `$${selectedCustomer.meanStake.toLocaleString()}`}
+                        </b>
                       </div>
                       <div>
                         VaR / Max Cap:{" "}
                         <b
                           style={{
                             color:
+                              !isUnknown(selectedCustomer, "var95") &&
+                              !isUnknown(selectedCustomer, "limit") &&
                               selectedCustomer.recommendedLimitUsd > 0 &&
                               selectedCustomer.var95Usd >
                                 selectedCustomer.recommendedLimitUsd
@@ -1022,7 +1262,9 @@ export function CustomersTabPanel({
                                 : "#7dd3fc",
                           }}
                         >
-                          {selectedCustomer.recommendedLimitUsd > 0
+                          {!isUnknown(selectedCustomer, "var95") &&
+                          !isUnknown(selectedCustomer, "limit") &&
+                          selectedCustomer.recommendedLimitUsd > 0
                             ? `${Math.round((selectedCustomer.var95Usd / selectedCustomer.recommendedLimitUsd) * 100)}%`
                             : "n/a"}
                         </b>
@@ -1034,32 +1276,46 @@ export function CustomersTabPanel({
                       </h4>
                       <div>
                         7d 95% VaR:{" "}
-                        <b>${selectedCustomer.var95Usd.toLocaleString()}</b>
+                        <b>
+                          {isUnknown(selectedCustomer, "var95")
+                            ? "—"
+                            : `$${selectedCustomer.var95Usd.toLocaleString()}`}
+                        </b>
                       </div>
                       <div>
                         Expected Shortfall (CVaR):{" "}
-                        <b>${selectedCustomer.cvar95Usd.toLocaleString()}</b>
+                        <b>
+                          {isUnknown(selectedCustomer, "var95")
+                            ? "—"
+                            : `$${selectedCustomer.cvar95Usd.toLocaleString()}`}
+                        </b>
                       </div>
                       <div>
                         Lifetime Hold:{" "}
                         <b
                           style={{
-                            color:
-                              selectedCustomer.holdPct < 0
+                            color: isUnknown(selectedCustomer, "holdPct")
+                              ? "#94a3b8"
+                              : selectedCustomer.holdPct < 0
                                 ? "#f87171"
                                 : "#4ade80",
                           }}
                         >
-                          {selectedCustomer.holdPct}%
+                          {isUnknown(selectedCustomer, "holdPct")
+                            ? "—"
+                            : `${selectedCustomer.holdPct}%`}
                         </b>
                       </div>
                       <div>
                         Projected LTV:{" "}
                         <b>
-                          ${Math.abs(selectedCustomer.ltvUsd).toLocaleString()}
-                          {selectedCustomer.ltvUsd < 0
-                            ? " (Loss to Desk)"
-                            : " (Desk Hold)"}
+                          {isUnknown(selectedCustomer, "ltv")
+                            ? "—"
+                            : `$${Math.abs(selectedCustomer.ltvUsd).toLocaleString()}${
+                                selectedCustomer.ltvUsd < 0
+                                  ? " (Loss to Desk)"
+                                  : " (Desk Hold)"
+                              }`}
                         </b>
                       </div>
                     </div>
@@ -1118,12 +1374,18 @@ export function CustomersTabPanel({
                     <div style={styles.directiveRow}>
                       <span>Max Stake Ceiling:</span>
                       <b>
-                        ${selectedCustomer.recommendedLimitUsd.toLocaleString()}
+                        {isUnknown(selectedCustomer, "limit")
+                          ? "—"
+                          : `$${selectedCustomer.recommendedLimitUsd.toLocaleString()}`}
                       </b>
                     </div>
                     <div style={styles.directiveRow}>
                       <span>In-Play Submission Delay:</span>
-                      <b>{selectedCustomer.inPlayDelaySec} seconds</b>
+                      <b>
+                        {isUnknown(selectedCustomer, "delay")
+                          ? "—"
+                          : `${selectedCustomer.inPlayDelaySec} seconds`}
+                      </b>
                     </div>
                     <div style={styles.directiveRow}>
                       <span>Line Shading:</span>
@@ -1456,11 +1718,11 @@ export function CustomersTabPanel({
                         🔍 Run Reverse DNS
                       </button>
                     </div>
-                    {customerForensicResult && (
-                      <div style={styles.forensicResult}>
-                        {customerForensicResult}
-                      </div>
-                    )}
+                    {customerReverseForensics ? (
+                      <ReverseDnsForensicsCard
+                        view={customerReverseForensics}
+                      />
+                    ) : null}
                   </div>
                 </div>
               ) : (

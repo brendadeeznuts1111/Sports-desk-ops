@@ -105,6 +105,11 @@ export type MarketCode =
 
 export type MarketFilter = "ALL" | MarketCode;
 
+/** Level 5: Wager / Feed Regime aligned with `packSubSportComboKey15` (`wagerType3`) */
+export type RegimeCode = "pregame" | "live_in_play";
+
+export type RegimeFilter = "ALL" | RegimeCode;
+
 export type PointBuyPolicy =
   "KEY_LEAK_EXPOSED" | "HOUSE_HOLD_ADVANTAGE" | "STRICTLY_BLOCKED";
 
@@ -136,7 +141,7 @@ export interface SubSportTaxonomySpec {
 }
 
 export interface TaxonomyRollupRow {
-  readonly dimension: "sport" | "subSport" | "period" | "market";
+  readonly dimension: "sport" | "subSport" | "period" | "market" | "regime";
   readonly code: string;
   readonly label: string;
   readonly parentCode?: string;
@@ -164,6 +169,7 @@ export interface TaxonomyCubeSummary {
     readonly subSport: SubSportFilter;
     readonly period: PeriodFilter;
     readonly market: MarketFilter;
+    readonly regime?: RegimeFilter | undefined;
     readonly periodNormalizedFromInvalid: boolean;
   };
   readonly activeSlice: {
@@ -187,6 +193,7 @@ export interface TaxonomyCubeSummary {
   readonly bySubSport: readonly TaxonomyRollupRow[];
   readonly byPeriod: readonly TaxonomyRollupRow[];
   readonly byMarket: readonly TaxonomyRollupRow[];
+  readonly byRegime?: readonly TaxonomyRollupRow[] | undefined;
 }
 
 export interface ShadowSimulationSummary {
@@ -289,6 +296,7 @@ export interface ShadowPricingDashboardPayload {
     readonly subSport: SubSportFilter;
     readonly period: PeriodFilter;
     readonly market: MarketFilter;
+    readonly regime?: RegimeFilter | undefined;
   };
   readonly taxonomy: TaxonomyCubeSummary;
   readonly simulation: ShadowSimulationSummary;

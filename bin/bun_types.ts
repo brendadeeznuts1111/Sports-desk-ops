@@ -22,6 +22,25 @@ export interface NamespaceGap {
   readonly undeclared: string[];
 }
 
+/** Tag for doc-snapshot entity inventory blocks in `bun-surface --json`. */
+export const E_DOC_SNAPSHOT_ENTITY_INVENTORY =
+  "E_DOC_SNAPSHOT_ENTITY_INVENTORY" as const;
+
+export interface AmbientDtsKindNumbers {
+  readonly functions: number;
+  readonly classes: number;
+  readonly interfaces: number;
+  readonly types: number;
+  readonly variables: number;
+  readonly namespaces: number;
+}
+
+export interface EntityInventoryReport extends AmbientDtsKindNumbers {
+  readonly doc: typeof E_DOC_SNAPSHOT_ENTITY_INVENTORY;
+  readonly total: number;
+  readonly error: string | null;
+}
+
 export interface TypesReport {
   readonly declared: number;
   /** Type-only symbols exported by `declare module "bun"` (and `Bun.<Type>`). */
@@ -32,6 +51,8 @@ export interface TypesReport {
   readonly absent: string[];
   readonly undeclared: string[];
   readonly namespaces: NamespaceGap[];
+  /** Category counts from the active `@types/bun` AST (`declare namespace Bun`). */
+  readonly entityInventory: EntityInventoryReport;
   /** Set when the program could not be built; the rest is then empty. */
   readonly error: string | null;
 }
@@ -82,29 +103,43 @@ function surfaceNames(value: unknown): string[] {
   return [...names];
 }
 
-export async function declarationDrift(
-  namespaces: readonly string[],
-  cwd: string = process.cwd(),
-): Promise<TypesReport> {
-  const empty: TypesReport = {
-    declared: 0,
-    declaredTypes: [],
-    moduleParity: false,
-    runtime: 0,
-    absent: [],
-    undeclared: [],
-    namespaces: [],
-    error: null,
-  };
+type AmbientKind = keyof AmbientDtsKindNumbers;
 
+const EMPTY_INVENTORY: EntityInventoryReport = {
+  doc: E_DOC_SNAPSHOT_ENTITY_INVENTORY,
+  functions: 0,
+  classes: 0,
+  interfaces: 0,
+  types: 0,
+  variables: 0,
+  namespaces: 0,
+  total: 0,
+  error: null,
+};
+
+function emptyInventory(error: string): EntityInventoryReport {
+  return { ...EMPTY_INVENTORY, error };
+}
+
+interface BunProbeContext {
+  readonly checker: ts.TypeChecker;
+  readonly source: ts.SourceFile;
+  readonly anchor: ts.Node;
+  readonly bunType: ts.Type;
+  readonly bunSymbol: ts.Symbol;
+  readonly modType: ts.Type | undefined;
+  readonly modNamespaceSymbol: ts.Symbol | undefined;
+}
+
+async function buildBunProbeContext(
+  cwd: string,
+): Promise<{ ctx: BunProbeContext | null; error: string | null }> {
   const configPath = path.join(cwd, "tsconfig.json");
   let config: ts.ParsedCommandLine;
   try {
     const read = ts.readConfigFile(configPath, ts.sys.readFile);
     if (read.error !== undefined)
-      return { ...empty, error: `no tsconfig at ${configPath}` };
-    // Only the compiler options are used. Emptying files/include skips expanding `**/*.ts`
-    // across the repo (~50-110 ms); the resulting "no inputs" diagnostic is ignored.
+      return { ctx: null, error: `no tsconfig at ${configPath}` };
     config = ts.parseJsonConfigFileContent(
       { ...read.config, files: [], include: [] },
       ts.sys,
@@ -113,7 +148,7 @@ export async function declarationDrift(
       configPath,
     );
   } catch (error) {
-    return { ...empty, error: `tsconfig: ${String(error)}` };
+    return { ctx: null, error: `tsconfig: ${String(error)}` };
   }
 
   const host = ts.createCompilerHost(config.options);
@@ -132,13 +167,13 @@ export async function declarationDrift(
   try {
     program = ts.createProgram([VIRTUAL], config.options, host);
   } catch (error) {
-    return { ...empty, error: `program: ${String(error)}` };
+    return { ctx: null, error: `program: ${String(error)}` };
   }
 
   const checker = program.getTypeChecker();
   const source = program.getSourceFile(VIRTUAL);
   if (source === undefined)
-    return { ...empty, error: "virtual source missing" };
+    return { ctx: null, error: "virtual source missing" };
 
   let bunSymbol: ts.Symbol | undefined;
   let modType: ts.Type | undefined;
@@ -170,10 +205,182 @@ export async function declarationDrift(
     }
   });
   if (bunSymbol === undefined)
-    return { ...empty, error: "Bun symbol not found" };
+    return { ctx: null, error: "Bun symbol not found" };
 
   const anchor = bunSymbol.declarations?.[0] ?? source;
   const bunType = checker.getTypeOfSymbolAtLocation(bunSymbol, anchor);
+  return {
+    ctx: {
+      checker,
+      source,
+      anchor,
+      bunType,
+      bunSymbol,
+      modType,
+      modNamespaceSymbol,
+    },
+    error: null,
+  };
+}
+
+function classifyAmbientMember(
+  checker: ts.TypeChecker,
+  symbol: ts.Symbol,
+  anchor: ts.Node,
+): AmbientKind | null {
+  const name = symbol.name;
+  if (name.startsWith("__")) return null;
+
+  const flags = symbol.flags;
+  if (flags & ts.SymbolFlags.Class) return "classes";
+  if (flags & ts.SymbolFlags.Interface) return "interfaces";
+  if (flags & ts.SymbolFlags.TypeAlias) return "types";
+  if (flags & ts.SymbolFlags.Enum) return "types";
+  if (flags & ts.SymbolFlags.Namespace) return "namespaces";
+  if (flags & ts.SymbolFlags.Function) return "functions";
+  if (flags & ts.SymbolFlags.Method) return "functions";
+
+  const decls = symbol.getDeclarations() ?? [];
+  for (const decl of decls) {
+    if (ts.isModuleDeclaration(decl)) return "namespaces";
+    if (
+      ts.isFunctionDeclaration(decl) ||
+      ts.isMethodSignature(decl) ||
+      ts.isCallSignatureDeclaration(decl) ||
+      ts.isConstructSignatureDeclaration(decl)
+    ) {
+      return "functions";
+    }
+    if (ts.isClassDeclaration(decl)) return "classes";
+    if (ts.isInterfaceDeclaration(decl)) return "interfaces";
+    if (ts.isTypeAliasDeclaration(decl)) return "types";
+    if (ts.isEnumDeclaration(decl)) return "types";
+    if (ts.isVariableDeclaration(decl)) return "variables";
+  }
+
+  if (
+    flags &
+    (ts.SymbolFlags.Property |
+      ts.SymbolFlags.Variable |
+      ts.SymbolFlags.BlockScopedVariable)
+  ) {
+    const first = decls[0] ?? anchor;
+    const type = checker.getTypeOfSymbolAtLocation(symbol, first);
+    if (type.getCallSignatures().length > 0) return "functions";
+    if (type.getConstructSignatures().length > 0) return "classes";
+    return "variables";
+  }
+
+  if (flags & ts.SymbolFlags.Type) return "types";
+  return null;
+}
+
+function collectBunNamespaceMembers(
+  ctx: BunProbeContext,
+): Map<string, ts.Symbol> {
+  const { checker, bunType, bunSymbol } = ctx;
+  const members = new Map<string, ts.Symbol>();
+  const ingest = (symbol: ts.Symbol) => {
+    if (symbol.name.startsWith("__")) return;
+    members.set(symbol.name, symbol);
+  };
+
+  for (const property of checker.getPropertiesOfType(bunType)) ingest(property);
+  const root = bunSymbol;
+  if (root.members !== undefined) {
+    for (const member of root.members.values()) ingest(member);
+  }
+  const exportSymbol = checker.getExportSymbolOfSymbol(root);
+  if (exportSymbol?.members !== undefined) {
+    for (const member of exportSymbol.members.values()) ingest(member);
+  }
+
+  const valueNames = new Set(members.keys());
+  if (ctx.modNamespaceSymbol !== undefined) {
+    for (const exp of checker.getExportsOfModule(ctx.modNamespaceSymbol)) {
+      if (exp.name.startsWith("__")) continue;
+      if (exp.name === "default") continue;
+      if (!valueNames.has(exp.name)) ingest(exp);
+    }
+  }
+  return members;
+}
+
+/**
+ * Counts functions, classes, interfaces, types, variables, and namespaces on the
+ * declared `Bun` namespace from the active `@types/bun` program (not hardcoded).
+ */
+export function deriveAmbientDtsKindNumbers(
+  ctx: BunProbeContext,
+): EntityInventoryReport {
+  const counts = {
+    functions: 0,
+    classes: 0,
+    interfaces: 0,
+    types: 0,
+    variables: 0,
+    namespaces: 0,
+  } satisfies AmbientDtsKindNumbers;
+
+  for (const symbol of collectBunNamespaceMembers(ctx).values()) {
+    const kind = classifyAmbientMember(ctx.checker, symbol, ctx.anchor);
+    if (kind === null) continue;
+    counts[kind] += 1;
+  }
+
+  const total =
+    counts.functions +
+    counts.classes +
+    counts.interfaces +
+    counts.types +
+    counts.variables +
+    counts.namespaces;
+
+  return {
+    doc: E_DOC_SNAPSHOT_ENTITY_INVENTORY,
+    ...counts,
+    total,
+    error: null,
+  };
+}
+
+export async function deriveAmbientDtsKindNumbersFromProject(
+  cwd: string = process.cwd(),
+): Promise<EntityInventoryReport> {
+  const built = await buildBunProbeContext(cwd);
+  if (built.error !== null || built.ctx === null) {
+    return emptyInventory(built.error ?? "probe unavailable");
+  }
+  return deriveAmbientDtsKindNumbers(built.ctx);
+}
+
+export async function declarationDrift(
+  namespaces: readonly string[],
+  cwd: string = process.cwd(),
+): Promise<TypesReport> {
+  const empty: TypesReport = {
+    declared: 0,
+    declaredTypes: [],
+    moduleParity: false,
+    runtime: 0,
+    absent: [],
+    undeclared: [],
+    namespaces: [],
+    entityInventory: { ...EMPTY_INVENTORY },
+    error: null,
+  };
+
+  const built = await buildBunProbeContext(cwd);
+  if (built.error !== null || built.ctx === null) {
+    return {
+      ...empty,
+      entityInventory: emptyInventory(built.error ?? "probe unavailable"),
+      error: built.error ?? "probe unavailable",
+    };
+  }
+  const { checker, anchor, bunType, modType, modNamespaceSymbol } = built.ctx;
+
+  const entityInventory = deriveAmbientDtsKindNumbers(built.ctx);
   const declared = checker
     .getPropertiesOfType(bunType)
     .map((symbol) => symbol.name)
@@ -239,6 +446,7 @@ export async function declarationDrift(
     absent: declared.filter((name) => !runtime.includes(name)),
     undeclared: runtime.filter((name) => !declared.includes(name)),
     namespaces: namespaceGaps,
+    entityInventory,
     error: null,
   };
 }

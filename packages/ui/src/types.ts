@@ -1,10 +1,13 @@
 import type {
   AgentDetailApiResponse,
+  AutomationScheduleSummary,
+  AutomationsSnapshot,
   BetTickerApiResponse,
   BetTickerBridge3aSnapshot,
   BetTickerChannelBucket,
   BetTickerTicketRow,
   BetTickerTypeBucket,
+  BridgeJobStatusSummary,
   CustomersApiResponse,
   CustomersCohortsSummary,
   Daemon4020State,
@@ -16,17 +19,23 @@ import type {
   R2PipelineApiResponse,
   R2SinkDetail,
   SlabPolicySummary,
+  TicketVerificationMode,
+  TicketVerificationSummary,
+  WagerChannel,
   WagerTier,
   WagersWireContractSummary,
 } from "@sportsdesk-ops/contracts";
 
 export type {
   AgentDetailApiResponse,
+  AutomationScheduleSummary,
+  AutomationsSnapshot,
   BetTickerApiResponse,
   BetTickerBridge3aSnapshot,
   BetTickerChannelBucket,
   BetTickerTicketRow,
   BetTickerTypeBucket,
+  BridgeJobStatusSummary,
   CustomersApiResponse,
   CustomersCohortsSummary,
   Daemon4020State,
@@ -37,8 +46,10 @@ export type {
   LiveWagersApiResponse,
   R2PipelineApiResponse,
   R2SinkDetail,
-  WagersWireContractSummary,
   SlabPolicySummary,
+  TicketVerificationMode,
+  TicketVerificationSummary,
+  WagersWireContractSummary,
 };
 
 export interface DashboardData {
@@ -143,6 +154,13 @@ export interface ShowcaseCustomer {
   readonly portalReconciliation?: CustomerPortalReconciliation | undefined;
   /** Fields the customer book did not carry; set by profile_rows, never guessed. */
   readonly unknown?: readonly string[] | undefined;
+  /** Where the row came from; every row the Profiles tab shows is cohort data, not a live book fetch. */
+  readonly source?:
+    "book" | "fixture" | "backtest" | "rankings" | "live-open" | undefined;
+  /** Human tier label when the API carried one (30d rankings). */
+  readonly tierLabel?: string | undefined;
+  /** Open risk in USD when synthesized from the live wager tape (`?matrix=1` overlay). */
+  readonly openRiskUsd?: number | undefined;
 }
 
 export interface RankedPlayer30d {
@@ -178,7 +196,11 @@ export interface LiveWager {
   readonly agentId: string;
   readonly masterAgent: string;
   readonly ticketWriter?: string | undefined;
+  /** Channel family derived from `ticketWriter` (shared vocabulary with ingest). */
+  readonly writer?: WagerChannel | undefined;
   readonly sport: string;
+  /** League / sub-sport when the source carries it; null when unknown. */
+  readonly subSport?: string | null | undefined;
   readonly betType: string;
   readonly event: string;
   readonly selection: string;
@@ -265,9 +287,44 @@ export interface BuildMatrixRow {
   readonly features: readonly string[];
   readonly totalJsBytes: number;
   readonly totalCssBytes: number;
+  readonly gzipJsBytes?: number | undefined;
+  readonly inputFileCount?: number | null | undefined;
+  readonly bundleHash8?: string | undefined;
   readonly hasDebugSentinel: boolean;
   readonly hasExperimentalSentinel: boolean;
   readonly hasProdSentinel: boolean;
+  readonly hasTestSentinel?: boolean | undefined;
+  readonly hasAnalyticsSentinel?: boolean | undefined;
+}
+
+export interface StaticDirectoryProbeSummary {
+  readonly wildcardPath: string;
+  readonly dir: string;
+  readonly caseInsensitiveHostFs: boolean;
+  readonly totalFiles: number;
+  readonly totalBytes: number;
+  readonly files: readonly {
+    readonly relativePath: string;
+    readonly urlPath: string;
+    readonly bytes: number;
+    readonly contentType: string;
+    readonly lastModifiedIso: string | null;
+  }[];
+  readonly liveCheck: {
+    readonly origin: string;
+    readonly elapsedMs: number;
+    readonly allPassed: boolean;
+    readonly etag: string | null;
+    readonly contentRange: string | null;
+    readonly checks: readonly {
+      readonly name: string;
+      readonly requestPath: string;
+      readonly expectedStatus: number;
+      readonly status: number | null;
+      readonly ok: boolean;
+      readonly detail: string;
+    }[];
+  } | null;
 }
 
 /**
@@ -464,6 +521,12 @@ export interface TerminalHistoryEntry {
   readonly exitCode: number;
   readonly durationMs: number;
   readonly timestamp: number;
+  /**
+   * True for the seeded welcome buffer, which never executed. A real run can
+   * legitimately report `durationMs: 0` (sub-millisecond command), so run
+   * statistics must not infer "did not execute" from the duration.
+   */
+  readonly synthetic?: boolean;
 }
 
 export interface TierSwatchStyle {

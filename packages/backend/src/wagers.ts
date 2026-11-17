@@ -170,7 +170,20 @@ export function projectLiveWagerRow(
       item.AgentLogin ?? item.masterAgent ?? "MASTER_A",
     ).trim(),
     ticketWriter,
-    sport: String(firstLeg?.sport?.toUpperCase() || (item.sport ?? "FOOTBALL")),
+    sport: String(
+      firstLeg?.sport?.toUpperCase() ||
+        (item.sport === undefined || item.sport === null
+          ? ""
+          : String(item.sport).toUpperCase()),
+    ),
+    subSport: (() => {
+      const rawSubSport = item.SubSport ?? item.subSport ?? item.SportSubType;
+      const normalized =
+        rawSubSport === undefined || rawSubSport === null
+          ? ""
+          : String(rawSubSport).trim();
+      return normalized === "" ? null : normalized.toUpperCase();
+    })(),
     // Declared projection of the raw wire code, not a rewrite of it:
     // `wagerTypeCode` keeps what the vendor sent, `betType` is the label.
     ...wagerTypeProjection,

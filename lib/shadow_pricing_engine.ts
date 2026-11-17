@@ -34,6 +34,12 @@ import {
   PERIOD_ID_GAME,
   PERIOD_PORTAL_NUMBERS,
   periodIndexOf,
+  REGIME_CODES,
+  REGIME_COUNT,
+  REGIME_ID_LIVE_IN_PLAY,
+  REGIME_ID_PREGAME,
+  REGIME_LABELS,
+  regimeIndexOf,
   resolveSlicePolicyAndRisk,
   SPORT_CODES,
   SPORT_COUNT,
@@ -91,6 +97,7 @@ import type {
   MarketFilter,
   PeriodFilter,
   PolicyRecommendation,
+  RegimeFilter,
   RouterAuditMode,
   ShadowPricingDashboardPayload,
   ShadowProvenance,
@@ -108,6 +115,7 @@ export type {
   MarketFilter,
   PeriodFilter,
   PolicyRecommendation,
+  RegimeFilter,
   RouterAuditMode,
   ShadowPricingDashboardPayload,
   ShadowProvenance,
@@ -207,6 +215,7 @@ export interface ShadowDashboardQuery {
   readonly subSport?: SubSportFilter | undefined;
   readonly period?: PeriodFilter | undefined;
   readonly market?: MarketFilter | undefined;
+  readonly regime?: RegimeFilter | undefined;
   readonly routerAuditMode?: RouterAuditMode | undefined;
   readonly holdFloorConfig?: HoldFloorConfig | undefined;
 }
@@ -310,6 +319,8 @@ export interface ShadowPricingArena {
   readonly legSubSportId: Uint8Array;
   readonly legPeriodId: Uint8Array;
   readonly legMarketId: Uint8Array;
+  /** 0 = PREGAME (wagerType3=0..6), 1 = LIVE_IN_PLAY / GSLive (wagerType3=7) */
+  readonly legRegimeId: Uint8Array;
   /** Dense bitset: 1 when `parseBuyPointsFromDesc > 0` (exact CLI parity cohort). */
   readonly legPositiveBuyBits: Uint32Array;
   /** Dense bitset: 1 when leg has any point buy (including Over totals `buying -0.5`). */
@@ -356,6 +367,7 @@ export function buildArenaFromRows(
   const legSubSportId = new Uint8Array(cap);
   const legPeriodId = new Uint8Array(cap);
   const legMarketId = new Uint8Array(cap);
+  const legRegimeId = new Uint8Array(cap);
   const wordCap = (cap + 31) >>> 5;
   const legPositiveBuyBits = new Uint32Array(wordCap);
   const legAnyBuyBits = new Uint32Array(wordCap);
@@ -423,6 +435,9 @@ export function buildArenaFromRows(
     legSubSportId[idx] = coords.subSportId;
     legPeriodId[idx] = coords.periodId;
     legMarketId[idx] = coords.marketId;
+    legRegimeId[idx] = SUBSPORT_TAXONOMY_CATALOG[coords.subSportId]?.isLive
+      ? REGIME_ID_LIVE_IN_PLAY
+      : REGIME_ID_PREGAME;
 
     if (hasPositiveBuy) {
       legPositiveBuyBits[idx >>> 5] =
@@ -451,6 +466,7 @@ export function buildArenaFromRows(
     legSubSportId: legSubSportId.subarray(0, legCount),
     legPeriodId: legPeriodId.subarray(0, legCount),
     legMarketId: legMarketId.subarray(0, legCount),
+    legRegimeId: legRegimeId.subarray(0, legCount),
     legPositiveBuyBits: legPositiveBuyBits.subarray(0, usedWords),
     legAnyBuyBits: legAnyBuyBits.subarray(0, usedWords),
   };
@@ -1201,6 +1217,7 @@ function runSlicePresetPass(
   fSubSport: number,
   fPeriod: number,
   fMarket: number,
+  fRegime: number,
   sharpBits: Uint32Array,
   ladderKey3: number,
   ladderKey7: number,
@@ -1217,6 +1234,7 @@ function runSlicePresetPass(
   const subArr = arena.legSubSportId;
   const perArr = arena.legPeriodId;
   const mktArr = arena.legMarketId;
+  const regArr = arena.legRegimeId;
   const buyBits =
     fMarket === MARKET_ID_TOTAL
       ? arena.legAnyBuyBits
@@ -1233,6 +1251,7 @@ function runSlicePresetPass(
     if (fSubSport !== -1 && subArr[i] !== fSubSport) continue;
     if (fPeriod !== -1 && perArr[i] !== fPeriod) continue;
     if (fMarket !== -1 && mktArr[i] !== fMarket) continue;
+    if (fRegime !== -1 && regArr[i] !== fRegime) continue;
 
     const outcome = outArr[i]!;
     if (outcome !== OUTCOME_LOST && outcome !== OUTCOME_WON) continue;
@@ -1275,7 +1294,7 @@ function runSlicePresetPass(
 }
 
 function buildRollupRow(params: {
-  readonly dimension: "sport" | "subSport" | "period" | "market";
+  readonly dimension: "sport" | "subSport" | "period" | "market" | "regime";
   readonly code: string;
   readonly label: string;
   readonly parentCode?: string | undefined;
@@ -1284,6 +1303,7 @@ function buildRollupRow(params: {
   readonly subSportId: number;
   readonly periodId: number;
   readonly marketId: number;
+  readonly regimeId?: number | undefined;
   readonly totalLegs: number;
   readonly settledLegs: number;
   readonly decidedLegs: number;
@@ -1315,6 +1335,7 @@ function buildRollupRow(params: {
     params.marketId,
     holdPct,
     params.buyLegs,
+    params.regimeId ?? -1,
   );
 
   const row: TaxonomyRollupRow = {
@@ -1368,11 +1389,12 @@ export function evaluateArenaShadowPricing(
   );
   const repriceMode: ShadowRepriceMode = query.repriceMode ?? "exact";
 
-  // 1. Resolve & validate 4-level hierarchical filter coordinates
+  // 1. Resolve & validate 5-level hierarchical filter coordinates
   let fSport = sportIndexOf(query.sport);
   let fSubSport = subSportIndexOf(query.subSport);
   let fPeriod = periodIndexOf(query.period);
   const fMarket = marketIndexOf(query.market);
+  const fRegime = regimeIndexOf(query.regime);
   let periodNormalizedFromInvalid = false;
 
   if (fSubSport !== -1) {
@@ -1407,6 +1429,8 @@ export function evaluateArenaShadowPricing(
     fPeriod >= 0 ? PERIOD_CODES[fPeriod]! : "ALL";
   const resolvedMarketFilter: MarketFilter =
     fMarket >= 0 ? MARKET_CODES[fMarket]! : "ALL";
+  const resolvedRegimeFilter: RegimeFilter =
+    fRegime >= 0 ? REGIME_CODES[fRegime]! : "ALL";
 
   const n = arena.legCount;
   const accountCount = arena.accountCount;
@@ -1414,6 +1438,7 @@ export function evaluateArenaShadowPricing(
   const subArr = arena.legSubSportId;
   const perArr = arena.legPeriodId;
   const mktArr = arena.legMarketId;
+  const regArr = arena.legRegimeId;
   const accIdxArr = arena.legAccountIdx;
   const stakeArr = arena.legStakeUsd;
   const priceArr = arena.legPriceTaken;
@@ -1433,6 +1458,7 @@ export function evaluateArenaShadowPricing(
     if (fSubSport !== -1 && subArr[i] !== fSubSport) continue;
     if (fPeriod !== -1 && perArr[i] !== fPeriod) continue;
     if (fMarket !== -1 && mktArr[i] !== fMarket) continue;
+    if (fRegime !== -1 && regArr[i] !== fRegime) continue;
 
     const accIdx = accIdxArr[i]!;
     sliceAccTotalBuyLegs[accIdx] = (sliceAccTotalBuyLegs[accIdx] ?? 0) + 1;
@@ -1500,6 +1526,16 @@ export function evaluateArenaShadowPricing(
   const mktActualPnl = new Float64Array(MARKET_COUNT);
   const mktShadowPnl = new Float64Array(MARKET_COUNT);
 
+  const regLegs = new Int32Array(REGIME_COUNT);
+  const regSettled = new Int32Array(REGIME_COUNT);
+  const regDecided = new Int32Array(REGIME_COUNT);
+  const regWins = new Int32Array(REGIME_COUNT);
+  const regHandle = new Float64Array(REGIME_COUNT);
+  const regBuyLegs = new Int32Array(REGIME_COUNT);
+  const regBuyHandle = new Float64Array(REGIME_COUNT);
+  const regActualPnl = new Float64Array(REGIME_COUNT);
+  const regShadowPnl = new Float64Array(REGIME_COUNT);
+
   // Active Slice ALL-leg totals (includes non-buy legs!)
   let sliceTotalLegs = 0;
   let sliceSettledLegs = 0;
@@ -1555,7 +1591,8 @@ export function evaluateArenaShadowPricing(
   const sliceHasKeyLadderSurface =
     (fSport === -1 || fSport === SPORT_ID_FOOTBALL) &&
     (fPeriod === -1 || fPeriod === PERIOD_ID_GAME) &&
-    (fMarket === -1 || fMarket === MARKET_ID_SPREAD);
+    (fMarket === -1 || fMarket === MARKET_ID_SPREAD) &&
+    (fRegime === -1 || fRegime === REGIME_ID_PREGAME);
   const effectiveElasticity = sliceHasKeyLadderSurface ? retailElasticity : 0;
   const retainedFactor = 1 - effectiveElasticity;
 
@@ -1564,6 +1601,7 @@ export function evaluateArenaShadowPricing(
     const sub = subArr[i]!;
     const per = perArr[i]!;
     const mkt = mktArr[i]!;
+    const reg = regArr[i]!;
     const stake = stakeArr[i]!;
     const price = priceArr[i]!;
     const bucket = bucketArr[i]!;
@@ -1607,9 +1645,10 @@ export function evaluateArenaShadowPricing(
     const matchSub = fSubSport === -1 || sub === fSubSport;
     const matchPeriod = fPeriod === -1 || per === fPeriod;
     const matchMarket = fMarket === -1 || mkt === fMarket;
+    const matchRegime = fRegime === -1 || reg === fRegime;
 
-    // Cube Level 1: Sport rollup (filtered by market if selected)
-    if (matchMarket) {
+    // Cube Level 1: Sport rollup (filtered by market + regime if selected)
+    if (matchMarket && matchRegime) {
       spLegs[sp] = (spLegs[sp] ?? 0) + 1;
       spSettled[sp] = (spSettled[sp] ?? 0) + isSettled;
       spDecided[sp] = (spDecided[sp] ?? 0) + isDecided;
@@ -1623,8 +1662,8 @@ export function evaluateArenaShadowPricing(
       }
     }
 
-    // Cube Level 2: SubSport rollup (scoped to selected Sport + Market)
-    if (matchSport && matchMarket) {
+    // Cube Level 2: SubSport rollup (scoped to selected Sport + Market + Regime)
+    if (matchSport && matchMarket && matchRegime) {
       subLegs[sub] = (subLegs[sub] ?? 0) + 1;
       subSettled[sub] = (subSettled[sub] ?? 0) + isSettled;
       subDecided[sub] = (subDecided[sub] ?? 0) + isDecided;
@@ -1638,8 +1677,8 @@ export function evaluateArenaShadowPricing(
       }
     }
 
-    // Cube Level 3: Period per SubSport rollup (scoped to Sport + SubSport + Market)
-    if (matchSport && matchSub && matchMarket) {
+    // Cube Level 3: Period per SubSport rollup (scoped to Sport + SubSport + Market + Regime)
+    if (matchSport && matchSub && matchMarket && matchRegime) {
       perLegs[per] = (perLegs[per] ?? 0) + 1;
       perSettled[per] = (perSettled[per] ?? 0) + isSettled;
       perDecided[per] = (perDecided[per] ?? 0) + isDecided;
@@ -1653,8 +1692,8 @@ export function evaluateArenaShadowPricing(
       }
     }
 
-    // Cube Level 4: Market rollup (scoped to Sport + SubSport + Period)
-    if (matchSport && matchSub && matchPeriod) {
+    // Cube Level 4: Market rollup (scoped to Sport + SubSport + Period + Regime)
+    if (matchSport && matchSub && matchPeriod && matchRegime) {
       mktLegs[mkt] = (mktLegs[mkt] ?? 0) + 1;
       mktSettled[mkt] = (mktSettled[mkt] ?? 0) + isSettled;
       mktDecided[mkt] = (mktDecided[mkt] ?? 0) + isDecided;
@@ -1668,8 +1707,23 @@ export function evaluateArenaShadowPricing(
       }
     }
 
-    // Active Slice intersection (all 4 dimensions matched)
+    // Cube Level 5: Regime / Wager Type rollup (scoped to Sport + SubSport + Period + Market)
     if (matchSport && matchSub && matchPeriod && matchMarket) {
+      regLegs[reg] = (regLegs[reg] ?? 0) + 1;
+      regSettled[reg] = (regSettled[reg] ?? 0) + isSettled;
+      regDecided[reg] = (regDecided[reg] ?? 0) + isDecided;
+      regWins[reg] = (regWins[reg] ?? 0) + isWin;
+      regHandle[reg] = (regHandle[reg] ?? 0) + stake;
+      regActualPnl[reg] = (regActualPnl[reg] ?? 0) + actualPnl;
+      regShadowPnl[reg] = (regShadowPnl[reg] ?? 0) + rawShadowPnl;
+      if (hasAnyBuy) {
+        regBuyLegs[reg] = (regBuyLegs[reg] ?? 0) + 1;
+        regBuyHandle[reg] = (regBuyHandle[reg] ?? 0) + stake;
+      }
+    }
+
+    // Active Slice intersection (all 5 dimensions matched)
+    if (matchSport && matchSub && matchPeriod && matchMarket && matchRegime) {
       sliceTotalLegs++;
       sliceSettledLegs += isSettled;
       sliceDecidedLegs += isDecided;
@@ -1762,6 +1816,7 @@ export function evaluateArenaShadowPricing(
         subSportId: -1,
         periodId: -1,
         marketId: fMarket,
+        regimeId: fRegime,
         totalLegs: spLegs[s]!,
         settledLegs: spSettled[s]!,
         decidedLegs: spDecided[s]!,
@@ -1790,6 +1845,7 @@ export function evaluateArenaShadowPricing(
         subSportId: sub,
         periodId: -1,
         marketId: fMarket,
+        regimeId: fRegime,
         totalLegs: subLegs[sub]!,
         settledLegs: subSettled[sub]!,
         decidedLegs: subDecided[sub]!,
@@ -1823,6 +1879,7 @@ export function evaluateArenaShadowPricing(
         subSportId: fSubSport,
         periodId: pid,
         marketId: fMarket,
+        regimeId: fRegime,
         totalLegs: perLegs[pid]!,
         settledLegs: perSettled[pid]!,
         decidedLegs: perDecided[pid]!,
@@ -1847,6 +1904,7 @@ export function evaluateArenaShadowPricing(
         subSportId: fSubSport,
         periodId: fPeriod,
         marketId: m,
+        regimeId: fRegime,
         totalLegs: mktLegs[m]!,
         settledLegs: mktSettled[m]!,
         decidedLegs: mktDecided[m]!,
@@ -1856,6 +1914,31 @@ export function evaluateArenaShadowPricing(
         buyHandleUsd: mktBuyHandle[m]!,
         actualPnl: mktActualPnl[m]!,
         shadowPnl: mktShadowPnl[m]!,
+      }),
+    );
+  }
+
+  const byRegime: TaxonomyRollupRow[] = [];
+  for (let r = 0; r < REGIME_COUNT; r++) {
+    byRegime.push(
+      buildRollupRow({
+        dimension: "regime",
+        code: REGIME_CODES[r]!,
+        label: REGIME_LABELS[r]!,
+        sportId: fSport,
+        subSportId: fSubSport,
+        periodId: fPeriod,
+        marketId: fMarket,
+        regimeId: r,
+        totalLegs: regLegs[r]!,
+        settledLegs: regSettled[r]!,
+        decidedLegs: regDecided[r]!,
+        wins: regWins[r]!,
+        handleUsd: regHandle[r]!,
+        buyLegs: regBuyLegs[r]!,
+        buyHandleUsd: regBuyHandle[r]!,
+        actualPnl: regActualPnl[r]!,
+        shadowPnl: regShadowPnl[r]!,
       }),
     );
   }
@@ -1880,6 +1963,7 @@ export function evaluateArenaShadowPricing(
     fMarket,
     sliceHoldPct,
     sliceBuyLegs,
+    fRegime,
   );
 
   const crumbSport = fSport >= 0 ? SPORT_CODES[fSport]! : "All Sports";
@@ -1899,6 +1983,10 @@ export function evaluateArenaShadowPricing(
     crumbPeriod = customLabel ?? PERIOD_DEFAULT_LABELS[fPeriod]!;
   }
   const crumbMarket = fMarket >= 0 ? MARKET_LABELS[fMarket]! : "All Markets";
+  const crumbRegimeSuffix =
+    fRegime >= 0
+      ? ` ▸ ${REGIME_CODES[fRegime] === "live_in_play" ? "LIVE_IN_PLAY" : "PREGAME"}`
+      : "";
 
   const taxonomy: TaxonomyCubeSummary = {
     activeFilters: {
@@ -1906,10 +1994,11 @@ export function evaluateArenaShadowPricing(
       subSport: resolvedSubSportFilter,
       period: resolvedPeriodFilter,
       market: resolvedMarketFilter,
+      regime: resolvedRegimeFilter,
       periodNormalizedFromInvalid,
     },
     activeSlice: {
-      breadcrumb: `${crumbSport} ▸ ${crumbSub} ▸ ${crumbPeriod} ▸ ${crumbMarket}`,
+      breadcrumb: `${crumbSport} ▸ ${crumbSub} ▸ ${crumbPeriod} ▸ ${crumbMarket}${crumbRegimeSuffix}`,
       totalLegs: sliceTotalLegs,
       settledLegs: sliceSettledLegs,
       winRatePct: sliceWinRatePct,
@@ -1929,6 +2018,7 @@ export function evaluateArenaShadowPricing(
     bySubSport,
     byPeriod,
     byMarket,
+    byRegime,
   };
 
   // 5. Point-Buy Cohort Simulation Results
@@ -2071,6 +2161,7 @@ export function evaluateArenaShadowPricing(
       fSubSport,
       fPeriod,
       fMarket,
+      fRegime,
       sharpBits,
       preset.ladderKey3,
       preset.ladderKey7,
@@ -2263,6 +2354,7 @@ export function evaluateArenaShadowPricing(
       subSport: resolvedSubSportFilter,
       period: resolvedPeriodFilter,
       market: resolvedMarketFilter,
+      regime: resolvedRegimeFilter,
     },
     taxonomy,
     simulation,

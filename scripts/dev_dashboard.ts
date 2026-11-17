@@ -38,6 +38,7 @@ import {
   retryAlert,
 } from "../lib/alerts.ts";
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
+import { buildAutomationsSnapshot } from "../lib/automations_status.ts";
 import {
   benchmarkResolverLatency,
   classifyIpAddress,
@@ -57,6 +58,11 @@ import { encodedResponse } from "../lib/http_compression.ts";
 import { parseShortDesc } from "../lib/live_wagers.ts";
 import { isSentinelTickerWriter } from "@sportsdesk-ops/backend";
 import { SLAB_SERVER } from "../lib/slab_config.ts";
+import {
+  inventoryStaticDirectory,
+  probeStaticDirectoryRoute,
+  type StaticDirectoryHealthProbe,
+} from "../lib/static_dir_probe.ts";
 import { inspectWagersWireContract } from "../lib/wagers_wire_contract.ts";
 import { loadWagersTabPolicyStamp } from "../lib/wagers_tab_policy.ts";
 import { SUBSPORT_TAXONOMY_CATALOG } from "../lib/market_taxonomy_catalog.ts";
@@ -69,6 +75,7 @@ import { executeTerminalQuery } from "../lib/terminal_emulator.ts";
 import indexHtml from "../src/dashboard/index.html";
 import { runBunBuild } from "./build.ts";
 import { computeDashboardDceMatrix } from "./build_dashboard.ts";
+import { runGsliveTicketVerification } from "./verify-gslive-tickets.ts";
 
 export interface DashboardServerDevelopmentOptions {
   readonly hmr?: boolean | undefined;
@@ -291,6 +298,7 @@ export function startDashboardServer(
   const r2PipelineService = createR2PipelineService({
     daemon4020Origin:
       Bun.env.SPORTSDESK_API_ORIGIN ?? DEFAULT_COMPANION_4020_ORIGIN,
+    getAutomationsSnapshot: () => buildAutomationsSnapshot(),
   });
   const { buildLiveWagersPayload, clearCache: clearWagersCache } =
     createDevLiveWagersLoader({
@@ -386,9 +394,12 @@ export function startDashboardServer(
     getPort: () => serverRef?.port ?? port,
   });
 
-  let cachedDceMatrix: Awaited<
-    ReturnType<typeof computeDashboardDceMatrix>
-  > | null = null;
+  let cachedDceMatrixProbe: {
+    readonly targets: Awaited<ReturnType<typeof computeDashboardDceMatrix>>;
+    /** When the probe finished, so a cached re-serve cannot look freshly built. */
+    readonly generatedAt: string;
+    readonly staticDir?: StaticDirectoryHealthProbe | undefined;
+  } | null = null;
   let cachedLegacyBundle: CachedLegacyBundle | null = null;
   let inflightLegacyBundle: Promise<CachedLegacyBundle | null> | null = null;
 
@@ -421,23 +432,17 @@ export function startDashboardServer(
         jsOutput.arrayBuffer(),
         cssOutput ? cssOutput.arrayBuffer() : Promise.resolve(null),
       ]);
+      // Cache-key / ETag fallback — xxHash64 is fast and ephemeral to this process.
+      const bundleCacheHash = (
+        output: { hash?: string | null },
+        bytes: Uint8Array,
+      ): string => output.hash ?? Bun.hash(bytes).toString(16);
       const jsBytes = new Uint8Array<ArrayBuffer>(jsBuf);
-      const jsHash =
-        jsOutput.hash ??
-        new Bun.CryptoHasher("sha256")
-          .update(jsBytes)
-          .digest("hex")
-          .slice(0, 16);
+      const jsHash = bundleCacheHash(jsOutput, jsBytes);
       const cssBytes =
         cssBuf !== null ? new Uint8Array<ArrayBuffer>(cssBuf) : null;
       const cssHash =
-        cssOutput && cssBytes
-          ? (cssOutput.hash ??
-            new Bun.CryptoHasher("sha256")
-              .update(cssBytes)
-              .digest("hex")
-              .slice(0, 16))
-          : null;
+        cssOutput && cssBytes ? bundleCacheHash(cssOutput, cssBytes) : null;
 
       const bundle: CachedLegacyBundle = {
         jsBytes,
@@ -604,6 +609,14 @@ export function startDashboardServer(
       getBetTickerPayload: (filters) => betTickerService.getPayload(filters),
       getR2PipelinePayload: (opts) => r2PipelineService.probeAll(opts),
       getDaemonStatusPayload: () => r2PipelineService.probeDaemon(),
+      getAutomationsPayload: () => buildAutomationsSnapshot(),
+      runGsliveTicketVerify: async (opts) => {
+        const summary = await runGsliveTicketVerification({
+          dryRun: opts?.dryRun ?? true,
+        });
+        r2PipelineService.clearCache();
+        return summary;
+      },
       getAgentDetailPayload: (agentId) =>
         agentDetailService.getAgentDetail(agentId),
       getTiersConfig: async () => {
@@ -621,11 +634,23 @@ export function startDashboardServer(
       runShadowPricing: (params) => runShadowPricingDashboard(params),
       forceShadowFixture: options.forceShadowFixture,
       shadowDbPath: options.shadowDbPath,
-      getBuildMatrix: async () => {
-        if (!cachedDceMatrix) {
-          cachedDceMatrix = await computeDashboardDceMatrix();
+      getBuildMatrix: async (force = false) => {
+        if (force || cachedDceMatrixProbe === null) {
+          const staticRoot = resolve(cwd, "static");
+          const [targets, staticDir] = await Promise.all([
+            computeDashboardDceMatrix(),
+            (serverRef !== null
+              ? probeStaticDirectoryRoute(serverRef.url.origin, staticRoot)
+              : inventoryStaticDirectory(staticRoot)
+            ).catch(() => undefined),
+          ]);
+          cachedDceMatrixProbe = {
+            targets,
+            generatedAt: new Date().toISOString(),
+            ...(staticDir !== undefined ? { staticDir } : {}),
+          };
         }
-        return cachedDceMatrix;
+        return cachedDceMatrixProbe;
       },
       handleMcp: (req: Request) => mcpHandler.handleRequest(req),
     },
@@ -635,6 +660,9 @@ export function startDashboardServer(
   const uiRoutes = {
     "/": indexHtml,
     "/dashboard": indexHtml,
+    // Bun's native directory route: zero-JS static dispatch with range/ETag
+    // handling and symlink clamping; files live under repo `static/`.
+    "/static/*": { dir: resolve(cwd, "static") },
     "/index.js": {
       GET: async (req: Request): Promise<Response> => {
         const bundle = await ensureLegacyBundle();
@@ -999,7 +1027,7 @@ export function startDashboardServer(
           if (!existsSync(dir)) continue;
           watchers.push(
             watch(dir, { recursive: true }, () => {
-              cachedDceMatrix = null;
+              cachedDceMatrixProbe = null;
               cachedLegacyBundle = null;
               api.publishTopic("dashboard", "reload");
             }),

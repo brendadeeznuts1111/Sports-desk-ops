@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  backtestRowsToProfiles,
   bookRowsToProfiles,
+  mergeProfileRows,
   selectProfileRows,
 } from "../packages/ui/src/profile_rows.ts";
 
@@ -97,6 +99,61 @@ describe("bookRowsToProfiles", () => {
     expect(single?.unknown).toContain("sizing");
     expect(single?.unknown).not.toContain("meanStake");
     expect(single?.meanStake).toBe(100);
+    expect(single?.var95Usd).toBe(0);
+    expect(single?.cvar95Usd).toBe(0);
+    expect(single?.sizingScore).toBe(0);
+    expect(single?.sizingStrategy).toBe("PENDING_TICKETS");
+    expect(single?.gini).toBe(0);
+  });
+
+  test("zero-risk tickets, single tickets, and missing delay_seconds stay signal-honest", () => {
+    const [noTix, zeroTix, oneTix, timedZero] = bookRowsToProfiles([
+      { customer_id: "no-tix", sharp_score: 60, recent_tickets: [] },
+      {
+        customer_id: "zero-tix",
+        sharp_score: 60,
+        recent_tickets: [{ risk_usd: 0 }, { risk_usd: 0 }],
+      },
+      {
+        customer_id: "one-tix",
+        sharp_score: 60,
+        recent_tickets: [{ risk_usd: 5 }],
+      },
+      {
+        customer_id: "timed-zero",
+        sharp_score: 60,
+        delay_seconds: 0,
+        recent_tickets: [],
+      },
+    ]);
+
+    expect(noTix?.sizingScore).toBe(0);
+    expect(noTix?.sizingStrategy).toBe("PENDING_TICKETS");
+    expect(noTix?.unknown).toContain("delay");
+
+    expect(zeroTix?.meanStake).toBe(0);
+    expect(zeroTix?.var95Usd).toBe(0);
+    expect(zeroTix?.gini).toBe(0);
+    expect(zeroTix?.sizingScore).toBe(0);
+    expect(zeroTix?.sizingStrategy).toBe("PENDING_TICKETS");
+    expect(zeroTix?.unknown).toEqual(
+      expect.arrayContaining(["meanStake", "sizing", "gini", "var95", "delay"]),
+    );
+
+    expect(oneTix?.meanStake).toBe(5);
+    expect(oneTix?.var95Usd).toBe(0);
+    expect(oneTix?.cvar95Usd).toBe(0);
+    expect(oneTix?.gini).toBe(0);
+    expect(oneTix?.sizingScore).toBe(0);
+    expect(oneTix?.sizingStrategy).toBe("PENDING_TICKETS");
+    expect(oneTix?.unknown).not.toContain("meanStake");
+    expect(oneTix?.unknown).toEqual(
+      expect.arrayContaining(["sizing", "gini", "var95", "delay"]),
+    );
+
+    expect(timedZero?.timingScore).toBe(0);
+    expect(timedZero?.inPlayDelaySec).toBe(0);
+    expect(timedZero?.unknown).not.toContain("delay");
   });
 
   test("a tie keeps the first-seen league", () => {
@@ -204,5 +261,81 @@ describe("source tier", () => {
       { customer_id: "C2", sharp_score: 81.5, tier: "GOLD" },
     ]);
     expect(bogus?.tier).toBe("TIER_2_STEAM_SYNDICATE");
+  });
+});
+
+describe("backtestRowsToProfiles", () => {
+  const backtestRow = {
+    customerId: "MJ102",
+    agentId: "MJ2026",
+    masterAgent: "BILLY666",
+    contextType: "EXECUTION_SNIPER",
+    ipSubnet: "104.28.34.0/24",
+    avgClvBps: 295,
+    sharpScore: 91.4,
+    totalParlayTickets: 62,
+    totalParlayHandleUsd: 310000,
+    dominantComboFamily: "NBA_ALT_SPREAD_5000_SUBSET",
+  };
+
+  const [profile] = backtestRowsToProfiles([backtestRow]);
+
+  test("derives score, CLV and mean stake from the parlay cohort fields", () => {
+    expect(profile?.id).toBe("MJ102");
+    expect(profile?.source).toBe("backtest");
+    expect(profile?.score).toBe(9.14);
+    expect(profile?.clvScore).toBe(2.95);
+    expect(profile?.meanStake).toBe(5000);
+    expect(profile?.specialization).toBe("NBA_ALT_SPREAD_5000_SUBSET");
+    expect(profile?.timingArchetype).toBe("EXECUTION_SNIPER");
+  });
+
+  test("lists everything it could not measure instead of rendering zeros", () => {
+    expect(profile?.unknown).toEqual(
+      expect.arrayContaining([
+        "syndicate",
+        "correlation",
+        "gini",
+        "sizing",
+        "var95",
+        "holdPct",
+        "ltv",
+        "limit",
+        "delay",
+        "tickets",
+      ]),
+    );
+  });
+
+  test("marks an unmeasurable sharpness instead of treating it as zero", () => {
+    const [bare] = backtestRowsToProfiles([{ customerId: "NO_STATS" }]);
+    expect(bare?.score).toBe(0);
+    expect(bare?.unknown).toContain("sharpness");
+  });
+});
+
+describe("mergeProfileRows", () => {
+  const [bookRow] = bookRowsToProfiles([row], "fixture");
+  const [backtestRow] = backtestRowsToProfiles([
+    { customerId: "SYNTH_SYN_01", sharpScore: 40 },
+  ]);
+
+  test("dedupes by customer ID and lets the richer first group win", () => {
+    const merged = mergeProfileRows(
+      bookRow ? [bookRow] : [],
+      backtestRow ? [backtestRow] : [],
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.source).toBe("fixture");
+    expect(merged[0]?.score).toBe(8.15);
+  });
+
+  test("is case-insensitive on the join key", () => {
+    const [lower] = backtestRowsToProfiles([{ customerId: "synth_syn_01" }]);
+    const merged = mergeProfileRows(
+      bookRow ? [bookRow] : [],
+      lower ? [lower] : [],
+    );
+    expect(merged).toHaveLength(1);
   });
 });

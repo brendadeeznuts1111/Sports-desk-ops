@@ -1,0 +1,65 @@
+<svg viewBox="0 0 680 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bun-route-title bun-route-desc">
+  <title id="bun-route-title">Bun.serve route dispatch: typed BunRequest on a hit, plain Request on the fetch fallback</title>
+  <desc id="bun-route-desc">A request enters the Bun.serve uWebSockets radix router. A matching route receives a BunRequest with typed params and cookies, and a handler may refresh a session cookie. A miss falls through to the fetch(req, srv) fallback, which receives a plain Request without route params or Bun cookie helpers.</desc>
+  <style>
+    :root {
+      --lumi-ink: light-dark(#000000, #e0e0e0);
+      --lumi-muted: light-dark(#5f6368, #9aa0a6);
+      --lumi-dim: light-dark(#f2f0f0, #242528);
+      --lumi-container: light-dark(#e8e6e6, #2d2f33);
+      --lumi-outline: light-dark(#727676, #9a9b9c);
+      --lumi-accent-bg: light-dark(#dcf1ff, #192967);
+      --lumi-primary: light-dark(#3186ff, #9dd2ff);
+      --lumi-sans: 'Google Sans Flex', var(--font-family, 'Google Sans', sans-serif);
+      --lumi-mono: 'Google Sans Code', ui-monospace, monospace;
+    }
+    text { font-weight: 400; stroke: none; }
+    .t-l1 { font-family: var(--lumi-sans); font-size: 15px; fill: var(--lumi-ink); }
+    .t-l2 { font-family: var(--lumi-mono); font-size: 13px; font-style: italic; fill: var(--lumi-ink); }
+    .t-l4 { font-family: var(--lumi-sans); font-size: 13px; fill: var(--lumi-muted); }
+    .node-step { fill: var(--lumi-dim); stroke: none; }
+    .node-focal { fill: var(--lumi-accent-bg); stroke: var(--lumi-primary); stroke-width: 1.25; }
+    .node-store { fill: var(--lumi-container); stroke: var(--lumi-outline); stroke-width: 1; }
+    .edge-seg { fill: none; stroke: var(--lumi-ink); stroke-width: 1.3; stroke-linecap: round; stroke-dasharray: 0 4; }
+    .edge-arrow { fill: none; stroke: var(--lumi-ink); stroke-width: 1.3; stroke-linecap: round; stroke-dasharray: 0 4; marker-end: url(#lumi-caret-req); }
+  </style>
+  <defs>
+    <marker id="lumi-caret-req" viewBox="0 0 10 10" refX="7.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M 3 1.2 L 7.5 5 L 3 8.8" fill="none" stroke="var(--lumi-ink)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+    </marker>
+  </defs>
+
+  <!-- Node 1: Bun.serve uWebSockets Radix Router -->
+  <rect class="node-step" x="20" y="20" width="176" height="80" rx="40" />
+  <text class="t-l1" x="108" y="51" text-anchor="middle" dominant-baseline="central">Bun.serve Router</text>
+  <text class="t-l2" x="108" y="73" text-anchor="middle" dominant-baseline="central">uWS SIMD radix</text>
+
+  <!-- Hit branch pill -> BunRequest<T> -->
+  <line class="edge-seg" x1="204" y1="60" x2="216" y2="60" />
+  <rect x="224" y="50" width="42" height="20" rx="10" fill="var(--lumi-dim)" />
+  <text class="t-l2" x="245" y="60" text-anchor="middle" dominant-baseline="central">Hit</text>
+  <line class="edge-arrow" x1="274" y1="60" x2="286" y2="60" />
+
+  <!-- Node 2: BunRequest<T> -->
+  <rect class="node-focal" x="294" y="20" width="180" height="80" rx="40" />
+  <text class="t-l1" x="384" y="51" text-anchor="middle" dominant-baseline="central">BunRequest</text>
+  <text class="t-l2" x="384" y="73" text-anchor="middle" dominant-baseline="central">params + cookies</text>
+
+  <line class="edge-arrow" x1="482" y1="60" x2="496" y2="60" />
+
+  <!-- Node 3: Route Handler + Set-Cookie Sync -->
+  <rect class="node-store" x="504" y="20" width="156" height="80" rx="40" />
+  <text class="t-l1" x="582" y="51" text-anchor="middle" dominant-baseline="central">Route Handler</text>
+  <text class="t-l4" x="582" y="73" text-anchor="middle" dominant-baseline="central">Set-Cookie sync</text>
+
+  <!-- Miss branch -> fallback fetch(req: Request) -->
+  <path class="edge-seg" d="M 108 108 L 108 180 Q 108 196 124 196 L 168 196" />
+  <rect x="176" y="186" width="48" height="20" rx="10" fill="var(--lumi-dim)" />
+  <text class="t-l2" x="200" y="196" text-anchor="middle" dominant-baseline="central">Miss</text>
+  <line class="edge-arrow" x1="232" y1="196" x2="286" y2="196" />
+
+  <!-- Node 4: Fallback fetch -->
+  <rect class="node-store" x="294" y="156" width="180" height="80" rx="40" />
+  <text class="t-l1" x="384" y="187" text-anchor="middle" dominant-baseline="central">fetch(req, srv)</text>
+  <text class="t-l4" x="384" y="209" text-anchor="middle" dominant-baseline="central">Plain Request only</text>
+</svg>

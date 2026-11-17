@@ -44,7 +44,7 @@
     "C": "Inferred only. Authored in docs/openapi.json or its generator scripts, or a repo TypeScript wire type, or a UI/DOM observation whose URL+method is a candidate. No request or response was observed.",
     "D": "A real surface missing from the spec. Recorded in surfaces[], never in operations[].",
     "E": "Documented operation with no implementation in this repository (/api/desk/*).",
-    "crawlerCandidatesRule": "B-vs-C rule for the 11 'Tracked Operational Domains' candidates (gameAdmin, getMessages, adjustBalance, createPlayer, get3rdPartyLimits, getAnalysis, getScores, getAgentTree, getBilling, getRules, getFinancialReport): a launcher tile alone is not enough for B. B requires a URL+method observed on the wire (or a handler that serves it). Those 11 rows take their path+method from hand-authored candidateEndpoint/candidateMethod constants in main:scripts/portal_tile_crawler.ts:55-206. The crawler CLI entry runs the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and its live branch only replaces extracted inputs/L-keys, never the URL/method; no audit JSON or screenshot proof exists in the main tree. They are therefore tier C with candidate_url=true and ui_observed=true, never B. getAnalysis and getFinancialReport also have independent UI action-name evidence (runbook:166-167), which improves the tile evidence but does not observe the URL."
+    "crawlerCandidatesRule": "B-vs-C rule for the 11 'Tracked Operational Domains' candidates (gameAdmin, getMessages, adjustBalance, createPlayer, get3rdPartyLimits, getAnalysis, getScores, getAgentTree, getBilling, getRules, getFinancialReport): a launcher tile alone is not enough for B. B requires a URL+method observed on the wire (or a handler that serves it). Those 11 rows take their path+method from hand-authored candidateEndpoint/candidateMethod constants in main:scripts/portal_tile_crawler.ts:55-206. The crawler CLI entry runs the offline branch (main:scripts/portal_tile_crawler.ts:691,775) and its live branch only replaces extracted inputs/L-keys, never the URL/method; no audit JSON or screenshot proof exists in the main tree. They are therefore tier C with candidate_url=true and ui_observed=true, never B. getAnalysis and getFinancialReport also have independent UI action-name evidence (runbook:166-167), which improves the tile evidence but does not observe the URL."
   },
   "counts": {
     "A": 11,
@@ -1233,9 +1233,9 @@
           "note": "Tile 'Game Admin' is declared in the UNMAPPED_LAUNCHER_TILES constant (tileName, clusterColor, domSelector, candidateEndpoint, candidateMethod, extractedInputs=rotationNumber/sportType/circleLimit/isLocked, dataLanguageLKeys=L-1034,L-1052). The URL and method are hand-authored 'candidate' fields (typed at main:scripts/portal_tile_crawler.ts:47-48), not an observed network call."
         },
         {
-          "source": "main:scripts/portal_tile_crawler.ts:545-670",
+          "source": "main:scripts/portal_tile_crawler.ts:543-668",
           "kind": "crawler-behaviour",
-          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
+          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:691,775) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
         },
         {
           "source": "docs/openapi.json",
@@ -1263,9 +1263,9 @@
           "note": "Tile 'Messaging' is declared in the UNMAPPED_LAUNCHER_TILES constant (tileName, clusterColor, domSelector, candidateEndpoint, candidateMethod, extractedInputs=recipientScope/subject/messageBody/priority, dataLanguageLKeys=L-1055,L-1056). The URL and method are hand-authored 'candidate' fields (typed at main:scripts/portal_tile_crawler.ts:47-48), not an observed network call."
         },
         {
-          "source": "main:scripts/portal_tile_crawler.ts:545-670",
+          "source": "main:scripts/portal_tile_crawler.ts:543-668",
           "kind": "crawler-behaviour",
-          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
+          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:691,775) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
         },
         {
           "source": "docs/openapi.json",
@@ -1293,9 +1293,9 @@
           "note": "Tile 'Cashier' is declared in the UNMAPPED_LAUNCHER_TILES constant (tileName, clusterColor, domSelector, candidateEndpoint, candidateMethod, extractedInputs=customerID/amountCents/transactionType/notes, dataLanguageLKeys=L-1031,L-1045,L-1058). The URL and method are hand-authored 'candidate' fields (typed at main:scripts/portal_tile_crawler.ts:47-48), not an observed network call."
         },
         {
-          "source": "main:scripts/portal_tile_crawler.ts:545-670",
+          "source": "main:scripts/portal_tile_crawler.ts:543-668",
           "kind": "crawler-behaviour",
-          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
+          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:691,775) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
         },
         {
           "source": "docs/openapi.json",
@@ -1323,9 +1323,9 @@
           "note": "Tile 'Add Customer' is declared in the UNMAPPED_LAUNCHER_TILES constant (tileName, clusterColor, domSelector, candidateEndpoint, candidateMethod, extractedInputs=customerID/agentID/password/creditLimit/delaySeconds, dataLanguageLKeys=L-1031,L-1032,L-1040). The URL and method are hand-authored 'candidate' fields (typed at main:scripts/portal_tile_crawler.ts:47-48), not an observed network call."
         },
         {
-          "source": "main:scripts/portal_tile_crawler.ts:545-670",
+          "source": "main:scripts/portal_tile_crawler.ts:543-668",
           "kind": "crawler-behaviour",
-          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
+          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:691,775) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
         },
         {
           "source": "docs/openapi.json",
@@ -1358,9 +1358,9 @@
           "note": "Tile '3rd Party Limits' is declared in the UNMAPPED_LAUNCHER_TILES constant (tileName, clusterColor, domSelector, candidateEndpoint, candidateMethod, extractedInputs=providerID/sportCategory/maxLimitCents, dataLanguageLKeys=L-1060,L-1061). The URL and method are hand-authored 'candidate' fields (typed at main:scripts/portal_tile_crawler.ts:47-48), not an observed network call."
         },
         {
-          "source": "main:scripts/portal_tile_crawler.ts:545-670",
+          "source": "main:scripts/portal_tile_crawler.ts:543-668",
           "kind": "crawler-behaviour",
-          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
+          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:691,775) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
         },
         {
           "source": "docs/openapi.json",
@@ -1388,9 +1388,9 @@
           "note": "Tile 'Analysis' is declared in the UNMAPPED_LAUNCHER_TILES constant (tileName, clusterColor, domSelector, candidateEndpoint, candidateMethod, extractedInputs=period/sport/marketCategory/agentID, dataLanguageLKeys=L-1034,L-1064). The URL and method are hand-authored 'candidate' fields (typed at main:scripts/portal_tile_crawler.ts:47-48), not an observed network call."
         },
         {
-          "source": "main:scripts/portal_tile_crawler.ts:545-670",
+          "source": "main:scripts/portal_tile_crawler.ts:543-668",
           "kind": "crawler-behaviour",
-          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
+          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:691,775) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
         },
         {
           "source": "docs/openapi.json",
@@ -1423,9 +1423,9 @@
           "note": "Tile 'Scores' is declared in the UNMAPPED_LAUNCHER_TILES constant (tileName, clusterColor, domSelector, candidateEndpoint, candidateMethod, extractedInputs=gameID/periodIndex/homeScore/awayScore/isFinal, dataLanguageLKeys=L-1034,L-1068). The URL and method are hand-authored 'candidate' fields (typed at main:scripts/portal_tile_crawler.ts:47-48), not an observed network call."
         },
         {
-          "source": "main:scripts/portal_tile_crawler.ts:545-670",
+          "source": "main:scripts/portal_tile_crawler.ts:543-668",
           "kind": "crawler-behaviour",
-          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
+          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:691,775) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
         },
         {
           "source": "docs/openapi.json",
@@ -1458,9 +1458,9 @@
           "note": "Tile 'Agent Admin' is declared in the UNMAPPED_LAUNCHER_TILES constant (tileName, clusterColor, domSelector, candidateEndpoint, candidateMethod, extractedInputs=masterAgent/commissionSplitPercent/creditCeiling, dataLanguageLKeys=L-1032,L-1070). The URL and method are hand-authored 'candidate' fields (typed at main:scripts/portal_tile_crawler.ts:47-48), not an observed network call."
         },
         {
-          "source": "main:scripts/portal_tile_crawler.ts:545-670",
+          "source": "main:scripts/portal_tile_crawler.ts:543-668",
           "kind": "crawler-behaviour",
-          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
+          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:691,775) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
         },
         {
           "source": "docs/openapi.json",
@@ -1488,9 +1488,9 @@
           "note": "Tile 'Billing' is declared in the UNMAPPED_LAUNCHER_TILES constant (tileName, clusterColor, domSelector, candidateEndpoint, candidateMethod, extractedInputs=billingWeek/ratePerActiveHead/activeAccountCount, dataLanguageLKeys=L-1050,L-1072). The URL and method are hand-authored 'candidate' fields (typed at main:scripts/portal_tile_crawler.ts:47-48), not an observed network call."
         },
         {
-          "source": "main:scripts/portal_tile_crawler.ts:545-670",
+          "source": "main:scripts/portal_tile_crawler.ts:543-668",
           "kind": "crawler-behaviour",
-          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
+          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:691,775) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
         },
         {
           "source": "docs/openapi.json",
@@ -1518,9 +1518,9 @@
           "note": "Tile 'Settings & Rules' is declared in the UNMAPPED_LAUNCHER_TILES constant (tileName, clusterColor, domSelector, candidateEndpoint, candidateMethod, extractedInputs=parlayMaxPayout/teaserTieRule/defaultDelaySeconds, dataLanguageLKeys=L-1040,L-1075). The URL and method are hand-authored 'candidate' fields (typed at main:scripts/portal_tile_crawler.ts:47-48), not an observed network call."
         },
         {
-          "source": "main:scripts/portal_tile_crawler.ts:545-670",
+          "source": "main:scripts/portal_tile_crawler.ts:543-668",
           "kind": "crawler-behaviour",
-          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
+          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:691,775) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
         },
         {
           "source": "docs/openapi.json",
@@ -1548,9 +1548,9 @@
           "note": "Tile 'Transactions History' is declared in the UNMAPPED_LAUNCHER_TILES constant (tileName, clusterColor, domSelector, candidateEndpoint, candidateMethod, extractedInputs=customerID/startDate/endDate/transactionFilter, dataLanguageLKeys=L-1031,L-1033,L-1058). The URL and method are hand-authored 'candidate' fields (typed at main:scripts/portal_tile_crawler.ts:47-48), not an observed network call."
         },
         {
-          "source": "main:scripts/portal_tile_crawler.ts:545-670",
+          "source": "main:scripts/portal_tile_crawler.ts:543-668",
           "kind": "crawler-behaviour",
-          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
+          "note": "The crawl path navigates/clicks and extracts only form inputs and L-keys; it never records a network request or response. The CLI entry runs with no portalUrl, so it takes the offline branch (main:scripts/portal_tile_crawler.ts:691,775) and just re-emits the constant. No reports/tile_crawler_audit.json and no reports/tile_crawler_proofs/ exist in the main tree."
         },
         {
           "source": "docs/openapi.json",
@@ -1843,7 +1843,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/blob_and_live_bets_server.ts:517-600",
+          "source": "services/blob_and_live_bets_server.ts:516-599",
           "kind": "implementation",
           "note": "Bearer-auth presigned redirect; key validated before presigning; 400/401/502 paths implemented."
         }
@@ -1860,7 +1860,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/blob_and_live_bets_server.ts:517-600",
+          "source": "services/blob_and_live_bets_server.ts:516-599",
           "kind": "implementation",
           "note": "Bearer-auth bounded upload: size caps, image allowlist, Bun.Image maxPixels, no upscaling, deterministic WebP, width/height metadata."
         }
@@ -1877,7 +1877,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/blob_and_live_bets_server.ts:601-619",
+          "source": "services/blob_and_live_bets_server.ts:600-618",
           "kind": "implementation",
           "note": "Bearer-auth DELETE checks existence (404 when absent), removes the stored object, and returns 204; delete failures are 502."
         }
@@ -1894,7 +1894,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/blob_and_live_bets_server.ts:432-456",
+          "source": "services/blob_and_live_bets_server.ts:431-455",
           "kind": "implementation",
           "note": "Bearer-auth ticket issuance: HMAC {exp, nonce}, pending allowlist cap 4096, 429 when full."
         }
@@ -1911,7 +1911,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/blob_and_live_bets_server.ts:457-503",
+          "source": "services/blob_and_live_bets_server.ts:456-502",
           "kind": "implementation",
           "note": "Bearer-auth publish: bounded body, channel regex, JSON serialization, Server.publish subscriber count."
         }
@@ -1928,7 +1928,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/blob_and_live_bets_server.ts:620-649",
+          "source": "services/blob_and_live_bets_server.ts:619-648",
           "kind": "implementation",
           "note": "Upgrade requires an issued unused ticket via query or Sec-WebSocket-Protocol, echoes live-bets.v1, bounded JSON messages and channel validation."
         }
@@ -2472,23 +2472,23 @@
     }
   ],
   "citationAnchors": {
-    "services/blob_and_live_bets_server.ts:432-456": "\"/api/v1/ws-tickets\": {",
-    "services/blob_and_live_bets_server.ts:457-503": "\"/api/v1/live-bets\": {",
-    "services/blob_and_live_bets_server.ts:517-600": "\"/api/v1/blobs/:key\": {",
-    "services/blob_and_live_bets_server.ts:601-619": "DELETE: async (request: KeyedRequest) => {",
-    "services/blob_and_live_bets_server.ts:620-649": "\"/ws/live-bets\": (request: Request",
-    "services/blob_and_live_bets_server.ts:432-456": "\"/api/v1/ws-tickets\": {",
-    "services/blob_and_live_bets_server.ts:457-503": "\"/api/v1/live-bets\": {",
-    "services/blob_and_live_bets_server.ts:517-600": "\"/api/v1/blobs/:key\": {",
-    "services/blob_and_live_bets_server.ts:620-649": "\"/ws/live-bets\": (request: Request",
-    "services/blob_and_live_bets_server.ts:432-456": "\"/api/v1/ws-tickets\": {",
-    "services/blob_and_live_bets_server.ts:457-503": "\"/api/v1/live-bets\": {",
-    "services/blob_and_live_bets_server.ts:517-600": "\"/api/v1/blobs/:key\": {",
-    "services/blob_and_live_bets_server.ts:620-649": "\"/ws/live-bets\": (request: Request",
-    "services/blob_and_live_bets_server.ts:432-456": "\"/api/v1/ws-tickets\": {",
-    "services/blob_and_live_bets_server.ts:457-503": "\"/api/v1/live-bets\": {",
-    "services/blob_and_live_bets_server.ts:517-600": "\"/api/v1/blobs/:key\": {",
-    "services/blob_and_live_bets_server.ts:620-649": "\"/ws/live-bets\": (request: Request",
+    "services/blob_and_live_bets_server.ts:431-455": "\"/api/v1/ws-tickets\": {",
+    "services/blob_and_live_bets_server.ts:456-502": "\"/api/v1/live-bets\": {",
+    "services/blob_and_live_bets_server.ts:516-599": "\"/api/v1/blobs/:key\": {",
+    "services/blob_and_live_bets_server.ts:600-618": "DELETE: async (request: BunRequest<\"/api/v1/blobs/:key\">) => {",
+    "services/blob_and_live_bets_server.ts:619-648": "\"/ws/live-bets\": (request: Request",
+    "services/blob_and_live_bets_server.ts:431-455": "\"/api/v1/ws-tickets\": {",
+    "services/blob_and_live_bets_server.ts:456-502": "\"/api/v1/live-bets\": {",
+    "services/blob_and_live_bets_server.ts:516-599": "\"/api/v1/blobs/:key\": {",
+    "services/blob_and_live_bets_server.ts:619-648": "\"/ws/live-bets\": (request: Request",
+    "services/blob_and_live_bets_server.ts:431-455": "\"/api/v1/ws-tickets\": {",
+    "services/blob_and_live_bets_server.ts:456-502": "\"/api/v1/live-bets\": {",
+    "services/blob_and_live_bets_server.ts:516-599": "\"/api/v1/blobs/:key\": {",
+    "services/blob_and_live_bets_server.ts:619-648": "\"/ws/live-bets\": (request: Request",
+    "services/blob_and_live_bets_server.ts:431-455": "\"/api/v1/ws-tickets\": {",
+    "services/blob_and_live_bets_server.ts:456-502": "\"/api/v1/live-bets\": {",
+    "services/blob_and_live_bets_server.ts:516-599": "\"/api/v1/blobs/:key\": {",
+    "services/blob_and_live_bets_server.ts:619-648": "\"/ws/live-bets\": (request: Request",
     "services/sportsdesk_webview_server.ts:3239-3248": "if (pathname === \"/api/agents/search\") {",
     "services/sportsdesk_telegram_bot.ts:80-84": "export const REPORT_TYPES = [",
     "catalog/fantasy402_sport_catalog.ts:133-140": "export type CatalogDigestSet = {",
@@ -2542,12 +2542,12 @@
     "scripts/portal_tile_crawler.ts:174-188": "tileName: \"Settings & Rules\"",
     "scripts/portal_tile_crawler.ts:190-205": "tileName: \"Transactions History\"",
     "scripts/portal_tile_crawler.ts:47-48": "readonly candidateEndpoint: string;",
-    "scripts/portal_tile_crawler.ts:545-670": "async function runLiveCrawl(",
+    "scripts/portal_tile_crawler.ts:543-668": "async function runLiveCrawl(",
     "scripts/portal_tile_crawler.ts:55-206": "export const UNMAPPED_LAUNCHER_TILES",
     "scripts/portal_tile_crawler.ts:57-66": "tileName: \"Game Admin\"",
     "scripts/portal_tile_crawler.ts:68-77": "tileName: \"Messaging\"",
-    "scripts/portal_tile_crawler.ts:693": "if (mode === \"offline\") {",
-    "scripts/portal_tile_crawler.ts:777": "let mode: CrawlMode = \"offline\";",
+    "scripts/portal_tile_crawler.ts:691": "if (mode === \"offline\") {",
+    "scripts/portal_tile_crawler.ts:775": "let mode: CrawlMode = \"offline\";",
     "scripts/portal_tile_crawler.ts:79-89": "tileName: \"Cashier\"",
     "scripts/portal_tile_crawler.ts:91-107": "tileName: \"Add Customer\"",
     "services/simulate_bettor_churn_suite.ts:104-117": "export interface RawPendingLegRow {",

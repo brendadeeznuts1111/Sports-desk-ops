@@ -130,22 +130,41 @@ async function store(agentId: string): Promise<void> {
 
 async function remove(): Promise<void> {
   let removed = 0;
+  let alreadyAbsent = 0;
+  const failures: string[] = [];
   for (const service of SERVICES) {
     for (const name of [
       F402_KEYCHAIN_NAMES.agentId,
       F402_KEYCHAIN_NAMES.password,
     ]) {
       try {
+        // `false` means "not found", which is the desired end state after removal;
+        // a thrown error means the keychain refused the delete and the stale entry
+        // may still be there. They are not the same outcome.
         const deleted = await Bun.secrets.delete({ service, name });
         if (deleted) removed += 1;
-      } catch {
-        // A locked or unavailable keychain is not a deletion failure by itself.
+        else alreadyAbsent += 1;
+      } catch (err) {
+        failures.push(
+          `${service}/${name}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
   }
   console.error(
-    `secrets:f402: removed ${removed} F402 credential entr${removed === 1 ? "y" : "ies"} from ${SERVICES.join(", ")}`,
+    `secrets:f402: removed ${removed}, already absent ${alreadyAbsent} F402 credential entr${
+      removed + alreadyAbsent === 1 ? "y" : "ies"
+    } from ${SERVICES.join(", ")}`,
   );
+  if (failures.length > 0) {
+    for (const failure of failures) {
+      console.error(`secrets:f402: delete failed — ${failure}`);
+    }
+    console.error(
+      `secrets:f402: ${failures.length} keychain delete(s) failed; entries may still be present`,
+    );
+    process.exitCode = 1;
+  }
 }
 
 const parsed = parseCliArgs(process.argv.slice(2), {

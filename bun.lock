@@ -100,6 +100,9 @@
         "sql-query": "./bin/sql-query.ts",
         "desk-provenance": "./bin/desk-provenance.ts",
       },
+      "dependencies": {
+        "typescript": "catalog:",
+      },
     },
     "packages/ui": {
       "name": "@sportsdesk-ops/ui",

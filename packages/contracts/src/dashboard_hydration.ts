@@ -132,6 +132,8 @@ export interface CustomersCohortsSummary {
 export interface CustomersApiResponse {
   readonly cohorts: CustomersCohortsSummary;
   readonly backtestTop: ReadonlyArray<Record<string, unknown>>;
+  /** Full backtest-cohort list (backtestTop is the leaderboard's first 20). */
+  readonly backtestAll: ReadonlyArray<Record<string, unknown>>;
   readonly fixtures: ReadonlyArray<Record<string, unknown>>;
   readonly provenance: DashboardSourceProvenance;
 }
@@ -141,7 +143,8 @@ export type DashboardWsEventName =
   | "dashboard-updated"
   | "wagers-updated"
   | "tiers-updated"
-  | "alerts-updated";
+  | "alerts-updated"
+  | "automations-updated";
 
 export interface DashboardWsEventFrame {
   readonly type: "topic-event";
@@ -170,6 +173,7 @@ export type ParsedDashboardWsAction =
       readonly tiers?: TierStyleMap | undefined;
     }
   | { readonly kind: "alerts-updated" }
+  | { readonly kind: "automations-updated" }
   | { readonly kind: "ack"; readonly ackType: string }
   | { readonly kind: "ignore" };
 
@@ -205,6 +209,9 @@ export function parseDashboardWsSignal(raw: string): ParsedDashboardWsAction {
   if (trimmed === "tiers-updated") return { kind: "tiers-updated" };
   if (trimmed === "alerts-updated" || trimmed === "syndicate-alerts") {
     return { kind: "alerts-updated" };
+  }
+  if (trimmed === "automations-updated") {
+    return { kind: "automations-updated" };
   }
 
   if (!trimmed.startsWith("{")) {
@@ -247,6 +254,9 @@ export function parseDashboardWsSignal(raw: string): ParsedDashboardWsAction {
       }
       if (event === "alerts-updated" || topic === "syndicate-alerts") {
         return { kind: "alerts-updated" };
+      }
+      if (event === "automations-updated") {
+        return { kind: "automations-updated" };
       }
       return { kind: "ignore" };
     }
@@ -428,6 +438,23 @@ export interface R2SinkRollupMetric {
   readonly value: string;
 }
 
+export type R2SinkBlockerClass =
+  | "f402_auth_expired"
+  | "gslive_auth_expired"
+  | "sanitization_guard"
+  | "upstream_capture_stale"
+  | "missing_artifact"
+  | "network_or_http"
+  | "sla_lag";
+
+export interface R2SinkDiagnostic {
+  readonly blockerClass: R2SinkBlockerClass;
+  readonly headline: string;
+  readonly detail: string;
+  readonly failedJobIds: readonly string[];
+  readonly suggestedCommand: string;
+}
+
 export interface R2SinkDetail {
   readonly id: string;
   readonly key: string;
@@ -447,7 +474,63 @@ export interface R2SinkDetail {
   readonly sha256: string | null;
   readonly reason: string | null;
   readonly remediationCommand: string;
+  readonly bridgeJobIds?: readonly string[] | undefined;
+  readonly diagnostic?: R2SinkDiagnostic | undefined;
   readonly metrics: readonly R2SinkRollupMetric[];
+}
+
+export type TicketVerificationMode =
+  "live" | "fixture" | "dry-run" | "unmeasured";
+
+export interface TicketVerificationSummary {
+  readonly schemaVersion: 1;
+  readonly available: boolean;
+  readonly mode: TicketVerificationMode;
+  readonly verifiedAt: string | null;
+  readonly sourcePath: string | null;
+  readonly totalRows: number;
+  readonly actionableTickets: number;
+  readonly sentinelNoiseCount: number;
+  readonly volumeMismatchCount: number;
+  readonly totalWageredCents: number;
+  readonly totalVolumeCents: number;
+  readonly totalToWinCents: number;
+  readonly canaryPassed: boolean;
+  readonly clientSealed: boolean;
+  readonly f402Status: "ok" | "skipped" | "error";
+  readonly r2Status: "ok" | "skipped" | "error";
+  readonly r2PublishedKey: string | null;
+  readonly error: string | null;
+  readonly remediation: string | null;
+}
+
+export interface BridgeJobStatusSummary {
+  readonly id: string;
+  readonly label: string;
+  readonly ok: boolean;
+  readonly durationMs: number;
+  readonly error?: string | undefined;
+}
+
+export interface AutomationScheduleSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly scheduleTime: string;
+  readonly tz: string;
+  readonly reportType: string;
+  readonly owner: "daemon" | "bot";
+  readonly enabled: boolean;
+  readonly gateReady: boolean;
+  readonly missingRequirements: readonly string[];
+  readonly lastTriggeredAt: string | null;
+}
+
+export interface AutomationsSnapshot {
+  readonly observedAt: string;
+  readonly bridgeRollupUpdatedAt: string | null;
+  readonly bridgeJobs: readonly BridgeJobStatusSummary[];
+  readonly schedules: readonly AutomationScheduleSummary[];
+  readonly ticketVerification: TicketVerificationSummary | null;
 }
 
 export interface R2PipelineApiResponse {
@@ -461,6 +544,7 @@ export interface R2PipelineApiResponse {
   readonly dataStaleKeys: readonly string[];
   readonly sinks: readonly R2SinkDetail[];
   readonly daemon4020: Daemon4020Status;
+  readonly automations?: AutomationsSnapshot | undefined;
 }
 
 export interface AgentDetailApiResponse {

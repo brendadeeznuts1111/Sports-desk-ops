@@ -1,0 +1,31 @@
+{
+  "generatedAt": "2026-11-16T02:08:12.916Z",
+  "checks": {
+    "ws.maxPayloadLength": true,
+    "ws.backpressureLimit": true,
+    "ws.closeOnBackpressureLimit": true,
+    "ws.oversize->1009": true,
+    "ws.subscribe->ack": true,
+    "ws.malformed-still-open": true,
+    "ws.stalled-consumer-evicted": true,
+    "ws.no-silent-gap": true
+  },
+  "passed": true,
+  "evidence": {
+    "probe_ws.ts": {
+      "exitCode": 0,
+      "stdout": "{\n  \"config\": {\n    \"maxPayloadLength\": 16384,\n    \"backpressureLimit\": 262144,\n    \"closeOnBackpressureLimit\": true,\n    \"idleTimeout\": 120\n  },\n  \"subscribe\": {\n    \"reply\": \"{\\\"type\\\":\\\"subscribed\\\",\\\"topic\\\":\\\"dashboard\\\",\\\"activeTopics\\\":[\\\"dashboard\\\",\\\"live-bets\\\",\\\"syndicate-alerts\\\",\\\"tiers-updated\\\"]}\"\n  },\n  \"malformed\": {\n    \"stillOpen\": true,\n    \"reply\": \"{\\\"type\\\":\\\"subscribed\\\",\\\"topic\\\":\\\"live-bets\\\",\\\"activeTopics\\\":[\\\"dashboard\\\",\\\"live-bets\\\",\\\"syndicate-alerts\\\",\\\"tiers-updated\\\"]}\"\n  },\n  \"oversize\": {\n    \"closeCode\": 1009\n  },\n  \"handshake\": \"HTTP/1.1 101 Switching Protocols\\r\\nUpgrad\",\n  \"backpressure\": {\n    \"clientsBefore\": 1,\n    \"publishAttempts\": 334,\n    \"deliveredFrames\": 333,\n    \"droppedFrames\": 1,\n    \"firstDropAt\": 333,\n    \"clientsAfter\": 0,\n    \"evicted\": true,\n    \"silentGap\": false\n  }\n}",
+      "stderr": ""
+    },
+    "probe_nanoseconds.ts": {
+      "exitCode": 0,
+      "stdout": "{\n  \"monotonic\": true,\n  \"deltaMs\": 26.159,\n  \"wallDeltaMs\": 26,\n  \"magnitudeVsWallClock\": \"32136000\",\n  \"plausibleSleepDelta\": true,\n  \"wallClockAgreement\": true\n}",
+      "stderr": ""
+    },
+    "probe_secrets.ts": {
+      "exitCode": 0,
+      "stdout": "{\n  \"service\": \"com.sportsdesk-ops.forensic-audit-probe\",\n  \"name\": \"probe-1794794892814-b46c7bb3d3f6a\",\n  \"set\": \"ok\",\n  \"get\": \"probe-value\",\n  \"deleteExisting\": true,\n  \"deleteMissing\": false,\n  \"getAfterDelete\": null,\n  \"deleteEmptyName\": \"throw: Expected service and name to not be empty\",\n  \"contract\": {\n    \"trueMeansDeleted\": true,\n    \"falseMeansAbsent\": true,\n    \"throwIsDistinguishable\": true\n  }\n}",
+      "stderr": ""
+    }
+  }
+}

@@ -74,7 +74,7 @@ import {
 } from "../lib/f402_session.ts";
 
 const repoRoot = path.resolve(
-  import.meta.dirname ?? path.dirname(process.argv[1] ?? process.cwd()),
+  import.meta.dirname ?? path.dirname(Bun.main),
   "..",
 );
 
