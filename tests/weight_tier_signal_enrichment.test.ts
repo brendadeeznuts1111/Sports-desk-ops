@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { createDod6SpineOverlay } from "../lib/dod6_spine_overlay.ts";
 
 import type { F402TickerRow } from "../lib/f402_ingest.ts";
 import {
+  buildStreamSignalDiagnostics,
   PickShapeTwinTracker,
   ScoutApexTracker,
   loadDod6BookOverlayFromJson,
@@ -102,5 +106,74 @@ describe("ScoutApexTracker unit", () => {
       30_500,
     );
     expect(hit?.deltaMs).toBe(29_500);
+  });
+});
+
+describe("DOD6 customer identity", () => {
+  test("keeps exact ids separate and joins same-login ticker rows by customerId", async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), "dod6-identity-"));
+    const path = resolve(dir, "book.json");
+    try {
+      writeFileSync(
+        path,
+        JSON.stringify([
+          { customer_id: "same_0", clv_bps: 10 },
+          { customer_id: "SAME_0", clv_bps: 20 },
+          { customer_id: "same_1", clv_bps: 30 },
+        ]),
+      );
+      const book = loadDod6BookOverlayFromJson(path);
+      expect(book.lookup("same_0")?.clvBps).toBe(10);
+      expect(book.lookup("SAME_0")?.clvBps).toBe(20);
+      expect(book.lookup("same_1")?.clvBps).toBe(30);
+      expect(book.lookup("same")).toBeNull();
+      expect(book.lookup(" same_0 ")).toBeNull();
+      const spine = await createDod6SpineOverlay({ jsonBookPath: path });
+      for (const [customerId, expected] of [
+        ["same_0", 10],
+        ["same_1", 30],
+      ] as const) {
+        const tickerRow = {
+          ...row({ login: "GX195", agentId: customerId }),
+          customerId,
+        };
+        const diagnostics = buildStreamSignalDiagnostics(tickerRow, {
+          atMs: 0,
+          dod6Book: book,
+        });
+        expect(diagnostics.dod6Overlay?.clvBps).toBe(expected);
+        expect(spine.lookup("GX195", customerId)?.clvBps).toBe(expected);
+        const planned = planStreamSignalsForRows([tickerRow], {
+          dod6Spine: spine,
+        });
+        expect(planned[0]?.diagnostics.dod6Overlay?.clvBps).toBe(expected);
+      }
+      expect(
+        buildStreamSignalDiagnostics(
+          { ...row({ login: "same_0" }), customerId: "missing" },
+          { atMs: 0, dod6Book: book },
+        ).dod6Overlay,
+      ).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test("rejects duplicate exact ids instead of silently overwriting metrics", () => {
+    const dir = mkdtempSync(resolve(tmpdir(), "dod6-duplicate-"));
+    const path = resolve(dir, "book.json");
+    try {
+      writeFileSync(
+        path,
+        JSON.stringify([
+          { customer_id: "same_0", clv_bps: 10 },
+          { customer_id: "same_0", clv_bps: 20 },
+        ]),
+      );
+      expect(() => loadDod6BookOverlayFromJson(path)).toThrow(
+        "duplicate customer id",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

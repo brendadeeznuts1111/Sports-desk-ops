@@ -56,7 +56,8 @@ export function rowOfHandle(identity: Dod6LookupHandle): number | null {
 
 export interface Dod6SpineOverlay {
   readonly header: Dod6SpineHeader | null;
-  lookup(login: string): Dod6LifetimeLookup | null;
+  /** Pass customerId for JSON book joins; login remains the legacy CSV/binary key. */
+  lookup(login: string, customerId?: string): Dod6LifetimeLookup | null;
 }
 
 export function normalizeCanonicalCustomer(raw: string): string {
@@ -215,12 +216,12 @@ export async function createDod6SpineOverlay(options: {
 
   return {
     header,
-    lookup(login: string): Dod6LifetimeLookup | null {
+    lookup(login: string, customerId = login): Dod6LifetimeLookup | null {
       const fromColumnar = columnarLookup?.(login) ?? null;
       const canonical = normalizeCanonicalCustomer(login);
       const fromCsv = lifetimeMap.get(canonical);
       if (fromColumnar !== null) {
-        const fromJson = jsonLookup?.(login);
+        const fromJson = jsonLookup?.(customerId);
         if (fromJson === null || fromJson === undefined) return fromColumnar;
         return {
           clvBps: fromJson.clvBps ?? fromColumnar.clvBps,
@@ -236,7 +237,7 @@ export async function createDod6SpineOverlay(options: {
       }
       if (fromCsv !== undefined) {
         const base = lifetimeToLookup(fromCsv);
-        const fromJson = jsonLookup?.(login);
+        const fromJson = jsonLookup?.(customerId);
         if (fromJson === null || fromJson === undefined) return base;
         return {
           clvBps: fromJson.clvBps ?? base.clvBps,
@@ -249,7 +250,7 @@ export async function createDod6SpineOverlay(options: {
           handle: base.handle,
         };
       }
-      return jsonLookup?.(login) ?? null;
+      return jsonLookup?.(customerId) ?? null;
     },
   };
 }

@@ -79,7 +79,8 @@ export interface StreamSignalDiagnostics {
 }
 
 export interface Dod6CustomerBookOverlay {
-  lookup(login: string): {
+  /** JSON book keys are verbatim customer ids, never display logins. */
+  lookup(customerId: string): {
     readonly clvBps: number | null;
     readonly sharpScore: number | null;
     readonly lifetimeNetUsd: number | null;
@@ -195,7 +196,7 @@ export function loadDod6BookOverlayFromJson(
   if (!Array.isArray(raw)) {
     throw new Error(`DOD6 book overlay: expected array in ${absolute}`);
   }
-  const byLogin = new Map<
+  const byCustomerId = new Map<
     string,
     {
       clvBps: number | null;
@@ -206,9 +207,14 @@ export function loadDod6BookOverlayFromJson(
   for (const row of raw) {
     if (row === null || typeof row !== "object") continue;
     const record = row as Record<string, unknown>;
-    const id = String(record.customer_id ?? record.customerId ?? "").trim();
+    const id = String(record.customer_id ?? record.customerId ?? "");
     if (id === "") continue;
-    byLogin.set(normalizeCustomerLogin(id), {
+    if (byCustomerId.has(id)) {
+      throw new Error(
+        `DOD6 book overlay: duplicate customer id in ${absolute}`,
+      );
+    }
+    byCustomerId.set(id, {
       clvBps: typeof record.clv_bps === "number" ? record.clv_bps : null,
       sharpScore:
         typeof record.sharp_score === "number" ? record.sharp_score : null,
@@ -219,8 +225,8 @@ export function loadDod6BookOverlayFromJson(
     });
   }
   return {
-    lookup(login: string) {
-      return byLogin.get(normalizeCustomerLogin(login)) ?? null;
+    lookup(customerId: string) {
+      return byCustomerId.get(customerId) ?? null;
     },
   };
 }
@@ -364,7 +370,7 @@ export function buildStreamSignalDiagnostics(
   const rotationKey = rotationKeyFromTickerShortDesc(row.shortDesc);
   const pickShapeTwins = options.pickShapeTwins ?? [];
   const scoutPrecursor = options.scoutPrecursor ?? null;
-  const bookRow = options.dod6Book?.lookup(row.login) ?? null;
+  const bookRow = options.dod6Book?.lookup(row.customerId) ?? null;
   const lifetime =
     options.dod6Lifetime ??
     (bookRow !== null ? bookRowToLifetime(bookRow) : null);

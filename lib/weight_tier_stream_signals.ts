@@ -668,7 +668,8 @@ export function planStreamSignalForRow(
   }
 
   const gsliveSteam = options.gsliveSteamIndex?.lookup(rotationKey) ?? null;
-  const dod6Lifetime = options.dod6Spine?.lookup(row.login) ?? null;
+  const dod6Lifetime =
+    options.dod6Spine?.lookup(row.login, row.customerId) ?? null;
   const dod6Header = options.dod6Spine?.header;
   const diagnostics = buildStreamSignalDiagnostics(row, {
     atMs,
