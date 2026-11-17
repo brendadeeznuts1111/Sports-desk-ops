@@ -30,6 +30,8 @@ afterAll(() => rmSync(root, { recursive: true, force: true }));
 interface Manifest {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
   keywords?: string[];
   packageExtensions?: Record<string, { dependencies: Record<string, string> }>;
   version?: string;
@@ -180,6 +182,86 @@ describe("Bun 1.4.4 package-manager behaviors", () => {
     expect(
       run(fixture(), ["install", "--minimum-release-age", "300"]).exitCode,
     ).toBe(0);
+  });
+
+  test("accepts --minimum-release-age-excludes", () => {
+    expect(
+      run(fixture(), [
+        "install",
+        "--minimum-release-age",
+        "3d",
+        "--minimum-release-age-excludes",
+        "typescript@5.9.3",
+      ]).exitCode,
+    ).toBe(0);
+  });
+
+  test("translates --no-optional / --ignore-optional to --omit=optional", () => {
+    expect(run(fixture(), ["install", "--no-optional"]).exitCode).toBe(0);
+    expect(run(fixture(), ["install", "--ignore-optional"]).exitCode).toBe(0);
+  });
+
+  test("translates --node-linker to --linker", () => {
+    expect(run(fixture(), ["install", "--node-linker=isolated"]).exitCode).toBe(
+      0,
+    );
+    expect(run(fixture(), ["install", "--node-linker=hoisted"]).exitCode).toBe(
+      0,
+    );
+  });
+
+  test("--package-lock-only writes the lockfile without node_modules", () => {
+    const dir = fixture();
+    seedDependency(dir, "local");
+    expect(run(dir, ["install", "--package-lock-only"]).exitCode).toBe(0);
+    expect(existsSync(join(dir, "node_modules"))).toBe(false);
+    expect(existsSync(join(dir, "bun.lock"))).toBe(true);
+  });
+
+  test("bun add translates --save-optional/--save-peer/--save-exact", () => {
+    const optional = fixture();
+    localPackage(optional, "local");
+    expect(run(optional, ["add", "--save-optional", "./local"]).exitCode).toBe(
+      0,
+    );
+    expect(
+      readManifest(optional).optionalDependencies?.["local-fixture"],
+    ).toBeDefined();
+
+    const peer = fixture();
+    localPackage(peer, "local");
+    expect(run(peer, ["add", "--save-peer", "./local"]).exitCode).toBe(0);
+    expect(
+      readManifest(peer).peerDependencies?.["local-fixture"],
+    ).toBeDefined();
+
+    const exact = fixture();
+    localPackage(exact, "local");
+    expect(run(exact, ["add", "--save-exact", "./local"]).exitCode).toBe(0);
+    expect(readManifest(exact).dependencies?.["local-fixture"]).toBeDefined();
+  });
+
+  test("link:../shared resolves a parent-relative path", () => {
+    const parent = fixture();
+    localPackage(parent, "shared");
+    const child = join(parent, "child");
+    mkdirSync(child, { recursive: true });
+    writeFileSync(
+      join(child, "package.json"),
+      JSON.stringify(
+        {
+          name: "child",
+          private: true,
+          dependencies: { "shared-fixture": "link:../shared" },
+        },
+        null,
+        2,
+      ),
+    );
+    expect(run(child, ["install"]).exitCode).toBe(0);
+    expect(
+      lstatSync(join(child, "node_modules", "shared-fixture")).isSymbolicLink(),
+    ).toBe(true);
   });
 
   test("reads NPM_CONFIG_USERCONFIG", () => {
