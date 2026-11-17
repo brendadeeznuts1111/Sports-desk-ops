@@ -142,25 +142,24 @@ describe("Bun 1.4.4 package-manager behaviors", () => {
   });
 
   test("bun add -d / --save-prod move an existing dependency group", () => {
-    const repoPkg = JSON.parse(
-      readFileSync(join(import.meta.dir, "..", "package.json"), "utf8"),
-    ) as { devDependencies?: Record<string, string> };
-    const version = repoPkg.devDependencies?.typescript ?? "^5.9.3";
+    // Hermetic: the dependency is a local file: package, so neither the install
+    // nor the group move touches a registry.
     const dir = fixture();
+    const ref = localPackage(dir, "local");
     const manifest = readManifest(dir);
-    manifest.dependencies = { typescript: version };
+    manifest.dependencies = { "local-fixture": ref };
     writeFileSync(join(dir, "package.json"), JSON.stringify(manifest, null, 2));
     expect(run(dir, ["install"]).exitCode).toBe(0);
 
-    expect(run(dir, ["add", "-d", "typescript"]).exitCode).toBe(0);
+    expect(run(dir, ["add", "-d", "./local"]).exitCode).toBe(0);
     const dev = readManifest(dir);
-    expect(dev.devDependencies?.typescript).toBeDefined();
-    expect(dev.dependencies?.typescript).toBeUndefined();
+    expect(dev.devDependencies?.["local-fixture"]).toBeDefined();
+    expect(dev.dependencies?.["local-fixture"]).toBeUndefined();
 
-    expect(run(dir, ["add", "--save-prod", "typescript"]).exitCode).toBe(0);
+    expect(run(dir, ["add", "--save-prod", "./local"]).exitCode).toBe(0);
     const prod = readManifest(dir);
-    expect(prod.dependencies?.typescript).toBeDefined();
-    expect(prod.devDependencies?.typescript).toBeUndefined();
+    expect(prod.dependencies?.["local-fixture"]).toBeDefined();
+    expect(prod.devDependencies?.["local-fixture"]).toBeUndefined();
   });
 
   test("accepts translated hoist/omit flags", () => {
