@@ -19,6 +19,15 @@ import {
   R2S3Client,
 } from "../../../../lib/r2_s3_client.ts";
 import {
+  MARKET_KIND_MASK,
+  PERIOD_MASK,
+  PERIOD_SHIFT,
+  SUB_SPORT_MASK,
+  SUB_SPORT_SHIFT,
+  WAGER_TYPE_MASK,
+  WAGER_TYPE_SHIFT,
+} from "../../../../src/lib/portal_taxonomy_normalizer.ts";
+import {
   hydrateXmlOddsFeedIntoSoA,
   type XmlOddsFeedColumnStore,
 } from "../../../../src/lib/xml_feed_spine_hydrator.ts";
@@ -288,10 +297,10 @@ export function serializeSoAToCanonicalXml(
       name: "event",
       attributes: {
         id: String(store.eventId32Col[rowIndex]!),
-        subSportCode6: String((packed >>> 9) & 0x3f),
-        wagerTypeCode3: String((packed >>> 6) & 0x07),
-        periodCode4: String((packed >>> 2) & 0x0f),
-        marketKindCode2: String(packed & 0x03),
+        subSportCode6: String((packed >>> SUB_SPORT_SHIFT) & SUB_SPORT_MASK),
+        wagerTypeCode3: String((packed >>> WAGER_TYPE_SHIFT) & WAGER_TYPE_MASK),
+        periodCode4: String((packed >>> PERIOD_SHIFT) & PERIOD_MASK),
+        marketKindCode2: String(packed & MARKET_KIND_MASK),
         lineHundredths: String(store.lineHundredthsI32Col[rowIndex]!),
       },
     });

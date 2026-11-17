@@ -5,12 +5,18 @@
  * arrays; the returned edge is a single reused view, so callers must copy immediately.
  */
 
-import type { SubSportComboPackedKey15 } from "./portal_taxonomy_normalizer.ts";
+import {
+  COMBO_KEY15_MASK,
+  MARKET_KIND_MASK,
+  WAGER_TYPE_MASK,
+  WAGER_TYPE_SHIFT,
+  type SubSportComboPackedKey15,
+} from "./portal_taxonomy_normalizer.ts";
 
 const RING_HASH = 0x9e3779b1;
 const EDGE_HASH = 0x85ebca6b;
 const BURST_MS = 350;
-const SURGE_WINDOW_MS = 3_000;
+export const LIVE_BROADCAST_SURGE_WINDOW_MS = 3_000 as const;
 const SURGE_SLOTS = 1024;
 const SURGE_SLOT_MASK = SURGE_SLOTS - 1;
 const SURGE_MEMBER_CAP = 16;
@@ -19,11 +25,16 @@ export const LIVE_WAGER_TYPE_CODE3 = 7 as const;
 export const LIVE_BOT_FOLLOW_WINDOW_MS = 1_500 as const;
 export const PREGAME_API_BOT_WINDOW_MS = 5_000 as const;
 export const PREGAME_TIP_CHANNEL_WINDOW_MS = 90_000 as const;
-export const BROADCAST_SURGE_DISTINCT_THRESHOLD = 8 as const;
+export const LIVE_BROADCAST_SURGE_ACCOUNT_CAP = 8 as const;
+export const BROADCAST_SURGE_DISTINCT_THRESHOLD =
+  LIVE_BROADCAST_SURGE_ACCOUNT_CAP;
 
-export const REGIME_BIT_PREGAME = 0b01 as const;
-export const REGIME_BIT_LIVE = 0b10 as const;
-export const REGIME_BIT_BOTH = 0b11 as const;
+export const REGIME_PREGAME = 0b01 as const;
+export const REGIME_LIVE_IN_PLAY = 0b10 as const;
+export const REGIME_BOTH = 0b11 as const;
+export const REGIME_BIT_PREGAME = REGIME_PREGAME;
+export const REGIME_BIT_LIVE = REGIME_LIVE_IN_PLAY;
+export const REGIME_BIT_BOTH = REGIME_BOTH;
 
 export type WagerRegime = "PREGAME" | "LIVE_IN_PLAY";
 export type FollowClass =
@@ -60,7 +71,7 @@ export function classifyWagerRegime(
   isGsLiveBridge: boolean,
 ): WagerRegime {
   if (isGsLiveBridge) return "LIVE_IN_PLAY";
-  const wagerType3 = (packedComboKey15 >>> 6) & 0x7;
+  const wagerType3 = (packedComboKey15 >>> WAGER_TYPE_SHIFT) & WAGER_TYPE_MASK;
   return wagerType3 === LIVE_WAGER_TYPE_CODE3 ? "LIVE_IN_PLAY" : "PREGAME";
 }
 
@@ -146,7 +157,7 @@ export class SyndicateTrackerArena {
     leaderCustomerRow: 0,
     followerCustomerRow: 0,
     regime: "PREGAME",
-    regimeBit: REGIME_BIT_PREGAME,
+    regimeBit: REGIME_PREGAME,
     followClass: "PREGAME_API_BOT",
     followCountU32: 0,
     lagMsU32: 0,
@@ -247,7 +258,12 @@ export class SyndicateTrackerArena {
         : PREGAME_TIP_CHANNEL_WINDOW_MS
       : (arg6 ?? 15_000);
     const lineSig32 = isDualRegime
-      ? computeRegimeLineSig32(regime, arg4, packedComboKey15 & 0x3, arg5)
+      ? computeRegimeLineSig32(
+          regime,
+          arg4,
+          packedComboKey15 & MARKET_KIND_MASK,
+          arg5,
+        )
       : arg4;
 
     if (
@@ -267,7 +283,7 @@ export class SyndicateTrackerArena {
     if (
       !Number.isInteger(packedComboKey15) ||
       packedComboKey15 < 0 ||
-      packedComboKey15 > 0x7fff
+      packedComboKey15 > COMBO_KEY15_MASK
     ) {
       throw new RangeError(
         `ERR_DOD_BITFIELD_RANGE_OVERFLOW: packedComboKey15=${String(packedComboKey15)}`,
@@ -321,7 +337,7 @@ export class SyndicateTrackerArena {
     // 3. Leader/follower ring.
     const lineSig = lineSig32 >>> 0;
     const regimeBit =
-      regime === "LIVE_IN_PLAY" ? REGIME_BIT_LIVE : REGIME_BIT_PREGAME;
+      regime === "LIVE_IN_PLAY" ? REGIME_LIVE_IN_PLAY : REGIME_PREGAME;
     let slot =
       (Math.imul(eventId32 ^ packedComboKey15, RING_HASH) ^ lineSig) &
       this.ringMask;
@@ -407,7 +423,8 @@ export class SyndicateTrackerArena {
       const storedEvent = this.surgeEventId[slot]!;
       const startMs = this.surgeWindowStartMs[slot]!;
       const expired =
-        storedEvent !== 0 && nowEpochMs - startMs > SURGE_WINDOW_MS;
+        storedEvent !== 0 &&
+        nowEpochMs - startMs > LIVE_BROADCAST_SURGE_WINDOW_MS;
       if (storedEvent === 0 || expired) {
         const oldCount = Math.min(
           this.surgeDistinctCount[slot]!,
@@ -429,7 +446,7 @@ export class SyndicateTrackerArena {
         const base = slot * SURGE_MEMBER_CAP;
         for (let i = 0; i < checkLen; i += 1) {
           if (this.surgeMembers[base + i] === member1) {
-            return count > BROADCAST_SURGE_DISTINCT_THRESHOLD;
+            return count > LIVE_BROADCAST_SURGE_ACCOUNT_CAP;
           }
         }
         if (count < SURGE_MEMBER_CAP) {
@@ -437,7 +454,7 @@ export class SyndicateTrackerArena {
         }
         const nextCount = count + 1;
         this.surgeDistinctCount[slot] = nextCount;
-        return nextCount > BROADCAST_SURGE_DISTINCT_THRESHOLD;
+        return nextCount > LIVE_BROADCAST_SURGE_ACCOUNT_CAP;
       }
       slot = (slot + 1) & SURGE_SLOT_MASK;
     }

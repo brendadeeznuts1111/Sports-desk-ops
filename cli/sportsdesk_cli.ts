@@ -24,11 +24,7 @@ import {
   startBotDaemon,
 } from "../services/reporting_scheduler_service.ts";
 import { runFullBettorSimulationPipeline } from "../services/simulate_bettor_churn_suite.ts";
-import {
-  syncReportsDirectory,
-  verifyR2Connection,
-  getR2ConfigInfo,
-} from "../services/sportsdesk_r2_sync.ts";
+import { getR2ConfigInfo } from "../services/sportsdesk_r2_sync.ts";
 import {
   describeAnsiTheme,
   parseAnsiMarkdownCliOptions,
@@ -2645,17 +2641,79 @@ export async function main(): Promise<void> {
 
   if (cmd === "r2") {
     const sub = rawArgs[1] || "--info";
+    const jsonFlag = rawArgs.includes("--json");
+    const includeBridges = rawArgs.includes("--include-bridges");
     if (sub === "--info" || sub === "info") {
       getR2ConfigInfo();
     } else if (sub === "--verify" || sub === "verify") {
-      await verifyR2Connection();
+      const { verifyCanonicalR2Surface } =
+        await import("../services/sportsdesk_r2_sync.ts");
+      const { mapR2ErrorExitCode } = await import("../lib/r2_manifest_cas.ts");
+      try {
+        const ok = await verifyCanonicalR2Surface({
+          json: jsonFlag,
+          includeBridges,
+        });
+        if (!ok) process.exitCode = 65;
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+        process.exitCode = mapR2ErrorExitCode(err);
+      }
     } else if (sub === "--sync" || sub === "sync") {
-      const targetDir = rawArgs[2] || "reports";
-      await syncReportsDirectory(targetDir);
+      const { syncCanonicalR2Surface } =
+        await import("../services/sportsdesk_r2_sync.ts");
+      const { mapR2ErrorExitCode } = await import("../lib/r2_manifest_cas.ts");
+      const targetDir =
+        rawArgs.slice(2).find((arg) => !arg.startsWith("-")) || "reports";
+      try {
+        await syncCanonicalR2Surface({ targetDir, json: jsonFlag });
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+        process.exitCode = mapR2ErrorExitCode(err);
+      }
     } else {
       console.log(
-        "Usage: bun sportsdesk_cli.ts r2 [--info|--verify|--sync <dir>]",
+        "Usage: bun sportsdesk_cli.ts r2 [--info|--verify [--json] [--include-bridges]|--sync [dir] [--json]]",
       );
+    }
+    return;
+  }
+
+  if (cmd === "stale") {
+    if (rawArgs.includes("-i") || rawArgs.includes("--input")) {
+      const proc = Bun.spawn(
+        ["bun", "run", "scripts/stale_line_cohort_cli.ts", ...rawArgs.slice(1)],
+        {
+          cwd: repoRoot,
+          stdout: "inherit",
+          stderr: "inherit",
+          stdin: "inherit",
+        },
+      );
+      process.exitCode = await proc.exited;
+      return;
+    }
+    const { runCanonicalStaleSurface } =
+      await import("../services/sportsdesk_r2_sync.ts");
+    const { mapR2ErrorExitCode } = await import("../lib/r2_manifest_cas.ts");
+    const jsonFlag = rawArgs.includes("--json");
+    const includeBridges = rawArgs.includes("--include-bridges");
+    const windowMinArg = getArgValue(rawArgs, ["--window-min"], "");
+    const parsedWindowMin = windowMinArg ? Number(windowMinArg) : Number.NaN;
+    const slaMs =
+      Number.isFinite(parsedWindowMin) && parsedWindowMin > 0
+        ? parsedWindowMin * 60_000
+        : undefined;
+    try {
+      const ok = await runCanonicalStaleSurface({
+        json: jsonFlag,
+        includeBridges,
+        ...(slaMs === undefined ? {} : { slaMs }),
+      });
+      if (!ok) process.exitCode = 1;
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exitCode = mapR2ErrorExitCode(err);
     }
     return;
   }

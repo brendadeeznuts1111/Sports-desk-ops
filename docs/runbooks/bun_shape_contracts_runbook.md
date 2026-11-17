@@ -124,7 +124,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/spawn)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/bun_terminal.ts`, `cli/sportsdesk_cli.ts`
+- **Here:** `cli/sportsdesk_cli.ts`, `lib/bun_terminal.ts`
 - **Evidence:** `surface:spawn`
 
 #### Bun.spawnSync
@@ -511,7 +511,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/CryptoHasher)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (2):** `algorithms`, `hash`
-- **Here:** `lib/gslive_users_report.ts`, `lib/r2_s3_client.ts`
+- **Here:** `lib/gslive_users_report.ts`, `lib/r2_manifest_cas.ts`
 - **Evidence:** `probe:crypto.hash`
 
 #### Bun.concatArrayBuffers

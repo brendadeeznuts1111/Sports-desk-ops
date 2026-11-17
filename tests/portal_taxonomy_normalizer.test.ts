@@ -1,12 +1,22 @@
 import { describe, expect, it } from "bun:test";
 import {
+  COMBO_KEY15_BITS,
+  COMBO_KEY15_MASK,
   DenseSubSportLookupTable,
+  MARKET_KIND_BITS,
   MARKET_KIND_MASK,
+  MARKET_KIND_SHIFT,
+  PERIOD_BITS,
   PERIOD_MASK,
+  PERIOD_SHIFT,
+  SUB_SPORT_BITS,
+  SUB_SPORT_MASK,
   SUB_SPORT_SHIFT,
   SUBSPORT_FIELD_MASK,
   SUBSPORT_UNKNOWN_CODE6,
+  WAGER_TYPE_BITS,
   WAGER_TYPE_MASK,
+  WAGER_TYPE_SHIFT,
   hydratePortalTaxonomyFromR2,
   packSubSportComboKey15,
   type PortalTaxonomyManifest,
@@ -210,9 +220,21 @@ describe("DenseSubSportLookupTable", () => {
 
 describe("packSubSportComboKey15", () => {
   it("packs [14:9] subSport6 | [8:6] wagerType3 | [5:2] period4 | [1:0] marketKind2", () => {
+    expect(MARKET_KIND_BITS).toBe(2);
+    expect(PERIOD_BITS).toBe(4);
+    expect(WAGER_TYPE_BITS).toBe(3);
+    expect(SUB_SPORT_BITS).toBe(6);
+    expect(MARKET_KIND_SHIFT).toBe(0);
+    expect(PERIOD_SHIFT).toBe(2);
+    expect(WAGER_TYPE_SHIFT).toBe(6);
+    expect(SUB_SPORT_SHIFT).toBe(9);
+    expect(SUB_SPORT_MASK).toBe(SUBSPORT_FIELD_MASK);
+    expect(COMBO_KEY15_BITS).toBe(15);
+    expect(COMBO_KEY15_MASK).toBe(0x7fff);
+
     const atpSet2Ml = packSubSportComboKey15(18, 0, 14, 2);
-    expect(atpSet2Ml).toBe((18 << SUB_SPORT_SHIFT) | (14 << 2) | 2);
-    expect((atpSet2Ml >>> SUB_SPORT_SHIFT) & SUBSPORT_FIELD_MASK).toBe(18);
+    expect(atpSet2Ml).toBe((18 << SUB_SPORT_SHIFT) | (14 << PERIOD_SHIFT) | 2);
+    expect((atpSet2Ml >>> SUB_SPORT_SHIFT) & SUB_SPORT_MASK).toBe(18);
 
     const unknownLiveSpread = packSubSportComboKey15(
       SUBSPORT_UNKNOWN_CODE6,
@@ -228,7 +250,7 @@ describe("packSubSportComboKey15", () => {
       PERIOD_MASK,
       MARKET_KIND_MASK,
     );
-    expect(maxKey).toBe(0x7fff);
+    expect(maxKey).toBe(COMBO_KEY15_MASK);
   });
 
   it("fails closed with ERR_DOD_BITFIELD_RANGE_OVERFLOW on negative, float, NaN, or out-of-range inputs", () => {

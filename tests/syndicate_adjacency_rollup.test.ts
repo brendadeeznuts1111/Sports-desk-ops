@@ -177,6 +177,7 @@ describe("flushTopSyndicateRingsToR2", () => {
       nextGenerationU32: 7,
       spineGenerationU32: 3,
       expectedPrevETag: '"prev"',
+      dataWindowMaxEpochMs: 1_699_999_995_000,
       flushEpochMs: 1_700_000_000_000,
       fetchImpl,
     });
@@ -197,10 +198,20 @@ describe("flushTopSyndicateRingsToR2", () => {
     expect(result.merkleRootSha256).toHaveLength(64);
 
     const manifest = JSON.parse(writes[0]!.body) as {
+      data_window_max_epoch_ms: number;
+      r2_published_at_epoch_ms: number;
+      poison_bit: number;
+      circuit_state: string;
+      unresolved_gap_cents: string;
       active_edge_count_u32: number;
       ring_count_u32: number;
       rings: unknown[];
     };
+    expect(manifest.data_window_max_epoch_ms).toBe(1_699_999_995_000);
+    expect(manifest.r2_published_at_epoch_ms).toBe(1_700_000_000_000);
+    expect(manifest.poison_bit).toBe(0);
+    expect(manifest.circuit_state).toBe("CLOSED");
+    expect(manifest.unresolved_gap_cents).toBe("0");
     expect(manifest.active_edge_count_u32).toBe(2);
     expect(manifest.ring_count_u32).toBe(1);
     expect(manifest.rings).toHaveLength(1);
@@ -232,15 +243,53 @@ describe("flushTopSyndicateRingsToR2", () => {
     const { store, writes } = makeStore('"prev"');
     const fetchImpl = (async () =>
       new Response("", { status: 412 })) as unknown as typeof fetch;
-    await expect(
-      flushTopSyndicateRingsToR2(store, arena, {
+    let capturedErr: unknown = null;
+    try {
+      await flushTopSyndicateRingsToR2(store, arena, {
         nextGenerationU32: 9,
         spineGenerationU32: 3,
         expectedPrevETag: '"prev"',
         fetchImpl,
-      }),
-    ).rejects.toThrow(/ERR_R2_MANIFEST_CAS_REJECTED/);
+      });
+    } catch (err) {
+      capturedErr = err;
+    }
+    expect(capturedErr).toBeInstanceOf(Error);
+    expect((capturedErr as Error).message).toMatch(
+      /ERR_R2_MANIFEST_CAS_REJECTED/,
+    );
+    expect((capturedErr as { exitCode?: number }).exitCode).toBe(74);
     expect(writes).toHaveLength(2);
+  });
+
+  test("initial gen=1 promotion uses If-None-Match=* when manifest is absent", async () => {
+    const arena = buildArena();
+    const { store, writes, setEtag } = makeStore("");
+    const fetchCalls: Array<{ init: RequestInit }> = [];
+    const fetchImpl = (async (_input: string, init?: RequestInit) => {
+      fetchCalls.push({ init: init ?? {} });
+      setEtag('"gen1"');
+      return new Response("", {
+        status: 200,
+        headers: { etag: '"gen1"' },
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await flushTopSyndicateRingsToR2(store, arena, {
+      nextGenerationU32: 1,
+      spineGenerationU32: 1,
+      expectedPrevETag: "*",
+      dataWindowMaxEpochMs: 1_700_000_000_000,
+      flushEpochMs: 1_700_000_001_000,
+      fetchImpl,
+    });
+
+    expect(writes).toHaveLength(2);
+    expect(fetchCalls).toHaveLength(1);
+    expect(new Headers(fetchCalls[0]!.init.headers).get("If-None-Match")).toBe(
+      "*",
+    );
+    expect(result.newETag).toBe('"gen1"');
   });
 
   test("empty expected ETag fails before any write", async () => {

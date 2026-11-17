@@ -115,6 +115,12 @@ import {
   type StoredFlagReview,
 } from "./review.ts";
 import { DETERMINISTIC_RULES, customerRefOf, type RuleName } from "./rules.ts";
+import {
+  PairwiseCrossRefError,
+  SYNDICATE_RINGS_MANIFEST_KEY,
+  WAGERS_BY_STATE_MANIFEST_KEY,
+  runPairwiseCrossRefCli,
+} from "../packages/sportsdesk-ops/src/bin/sportsdesk-fraud-cross-ref.ts";
 
 const EXIT_OK = 0;
 const EXIT_USAGE = 2;
@@ -1947,6 +1953,27 @@ async function cmdExplore(
   });
 }
 
+/**
+ * Live R2-backed columnar pairwise customer wager cross-reference.
+ */
+async function cmdCrossRef(
+  tokens: readonly string[],
+  context: CliContext,
+): Promise<number> {
+  try {
+    await runPairwiseCrossRefCli(tokens, {
+      env: Bun.env,
+      jsonDefault: context.json,
+    });
+    return EXIT_OK;
+  } catch (error) {
+    if (error instanceof PairwiseCrossRefError) {
+      throw new CliError(error.errorCode, error.message, {}, error.exitCode);
+    }
+    throw error;
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Help                                                                        */
 /* -------------------------------------------------------------------------- */
@@ -2277,6 +2304,45 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
     options: [],
     examples: ["bun run cli/sportsdesk_fraud_cli.ts research --json"],
   },
+  {
+    name: "cross-ref",
+    summary: "Live R2-backed columnar pairwise customer wager cross-reference",
+    usage:
+      "cross-ref <customerA> <customerB> [--bridge all|f402|gslive] [--max-overlaps N] [flags]",
+    detail: [
+      `Hydrates contiguous SoA columns via Bun.S3Client from sportsdesk-ops-reports R2 manifests`,
+      `(${WAGERS_BY_STATE_MANIFEST_KEY} and ${SYNDICATE_RINGS_MANIFEST_KEY}) and runs`,
+      "zero-Map/zero-Set deduplicated follower attribution between customerA and customerB.",
+      "Local file flags (--input/--file) and .json/.jsonl/.sqlite/.dodbin paths fail closed",
+      "with ERR_OPS_LOCAL_JSON_FORBIDDEN (exit 78).",
+    ],
+    arguments: [
+      {
+        flags: "<customerA>",
+        description: "Primary / reference customer login (e.g. C001).",
+      },
+      {
+        flags: "<customerB>",
+        description: "Comparison customer login (e.g. C002).",
+      },
+    ],
+    options: [
+      {
+        flags: "--bridge <all|f402|gslive>",
+        description:
+          "Filter evaluation to one bridge or all bridges (default: all).",
+      },
+      {
+        flags: "--max-overlaps <N>",
+        description:
+          "Maximum sample overlaps in --json output (0-1024, default 16).",
+      },
+    ],
+    examples: [
+      "bun x sportsdesk-fraud cross-ref C001 C002 --json",
+      "bun x sportsdesk-fraud cross-ref C001 C002 --bridge f402 --max-overlaps 32 --json",
+    ],
+  },
 ];
 
 function formatHelpRows(rows: readonly HelpRow[]): string {
@@ -2389,6 +2455,9 @@ async function dispatch(
       return cmdDossier(args, context);
     case "research":
       return cmdResearch(args, context);
+    case "cross-ref":
+    case "pairwise-cross-ref":
+      return cmdCrossRef(args, context);
     default:
       usageError(
         command,

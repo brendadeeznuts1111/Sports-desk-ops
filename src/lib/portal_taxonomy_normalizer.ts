@@ -8,12 +8,28 @@
 /** 15-bit combo key (0..32767). Kept as a named alias for call-site clarity. */
 export type SubSportComboPackedKey15 = number;
 
-export const SUBSPORT_UNKNOWN_CODE6 = 0;
-export const SUBSPORT_FIELD_MASK = 0x3f; // 6 bits
-export const SUB_SPORT_SHIFT = 9; // [14:9]
-export const WAGER_TYPE_MASK = 0x07; // [8:6]
-export const PERIOD_MASK = 0x0f; // [5:2]
-export const MARKET_KIND_MASK = 0x03; // [1:0]
+export const SUBSPORT_UNKNOWN_CODE6 = 0 as const;
+
+export const MARKET_KIND_BITS = 2 as const;
+export const PERIOD_BITS = 4 as const;
+export const WAGER_TYPE_BITS = 3 as const;
+export const SUB_SPORT_BITS = 6 as const;
+
+export const MARKET_KIND_SHIFT = 0 as const;
+export const PERIOD_SHIFT = (MARKET_KIND_SHIFT + MARKET_KIND_BITS) as 2; // [5:2]
+export const WAGER_TYPE_SHIFT = (PERIOD_SHIFT + PERIOD_BITS) as 6; // [8:6]
+export const SUB_SPORT_SHIFT = (WAGER_TYPE_SHIFT + WAGER_TYPE_BITS) as 9; // [14:9]
+
+export const MARKET_KIND_MASK = ((1 << MARKET_KIND_BITS) - 1) as 0x03; // [1:0]
+export const PERIOD_MASK = ((1 << PERIOD_BITS) - 1) as 0x0f; // [5:2]
+export const WAGER_TYPE_MASK = ((1 << WAGER_TYPE_BITS) - 1) as 0x07; // [8:6]
+export const SUB_SPORT_MASK = ((1 << SUB_SPORT_BITS) - 1) as 0x3f; // [14:9]
+export const SUBSPORT_FIELD_MASK = SUB_SPORT_MASK;
+export const COMBO_KEY15_BITS = (SUB_SPORT_BITS +
+  WAGER_TYPE_BITS +
+  PERIOD_BITS +
+  MARKET_KIND_BITS) as 15;
+export const COMBO_KEY15_MASK = ((1 << COMBO_KEY15_BITS) - 1) as 0x7fff;
 
 export interface PortalTaxonomyEntry {
   readonly sport: string;
@@ -118,15 +134,15 @@ export function packSubSportComboKey15(
   period4: number,
   marketKind2: number,
 ): SubSportComboPackedKey15 {
-  assertField("subSport6", subSport6, SUBSPORT_FIELD_MASK);
+  assertField("subSport6", subSport6, SUB_SPORT_MASK);
   assertField("wagerType3", wagerType3, WAGER_TYPE_MASK);
   assertField("period4", period4, PERIOD_MASK);
   assertField("marketKind2", marketKind2, MARKET_KIND_MASK);
   return (
-    ((subSport6 & SUBSPORT_FIELD_MASK) << SUB_SPORT_SHIFT) |
-    ((wagerType3 & WAGER_TYPE_MASK) << 6) |
-    ((period4 & PERIOD_MASK) << 2) |
-    (marketKind2 & MARKET_KIND_MASK)
+    ((subSport6 & SUB_SPORT_MASK) << SUB_SPORT_SHIFT) |
+    ((wagerType3 & WAGER_TYPE_MASK) << WAGER_TYPE_SHIFT) |
+    ((period4 & PERIOD_MASK) << PERIOD_SHIFT) |
+    ((marketKind2 & MARKET_KIND_MASK) << MARKET_KIND_SHIFT)
   );
 }
 
@@ -158,9 +174,9 @@ export class DenseSubSportLookupTable {
     let keyCount = 0;
     for (const entry of entries) {
       const code = entry.denseCode6;
-      if (!Number.isInteger(code) || code <= 0 || code > SUBSPORT_FIELD_MASK) {
+      if (!Number.isInteger(code) || code <= 0 || code > SUB_SPORT_MASK) {
         throw rangeError(
-          `denseCode6=${String(code)} outside 1..${SUBSPORT_FIELD_MASK}`,
+          `denseCode6=${String(code)} outside 1..${SUB_SPORT_MASK}`,
         );
       }
       if (seenCodes.has(code)) {

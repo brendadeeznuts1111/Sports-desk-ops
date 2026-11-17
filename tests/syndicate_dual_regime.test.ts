@@ -3,11 +3,16 @@ import { packSubSportComboKey15 } from "../src/lib/portal_taxonomy_normalizer";
 import {
   BROADCAST_SURGE_DISTINCT_THRESHOLD,
   LIVE_BOT_FOLLOW_WINDOW_MS,
+  LIVE_BROADCAST_SURGE_ACCOUNT_CAP,
+  LIVE_BROADCAST_SURGE_WINDOW_MS,
   LIVE_WAGER_TYPE_CODE3,
   PREGAME_TIP_CHANNEL_WINDOW_MS,
   REGIME_BIT_BOTH,
   REGIME_BIT_LIVE,
   REGIME_BIT_PREGAME,
+  REGIME_BOTH,
+  REGIME_LIVE_IN_PLAY,
+  REGIME_PREGAME,
   SyndicateTrackerArena,
   classifyWagerRegime,
   computeRegimeLineSig32,
@@ -15,6 +20,16 @@ import {
 import { SyndicateAdjacencyRollupArena } from "../src/lib/syndicate_adjacency_rollup";
 
 describe("classifyWagerRegime & computeRegimeLineSig32", () => {
+  it("exposes aligned dual-regime surge and regime-bit constants", () => {
+    expect(LIVE_BROADCAST_SURGE_WINDOW_MS).toBe(3_000);
+    expect(LIVE_BROADCAST_SURGE_ACCOUNT_CAP).toBe(
+      BROADCAST_SURGE_DISTINCT_THRESHOLD,
+    );
+    expect(REGIME_PREGAME).toBe(REGIME_BIT_PREGAME);
+    expect(REGIME_LIVE_IN_PLAY).toBe(REGIME_BIT_LIVE);
+    expect(REGIME_BOTH).toBe(REGIME_BIT_BOTH);
+  });
+
   it("classifies LIVE_IN_PLAY via either isGsLiveBridge=true or wagerType3=7", () => {
     const pregameStraightKey = packSubSportComboKey15(3, 0, 0, 0); // NBA | Straight | GAME | SPREAD
     const liveInPlayKey = packSubSportComboKey15(
