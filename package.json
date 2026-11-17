@@ -390,7 +390,10 @@
     "audit:deps": "bun audit --ignore=GHSA-fc5q-39xc-vjpf",
     "audit:deps:json": "bun audit --json",
     "validate:field-contract": "bun scripts/validate_wagers_field_contract.ts",
-    "profiles:harvest": "bun run scripts/harvest_live_profiles.ts"
+    "profiles:harvest": "bun run scripts/harvest_live_profiles.ts",
+    "check:pm-state": "bun install --frozen-lockfile && bun prune --check",
+    "predev": "bun run check:pm-state && bun test tests/pm_state.test.ts",
+    "test:pm-contracts": "bun test tests/bun_pm_behaviors.test.ts"
   },
   "keywords": [
     "sportsdesk",

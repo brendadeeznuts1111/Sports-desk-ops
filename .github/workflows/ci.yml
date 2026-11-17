@@ -185,6 +185,8 @@ jobs:
 
       - name: Bun test changed files
         run: bun run test:changed
+      - name: PM contract suite
+        run: bun run test:pm-contracts
       - name: Changed dsh-plugin bundles (verify-load)
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
