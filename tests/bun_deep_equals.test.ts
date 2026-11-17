@@ -26,6 +26,13 @@ describe("Bun.deepEquals", () => {
     expect(Bun.deepEquals({}, { a: undefined }, false)).toBe(true);
   });
 
+  test("an extra undefined own key is ignored loose and rejected strict", () => {
+    const a = { entries: [1, 2] };
+    const b = { entries: [1, 2], extra: undefined };
+    expect(Bun.deepEquals(a, b)).toBe(true);
+    expect(Bun.deepEquals(a, b, true)).toBe(false);
+  });
+
   test("strict mode distinguishes undefined inside arrays", () => {
     expect(Bun.deepEquals(["asdf"], ["asdf", undefined], true)).toBe(false);
     expect(Bun.deepEquals(["asdf"], ["asdf", undefined], false)).toBe(true);

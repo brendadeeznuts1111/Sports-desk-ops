@@ -41,7 +41,7 @@ export interface DegradedReason {
   readonly severity: DegradedReasonSeverity;
 }
 
-export type F402AuthStatus = "ok" | "missing" | "expired";
+export type F402AuthStatus = "ok" | "missing" | "expired" | "unverified";
 
 export interface F402AuthProbe {
   readonly status: F402AuthStatus;
@@ -244,6 +244,18 @@ function probeF402Auth(
     const expiresInSeconds = Number.isFinite(expiresAt)
       ? Math.max(0, Math.floor((expiresAt - nowMs) / 1000))
       : null;
+    // Expiry is necessary but not sufficient: a Cloudflare-only cookie jar can
+    // be unexpired and still return 401 on every portal read.
+    const cloudflareOnly = session.cookieNames.every((name) =>
+      ["cf_clearance", "__cf_bm", "_cfuvid", "csrftoken"].includes(name),
+    );
+    if (session.authorizationHeader === undefined && cloudflareOnly) {
+      return {
+        status: "unverified",
+        source: "session-file",
+        expiresInSeconds,
+      };
+    }
     return { status: "ok", source: "session-file", expiresInSeconds };
   }
   const path = resolveF402SessionPath();
@@ -450,6 +462,9 @@ function f402Remediation(
       ? "Auto-mint queued"
       : "Manual F402_LIVE_LOGIN=1 required";
   }
+  if (status === "unverified") {
+    return "F402_LIVE_LOGIN=1 bun run session:login --from-keychain";
+  }
   return null;
 }
 
@@ -596,6 +611,18 @@ export async function buildDeskEnhancedHealth(
         action:
           f402.remediation ??
           "F402_LIVE_LOGIN=1 bun run session:login --from-keychain",
+      },
+    );
+  } else if (f402.status === "unverified") {
+    pushDegradedReason(
+      degradedReasons,
+      "F402 session has no portal auth cookie (Cloudflare-only)",
+      "auth",
+      {
+        action:
+          f402.remediation ??
+          "F402_LIVE_LOGIN=1 bun run session:login --from-keychain",
+        severity: "error",
       },
     );
   }

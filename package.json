@@ -316,6 +316,8 @@
     "probes:index": "bun run scripts/capture/probe_index.ts",
     "probes:prune": "bun run scripts/capture/probes_prune.ts",
     "customers": "bun run scripts/customer_lookup.ts",
+    "wagers:review": "bun run scripts/customer_wager_review.ts",
+    "customer:wagers": "bun run scripts/customer_wager_review.ts",
     "capture:evidence:live": "bun run scripts/evidence_capture.ts --mode live",
     "apply:captures": "bun run scripts/apply_captures.ts",
     "docs:audit:portal": "bun run scripts/audit_docs_portal.ts --once",

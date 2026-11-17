@@ -66,6 +66,7 @@ const { values, positionals } = parseArgs({
     fetch: { type: "boolean" },
     "agent-id": { type: "string" },
     "agent-type": { type: "string" },
+    "agent-owner": { type: "string" },
     profile: { type: "string" },
     cookie: { type: "string" },
     bust: { type: "string", default: "1.0.280" },
@@ -86,6 +87,7 @@ if (values.help) {
   --dry-run        Print redacted request fields only (with --fetch)
   --fetch          POST getListAgenstByAgent (needs --agent-id, --agent-type, session file)
   --profile        Ignored: export it first with \`bun run session:login --from-profile <dir>\`
+  --agent-owner    agentOwner form field (default: --agent-id)
   --players-mode   Override F402_PLAYERS_MODE for this run
   --bust           Manager bundle version for audit drift
   DEBUG_TRACE=1    Print Bun.inspect.table step timings
@@ -132,8 +134,12 @@ async function runPipeline(): Promise<void> {
       if (agentId === "") {
         throw new Error("--fetch requires --agent-id or F402_AGENT_ID");
       }
+      const agentOwner =
+        values["agent-owner"]?.trim() ??
+        Bun.env.F402_AGENT_OWNER?.trim() ??
+        agentId;
       const body = buildHierarchyFormBody(
-        { agentID: agentId, agentType },
+        { agentID: agentId, agentType, agentOwner },
         MANAGER_RRO,
       );
       const url = `${PROBE_HOST}/cloud/api/Manager/getListAgenstByAgent`;
@@ -194,7 +200,11 @@ async function runPipeline(): Promise<void> {
             agentId,
           );
         }
-        throw e;
+        if (Bun.env.F402_ALLOW_AGENT_COLLISIONS?.trim() === "1") {
+          console.error(`quarantined agent login collision: ${String(e)}`);
+        } else {
+          throw e;
+        }
       }
       const mem = estimatePlayersShallowBytes(envelope.PLAYERS);
       if (mem !== null && mode === "full") {

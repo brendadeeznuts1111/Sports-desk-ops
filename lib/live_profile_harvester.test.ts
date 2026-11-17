@@ -20,6 +20,8 @@ function writeJson(relativePath: string, value: unknown): void {
   writeFileSync(path, JSON.stringify(value, null, 2));
 }
 
+let nextWagerNumber = 700001;
+
 function wagerRow(
   customerId: string,
   insertedAt: string,
@@ -30,6 +32,8 @@ function wagerRow(
     AgentID: "AG1",
     TicketWriter: "gslive",
     AmountWagered: 10000,
+    ToWinAmount: 25000,
+    WagerNumber: nextWagerNumber++,
     ShortDesc: "Lakers -3",
     WagerType: "S",
     InsertDateTime: insertedAt,
@@ -170,5 +174,65 @@ describe("live profile harvester reports measured values only", () => {
   test("a single stake has a zero Gini, not a default coefficient", async () => {
     const { map } = await byId();
     expect(map.get("CUST_SINGLE")?.gini).toBe(0);
+  });
+
+  test("carries ticket-level open positions, not just the six-row sample", async () => {
+    const { map } = await byId();
+    const burst = map.get("CUST_BURST");
+    expect(burst?.positions).toHaveLength(3);
+    expect(burst?.positions[0]).toMatchObject({
+      sport: "Football",
+      wagerType: "S",
+      description: "Lakers -3",
+      riskUsd: 100,
+      toWinUsd: 250,
+      status: "open",
+      source: "live-wagers",
+    });
+    expect(map.get("CUST_SINGLE")?.positions).toHaveLength(1);
+  });
+});
+
+describe("position identity refusals", () => {
+  test("pending rows without a ticket are refused, not keyed on wagerNumber 1", async () => {
+    const root = mkdtempSync(join(tmpdir(), "harvester-null-ticket-"));
+    try {
+      mkdirSync(join(root, "data"), { recursive: true });
+      writeFileSync(
+        join(root, "data/live-bets.json"),
+        JSON.stringify({
+          games: [
+            {
+              customerID: "NT_CUST",
+              wagerNumber: "1",
+              wagered: 100,
+              toWin: 200,
+              sport: "Basketball",
+              description: "first ticket without a ticket number",
+            },
+            {
+              customerID: "NT_CUST",
+              wagerNumber: "1",
+              wagered: 100,
+              toWin: 200,
+              sport: "Basketball",
+              description: "second ticket without a ticket number",
+            },
+          ],
+        }),
+      );
+      const result = await harvestLiveCustomerProfiles({
+        repoRoot: root,
+        limit: 10,
+      });
+      expect(result.positionRefusals).toEqual({
+        nullTicket: 2,
+        nullWager: 0,
+      });
+      const profile = result.profiles.find((p) => p.id === "NT_CUST");
+      expect(profile?.positions ?? []).toHaveLength(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

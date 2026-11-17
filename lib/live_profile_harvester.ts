@@ -23,6 +23,8 @@ import {
   type Dod6V54LifetimeReader,
 } from "./dod6_v54_lifetime_reader.ts";
 import { normalizeCanonicalCustomer } from "./dod6_spine_overlay.ts";
+import { ticketWriterDisposition } from "./live_writer_policy.ts";
+import { positionIdentity } from "./position_identity.ts";
 
 export type LiveAnomalyFlag =
   | "WHALE_SINGLE_AGENT_CONDUIT"
@@ -103,6 +105,27 @@ export interface HarvestedLiveProfile {
   readonly dodBinaryRow: number | null;
   readonly anomalyFlags: readonly LiveAnomalyFlag[];
   readonly sampleWagers: readonly HarvestedSampleWager[];
+  /** Open ticket-level positions from the live captures, not the six-row sample. */
+  readonly positions: readonly HarvestedPosition[];
+}
+
+/** One open ticket attributed to a customer. `status` is open by construction: settled rows come
+ * from the graded/ledger artifacts, not these live captures. */
+export interface HarvestedPosition {
+  /** The pending capture's per-row identity; `wagerNumber` is "1" on every row. */
+  readonly ticketNumber: string | null;
+  readonly wagerNumber: string | null;
+  readonly sport: string;
+  readonly wagerType: string;
+  readonly description: string;
+  readonly riskUsd: number;
+  readonly toWinUsd: number | null;
+  readonly placedAtIso: string | null;
+  readonly writer: string | null;
+  readonly vip: boolean;
+  /** Placeholder until settled positions are wired: every captured row is open by construction. */
+  readonly status: "open";
+  readonly source: "live-wagers" | "live-bets";
 }
 
 export type HarvestSourceStatus = "ok" | "missing" | "malformed";
@@ -125,6 +148,11 @@ export interface LiveProfileHarvestResult {
   readonly dodSpineMatchedCount: number;
   readonly flaggedProfilesCount: number;
   readonly patternCounts: Readonly<Record<LiveAnomalyFlag, number>>;
+  /** Positions dropped for having no honest identity; the denominator travels with the stat. */
+  readonly positionRefusals: {
+    readonly nullTicket: number;
+    readonly nullWager: number;
+  };
   /** Missing/malformed inputs are named; a zero scan is never mistaken for a clean read. */
   readonly sources: HarvestSources;
   readonly profiles: readonly HarvestedLiveProfile[];
@@ -154,6 +182,8 @@ interface RawAccumulator {
   sports: Map<string, number>;
   wagerTypes: Map<string, number>;
   sampleWagers: HarvestedSampleWager[];
+  /** Every open ticket seen for this customer, deduped by wager number across captures. */
+  positions: HarvestedPosition[];
   latestSelection: string;
   dodSettledStakedCents: number | null;
   dodSettledNetCents: number | null;
@@ -569,6 +599,7 @@ function buildProfileFromAccumulator(
     dodBinaryRow,
     anomalyFlags: flags,
     sampleWagers: acc.sampleWagers.slice(0, 6),
+    positions: [...acc.positions].sort((a, b) => b.riskUsd - a.riskUsd),
   };
 }
 
@@ -603,6 +634,8 @@ export async function harvestLiveCustomerProfiles(
     dodSpine: "missing",
   };
 
+  const positionRefusals = { nullTicket: 0, nullWager: 0 };
+
   const getOrCreate = (rawId: string, rawAgent: string): RawAccumulator => {
     const id = rawId.trim().toUpperCase();
     const agentId = rawAgent.trim().toUpperCase() || "UNASSIGNED";
@@ -624,6 +657,7 @@ export async function harvestLiveCustomerProfiles(
         sports: new Map(),
         wagerTypes: new Map(),
         sampleWagers: [],
+        positions: [],
         latestSelection: "",
         dodSettledStakedCents: null,
         dodSettledNetCents: null,
@@ -720,11 +754,12 @@ export async function harvestLiveCustomerProfiles(
         const desc = String(r.ShortDesc ?? "").trim();
         const wt = String(r.WagerType ?? "S").trim();
 
-        if (writer === "alert") {
+        const writerDisposition = ticketWriterDisposition(writer);
+        if (writerDisposition === "alert") {
           acc.alertMirrorTriggers++;
           continue;
         }
-        if (writer === "blocked") continue;
+        if (writerDisposition === "blocked") continue;
 
         const whenMs = Date.parse(String(r.InsertDateTime ?? ""));
         acc.liveWagerStakesUsd.push(stakeUsd);
@@ -742,6 +777,33 @@ export async function harvestLiveCustomerProfiles(
               : "Football";
         acc.sports.set(sport, (acc.sports.get(sport) ?? 0) + 1);
         acc.wagerTypes.set(wt, (acc.wagerTypes.get(wt) ?? 0) + 1);
+
+        const toWinCents = Number(r.ToWinAmount);
+        const wagerNumber = String(r.WagerNumber ?? "").trim();
+        const tickerPosition: HarvestedPosition = {
+          ticketNumber: null,
+          wagerNumber: wagerNumber === "" ? null : wagerNumber,
+          sport,
+          wagerType: wt,
+          description: desc,
+          riskUsd: riskCents / 100,
+          toWinUsd: Number.isFinite(toWinCents) ? toWinCents / 100 : null,
+          placedAtIso: Number.isFinite(whenMs)
+            ? new Date(whenMs).toISOString()
+            : null,
+          writer: writer === "" ? null : writer,
+          vip: Boolean(r.VIP),
+          status: "open",
+          source: "live-wagers",
+        };
+        const tickerIdentity = positionIdentity(tickerPosition);
+        if (tickerIdentity.key === null) {
+          if (tickerIdentity.refusal === "null_ticket")
+            positionRefusals.nullTicket++;
+          else positionRefusals.nullWager++;
+        } else {
+          acc.positions.push(tickerPosition);
+        }
 
         if (acc.sampleWagers.length < 6 && desc) {
           acc.sampleWagers.push({
@@ -788,6 +850,50 @@ export async function harvestLiveCustomerProfiles(
         if (acc.openRisk24hCents === 0) {
           acc.openRisk24hCents += riskCents;
           acc.openTickets24h += 1;
+        }
+
+        const wagerNumber = String(g.wagerNumber ?? "").trim();
+        const ticketNumber = String(g.ticketNumber ?? "").trim();
+        const toWinCents = Number(g.toWin);
+        const position: HarvestedPosition = {
+          ticketNumber: ticketNumber === "" ? null : ticketNumber,
+          wagerNumber: wagerNumber === "" ? null : wagerNumber,
+          sport:
+            String(g.sport ?? "")
+              .trim()
+              .toUpperCase() || "OTHER",
+          wagerType: String(g.wagerType ?? "").trim(),
+          description: String(g.description ?? "").trim(),
+          riskUsd: riskCents / 100,
+          toWinUsd: Number.isFinite(toWinCents) ? toWinCents / 100 : null,
+          placedAtIso: String(g.acceptedAt ?? "").trim() || null,
+          writer: null,
+          vip: false,
+          status: "open",
+          source: "live-bets",
+        };
+        const positionKey = positionIdentity(position);
+        if (positionKey.key === null) {
+          if (positionKey.refusal === "null_ticket")
+            positionRefusals.nullTicket++;
+          else positionRefusals.nullWager++;
+          continue;
+        }
+        const existingIndex = acc.positions.findIndex(
+          (p) => positionIdentity(p).key === positionKey.key,
+        );
+        if (existingIndex >= 0) {
+          const existing = acc.positions[existingIndex]!;
+          acc.positions[existingIndex] = {
+            ...existing,
+            sport: position.sport !== "OTHER" ? position.sport : existing.sport,
+            wagerType: position.wagerType || existing.wagerType,
+            description: position.description || existing.description,
+            toWinUsd: position.toWinUsd ?? existing.toWinUsd,
+            placedAtIso: position.placedAtIso ?? existing.placedAtIso,
+          };
+        } else {
+          acc.positions.push(position);
         }
       }
       sources.liveBets = "ok";
@@ -925,6 +1031,7 @@ export async function harvestLiveCustomerProfiles(
     flaggedProfilesCount: allProfiles.filter((p) => p.anomalyFlags.length > 0)
       .length,
     patternCounts,
+    positionRefusals,
     sources,
     profiles: filtered.slice(0, limit),
   };
