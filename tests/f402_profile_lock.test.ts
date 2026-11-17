@@ -12,7 +12,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import {
   acquireProfileLock,
@@ -21,7 +20,7 @@ import {
 } from "../lib/f402_profile_lock.ts";
 
 const T0 = new Date("2026-01-01T00:00:00.000Z");
-const LOCK_MODULE_PATH = fileURLToPath(
+const LOCK_MODULE_PATH = Bun.fileURLToPath(
   new URL("../lib/f402_profile_lock.ts", import.meta.url),
 );
 

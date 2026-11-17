@@ -41,6 +41,20 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
     proc.kill();
   });
 
+  describe("Static directory routes", () => {
+    it("serves /static/* through Bun's native directory route", async () => {
+      const res = await fetch(`${baseUrl}/static/live-bets.html`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      expect(await res.text()).toContain("Live");
+    });
+
+    it("does not escape the static directory", async () => {
+      const res = await fetch(`${baseUrl}/static/../package.json`);
+      expect([400, 403, 404]).toContain(res.status);
+    });
+  });
+
   describe("DNS Telemetry Endpoints", () => {
     it("answers GET /api/dns with telemetry and core hosts", async () => {
       const res = await fetch(`${baseUrl}/api/dns`);

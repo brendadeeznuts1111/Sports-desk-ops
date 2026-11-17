@@ -64,6 +64,9 @@
     "schema:list": "bun run --cwd ../.. schema:list",
     "schema:json": "bun run --cwd ../.. schema:json"
   },
+  "dependencies": {
+    "typescript": "catalog:"
+  },
   "engines": {
     "bun": "1.4.4"
   }

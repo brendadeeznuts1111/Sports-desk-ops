@@ -99,6 +99,61 @@ describe("bookRowsToProfiles", () => {
     expect(single?.unknown).toContain("sizing");
     expect(single?.unknown).not.toContain("meanStake");
     expect(single?.meanStake).toBe(100);
+    expect(single?.var95Usd).toBe(0);
+    expect(single?.cvar95Usd).toBe(0);
+    expect(single?.sizingScore).toBe(0);
+    expect(single?.sizingStrategy).toBe("PENDING_TICKETS");
+    expect(single?.gini).toBe(0);
+  });
+
+  test("zero-risk tickets, single tickets, and missing delay_seconds stay signal-honest", () => {
+    const [noTix, zeroTix, oneTix, timedZero] = bookRowsToProfiles([
+      { customer_id: "no-tix", sharp_score: 60, recent_tickets: [] },
+      {
+        customer_id: "zero-tix",
+        sharp_score: 60,
+        recent_tickets: [{ risk_usd: 0 }, { risk_usd: 0 }],
+      },
+      {
+        customer_id: "one-tix",
+        sharp_score: 60,
+        recent_tickets: [{ risk_usd: 5 }],
+      },
+      {
+        customer_id: "timed-zero",
+        sharp_score: 60,
+        delay_seconds: 0,
+        recent_tickets: [],
+      },
+    ]);
+
+    expect(noTix?.sizingScore).toBe(0);
+    expect(noTix?.sizingStrategy).toBe("PENDING_TICKETS");
+    expect(noTix?.unknown).toContain("delay");
+
+    expect(zeroTix?.meanStake).toBe(0);
+    expect(zeroTix?.var95Usd).toBe(0);
+    expect(zeroTix?.gini).toBe(0);
+    expect(zeroTix?.sizingScore).toBe(0);
+    expect(zeroTix?.sizingStrategy).toBe("PENDING_TICKETS");
+    expect(zeroTix?.unknown).toEqual(
+      expect.arrayContaining(["meanStake", "sizing", "gini", "var95", "delay"]),
+    );
+
+    expect(oneTix?.meanStake).toBe(5);
+    expect(oneTix?.var95Usd).toBe(0);
+    expect(oneTix?.cvar95Usd).toBe(0);
+    expect(oneTix?.gini).toBe(0);
+    expect(oneTix?.sizingScore).toBe(0);
+    expect(oneTix?.sizingStrategy).toBe("PENDING_TICKETS");
+    expect(oneTix?.unknown).not.toContain("meanStake");
+    expect(oneTix?.unknown).toEqual(
+      expect.arrayContaining(["sizing", "gini", "var95", "delay"]),
+    );
+
+    expect(timedZero?.timingScore).toBe(0);
+    expect(timedZero?.inPlayDelaySec).toBe(0);
+    expect(timedZero?.unknown).not.toContain("delay");
   });
 
   test("a tie keeps the first-seen league", () => {

@@ -4160,7 +4160,14 @@ export function apply(ctx, config) {
         '"integrity" measures provenance features (documentation IP ranges, sequential ' +
         "subnets, placeholder selections, generated id families, coarse timestamp grids, " +
         "uniform sample sizes, duplicate rollups) and returns a derived character verdict, " +
-        "so a fixture-derived ranking cannot be read as an observation of real customers.",
+        "so a fixture-derived ranking cannot be read as an observation of real customers. " +
+        '"wagers" runs the repo\'s customer wager review (`bun run wagers:review <login>`): it ' +
+        "joins the pending capture, the ticker, the graded-wager exports, the newest users " +
+        "report that actually carries the login, the agent roster and the suspected-bot ledger, " +
+        "then reports open exposure, the settled record by structure, measured findings and the " +
+        "limits of the evidence. Unlike the other reports it does NOT require the customer to be " +
+        "in the book (the book is a fixture cohort on this desk); a login in no wager source " +
+        'returns available:false with reason "unknown_customer".',
       parameters: {
         type: "object",
         properties: {
@@ -4170,7 +4177,8 @@ export function apply(ctx, config) {
           },
           customerId: {
             type: "string",
-            description: 'Customer id for reports "lookup" and "profile".',
+            description:
+              'Customer id for reports "lookup" and "profile"; the customer login (e.g. "TTN97" or "player_TTN97") for report "wagers".',
           },
           customerIds: {
             type: "array",
@@ -4230,6 +4238,7 @@ export function apply(ctx, config) {
           "signals",
           "compare",
           "integrity",
+          "wagers",
         ];
         if (
           typeof request.report !== "string" ||
@@ -4249,6 +4258,60 @@ export function apply(ctx, config) {
           limit > 100
         ) {
           return invalidArguments("limit must be an integer from 1 to 100.");
+        }
+        if (request.report === "wagers") {
+          const customerId =
+            typeof request.customerId === "string"
+              ? request.customerId.trim()
+              : "";
+          if (customerId === "") {
+            return invalidArguments(
+              'customerId is required for report "wagers" (a customer login, e.g. "TTN97").',
+            );
+          }
+          const argv = [
+            "scripts/customer_wager_review.ts",
+            customerId,
+            "--json",
+            "--root",
+            repoPath,
+          ];
+          const command = `bun ${argv.join(" ")}`;
+          const result = await runBun(argv, settings.timeoutMs);
+          const parsed = parseJson(result.stdout.trim());
+          if (result.exitCode === 3 && parsed.ok) {
+            return {
+              ...parsed.value,
+              available: false,
+              ok: false,
+              reason: "unknown_customer",
+              command,
+              exitCode: 3,
+              durationMs: result.durationMs,
+            };
+          }
+          if (!result.ok || !parsed.ok) {
+            return {
+              available: false,
+              reason: result.timedOut ? "timed_out" : "cli_failed",
+              message:
+                result.spawnError === null
+                  ? `\`${command}\` exited ${result.exitCode}${result.timedOut ? " (timed out)" : ""} without a JSON review.`
+                  : `Could not run the wager review: ${result.spawnError}`,
+              command,
+              exitCode: result.exitCode,
+              durationMs: result.durationMs,
+              stderr: truncate(result.stderr, MAX_EXCERPT),
+            };
+          }
+          return {
+            ...parsed.value,
+            available: true,
+            ok: true,
+            command,
+            exitCode: result.exitCode,
+            durationMs: result.durationMs,
+          };
         }
         const book = readCustomerBook(repoPath);
         if (!book.ok) {

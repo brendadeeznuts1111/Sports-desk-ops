@@ -58,6 +58,11 @@ import { encodedResponse } from "../lib/http_compression.ts";
 import { parseShortDesc } from "../lib/live_wagers.ts";
 import { isSentinelTickerWriter } from "@sportsdesk-ops/backend";
 import { SLAB_SERVER } from "../lib/slab_config.ts";
+import {
+  inventoryStaticDirectory,
+  probeStaticDirectoryRoute,
+  type StaticDirectoryHealthProbe,
+} from "../lib/static_dir_probe.ts";
 import { inspectWagersWireContract } from "../lib/wagers_wire_contract.ts";
 import { loadWagersTabPolicyStamp } from "../lib/wagers_tab_policy.ts";
 import { SUBSPORT_TAXONOMY_CATALOG } from "../lib/market_taxonomy_catalog.ts";
@@ -393,6 +398,7 @@ export function startDashboardServer(
     readonly targets: Awaited<ReturnType<typeof computeDashboardDceMatrix>>;
     /** When the probe finished, so a cached re-serve cannot look freshly built. */
     readonly generatedAt: string;
+    readonly staticDir?: StaticDirectoryHealthProbe | undefined;
   } | null = null;
   let cachedLegacyBundle: CachedLegacyBundle | null = null;
   let inflightLegacyBundle: Promise<CachedLegacyBundle | null> | null = null;
@@ -426,23 +432,17 @@ export function startDashboardServer(
         jsOutput.arrayBuffer(),
         cssOutput ? cssOutput.arrayBuffer() : Promise.resolve(null),
       ]);
+      // Cache-key / ETag fallback — xxHash64 is fast and ephemeral to this process.
+      const bundleCacheHash = (
+        output: { hash?: string | null },
+        bytes: Uint8Array,
+      ): string => output.hash ?? Bun.hash(bytes).toString(16);
       const jsBytes = new Uint8Array<ArrayBuffer>(jsBuf);
-      const jsHash =
-        jsOutput.hash ??
-        new Bun.CryptoHasher("sha256")
-          .update(jsBytes)
-          .digest("hex")
-          .slice(0, 16);
+      const jsHash = bundleCacheHash(jsOutput, jsBytes);
       const cssBytes =
         cssBuf !== null ? new Uint8Array<ArrayBuffer>(cssBuf) : null;
       const cssHash =
-        cssOutput && cssBytes
-          ? (cssOutput.hash ??
-            new Bun.CryptoHasher("sha256")
-              .update(cssBytes)
-              .digest("hex")
-              .slice(0, 16))
-          : null;
+        cssOutput && cssBytes ? bundleCacheHash(cssOutput, cssBytes) : null;
 
       const bundle: CachedLegacyBundle = {
         jsBytes,
@@ -636,10 +636,18 @@ export function startDashboardServer(
       shadowDbPath: options.shadowDbPath,
       getBuildMatrix: async (force = false) => {
         if (force || cachedDceMatrixProbe === null) {
-          const targets = await computeDashboardDceMatrix();
+          const staticRoot = resolve(cwd, "static");
+          const [targets, staticDir] = await Promise.all([
+            computeDashboardDceMatrix(),
+            (serverRef !== null
+              ? probeStaticDirectoryRoute(serverRef.url.origin, staticRoot)
+              : inventoryStaticDirectory(staticRoot)
+            ).catch(() => undefined),
+          ]);
           cachedDceMatrixProbe = {
             targets,
             generatedAt: new Date().toISOString(),
+            ...(staticDir !== undefined ? { staticDir } : {}),
           };
         }
         return cachedDceMatrixProbe;
@@ -652,6 +660,9 @@ export function startDashboardServer(
   const uiRoutes = {
     "/": indexHtml,
     "/dashboard": indexHtml,
+    // Bun's native directory route: zero-JS static dispatch with range/ETag
+    // handling and symlink clamping; files live under repo `static/`.
+    "/static/*": { dir: resolve(cwd, "static") },
     "/index.js": {
       GET: async (req: Request): Promise<Response> => {
         const bundle = await ensureLegacyBundle();

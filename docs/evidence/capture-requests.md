@@ -370,7 +370,7 @@ change on a controlled account — the repo's builder deliberately never calls i
 Ledger rows: the 11 `POST /cloud/api/...` operations tagged `Tracked Operational Domains` (all tier C,
 `candidate_url: true`, `ui_observed: true`). Their path+method come from hand-authored constants in
 `scripts/portal_tile_crawler.ts:55-206`; the crawler's CLI
-entry runs the `offline` branch (`scripts/portal_tile_crawler.ts:693,777`) and never records network traffic.
+entry runs the `offline` branch (`scripts/portal_tile_crawler.ts:691,775`) and never records network traffic.
 The former post-processor draft (`append_tracked_domains.mjs`) was removed: it mutated the generated
 spec and reference outside the ledger, duplicated this table, and failed the docs gate.
 The markdown table calls them "Target Wire Endpoint", which is an overclaim. **Contradicted, re-read 2026-11-02:** `docs/api-reference.md` no longer contains that label.

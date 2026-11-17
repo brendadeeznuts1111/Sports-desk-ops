@@ -10,6 +10,7 @@ import * as uiBarrel from "../packages/ui/src/index.ts";
 import {
   AlertAuditDetail,
   AlertsTabPanel,
+  ApiUsageCard,
   BetTickerTabPanel,
   buildRegistryRootCss,
   BuildMatrixDrawer,
@@ -35,6 +36,11 @@ import {
   TOKENS_TOML_VERSION,
 } from "../packages/ui/src/tokens.registry.generated.ts";
 import { backtestRowsToProfiles } from "../packages/ui/src/profile_rows.ts";
+import {
+  beginApiCall,
+  endApiCall,
+  resetApiUsage,
+} from "../packages/ui/src/api_usage.ts";
 import {
   FIXTURE_LIVE_WAGERS,
   FIXTURE_PROFILE_CUSTOMERS,
@@ -65,6 +71,10 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(html).toContain("feed: Pending Hydration · pending");
     expect(html).toContain('data-desk-quickjump="copy-link"');
     expect(html).toContain("⧉ Copy link");
+    expect(html).toContain('data-copy-view-link="true"');
+    expect(html).toContain("⧉ Copy view");
+    // Default SSR view: reset is only offered when the view is non-default.
+    expect(html).not.toContain('data-reset-view="true"');
     expect(html).not.toContain("GP301");
     expect(html).not.toContain("+$76,950");
   });
@@ -293,6 +303,72 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(stale).toContain("⚠ Stale probe");
   });
 
+  test("BuildMatrixDrawer renders 5-flag sentinels, gzip bytes, inputs/hash, and staticDir probe strip", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(BuildMatrixDrawer, {
+        dceMarker: "[DCE_PROD_TARGET_ACTIVE]",
+        activeSentinels: [
+          "[DCE_PROD_TARGET_ACTIVE]",
+          "[DCE_ANALYTICS_TELEMETRY_ACTIVE]",
+        ],
+        loading: false,
+        target: "prod",
+        enabledFeatures: ["PROD", "ANALYTICS"],
+        error: null,
+        rows: [
+          {
+            target: "prod",
+            features: ["PROD", "ANALYTICS"],
+            totalJsBytes: 40960,
+            totalCssBytes: 8192,
+            gzipJsBytes: 12288,
+            inputFileCount: 14,
+            bundleHash8: "c7156202",
+            hasProdSentinel: true,
+            hasDebugSentinel: false,
+            hasTestSentinel: false,
+            hasAnalyticsSentinel: true,
+            hasExperimentalSentinel: false,
+          },
+        ],
+        staticDir: {
+          wildcardPath: "/static/*",
+          dir: "/repo/static",
+          caseInsensitiveHostFs: true,
+          totalFiles: 5,
+          totalBytes: 327680,
+          files: [],
+          liveCheck: {
+            origin: "http://127.0.0.1:4022",
+            elapsedMs: 1.2,
+            allPassed: true,
+            etag: 'W/"100-abc"',
+            contentRange: "bytes 0-9/100",
+            checks: [
+              {
+                name: "GET 200",
+                requestPath: "/static/status.html",
+                expectedStatus: 200,
+                status: 200,
+                ok: true,
+                detail: "text/html",
+              },
+            ],
+          },
+        },
+      }),
+    );
+    expect(html).toContain("TEST Branch");
+    expect(html).toContain("ANALYTICS Branch");
+    expect(html).toContain("12.0 KB gz");
+    expect(html).toContain("Inputs / Hash");
+    expect(html).toContain("14 · c7156202");
+    expect(html).toContain("sentinels 5/5 match the flags each target enables");
+    expect(html).toContain('data-static-dir-probe="true"');
+    expect(html).toContain("/_dev/serve-local/bun-directory");
+    expect(html).toContain("Inspect in BookDeskOps");
+  });
+
   test("CustomersTabPanel renders customer table, radars, and inspector actions", () => {
     const cust = FIXTURE_PROFILE_CUSTOMERS[0]!;
     const noop = () => {};
@@ -428,6 +504,38 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(brtHtml).toContain("LINE_MOVER_WEIGHT_ACTIVE");
     expect(brtHtml).toContain("BETTING_ALERTS_DISABLED");
     expect(brtHtml).toContain("⚡ Wager Tape");
+  });
+
+  test("CustomersTabPanel explains a lookup outside the curated cohort", () => {
+    const noop = () => {};
+    const html = renderToStaticMarkup(
+      React.createElement(CustomersTabPanel, {
+        bannerDismissed: true,
+        onDismissBanner: noop,
+        kpisCollapsed: false,
+        onToggleKpis: noop,
+        searchQuery: "BRT5229",
+        onSearchQueryChange: noop,
+        filterTier: "ALL",
+        onFilterTierChange: noop,
+        sortedCustomers: [],
+        customerSort: { key: "score", dir: -1 },
+        onCustomerSort: noop,
+        selectedCustomer: null,
+        onSelectCustomer: noop,
+        customerLookupNotice: "BRT5229",
+        onClearCustomerLookupNotice: noop,
+        copiedCliId: null,
+        onCopyCli: noop,
+        onClearForensicResult: noop,
+        onRunReverseLookup: noop,
+        onOpenTerminalProfile: noop,
+      }),
+    );
+    expect(html).toContain('data-customer-lookup-notice="BRT5229"');
+    expect(html).toContain("No curated cohort profile for");
+    expect(html).toContain("Open terminal profile");
+    expect(html).toContain("Dismiss");
   });
 
   test("CustomersTabPanel renders cohort provenance, row source, and unknown fields as dashes", () => {
@@ -1274,6 +1382,42 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(html).toContain("Show all 130 rows");
     expect(html).toContain("⧉ Copy rows (130)");
     expect((html.match(/Team -3/g) ?? []).length).toBe(120);
+  });
+
+  test("ApiUsageCard reports coalesced requests separately from network calls", () => {
+    resetApiUsage();
+    try {
+      endApiCall(beginApiCall("GET /api/kpis"), 200);
+      endApiCall(beginApiCall("GET /api/kpis", true), 200);
+      const html = renderToStaticMarkup(React.createElement(ApiUsageCard));
+      expect(html).toContain("2 calls");
+      expect(html).toContain("1 network");
+      expect(html).toContain("1 coalesced");
+    } finally {
+      resetApiUsage();
+    }
+  });
+
+  test("ApiUsageCard renders the empty state and normalized session rows", () => {
+    resetApiUsage();
+    try {
+      const empty = renderToStaticMarkup(React.createElement(ApiUsageCard));
+      expect(empty).toContain('data-api-usage-card="true"');
+      expect(empty).toContain("No API calls recorded this session");
+
+      endApiCall(beginApiCall("GET /api/kpis"), 200);
+      endApiCall(beginApiCall("GET /api/kpis"), 503);
+      const html = renderToStaticMarkup(React.createElement(ApiUsageCard));
+      expect(html).toContain("GET /api/kpis");
+      expect(html).toContain("2 calls");
+      expect(html).toContain("1 ok");
+      expect(html).toContain("1 failed");
+      expect(html).toContain("Reset meter");
+      // No request-specific values leak into the meter.
+      expect(html).not.toContain("window=24");
+    } finally {
+      resetApiUsage();
+    }
   });
 
   test("BetTickerTabPanel sanitizes portal markup in channels and selections", () => {

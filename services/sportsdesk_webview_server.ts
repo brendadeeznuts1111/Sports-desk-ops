@@ -278,7 +278,7 @@ function adminRejection(
 const repoRoot = resolve(
   typeof import.meta !== "undefined" && import.meta.dir
     ? import.meta.dir
-    : dirname(process.argv[1] || "."),
+    : dirname(Bun.main),
   "..",
 );
 

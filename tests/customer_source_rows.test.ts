@@ -5,11 +5,14 @@ import {
   customerRowFromLiveWagers,
   liveWagerCustomerId,
   liveWagerRows,
+  customerRowFromLiveBets,
+  customerRowsFromLiveCaptures,
+  liveBetsRows,
 } from "../lib/customer_source_rows.ts";
 import { summarizeTickets } from "../lib/customer_profile.ts";
 
-// Shape of the open-wager capture written tonight: a `LIST` envelope, untrimmed logins, dollar
-// amounts and a ticket writer, no lifetime aggregates.
+// Shape of the open-wager capture written tonight: a `LIST` envelope, untrimmed logins, wire
+// cents and a ticket writer, no lifetime aggregates.
 const CAPTURE = {
   schemaVersion: 1,
   source: "gslive",
@@ -21,8 +24,8 @@ const CAPTURE = {
       AgentID: "AG1",
       CustomerID: "WC8036  ",
       Login: "WC8036",
-      AmountWagered: 250,
-      ToWinAmount: 200,
+      AmountWagered: 25000,
+      ToWinAmount: 20000,
       TicketWriter: "Internet",
       ShortDesc: "LAL -4.5",
       InsertDateTime: "2026-11-15T05:59:00.000Z",
@@ -31,8 +34,8 @@ const CAPTURE = {
       WagerNumber: 700002,
       AgentID: "AG1",
       CustomerID: "WC8036  ",
-      AmountWagered: 100,
-      ToWinAmount: 90,
+      AmountWagered: 10000,
+      ToWinAmount: 9000,
       TicketWriter: "Phone",
       ShortDesc: "BOS/LAL o221.5",
       InsertDateTime: "2026-11-15T05:58:00.000Z",
@@ -41,8 +44,8 @@ const CAPTURE = {
       WagerNumber: 700003,
       AgentID: "AG2",
       CustomerID: "FREDOVIP",
-      AmountWagered: 50,
-      ToWinAmount: 45,
+      AmountWagered: 5000,
+      ToWinAmount: 4500,
       ShortDesc: "NYJ +6.5",
     },
   ],
@@ -77,6 +80,21 @@ const HARVESTED = {
       stakeUsd: 300,
       netUsd: -300,
       time: null,
+    },
+  ],
+  positions: [
+    {
+      wagerNumber: "9001",
+      sport: "Basketball",
+      wagerType: "S",
+      description: "LAL -4.5",
+      riskUsd: 500,
+      toWinUsd: 450,
+      placedAtIso: "2026-11-14T02:00:00.000Z",
+      writer: "gslive",
+      vip: false,
+      status: "open",
+      source: "live-bets",
     },
   ],
 };
@@ -121,6 +139,16 @@ describe("customerRowFromLiveWagers", () => {
       channel: "Internet",
       placed_at: "2026-11-15T05:59:00.000Z",
     });
+    expect(row.open_positions).toHaveLength(2);
+    expect(row.open_positions?.[0]).toMatchObject({
+      wager_number: "700001",
+      risk_usd: 250,
+      to_win_usd: 200,
+      selection: "LAL -4.5",
+      writer: "Internet",
+      status: "open",
+      source: "live-wagers",
+    });
   });
 
   test("an idle capture is not a customer record", () => {
@@ -147,6 +175,18 @@ describe("customerRowFromHarvestedProfile", () => {
     expect(row.sharp_score).toBe(91.2);
     // The harvester publishes no lifetime volume, so the 10x-of-net guess is gone.
     expect(row).not.toHaveProperty("lifetime_volume_usd");
+    expect(row.open_positions).toHaveLength(1);
+    expect(row.open_positions?.[0]).toMatchObject({
+      wager_number: "9001",
+      sport: "Basketball",
+      market: "S",
+      selection: "LAL -4.5",
+      risk_usd: 500,
+      to_win_usd: 450,
+      writer: "gslive",
+      status: "open",
+      source: "live-bets",
+    });
   });
 
   test("labels sample wagers from their net instead of a fixed result", () => {
@@ -190,5 +230,182 @@ describe("summarizeTickets with open tickets", () => {
     expect(summary.voids).toBe(0);
     // Two settled outcomes — the open ticket is not counted as a settled non-win.
     expect(summary.winRate).toBe(0.5);
+  });
+});
+
+// Shape of the pending-ticket capture (`data/live-bets.json`): wire cents, explicit sport and a
+// wagerNumber string; the agent is an object, not a flat AgentID.
+const BETS = {
+  games: [
+    {
+      customerID: "WC8036",
+      agent: { id: "AG1" },
+      wagered: 5000,
+      toWin: 9000,
+      wagerNumber: "1",
+      ticketNumber: "T-8001",
+      sport: "Basketball",
+      subSport: "PREGAME",
+      wagerType: "M",
+      description: "NBA LAL -4.5",
+      acceptedAt: "2026-11-16T12:00:00.000Z",
+    },
+    {
+      customerID: "WC8036",
+      agent: { id: "AG1" },
+      wagered: 2500,
+      toWin: 5000,
+      wagerNumber: "1",
+      ticketNumber: "T-8002",
+      sport: "Basketball",
+      subSport: "PREGAME",
+      wagerType: "S",
+      description: "NBA BOS +2.5",
+      acceptedAt: "2026-11-16T12:05:00.000Z",
+    },
+    {
+      customerID: "LP1",
+      agent: { id: "AG9" },
+      wagered: 1000,
+      toWin: 2500,
+      wagerNumber: "1",
+      ticketNumber: "T-9001",
+      sport: "Tennis",
+      wagerType: "M",
+      description: "Tennis Final",
+      acceptedAt: "2026-11-16T13:00:00.000Z",
+    },
+  ],
+};
+
+describe("customerRowFromLiveBets", () => {
+  test("maps every pending wager to an open position in dollars", () => {
+    const rows = liveBetsRows(BETS);
+    const row = customerRowFromLiveBets(" wc8036 ", rows);
+    expect(row).not.toBeNull();
+    if (row === null) return;
+    expect(row.provenance).toBe("live-bets");
+    expect(row.open_positions).toHaveLength(2);
+    expect(row.open_positions?.[0]).toMatchObject({
+      ticket_number: "T-8001",
+      wager_number: "1",
+      sport: "Basketball",
+      risk_usd: 50,
+      to_win_usd: 90,
+      status: "open",
+      source: "live-bets",
+    });
+  });
+
+  test("unions ticker and pending captures without duplicating a wager", () => {
+    const rows = customerRowsFromLiveCaptures(CAPTURE, BETS);
+    const wc = rows.find((row) => row.customer_id === "WC8036");
+    const lp = rows.find((row) => row.customer_id === "LP1");
+    // WC8036 and FREDOVIP come from the ticker capture; LP1 exists only in the pending one.
+    expect(rows).toHaveLength(3);
+    // The pending rows all carry wagerNumber "1"; ticketNumber is their identity, so both
+    // pending tickets survive next to the two ticker wagers instead of collapsing to one.
+    expect(wc?.open_positions).toHaveLength(4);
+    expect(lp?.open_positions).toHaveLength(1);
+    expect(lp?.open_positions?.[0]?.risk_usd).toBe(10);
+  });
+});
+
+describe("null-ticket positions", () => {
+  test("two pending rows with wagerNumber 1 and no ticket do not collapse", () => {
+    const rows = customerRowsFromLiveCaptures(
+      {},
+      {
+        games: [
+          {
+            customerID: "NT1",
+            wagerNumber: "1",
+            wagered: 100,
+            toWin: 200,
+            sport: "Basketball",
+            description: "a",
+          },
+          {
+            customerID: "NT1",
+            wagerNumber: "1",
+            wagered: 100,
+            toWin: 200,
+            sport: "Basketball",
+            description: "b",
+          },
+        ],
+      },
+    );
+    // The union cannot dedupe an identity it does not have; both rows survive, and the
+    // builder refuses/counts them rather than silently collapsing one.
+    expect(rows[0]?.open_positions).toHaveLength(2);
+  });
+});
+
+describe("ticket writer policy in the capture merge", () => {
+  test("alert and blocked ticker rows never become positions", () => {
+    const rows = customerRowsFromLiveCaptures(
+      {
+        LIST: [
+          {
+            CustomerID: "AL1",
+            TicketWriter: "ALERT     ",
+            AmountWagered: 10000,
+            ToWinAmount: 20000,
+            WagerNumber: 1,
+            ShortDesc: "S:Football #286",
+          },
+          {
+            CustomerID: "AL1",
+            TicketWriter: "blocked",
+            AmountWagered: 10000,
+            ToWinAmount: 20000,
+            WagerNumber: 2,
+            ShortDesc: "S:Football #287",
+          },
+          {
+            CustomerID: "AL1",
+            TicketWriter: "Internet   ",
+            AmountWagered: 10000,
+            ToWinAmount: 20000,
+            WagerNumber: 3,
+            ShortDesc: "S:Football #288",
+          },
+        ],
+      },
+      {},
+    );
+    const al = rows.find((row) => row.customer_id === "AL1");
+    expect(al?.open_positions).toHaveLength(1);
+    expect(al?.open_positions?.[0]?.writer).toBe("Internet");
+    expect(al?.recent_tickets).toHaveLength(1);
+  });
+});
+
+describe("live bet ticker enrichment", () => {
+  test("carries market, VIP, canonical rotation and leg count", () => {
+    const rows = customerRowsFromLiveCaptures(
+      {
+        LIST: [
+          {
+            CustomerID: "TK1",
+            TicketWriter: "Internet",
+            WagerType: "P",
+            VIP: "1   ",
+            AmountWagered: 10000,
+            ToWinAmount: 50000,
+            WagerNumber: 9,
+            ShortDesc:
+              "P.Hockey #286 Mammoth -335 - For Game Basketball #870 Tulsa -260 - For Game",
+          },
+        ],
+      },
+      {},
+    );
+    const position = rows[0]?.open_positions?.[0];
+    expect(position?.market).toBe("P");
+    expect(position?.vip).toBe(true);
+    expect(position?.rotation).toBe("ROT 286");
+    expect(position?.legs).toBe(2);
   });
 });

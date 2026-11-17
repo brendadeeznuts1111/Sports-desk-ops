@@ -78,7 +78,11 @@ export interface LiveTickerStatusBody {
   readonly ttlMs: number;
 }
 
+export type LivePendingScopeSource = "env" | "ticker" | "none";
+
 export interface LivePendingStatusBody extends LiveTickerStatusBody {
+  /** Where the fan-out scope came from; `none` is the actionable 503 case. */
+  readonly scopeSource: LivePendingScopeSource;
   readonly customersAttempted: number;
   readonly customersFailed: number;
 }
@@ -287,6 +291,7 @@ function disabledPendingStatus(
 ): LivePendingStatusBody {
   return {
     ...disabledTickerStatus(mode, ttlMs),
+    scopeSource: "none",
     customersAttempted: 0,
     customersFailed: 0,
   };
@@ -483,6 +488,7 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
     mode: LiveSourceMode,
     servedFromCache: boolean,
     result: Awaited<ReturnType<typeof fetchLivePending>>,
+    scopeSource: LivePendingScopeSource,
   ): LivePendingStatusBody {
     if (!pendingGateOn) {
       return disabledPendingStatus(mode, pendingTtlMs);
@@ -495,6 +501,7 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
       servedFromCache,
       transport: result.transport,
       diagnostic: toDiagnostic(result.diagnostic),
+      scopeSource,
       customersAttempted: result.customersAttempted,
       customersFailed: result.customersFailed,
       ttlMs: pendingTtlMs,
@@ -628,13 +635,22 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
     return entry;
   }
 
-  async function resolvePendingCustomers(): Promise<string[]> {
+  async function resolvePendingCustomers(): Promise<{
+    readonly customers: string[];
+    readonly source: LivePendingScopeSource;
+  }> {
     const explicit = parseCustomers(pendingEnv, pendingOpt.customers);
-    if (explicit.length > 0) return explicit;
-    return pendingCustomersFromTickerRows(
+    if (explicit.length > 0) {
+      return { customers: explicit, source: "env" };
+    }
+    const ticker = pendingCustomersFromTickerRows(
       tickerRowsForScope,
       pendingMaxCustomers,
     );
+    return {
+      customers: ticker,
+      source: ticker.length > 0 ? "ticker" : "none",
+    };
   }
 
   async function readPendingLive(
@@ -670,9 +686,9 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
       await readTickerLive("auto", false);
     }
 
-    const customers = await resolvePendingCustomers();
+    const scope = await resolvePendingCustomers();
     const result = await fetchLivePending({
-      customers,
+      customers: scope.customers,
       ...(pendingOpt.fetch === undefined
         ? {}
         : { fetchImpl: pendingOpt.fetch }),
@@ -685,7 +701,7 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
       env: pendingEnv,
     });
 
-    const status = pendingStatusFromFetch(mode, false, result);
+    const status = pendingStatusFromFetch(mode, false, result, scope.source);
     let artifact: LiveBetsArtifact | null = null;
     if (result.ok) {
       artifact = livePendingArtifact(result.rows, {

@@ -93,13 +93,17 @@ export async function createF402ReplayTransport(
 
   async function fetchOnce(url: string, init: RequestInit): Promise<Response> {
     const headers = new Headers(init.headers);
-    if (!headers.has("cookie")) {
-      const session = readSession();
-      if (session !== null) {
-        headers.set("cookie", session.cookieHeader);
-      } else if (deprecatedCookie !== "") {
-        headers.set("cookie", deprecatedCookie);
+    const session = readSession();
+    if (session !== null) {
+      if (!headers.has("cookie")) headers.set("cookie", session.cookieHeader);
+      if (
+        !headers.has("authorization") &&
+        session.authorizationHeader !== undefined
+      ) {
+        headers.set("authorization", session.authorizationHeader);
       }
+    } else if (deprecatedCookie !== "" && !headers.has("cookie")) {
+      headers.set("cookie", deprecatedCookie);
     }
     return wireFetch(url, { ...init, headers });
   }

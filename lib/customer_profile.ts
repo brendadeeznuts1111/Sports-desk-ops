@@ -15,6 +15,12 @@
  *    as a *proxy* and says so. Period (`Game` vs halves) is a market property, not a timing one.
  */
 
+import type {
+  AgentDownlineRollup,
+  AgentExposure,
+  TreeCollision,
+  TreeDownlineCounts,
+} from "./agent_downline.ts";
 import { portalIso } from "./bet_flags.ts";
 import { competitionFamilyFromDirectory } from "./candidate_match_evaluation.ts";
 import type { BunInspectOptions } from "./cli_inspect.ts";
@@ -279,8 +285,33 @@ export interface TicketRow {
   readonly placed_at?: string;
 }
 
+/** One open ticket attributed to a customer. Distinct from `TicketRow`: a position is unsettled by
+ * construction and carries the live writer/source, while `TicketRow` is the book's recent sample. */
+export interface PositionRow {
+  /** Pending-capture row identity; `wager_number` is "1" on every pending row. */
+  readonly ticket_number?: string;
+  readonly wager_number?: string;
+  readonly sport?: string;
+  readonly market?: string;
+  readonly selection?: string;
+  readonly risk_usd?: number;
+  readonly to_win_usd?: number;
+  readonly placed_at?: string;
+  readonly writer?: string;
+  /** Ticker VIP flag; absent when the capture did not carry one. */
+  readonly vip?: boolean;
+  /** Canonical rotation key ("ROT 286") from the ticker description. */
+  readonly rotation?: string;
+  /** Legs counted from the ticker description (1 for a straight wager). */
+  readonly legs?: number;
+  /** Placeholder: live captures only produce open positions; settled rows are not wired yet. */
+  readonly status?: string;
+  readonly source?: string;
+}
+
 /** Artifact a synthesized row came from; the book's own rows leave this unset. */
-export type CustomerRowProvenance = "harvested-live-profiles" | "live-wagers";
+export type CustomerRowProvenance =
+  "harvested-live-profiles" | "live-wagers" | "live-bets";
 
 export interface CustomerRow {
   readonly customer_id: string;
@@ -303,6 +334,8 @@ export interface CustomerRow {
   readonly churn_hazard?: number;
   readonly churn_mode?: string;
   readonly recent_tickets?: readonly TicketRow[];
+  /** Open ticket-level positions harvested from the live captures. */
+  readonly open_positions?: readonly PositionRow[];
 }
 
 export interface Bucket {
@@ -359,7 +392,33 @@ export interface CustomerProfile {
     readonly ipSubnet: string;
   };
   readonly tickets: TicketSummary;
+  /** Open positions, one row per ticket; empty when no live capture carried this customer. */
+  readonly positions: readonly PositionRow[];
   readonly placement: Placement;
+  /** Downline rollup for the agent, when the snapshot carries that login. */
+  readonly downline?: AgentDownlineRollup;
+  /** Direct and descendant agent counts for the agent, from the tree. */
+  readonly treeDownline?: TreeDownlineCounts;
+  /** Open-position exposure for the agent's whole tree subtree (including itself). */
+  readonly treeExposure?: AgentExposure;
+  /** Tree collision for this agent login, when the tree reports one. */
+  readonly treeCollision?: TreeCollision;
+  /** Real roster assignment for this customer, when the projected roster carries it. */
+  readonly roster?: {
+    readonly agentId: string;
+    readonly level: number | null;
+    readonly type: string | null;
+    readonly seqNumber: number | null;
+    readonly playerCount?: number;
+    readonly agentMatchesProfile: boolean;
+  };
+  /** Root weekly figure, attached to profiles inside that agent's tree subtree. */
+  readonly weeklyFigure?: {
+    readonly kind: string;
+    readonly activePlayers?: number;
+    readonly thisWeek?: number | null;
+    readonly today?: number | null;
+  };
   /** Data-quality notes that change how a number should be read. */
   readonly flags: readonly string[];
 }
@@ -519,6 +578,7 @@ export function buildCustomerProfile(
       ipSubnet: text(row.ip_subnet),
     },
     tickets,
+    positions: row.open_positions ?? [],
     placement,
     flags,
   };

@@ -16,6 +16,21 @@ const num = (value: unknown, fallback = 0): number => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+const DECIMAL_NUMERIC = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+function nonNegativeFinite(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "" || !DECIMAL_NUMERIC.test(trimmed)) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  }
+  return null;
+}
+
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
@@ -135,9 +150,12 @@ export function bookRowsToProfiles(
     const sharpKnown = Number.isFinite(rawSharp);
     const score = sharpKnown ? clamp(rawSharp / 10, 0, 10) : 0;
     const clvScore = clamp(num(row.clv_bps) / 100, -10, 10);
-    const delay = num(row.delay_seconds);
+    const rawDelay = nonNegativeFinite(row.delay_seconds);
+    const delayKnown = rawDelay !== null;
+    const delay = rawDelay ?? 0;
     const league = topKey(tickets, "league");
     const market = topKey(tickets, "market");
+    const sizingKnown = stakes.length >= 2;
 
     const unknown: string[] = [];
     if (!sharpKnown) unknown.push("sharpness");
@@ -145,7 +163,7 @@ export function bookRowsToProfiles(
       // A mean of zero observations is undefined; a mean of one is just that stake.
       unknown.push("meanStake");
     }
-    if (stakes.length < 2) {
+    if (!sizingKnown) {
       // Gini/VaR of one observation are convention, not measurement; sizing derives from
       // a spread that does not exist yet.
       unknown.push("sizing", "gini", "var95");
@@ -153,6 +171,7 @@ export function bookRowsToProfiles(
     if (!league && !market) unknown.push("specialization");
     // The book carries no syndicate or correlation signal at all.
     unknown.push("syndicate", "correlation");
+    if (!delayKnown) unknown.push("delay");
 
     return {
       id,
@@ -163,11 +182,15 @@ export function bookRowsToProfiles(
       score: round(score, 2),
       clvScore: round(clvScore, 2),
       skillScore: clvScore,
-      sizingScore: round(clamp(1 - cv, 0, 2), 2),
+      sizingScore: sizingKnown ? round(clamp(1 - cv, 0, 2), 2) : 0,
       sigScore: 0,
-      timingScore: delay > 0 ? 1 : 0,
-      sizingStrategy: cv < 0.15 ? "FLAT_UNIT" : "PROPORTIONAL_KELLY",
-      gini: round(gini(stakes), 4),
+      timingScore: delayKnown && delay > 0 ? 1 : 0,
+      sizingStrategy: sizingKnown
+        ? cv < 0.15
+          ? "FLAT_UNIT"
+          : "PROPORTIONAL_KELLY"
+        : "PENDING_TICKETS",
+      gini: sizingKnown ? round(gini(stakes), 4) : 0,
       meanStake: round(meanStake, 2),
       specialization:
         [league, market].filter(Boolean).join(" ") ||
@@ -178,8 +201,8 @@ export function bookRowsToProfiles(
       syndicateRisk: "LOW",
       syndicateProb: 0,
       subAccountIndex: null,
-      var95Usd: round(meanStake + 1.645 * sd, 2),
-      cvar95Usd: round(meanStake + 2 * sd, 2),
+      var95Usd: sizingKnown ? round(meanStake + 1.645 * sd, 2) : 0,
+      cvar95Usd: sizingKnown ? round(meanStake + 2 * sd, 2) : 0,
       holdPct: num(row.hold_pct),
       ltvUsd: num(row.lifetime_net_usd),
       recommendedLimitUsd: num(row.wager_limit_usd),

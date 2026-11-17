@@ -26,15 +26,18 @@ import {
   type TokenAliasSpec,
   type TokenAxis,
 } from "../token_registry.ts";
-import type { BuildMatrixRow } from "../types.ts";
+import { buildBookdeskopsDirectoryRouteHref } from "../desk_quick_jump.ts";
+import type { BuildMatrixRow, StaticDirectoryProbeSummary } from "../types.ts";
 
 export { HOUDINI_TOKENS } from "../token_registry.ts";
 export type { HoudiniTokenSpec, TokenAxis } from "../token_registry.ts";
 
 export interface BuildMatrixDrawerProps {
   readonly dceMarker: string;
+  readonly activeSentinels?: readonly string[] | undefined;
   readonly loading: boolean;
   readonly rows: readonly BuildMatrixRow[] | null;
+  readonly staticDir?: StaticDirectoryProbeSummary | null | undefined;
   readonly target?: string | undefined;
   readonly enabledFeatures?: readonly string[] | undefined;
   readonly error?: string | null | undefined;
@@ -67,10 +70,10 @@ const VISUALLY_HIDDEN: React.CSSProperties = {
 };
 
 /**
- * The three branches whose retention is probed by `has*Sentinel`. Each row states the
- * flags it was built with, so retention is checkable against that same row.
+ * Branch sentinel probes: core 3 (`PROD`, `DEBUG`, `EXPERIMENTAL`) plus `TEST` &
+ * `ANALYTICS` when rows report `hasTestSentinel` / `hasAnalyticsSentinel`.
  */
-const SENTINEL_PROBES = [
+const CORE_SENTINEL_PROBES = [
   { feature: "PROD", key: "hasProdSentinel", label: "PROD Branch" },
   { feature: "DEBUG", key: "hasDebugSentinel", label: "DEBUG Branch" },
   {
@@ -83,6 +86,34 @@ const SENTINEL_PROBES = [
   readonly key: keyof BuildMatrixRow;
   readonly label: string;
 }[];
+
+const EXTENDED_SENTINEL_PROBES = [
+  { feature: "PROD", key: "hasProdSentinel", label: "PROD Branch" },
+  { feature: "DEBUG", key: "hasDebugSentinel", label: "DEBUG Branch" },
+  { feature: "TEST", key: "hasTestSentinel", label: "TEST Branch" },
+  {
+    feature: "ANALYTICS",
+    key: "hasAnalyticsSentinel",
+    label: "ANALYTICS Branch",
+  },
+  {
+    feature: "EXPERIMENTAL",
+    key: "hasExperimentalSentinel",
+    label: "EXPERIMENTAL Branch",
+  },
+] as const satisfies readonly {
+  readonly feature: (typeof FEATURES)[number];
+  readonly key: keyof BuildMatrixRow;
+  readonly label: string;
+}[];
+
+type SentinelProbeDef = (typeof EXTENDED_SENTINEL_PROBES)[number];
+
+function activeProbesForRow(row: BuildMatrixRow): readonly SentinelProbeDef[] {
+  const hasExtended =
+    row.hasTestSentinel !== undefined || row.hasAnalyticsSentinel !== undefined;
+  return hasExtended ? EXTENDED_SENTINEL_PROBES : CORE_SENTINEL_PROBES;
+}
 
 /**
  * Flag → description, keyed by plain string so a probe payload carrying an
@@ -149,7 +180,7 @@ function sentinelParity(row: BuildMatrixRow): {
   readonly mismatches: readonly string[];
 } {
   const mismatches: string[] = [];
-  for (const probe of SENTINEL_PROBES) {
+  for (const probe of activeProbesForRow(row)) {
     const expected = row.features.includes(probe.feature);
     const observed = row[probe.key];
     if (observed !== expected) {
@@ -217,8 +248,10 @@ function readComputedTokenMap(): Readonly<Record<string, string>> {
 
 export function BuildMatrixDrawer({
   dceMarker,
+  activeSentinels,
   loading,
   rows,
+  staticDir,
   target,
   enabledFeatures,
   error,
@@ -338,7 +371,37 @@ export function BuildMatrixDrawer({
     [rows],
   );
 
-  const parityChecks = rows === null ? 0 : rows.length * SENTINEL_PROBES.length;
+  const activeSentinelsCsv =
+    activeSentinels !== undefined ? activeSentinels.join(",") : undefined;
+
+  const activeSentinelProbes = useMemo<readonly SentinelProbeDef[]>(() => {
+    if (
+      rows !== null &&
+      rows.some(
+        (row) =>
+          row.hasTestSentinel !== undefined ||
+          row.hasAnalyticsSentinel !== undefined,
+      )
+    ) {
+      return EXTENDED_SENTINEL_PROBES;
+    }
+    return CORE_SENTINEL_PROBES;
+  }, [rows]);
+
+  const showBuildArtifactsMeta = useMemo(
+    () =>
+      rows !== null &&
+      rows.some(
+        (row) =>
+          row.bundleHash8 !== undefined || row.inputFileCount !== undefined,
+      ),
+    [rows],
+  );
+
+  const parityChecks =
+    rows === null
+      ? 0
+      : rows.reduce((sum, row) => sum + activeProbesForRow(row).length, 0);
   const parityMismatches =
     parity === null
       ? 0
@@ -552,6 +615,7 @@ export function BuildMatrixDrawer({
           >
             <span
               className="sd-mono"
+              data-dce-sentinels={activeSentinelsCsv}
               style={{ fontSize: "11px", color: MUTED_TEXT }}
               title="The marker the page's own runtime reports. The build probes below are separate Bun.build runs and do not change it."
             >
@@ -980,7 +1044,12 @@ export function BuildMatrixDrawer({
                   <th scope="col" style={{ textAlign: "right" }}>
                     Total
                   </th>
-                  {SENTINEL_PROBES.map((probe) => (
+                  {showBuildArtifactsMeta && (
+                    <th scope="col" style={{ textAlign: "right" }}>
+                      Inputs / Hash
+                    </th>
+                  )}
+                  {activeSentinelProbes.map((probe) => (
                     <th key={probe.feature} scope="col">
                       {probe.label}
                     </th>
@@ -1086,7 +1155,7 @@ export function BuildMatrixDrawer({
                             {r.features.map((feature) => {
                               const description =
                                 FEATURE_DESCRIPTIONS.get(feature) ?? null;
-                              const probe = SENTINEL_PROBES.find(
+                              const probe = activeSentinelProbes.find(
                                 (entry) => entry.feature === feature,
                               );
                               return (
@@ -1120,7 +1189,12 @@ export function BuildMatrixDrawer({
                         )}
                       </td>
                       <td className="sd-mono" style={{ textAlign: "right" }}>
-                        <span>{formatKb(r.totalJsBytes)}</span>
+                        <span>
+                          {formatKb(r.totalJsBytes)}
+                          {r.gzipJsBytes !== undefined
+                            ? ` (${formatKb(r.gzipJsBytes)} gz)`
+                            : ""}
+                        </span>
                         <span
                           aria-hidden="true"
                           style={{
@@ -1154,7 +1228,12 @@ export function BuildMatrixDrawer({
                       <td className="sd-mono" style={{ textAlign: "right" }}>
                         {formatKb(r.totalJsBytes + r.totalCssBytes)}
                       </td>
-                      {SENTINEL_PROBES.map((probe) => (
+                      {showBuildArtifactsMeta && (
+                        <td className="sd-mono" style={{ textAlign: "right" }}>
+                          {r.inputFileCount ?? "—"} · {r.bundleHash8 ?? "—"}
+                        </td>
+                      )}
+                      {activeSentinelProbes.map((probe) => (
                         <td key={probe.feature} className="sd-mono">
                           {r[probe.key] ? "✅ Kept" : "✂️ Pruned (DCE)"}
                         </td>
@@ -1164,6 +1243,49 @@ export function BuildMatrixDrawer({
                 })}
               </tbody>
             </table>
+            {staticDir !== null && staticDir !== undefined && (
+              <div
+                data-static-dir-probe="true"
+                className="sd-mono"
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "6px 12px",
+                  fontSize: "11px",
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                  border: "1px solid var(--sd-surface-border, #1e293b)",
+                  backgroundColor: "rgba(56, 189, 248, 0.06)",
+                  color: "var(--sd-text-secondary, #cbd5e1)",
+                }}
+              >
+                <span>
+                  📁 <strong>{staticDir.wildcardPath}</strong> ·{" "}
+                  {staticDir.totalFiles} files ({formatKb(staticDir.totalBytes)}
+                  )
+                  {staticDir.liveCheck !== null
+                    ? ` · ${
+                        staticDir.liveCheck.allPassed
+                          ? `✅ ${staticDir.liveCheck.checks.length}/${staticDir.liveCheck.checks.length} HTTP probes (${staticDir.liveCheck.elapsedMs}ms)`
+                          : "⚠ probe failure"
+                      }`
+                    : " · static inventory"}
+                  {staticDir.caseInsensitiveHostFs
+                    ? " · ⚠ case-insensitive host FS"
+                    : ""}
+                </span>
+                <a
+                  href={buildBookdeskopsDirectoryRouteHref()}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: ACCENT_COLOR, textDecoration: "none" }}
+                >
+                  📁 Inspect in BookDeskOps ↗
+                </a>
+              </div>
+            )}
           </>
         ) : rows !== null ? (
           <div

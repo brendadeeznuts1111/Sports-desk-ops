@@ -550,13 +550,12 @@ async function main(): Promise<number> {
         "scripts/gen_tokens_gate.ts",
       ]);
     } else {
+      // Same-process before/after change detection only — xxHash64 suffices.
       const hashOutputs = async (): Promise<Map<string, string>> => {
         const out = new Map<string, string>();
         for (const rel of GEN_TOKEN_EMISSION_PATHS) {
           const bytes = await Bun.file(path.join(ROOT, rel)).bytes();
-          const hasher = new Bun.CryptoHasher("sha256");
-          hasher.update(bytes);
-          out.set(rel, hasher.digest("hex"));
+          out.set(rel, Bun.hash(bytes).toString(16));
         }
         return out;
       };

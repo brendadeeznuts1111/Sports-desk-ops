@@ -118,7 +118,7 @@ One section per operation present in the final spec. Each section starts with it
 
 ### `POST /cloud/api/Manager/getScores`
 
-> **Evidence — tier B** · sources: `main:scripts/portal_tile_crawler.ts:134-149`, `main:scripts/portal_tile_crawler.ts:545-670`, `docs/evidence/capture-requests.md` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier B** · sources: `main:scripts/portal_tile_crawler.ts:134-149`, `main:scripts/portal_tile_crawler.ts:543-668`, `docs/evidence/capture-requests.md` · response not captured · candidate URL+method (not observed on the wire)
 
 **Scores leaderboard (request observed 2026-11-02; response shape partly observed)**
 
@@ -1761,7 +1761,7 @@ Throws a string so the server's error boundary runs; `?trigger_error=non_error` 
 
 ### `GET /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:517-600` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:516-599` · response not captured
 
 **Presigned download URL for one blob**
 
@@ -1807,7 +1807,7 @@ Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_
 
 ### `PUT /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:517-600` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:516-599` · response not captured
 
 **Bounded image upload, transcoded to WebP**
 
@@ -1877,7 +1877,7 @@ No declared fields.
 
 ### `DELETE /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:601-619` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:600-618` · response not captured
 
 **Delete one stored blob**
 
@@ -1948,7 +1948,7 @@ Frozen v1 live-bets endpoint (sportsdesk_webview_server.ts#GET /api/v1/live-bets
 
 ### `POST /api/v1/live-bets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:457-503` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:456-502` · response not captured
 
 **Publish a live-bets event to subscribers**
 
@@ -2000,7 +2000,7 @@ Bearer-auth POST {channel, event} validates the channel, serializes the event an
 
 ### `POST /api/v1/ws-tickets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:432-456` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:431-455` · response not captured
 
 **Short-lived one-time WebSocket ticket**
 
@@ -2173,7 +2173,7 @@ Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview
 
 ### `GET /ws/live-bets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:620-649` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:619-648` · response not captured
 
 **Live-bets WebSocket upgrade**
 
@@ -2308,7 +2308,7 @@ The only upstream Fantasy402 route in this repository with a real fetch client: 
 
 ### `POST /cloud/api/Manager/adjustBalance`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:79-89`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:79-89`, `main:scripts/portal_tile_crawler.ts:543-668` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Cashier**
 
@@ -2327,7 +2327,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Manager/createPlayer`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:91-107`, `main:scripts/portal_tile_crawler.ts:545-670`, `docs/runbooks/operational_guardrails_runbook.md:213` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:91-107`, `main:scripts/portal_tile_crawler.ts:543-668`, `docs/runbooks/operational_guardrails_runbook.md:213` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Add Customer**
 
@@ -2376,7 +2376,7 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Manager/gameAdmin`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:57-66`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:57-66`, `main:scripts/portal_tile_crawler.ts:543-668` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Game Admin**
 
@@ -2395,7 +2395,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Manager/get3rdPartyLimits`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:109-120`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:109-120`, `main:scripts/portal_tile_crawler.ts:543-668` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: 3rd Party Limits**
 
@@ -2414,7 +2414,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Manager/getAgentTree`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:151-161`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:151-161`, `main:scripts/portal_tile_crawler.ts:543-668` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Agent Admin**
 
@@ -2433,7 +2433,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Manager/getBilling`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:163-172`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:163-172`, `main:scripts/portal_tile_crawler.ts:543-668` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Billing**
 
@@ -2513,7 +2513,7 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Manager/getRules`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:174-188`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:174-188`, `main:scripts/portal_tile_crawler.ts:543-668` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Rules**
 
@@ -2607,7 +2607,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Report/getAnalysis`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:122-132`, `main:scripts/portal_tile_crawler.ts:545-670`, `docs/runbooks/operational_guardrails_runbook.md:166` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:122-132`, `main:scripts/portal_tile_crawler.ts:543-668`, `docs/runbooks/operational_guardrails_runbook.md:166` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Analysis**
 
@@ -2656,7 +2656,7 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Report/getFinancialReport`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:190-205`, `main:scripts/portal_tile_crawler.ts:545-670`, `docs/runbooks/operational_guardrails_runbook.md:167` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:190-205`, `main:scripts/portal_tile_crawler.ts:543-668`, `docs/runbooks/operational_guardrails_runbook.md:167` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Transactions History**
 
@@ -2750,7 +2750,7 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/System/getMessages`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:68-77`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:68-77`, `main:scripts/portal_tile_crawler.ts:543-668` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Messaging**
 
