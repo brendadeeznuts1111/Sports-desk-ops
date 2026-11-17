@@ -109,7 +109,7 @@ try {
   sdk.addEventListener(ValidKinds.events, (payload: unknown) => {
     payloads.push(payload);
   });
-  await new Promise((resolveWait) => setTimeout(resolveWait, seconds * 1_000));
+  await Bun.sleep(seconds * 1_000);
 } finally {
   sdk.close();
 }

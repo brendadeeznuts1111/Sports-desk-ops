@@ -3,7 +3,6 @@
  * @description Secure operator session management with SHA-256 token hashing, sliding idle timeouts, and throttled activity touches.
  */
 
-import { Buffer } from "node:buffer";
 import { sql, type OperatorListRow } from "./db.ts";
 import { sha256Hex } from "./auth.ts";
 

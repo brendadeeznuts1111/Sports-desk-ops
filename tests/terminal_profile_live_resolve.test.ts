@@ -1,7 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { executeTerminalQuery } from "../lib/terminal_emulator.ts";
 
-describe("terminal profile live book resolve", () => {
+// `data/live-wagers.json` is a gitignored live-rotating capture (see .gitignore).
+// On CI / fresh clones it does not exist, and locally cron refreshes rotate open logins.
+const liveWagersPath = resolve(import.meta.dir, "../data/live-wagers.json");
+const hasLiveDcc306 =
+  existsSync(liveWagersPath) &&
+  readFileSync(liveWagersPath, "utf8").includes('"DCC306"');
+const describeWithLiveDcc306 = describe.skipIf(!hasLiveDcc306);
+
+describeWithLiveDcc306("terminal profile live book resolve", () => {
   test("profile DCC306 --radar uses data/live-wagers.json", async () => {
     const radarRes = await executeTerminalQuery("profile DCC306 --radar");
     expect(radarRes.exitCode).toBe(0);

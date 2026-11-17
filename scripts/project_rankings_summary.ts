@@ -101,8 +101,13 @@ function runPolicy(): void {
   );
 }
 
-function main(): void {
-  if (POLICY) {
+function runMain(options?: {
+  readonly check?: boolean;
+  readonly policy?: boolean;
+}): Projection | void {
+  const check = options?.check ?? CHECK;
+  const policy = options?.policy ?? POLICY;
+  if (policy) {
     runPolicy();
     return;
   }
@@ -161,7 +166,7 @@ function main(): void {
 
   const serialized = `${JSON.stringify(projection, null, 2)}\n`;
 
-  if (CHECK) {
+  if (check) {
     const current = existsSync(OUT) ? readFileSync(OUT, "utf8") : "";
     if (current !== serialized) {
       fail(`${OUT} is stale — rerun without --check`);
@@ -169,7 +174,7 @@ function main(): void {
     console.log(
       `project_rankings_summary: ok — ${OUT} matches ${projection.sourceSha256.slice(0, 16)}…`,
     );
-    return;
+    return projection;
   }
 
   mkdirSync(dirname(OUT), { recursive: true });
@@ -179,6 +184,11 @@ function main(): void {
       `${projection.population.gradedRowsAfter}/${projection.population.gradedRowsBefore} rows, ` +
       `digest ${projection.sourceSha256.slice(0, 16)}…`,
   );
+  return projection;
 }
 
-main();
+export const projectRankingsSummary = runMain;
+
+if (import.meta.main) {
+  runMain();
+}

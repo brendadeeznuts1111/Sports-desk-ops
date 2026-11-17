@@ -19,7 +19,6 @@
  */
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -96,7 +95,7 @@ import {
 } from "./provenance_palette.ts";
 import { SPORT_CATEGORIES, sportCategoryFor } from "./sport_taxonomy.ts";
 
-export const DEFAULT_MCP_WORKSPACE_ROOT: string = fileURLToPath(
+export const DEFAULT_MCP_WORKSPACE_ROOT: string = Bun.fileURLToPath(
   new URL("..", import.meta.url),
 );
 

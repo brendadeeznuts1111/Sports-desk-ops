@@ -13,7 +13,14 @@ import type { BuildMatrixRow } from "./types.ts";
 
 /** Retained-branch probes carried by every matrix row. */
 export const MATRIX_BRANCHES = ["PROD", "DEBUG", "EXPERIMENTAL"] as const;
-export type MatrixBranch = (typeof MATRIX_BRANCHES)[number];
+export const EXTENDED_MATRIX_BRANCHES = [
+  "PROD",
+  "DEBUG",
+  "TEST",
+  "ANALYTICS",
+  "EXPERIMENTAL",
+] as const;
+export type MatrixBranch = (typeof EXTENDED_MATRIX_BRANCHES)[number];
 
 const REGISTERED_FEATURES: ReadonlySet<string> = new Set(FEATURES);
 
@@ -26,10 +33,25 @@ export interface MatrixEvidenceMeta {
 
 function branchKey(
   branch: MatrixBranch,
-): "hasProdSentinel" | "hasDebugSentinel" | "hasExperimentalSentinel" {
+):
+  | "hasProdSentinel"
+  | "hasDebugSentinel"
+  | "hasTestSentinel"
+  | "hasAnalyticsSentinel"
+  | "hasExperimentalSentinel" {
   if (branch === "PROD") return "hasProdSentinel";
   if (branch === "DEBUG") return "hasDebugSentinel";
+  if (branch === "TEST") return "hasTestSentinel";
+  if (branch === "ANALYTICS") return "hasAnalyticsSentinel";
   return "hasExperimentalSentinel";
+}
+
+function hasExtendedBranchTelemetry(rows: readonly BuildMatrixRow[]): boolean {
+  return rows.some(
+    (row) =>
+      row.hasTestSentinel !== undefined ||
+      row.hasAnalyticsSentinel !== undefined,
+  );
 }
 
 /** `kept` / `pruned` for one branch probe. */
@@ -78,18 +100,29 @@ export function formatMatrixRowEvidence(
   row: BuildMatrixRow,
   devBaselineBytes: number | null,
 ): string {
-  const branches = MATRIX_BRANCHES.map(
-    (branch) => `${branch}=${branchState(row, branch)}`,
-  ).join(", ");
-  return [
+  const activeBranches = hasExtendedBranchTelemetry([row])
+    ? EXTENDED_MATRIX_BRANCHES
+    : MATRIX_BRANCHES;
+  const branches = activeBranches
+    .map((branch) => `${branch}=${branchState(row, branch)}`)
+    .join(", ");
+  const jsLabel =
+    row.gzipJsBytes !== undefined
+      ? `js=${row.totalJsBytes}B (gz=${row.gzipJsBytes}B)`
+      : `js=${row.totalJsBytes}B`;
+  const parts = [
     row.target,
     `flags=${formatFlags(row.features)}`,
-    `js=${row.totalJsBytes}B`,
+    jsLabel,
     `css=${row.totalCssBytes}B`,
     `total=${row.totalJsBytes + row.totalCssBytes}B`,
     `deltaVsDev=${formatDelta(row.totalJsBytes, devBaselineBytes).text}`,
-    `branches: ${branches}`,
-  ].join(" · ");
+  ];
+  if (row.bundleHash8 !== undefined) {
+    parts.push(`hash=${row.bundleHash8}`);
+  }
+  parts.push(`branches: ${branches}`);
+  return parts.join(" · ");
 }
 
 function metaLine(meta: MatrixEvidenceMeta | undefined): string {
@@ -118,6 +151,9 @@ export function formatMatrixEvidenceTable(
   if (rows.length === 0) {
     return `${metaLine(meta)}\n\n(no target rows in the probe)`;
   }
+  const activeBranches = hasExtendedBranchTelemetry(rows)
+    ? EXTENDED_MATRIX_BRANCHES
+    : MATRIX_BRANCHES;
   const header = [
     "target",
     "flags",
@@ -125,7 +161,7 @@ export function formatMatrixEvidenceTable(
     "CSS",
     "total",
     "Δ vs dev",
-    ...MATRIX_BRANCHES,
+    ...activeBranches,
   ];
   const divider = [
     "---",
@@ -134,16 +170,18 @@ export function formatMatrixEvidenceTable(
     "---:",
     "---:",
     "---:",
-    ...MATRIX_BRANCHES.map(() => "---"),
+    ...activeBranches.map(() => "---"),
   ];
   const body = rows.map((row) => [
     row.target,
     formatFlags(row.features),
-    formatKb(row.totalJsBytes),
+    row.gzipJsBytes !== undefined
+      ? `${formatKb(row.totalJsBytes)} (${formatKb(row.gzipJsBytes)} gz)`
+      : formatKb(row.totalJsBytes),
     formatKb(row.totalCssBytes),
     formatKb(row.totalJsBytes + row.totalCssBytes),
     formatDelta(row.totalJsBytes, devBaselineBytes).kb,
-    ...MATRIX_BRANCHES.map((branch) => branchState(row, branch)),
+    ...activeBranches.map((branch) => branchState(row, branch)),
   ]);
   return [
     metaLine(meta),

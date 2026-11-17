@@ -6,6 +6,7 @@ export {
   AlertAuditDetail,
   type AlertAuditDetailProps,
 } from "./AlertAuditDetail.tsx";
+export { ApiUsageCard } from "./ApiUsageCard.tsx";
 export { AlertsTabPanel, type AlertsTabPanelProps } from "./AlertsTabPanel.tsx";
 export {
   BetTickerTabPanel,

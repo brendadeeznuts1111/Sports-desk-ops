@@ -34,11 +34,12 @@ import {
   type BatchedRankingResult,
 } from "./customer_rankings.ts";
 import {
+  type AnsiMarkdownOptions,
   describeAnsiTheme,
   formatOsc8Hyperlink,
   getCanonicalCustomerUrl,
   getCanonicalAgentUrl,
-  parseAnsiMarkdownCliOptions,
+  parseAnsiMarkdownCliArgs,
   renderAnsiMarkdown,
 } from "./canonical_osc8_links.ts";
 import { formatHalfPointLine } from "../design/domain-branded-types.ts";
@@ -291,6 +292,8 @@ export const COMMAND_ALIASES: Readonly<Record<string, string>> = {
   h: "help",
   help: "help",
   "?": "help",
+  "--help": "help",
+  "-h": "help",
   kb: "keybindings",
   keyshelp: "keybindings",
   keybindings: "keybindings",
@@ -331,6 +334,7 @@ export const AUTOCOMPLETE_COMMANDS: readonly string[] = [
   "capabilities",
   "clear",
   "help",
+  "--help",
   "keybindings",
   // Shortcodes
   "p",
@@ -919,7 +923,7 @@ function ansi256ToCss(index: number): string | undefined {
 export function parseAnsiSegments(raw: string): AnsiSegment[] {
   const segments: AnsiSegment[] = [];
   const tokenRegex =
-    /\x1b]8;[a-zA-Z0-9;=]*;([^\x1b\x07\\]*)(?:\x1b\\|\x07)|\x1b\[([0-9;]*)m/g;
+    /\x1b]8;[a-zA-Z0-9;=:\-_.]*;([^\x1b\x07\\]*)(?:\x1b\\|\x07)|\x1b\[([0-9;]*)m/g;
 
   let lastIndex = 0;
   let currentColor: string | undefined;
@@ -1056,12 +1060,16 @@ export function parseAnsiSegments(raw: string): AnsiSegment[] {
 
 /** Escapes special HTML characters. */
 function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+  return Bun.escapeHTML(str);
+}
+
+function isSafeTerminalLinkUrl(rawUrl: string): boolean {
+  const normalized = rawUrl.trim().toLowerCase();
+  return (
+    normalized.startsWith("https://") ||
+    normalized.startsWith("http://") ||
+    normalized.startsWith("/")
+  );
 }
 
 /**
@@ -1089,7 +1097,7 @@ export function ansiToHtml(raw: string): string {
         styles.length > 0 ? ` style="${styles.join("; ")}"` : "";
       const escaped = escapeHtml(seg.text);
 
-      if (seg.linkUrl) {
+      if (seg.linkUrl && isSafeTerminalLinkUrl(seg.linkUrl)) {
         return `<a href="${escapeHtml(seg.linkUrl)}" target="_blank" rel="noopener noreferrer"${styleAttr}>${escaped}</a>`;
       }
       return styles.length > 0
@@ -1128,7 +1136,7 @@ export function getTerminalWelcomeBanner(): string {
     "  \x1b[1;32mdns <host>\x1b[0m (alias: \x1b[32md\x1b[0m)         Benchmark c-ares vs system DNS resolver latency",
     "  \x1b[1;32mreverse <ip>\x1b[0m (alias: \x1b[32mr, ip\x1b[0m)     Reverse DNS forensics & datacenter/residential IP lookup",
     "  \x1b[1;32mcron <expr>\x1b[0m (alias: \x1b[32mcr\x1b[0m)        Inspect Bun.cron() schedule triggers",
-    "  \x1b[1;32mmarkdown\x1b[0m (alias: \x1b[32mmd\x1b[0m)           Render Markdown via native Bun.markdown.ansi",
+    "  \x1b[1;32mmarkdown\x1b[0m (alias: \x1b[32mmd\x1b[0m)           Render Markdown via native Bun.markdown.ansi (\x1b[36m--theme\x1b[0m, \x1b[36m--columns\x1b[0m, \x1b[36m--no-color\x1b[0m)",
     "  \x1b[1;32mcapabilities\x1b[0m                  Inspect Bun v1.4 native engine capabilities",
     "  \x1b[1;32mclear\x1b[0m (alias: \x1b[32mcls\x1b[0m)             Clear terminal screen buffer",
     "  \x1b[1;32mhelp\x1b[0m (aliases: \x1b[32mh, ?\x1b[0m)           Display this reference manual",
@@ -1482,6 +1490,220 @@ function renderKeybindingsCheatSheet(): string {
     "\x1b[90mTip: Press [Tab] to auto-complete commands, shortcodes, and customer IDs in real-time.\x1b[0m",
   );
   return rows.join("\n");
+}
+
+interface MarkdownArgToken {
+  readonly text: string;
+  readonly sep: string;
+}
+
+/**
+ * Quote-aware argument tokenizer for the `markdown` command that preserves
+ * newlines and leading indentation inside unquoted multiline markdown payloads.
+ */
+function tokenizeMarkdownArgs(trimmedCommand: string): MarkdownArgToken[] {
+  let i = 0;
+  while (i < trimmedCommand.length && !/\s/.test(trimmedCommand[i]!)) {
+    i++;
+  }
+  const tokens: MarkdownArgToken[] = [];
+  while (i < trimmedCommand.length) {
+    const sepStart = i;
+    while (i < trimmedCommand.length && /\s/.test(trimmedCommand[i]!)) {
+      i++;
+    }
+    const sep = trimmedCommand.slice(sepStart, i).replace(/\r/g, "");
+    if (i >= trimmedCommand.length) break;
+
+    const ch = trimmedCommand[i]!;
+    if (ch === '"' || ch === "'") {
+      const quote = ch;
+      i++;
+      let text = "";
+      while (i < trimmedCommand.length && trimmedCommand[i] !== quote) {
+        if (
+          trimmedCommand[i] === "\\" &&
+          i + 1 < trimmedCommand.length &&
+          (trimmedCommand[i + 1] === quote || trimmedCommand[i + 1] === "\\")
+        ) {
+          text += trimmedCommand[i + 1];
+          i += 2;
+        } else {
+          text += trimmedCommand[i];
+          i++;
+        }
+      }
+      if (i < trimmedCommand.length && trimmedCommand[i] === quote) {
+        i++;
+      }
+      tokens.push({ text, sep });
+      continue;
+    }
+
+    const tokStart = i;
+    while (i < trimmedCommand.length && !/\s/.test(trimmedCommand[i]!)) {
+      i++;
+    }
+    tokens.push({ text: trimmedCommand.slice(tokStart, i), sep });
+  }
+  return tokens;
+}
+
+function buildSportsDeskMarkdownShowcase(): string {
+  return [
+    "# SportsDesk Markdown",
+    "",
+    "> Native Zig GFM renderer (`Bun.markdown.ansi` + `AnsiTheme`)",
+    "",
+    "| Capability | Flag / API | Scope |",
+    "| :--- | :--- | :--- |",
+    "| **OSC 8 Hyperlinks** | `--hyperlinks` | Customer & API links |",
+    "| **Theme Presets** | `--theme=dark`, `--light`, `--mono` | SGR 24-bit / plain |",
+    "| **Symbol Auto-Links** | `--linkify-symbols` | `Bun.markdown.ansi` |",
+    "| **Layout & Media** | `--columns=N`, `--kitty` | GFM tables & images |",
+    "",
+    "- [x] Linear-time CommonMark + GFM tables & task lists",
+    `- [x] Customer: [GP301](${getCanonicalCustomerUrl("GP301")})`,
+    `- [x] Customer: [BRT106](${getCanonicalCustomerUrl("BRT106")})`,
+    "",
+    "```sh",
+    "markdown --theme=light --columns=100 README.md",
+    "```",
+  ].join("\n");
+}
+
+function buildMarkdownHelpDoc(): string {
+  return [
+    "# markdown (md)",
+    "",
+    "> Render CommonMark + GFM with `Bun.markdown.ansi` or `--wager` tier badges",
+    "",
+    "| Flag | Effect | Notes |",
+    "| :--- | :--- | :--- |",
+    "| `--theme=<preset>` | Apply theme preset | `dark`, `light`, `mono`, `accessible` |",
+    "| `--columns=<N>` | Set wrap width | `0` disables wrapping (defaults to pane width) |",
+    "| `--color`, `--no-color` | Toggle ANSI / OSC 8 | Plain ASCII table & chrome when off |",
+    "| `--hyperlinks`, `--no-hyperlinks` | Toggle OSC 8 links | Customer & Bun symbol URLs |",
+    "| `--linkify-symbols` | Auto-link Bun APIs | Turns code spans into docs links |",
+    "| `--light`, `--dark` | Code span palette | Adjusts 256-color inline code contrast |",
+    "| `--ansi`, `--wager` | Force renderer | `Bun.markdown.ansi` vs wager badges |",
+    "",
+    "```sh",
+    'markdown "# Alert" --theme=light --columns=100',
+    "markdown --no-color README.md",
+    "```",
+  ].join("\n");
+}
+
+const WAGER_TIER_INLINE_RE =
+  /\*\*(?:[^*]|\*(?!\*))*?(?:CRITICAL|STEAM|LATENCY|RECREATIONAL)/;
+
+async function runMarkdownTerminalCommand(
+  trimmed: string,
+  options: TerminalQueryOptions,
+  startedAt: number,
+): Promise<TerminalQueryResult> {
+  const argTokens = tokenizeMarkdownArgs(trimmed);
+  const parsed = parseAnsiMarkdownCliArgs(argTokens.map((t) => t.text));
+
+  const callerColumns =
+    parsed.themeOptions.columns === undefined &&
+    options.cols !== undefined &&
+    Number.isInteger(options.cols) &&
+    options.cols >= 0
+      ? Math.min(options.cols, 130)
+      : undefined;
+
+  const isShowcaseMode =
+    !parsed.helpRequested && parsed.positionalArgs.length === 0;
+  const shouldAutoLinkifySymbols =
+    isShowcaseMode &&
+    parsed.themeOptions.linkifySymbols === undefined &&
+    parsed.themeOptions.colors !== false &&
+    parsed.themeOptions.hyperlinks !== false;
+
+  const resolvedThemeOptions: AnsiMarkdownOptions = {
+    ...parsed.themeOptions,
+    ...(callerColumns !== undefined ? { columns: callerColumns } : {}),
+    ...(shouldAutoLinkifySymbols ? { linkifySymbols: true } : {}),
+  };
+  const isPlainMode = resolvedThemeOptions.colors === false;
+
+  const formatMarkdownError = (message: string): TerminalQueryResult => {
+    const msg = `[MARKDOWN_ERROR] ${message}`;
+    return {
+      command: trimmed,
+      stdout: isPlainMode ? msg : `\x1b[31m${msg}\x1b[0m`,
+      exitCode: 1,
+      durationMs: Date.now() - startedAt,
+      timestamp: startedAt,
+    };
+  };
+
+  if (parsed.invalidOptionError) {
+    return formatMarkdownError(parsed.invalidOptionError);
+  }
+
+  let input = "";
+  for (let idx = 0; idx < parsed.positionalIndices.length; idx++) {
+    const tok = argTokens[parsed.positionalIndices[idx]!]!;
+    if (idx > 0) {
+      const nlIdx = tok.sep.indexOf("\n");
+      input += nlIdx >= 0 ? tok.sep.slice(nlIdx) : " ";
+    }
+    input += tok.text;
+  }
+
+  try {
+    const firstPositional = parsed.positionalArgs[0] ?? "";
+    const isFileTarget =
+      !parsed.helpRequested &&
+      parsed.positionalArgs.length === 1 &&
+      !firstPositional.includes("\n") &&
+      /\.md(?:own)?$/i.test(firstPositional);
+
+    let mdText = parsed.helpRequested
+      ? buildMarkdownHelpDoc()
+      : input || buildSportsDeskMarkdownShowcase();
+
+    if (isFileTarget) {
+      const filePath = resolve(options.cwd ?? process.cwd(), firstPositional);
+      const f = Bun.file(filePath);
+      if (!(await f.exists())) {
+        return formatMarkdownError(`File not found: ${firstPositional}`);
+      }
+      mdText = await f.text();
+    }
+
+    const isInlineWagerBadge =
+      !parsed.helpRequested &&
+      !parsed.hasNativeThemeFlag &&
+      !isFileTarget &&
+      input.length > 0 &&
+      (parsed.wagerMode || WAGER_TIER_INLINE_RE.test(input));
+
+    const useNativeAnsiTheme = !isInlineWagerBadge;
+    const renderStart = performance.now();
+    const body = useNativeAnsiTheme
+      ? renderAnsiMarkdown(mdText, resolvedThemeOptions)
+      : renderWagerMarkdownTerminal(mdText, { colors: !isPlainMode });
+    const elapsed = (performance.now() - renderStart).toFixed(2);
+    const footerText = `⚡ Rendered via Bun.markdown.ansi in ${elapsed}ms (AnsiTheme: ${describeAnsiTheme(resolvedThemeOptions)})`;
+    const rendered = useNativeAnsiTheme
+      ? `${body.trimEnd()}\n\n${isPlainMode ? footerText : `\x1b[2m${footerText}\x1b[0m`}`
+      : body;
+    return {
+      command: trimmed,
+      stdout: rendered,
+      exitCode: 0,
+      durationMs: Date.now() - startedAt,
+      timestamp: startedAt,
+    };
+  } catch (err) {
+    return formatMarkdownError(
+      `Failed rendering: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }
 
 /**
@@ -2112,83 +2334,7 @@ async function executeTerminalQueryInner(
 
   // Quick Command: Bun.markdown Native Terminal Renderer (Bun.markdown.ansi + AnsiTheme & tier badges)
   if (canonicalCmd === "markdown") {
-    const themeOptions = parseAnsiMarkdownCliOptions(cmdArgs);
-    const nonFlagTokens: string[] = [];
-    let hasAnsiThemeFlag = false;
-    for (let i = 0; i < cmdArgs.length; i++) {
-      const a = cmdArgs[i]!;
-      if (a === "--theme" || a === "--columns") {
-        hasAnsiThemeFlag = true;
-        i++;
-        continue;
-      }
-      if (
-        a === "--ansi" ||
-        a.startsWith("--theme=") ||
-        a.startsWith("--columns=") ||
-        a === "--colors" ||
-        a === "--color" ||
-        a === "--no-colors" ||
-        a === "--no-color" ||
-        a === "--hyperlinks" ||
-        a === "--no-hyperlinks" ||
-        a === "--light" ||
-        a === "--dark" ||
-        a === "--no-light" ||
-        a === "--kitty-graphics" ||
-        a === "--kitty" ||
-        a === "--no-kitty-graphics" ||
-        a === "--no-kitty" ||
-        a === "--linkify-symbols" ||
-        a === "--no-linkify-symbols"
-      ) {
-        hasAnsiThemeFlag = true;
-        continue;
-      }
-      nonFlagTokens.push(a);
-    }
-
-    const input =
-      nonFlagTokens.join(" ") ||
-      "# SportsDesk Markdown\n\n- Native `Bun.markdown.ansi` with `AnsiTheme`\n- Clickable OSC 8 links: [GP301](https://fantasy402.com/manager.html?customer=GP301) · [BRT106](https://fantasy402.com/manager.html?customer=BRT106)\n- Linear time parsing";
-    try {
-      let mdText = input;
-      const isFileTarget = nonFlagTokens.length === 1 && input.endsWith(".md");
-      if (isFileTarget) {
-        const f = Bun.file(input);
-        if (await f.exists()) {
-          mdText = await f.text();
-        }
-      }
-      const useNativeAnsiTheme =
-        hasAnsiThemeFlag || isFileTarget || nonFlagTokens.length === 0;
-      const renderStart = performance.now();
-      const rendered = useNativeAnsiTheme
-        ? renderAnsiMarkdown(mdText, {
-            ...themeOptions,
-            ...(nonFlagTokens.length === 0 &&
-            themeOptions.linkifySymbols === undefined
-              ? { linkifySymbols: true }
-              : {}),
-          }) +
-          `\n\x1b[2m⚡ Rendered via Bun.markdown.ansi in ${(performance.now() - renderStart).toFixed(2)}ms (AnsiTheme: ${describeAnsiTheme(themeOptions)})\x1b[0m`
-        : renderWagerMarkdownTerminal(mdText);
-      return {
-        command: trimmed,
-        stdout: rendered,
-        exitCode: 0,
-        durationMs: Date.now() - startedAt,
-        timestamp: startedAt,
-      };
-    } catch (err) {
-      return {
-        command: trimmed,
-        stdout: `\x1b[31m[MARKDOWN_ERROR] Failed rendering: ${err instanceof Error ? err.message : String(err)}\x1b[0m`,
-        exitCode: 1,
-        durationMs: Date.now() - startedAt,
-        timestamp: startedAt,
-      };
-    }
+    return await runMarkdownTerminalCommand(trimmed, options, startedAt);
   }
 
   // Quick Command: Rankings (30d Batched Corpus)

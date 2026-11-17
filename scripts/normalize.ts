@@ -22,6 +22,7 @@ import {
   isDerivativePointsLineWager,
   normalizeWager,
   PeriodTaxonomyInspection,
+  formatTaxonomyBreakdownTable,
   registerPortalPeriodSqliteFunctions,
   insertNormalizedWagers,
   type NormalizedWagerRecord,
@@ -63,13 +64,20 @@ Options:
   --input <path>              Path to JSONL wagers file
   --output <path>             Path to save normalized JSON output (also writes <output>_meta.json)
   --sqlite <path>             Ingest normalized records directly into SQLite database using atomic transaction
-  --format <fmt>              Output presentation format: inspect | table | json | summary (default: table)
-  --inspect                   Format output using Bun.inspect inspection view (shortcut for --format=inspect)
+  --format <fmt>              Output presentation format: inspect | table | json | yaml | toml | summary (default: table)
+  --inspect                   Shortcut for --format inspect
+  --json                      Shortcut for --format json
+  --yaml, --yml               Shortcut for --format yaml (via Bun.YAML.stringify)
+  --toml                      Shortcut for --format toml (via Bun.TOML.stringify)
+  --table                     Shortcut for --format table
+  --summary                   Shortcut for --format summary
   --help                      Show this help message
 `);
 }
 
 export type InputFileSource = string | File | Blob;
+export type NormalizeOutputFormat =
+  "json" | "yaml" | "toml" | "table" | "inspect" | "summary";
 
 export interface CliOptions {
   mode: ReportMode;
@@ -83,8 +91,23 @@ export interface CliOptions {
   inputPath: InputFileSource;
   outputPath: string | null;
   sqlitePath?: string | null;
-  format: "json" | "table" | "inspect" | "summary";
+  format: NormalizeOutputFormat;
   inspect?: boolean;
+}
+
+function normalizeFormatName(raw: string): NormalizeOutputFormat | null {
+  const val = raw.trim().toLowerCase();
+  if (val === "yml" || val === "yaml") return "yaml";
+  if (
+    val === "json" ||
+    val === "toml" ||
+    val === "table" ||
+    val === "inspect" ||
+    val === "summary"
+  ) {
+    return val;
+  }
+  return null;
 }
 
 export function parseCliArgs(args: string[]): CliOptions {
@@ -99,7 +122,7 @@ export function parseCliArgs(args: string[]): CliOptions {
   let inputPath = "";
   let outputPath: string | null = null;
   let sqlitePath: string | null = null;
-  let format: "json" | "table" | "inspect" | "summary" = "table";
+  let format: NormalizeOutputFormat = "table";
   let inspect = false;
 
   for (let i = 0; i < args.length; i++) {
@@ -164,19 +187,45 @@ export function parseCliArgs(args: string[]): CliOptions {
     } else if (arg === "--sqlite" && i + 1 < args.length) {
       sqlitePath = args[++i] ?? null;
     } else if (arg === "--format" && i + 1 < args.length) {
-      const nextArg = args[++i];
-      const val = nextArg ? nextArg.toLowerCase() : "";
-      if (
-        val === "json" ||
-        val === "table" ||
-        val === "inspect" ||
-        val === "summary"
-      ) {
-        format = val;
+      const nextArg = args[++i] ?? "";
+      const parsed = normalizeFormatName(nextArg);
+      if (parsed === null) {
+        console.error(
+          `Invalid --format: ${nextArg}. Must be inspect, table, json, yaml, toml, or summary.`,
+        );
+        process.exit(1);
       }
+      format = parsed;
+      inspect = parsed === "inspect";
+    } else if (arg?.startsWith("--format=")) {
+      const val = arg.slice("--format=".length);
+      const parsed = normalizeFormatName(val);
+      if (parsed === null) {
+        console.error(
+          `Invalid --format: ${val}. Must be inspect, table, json, yaml, toml, or summary.`,
+        );
+        process.exit(1);
+      }
+      format = parsed;
+      inspect = parsed === "inspect";
     } else if (arg === "--inspect") {
       inspect = true;
       format = "inspect";
+    } else if (arg === "--json") {
+      format = "json";
+      inspect = false;
+    } else if (arg === "--yaml" || arg === "--yml") {
+      format = "yaml";
+      inspect = false;
+    } else if (arg === "--toml") {
+      format = "toml";
+      inspect = false;
+    } else if (arg === "--table") {
+      format = "table";
+      inspect = false;
+    } else if (arg === "--summary") {
+      format = "summary";
+      inspect = false;
     }
   }
 
@@ -439,6 +488,37 @@ export async function runNormalizer(options: CliOptions): Promise<{
   return { records, provenance, inspection };
 }
 
+/** Strip `null`/`undefined` entries because `Bun.TOML.stringify` rejects `null`. */
+function stripNullishForToml(value: unknown): unknown {
+  if (value === null || value === undefined) return undefined;
+  if (Array.isArray(value)) {
+    return value.map(stripNullishForToml).filter((item) => item !== undefined);
+  }
+  if (typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      const cleaned = stripNullishForToml(entry);
+      if (cleaned !== undefined) out[key] = cleaned;
+    }
+    return out;
+  }
+  return value;
+}
+
+function serializeStructuredOutput(
+  format: "json" | "yaml" | "toml",
+  payload: {
+    readonly provenance: ProvenanceSidecar;
+    readonly sample: readonly NormalizedWagerRecord[];
+  },
+): string {
+  if (format === "json") return JSON.stringify(payload, null, 2);
+  if (format === "yaml") return Bun.YAML.stringify(payload, null, 2).trimEnd();
+  return Bun.TOML.stringify(
+    stripNullishForToml(payload) as Record<string, unknown>,
+  ).trimEnd();
+}
+
 async function main(): Promise<void> {
   const options = parseCliArgs(process.argv.slice(2));
 
@@ -461,20 +541,46 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (
+    !options.outputPath &&
+    (options.format === "json" ||
+      options.format === "yaml" ||
+      options.format === "toml")
+  ) {
+    console.log(
+      serializeStructuredOutput(options.format, {
+        provenance,
+        sample: records.slice(0, 5),
+      }),
+    );
+    return;
+  }
+
   console.log(`[Normalizer] Processing: ${options.inputPath}`);
   console.log(
     `[Normalizer] Mode: ${options.mode} (${DATE_FAMILIES[options.mode].family}) | Period: ${options.period} (${PORTAL_PERIOD_LABELS[options.period]}) | Engine: ${options.engine}`,
   );
 
+  const activeDateFields = Object.fromEntries(
+    Object.entries(provenance.dateFields).filter(([, v]) => v !== null),
+  );
+  const matchRatePct =
+    provenance.stats.totalProcessed > 0
+      ? (
+          (provenance.stats.matchedRows / provenance.stats.totalProcessed) *
+          100
+        ).toFixed(1)
+      : "0.0";
+
   console.log(`\n=== Provenance & Date Window Metadata ===`);
   console.log(`Mode:            ${provenance.reportMode}`);
   console.log(`Date Family:     ${provenance.dateFamily}`);
   console.log(
-    `Date Fields:     ${JSON.stringify(
-      Object.fromEntries(
-        Object.entries(provenance.dateFields).filter(([, v]) => v !== null),
-      ),
-    )}`,
+    `Date Fields:     ${
+      Object.keys(activeDateFields).length > 0
+        ? JSON.stringify(activeDateFields)
+        : "unbounded"
+    }`,
   );
   console.log(
     `Period Filter:   [${provenance.period}] ${provenance.portalPeriodLabel}`,
@@ -484,7 +590,7 @@ async function main(): Promise<void> {
     `Total Universe:  ${provenance.stats.totalProcessed.toLocaleString()} wagers`,
   );
   console.log(
-    `Matched Rows:    ${provenance.stats.matchedRows.toLocaleString()} wagers`,
+    `Matched Rows:    ${provenance.stats.matchedRows.toLocaleString()} / ${provenance.stats.totalProcessed.toLocaleString()} (${matchRatePct}%)`,
   );
   console.log(
     `Total Risk:      $${provenance.stats.totalRisk.toLocaleString("en-US", {
@@ -496,33 +602,22 @@ async function main(): Promise<void> {
       minimumFractionDigits: 2,
     })}`,
   );
-
-  console.log(`\n=== Taxonomy Breakdown (Engine | Code | Label | Market) ===`);
-  const detailed = provenance.stats.detailedBreakdown ?? {};
-  const breakdownRows = Object.values(detailed)
-    .map((row) => ({
-      engine: row.engine,
-      code: row.code,
-      label: row.label,
-      market: row.market,
-      count: row.count,
-      risk: `$${row.risk.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      avg: `$${(row.count > 0 ? row.risk / row.count : 0).toLocaleString(
-        "en-US",
-        {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        },
-      )}`,
-    }))
-    .sort(
-      (a, b) =>
-        a.engine.localeCompare(b.engine) ||
-        (a.code === "∅" ? 99 : Number(a.code)) -
-          (b.code === "∅" ? 99 : Number(b.code)) ||
-        a.market.localeCompare(b.market),
+  if (provenance.stats.throughputRowsPerSec !== undefined) {
+    console.log(
+      `Throughput:      ${provenance.stats.throughputRowsPerSec.toLocaleString()} wagers/sec (${provenance.stats.durationMs?.toFixed(1) ?? "0.0"}ms)`,
     );
-  console.table(breakdownRows);
+  }
+
+  if (options.format !== "summary") {
+    console.log(
+      `\n=== Taxonomy Breakdown (Engine | Code | Label | Market) ===`,
+    );
+    console.log(
+      formatTaxonomyBreakdownTable(provenance.stats.detailedBreakdown, {
+        colors: Boolean(process.stdout.isTTY),
+      }),
+    );
+  }
 
   if (options.outputPath) {
     const outPath = resolve(options.outputPath);
@@ -540,10 +635,6 @@ async function main(): Promise<void> {
   if (options.sqlitePath) {
     console.log(
       `\n[Normalizer] Ingested ${records.length} records into SQLite: ${resolve(options.sqlitePath)}`,
-    );
-  } else if (!options.outputPath && options.format === "json") {
-    console.log(
-      JSON.stringify({ provenance, sample: records.slice(0, 5) }, null, 2),
     );
   }
 }

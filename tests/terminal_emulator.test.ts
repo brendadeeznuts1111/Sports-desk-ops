@@ -98,6 +98,13 @@ describe("SportsDesk Terminal Emulator & Query Engine", () => {
     // Verifies HTML escaping
     expect(html).toContain("&lt;bad &amp; dangerous&gt;");
     expect(html).not.toContain("<bad & dangerous>");
+
+    // Unsafe URL schemes in OSC 8 links must not render as clickable anchors
+    const unsafe = ansiToHtml(
+      "\x1b]8;;javascript:alert(1)\x1b\\Click\x1b]8;;\x1b\\",
+    );
+    expect(unsafe).not.toContain("<a ");
+    expect(unsafe).toContain("Click");
   });
 
   test("executeTerminalQuery returns welcome banner on 'help'", async () => {
@@ -107,6 +114,16 @@ describe("SportsDesk Terminal Emulator & Query Engine", () => {
       "SPORTSDESK & FANTASY402 INTERACTIVE PTY TERMINAL",
     );
     expect(result.stdout).toContain("profile <id>");
+  });
+
+  test("executeTerminalQuery accepts --help and -h aliases", async () => {
+    for (const command of ["--help", "-h"]) {
+      const result = await executeTerminalQuery(command);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain(
+        "SPORTSDESK & FANTASY402 INTERACTIVE PTY TERMINAL",
+      );
+    }
   });
 
   test("executeTerminalQuery executes customer search with 'find'", async () => {
@@ -157,6 +174,101 @@ describe("SportsDesk Terminal Emulator & Query Engine", () => {
     const result = await executeTerminalQuery("markdown # Operator Alert");
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Operator Alert");
+
+    const showcase = await executeTerminalQuery(
+      "markdown --color --hyperlinks",
+      { cols: 100 },
+    );
+    expect(showcase.exitCode).toBe(0);
+    expect(showcase.stdout).toContain("SportsDesk Markdown");
+    expect(showcase.stdout).toContain("colors=true");
+    expect(showcase.stdout).toContain("hyperlinks=true");
+    expect(showcase.stdout).toContain("columns=100");
+    expect(showcase.stdout).toContain("linkifySymbols=true");
+    expect(showcase.stdout).toContain(
+      "\x1b]8;;https://bun.com/reference/bun/markdown/ansi",
+    );
+    expect(showcase.stdout).toContain(
+      "\x1b]8;;https://fantasy402.com/manager.html?customer=GP301",
+    );
+
+    const explicitCols = await executeTerminalQuery(
+      "markdown --no-color --columns=92",
+      { cols: 120 },
+    );
+    expect(explicitCols.exitCode).toBe(0);
+    expect(explicitCols.stdout).toContain("columns=92");
+    expect(explicitCols.stdout).not.toContain("\x1b");
+
+    const plain = await executeTerminalQuery("markdown --no-color");
+    expect(plain.exitCode).toBe(0);
+    expect(plain.stdout).toContain("SportsDesk Markdown");
+    expect(plain.stdout).toContain("OSC 8 Hyperlinks");
+    expect(plain.stdout).toContain("colors=false, hyperlinks=false");
+    expect(plain.stdout).not.toContain("linkifySymbols=true");
+    expect(plain.stdout).not.toContain("\x1b");
+  });
+
+  test("executeTerminalQuery markdown handles quoted args, multiline tables, files, wager badges, help, and errors", async () => {
+    const quoted = await executeTerminalQuery(
+      'markdown "# Quoted Alert" --theme=light',
+    );
+    expect(quoted.exitCode).toBe(0);
+    expect(quoted.stdout).toContain("Quoted Alert");
+    expect(quoted.stdout).not.toContain('"');
+    expect(quoted.stdout).toContain("light=true");
+
+    const multiline = await executeTerminalQuery(
+      "markdown --no-color\n| Key | Val |\n| --- | --- |\n| k1 | v1 |",
+    );
+    expect(multiline.exitCode).toBe(0);
+    expect(multiline.stdout).toContain("+-----+-----+");
+    expect(multiline.stdout).toContain("| k1  | v1  |");
+    expect(multiline.stdout).not.toContain("\x1b");
+
+    writeFileSync(
+      join(fixtureDir, "note.md"),
+      "# Cwd Note\n\n- loaded from cwd\n",
+      "utf8",
+    );
+    const loadedFile = await executeTerminalQuery(
+      "markdown note.md --no-color",
+      {
+        cwd: fixtureDir,
+      },
+    );
+    expect(loadedFile.exitCode).toBe(0);
+    expect(loadedFile.stdout).toContain("Cwd Note");
+    expect(loadedFile.stdout).toContain("loaded from cwd");
+
+    const missingFile = await executeTerminalQuery(
+      "markdown does-not-exist.md --no-color",
+      { cwd: fixtureDir },
+    );
+    expect(missingFile.exitCode).toBe(1);
+    expect(missingFile.stdout).toContain("[MARKDOWN_ERROR] File not found:");
+    expect(missingFile.stdout).not.toContain("\x1b");
+
+    const invalidTheme = await executeTerminalQuery(
+      "markdown --theme=bogus --no-color",
+    );
+    expect(invalidTheme.exitCode).toBe(1);
+    expect(invalidTheme.stdout).toContain(
+      "[MARKDOWN_ERROR] Unknown theme preset",
+    );
+
+    const wagerPlain = await executeTerminalQuery(
+      "markdown --no-color **STEAM**",
+    );
+    expect(wagerPlain.exitCode).toBe(0);
+    expect(wagerPlain.stdout).toContain("STEAM");
+    expect(wagerPlain.stdout).not.toContain("\x1b");
+    expect(wagerPlain.stdout).not.toContain("Rendered via Bun.markdown.ansi");
+
+    const helpRes = await executeTerminalQuery("markdown --help --no-color");
+    expect(helpRes.exitCode).toBe(0);
+    expect(helpRes.stdout).toContain("--theme=<preset>");
+    expect(helpRes.stdout).toContain("--wager");
   });
 
   test("executeTerminalQuery displays Bun 1.4 capability matrix", async () => {

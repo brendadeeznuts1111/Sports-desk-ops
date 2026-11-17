@@ -136,9 +136,7 @@ function timestampSlug(isoTimestamp: string): string {
 }
 
 function sleep(milliseconds: number): Promise<void> {
-  return new Promise((resolvePromise) => {
-    setTimeout(resolvePromise, milliseconds);
-  });
+  return Bun.sleep(milliseconds);
 }
 
 function withTimeout<T>(

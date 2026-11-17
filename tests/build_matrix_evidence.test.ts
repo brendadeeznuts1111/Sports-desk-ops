@@ -116,4 +116,37 @@ describe("build_matrix_evidence · table", () => {
       "DCE matrix\n\n(no target rows in the probe)",
     );
   });
+
+  test("includes gzip, bundle hash, and all 5 branches when extended telemetry is present", () => {
+    const extProd: BuildMatrixRow = {
+      ...PROD,
+      gzipJsBytes: 12288,
+      bundleHash8: "c7156202",
+      inputFileCount: 14,
+      hasTestSentinel: false,
+      hasAnalyticsSentinel: true,
+    };
+    const extDev: BuildMatrixRow = {
+      ...DEV,
+      gzipJsBytes: 24576,
+      bundleHash8: "de18ab1e",
+      inputFileCount: 14,
+      hasTestSentinel: true,
+      hasAnalyticsSentinel: true,
+    };
+    const line = formatMatrixRowEvidence(extProd, extDev.totalJsBytes);
+    expect(line).toContain("js=40960B (gz=12288B)");
+    expect(line).toContain("hash=c7156202");
+    expect(line).toContain(
+      "branches: PROD=kept, DEBUG=pruned, TEST=pruned, ANALYTICS=kept, EXPERIMENTAL=pruned",
+    );
+    const md = formatMatrixEvidenceTable(
+      [extProd, extDev],
+      extDev.totalJsBytes,
+    );
+    expect(md).toContain(
+      "| target | flags | JS | CSS | total | Δ vs dev | PROD | DEBUG | TEST | ANALYTICS | EXPERIMENTAL |",
+    );
+    expect(md).toContain("40.0 KB (12.0 KB gz)");
+  });
 });
