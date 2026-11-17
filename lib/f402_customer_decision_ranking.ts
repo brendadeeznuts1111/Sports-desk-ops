@@ -165,6 +165,18 @@ export interface RankingInputProvenance {
   readonly sha256: string;
   readonly bytes: number;
   readonly records: number;
+  /**
+   * Capture facts (#242): what the export can and cannot tell you about itself. A hash proves
+   * bytes, not provenance — without these fields a reader cannot say when the bytes were taken,
+   * by what request, or over what population.
+   */
+  readonly capturedAtIso: string;
+  /** How `capturedAtIso` was obtained, stated plainly so it is not mistaken for a payload field. */
+  readonly capturedAtSource: string;
+  readonly capturedBy: string;
+  readonly request: string;
+  /** `unknown` means "we looked and the export cannot say", never "recorded and empty". */
+  readonly scope: string;
 }
 
 export interface AllCustomerDecisionRankingSystem {
