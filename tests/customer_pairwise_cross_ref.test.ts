@@ -1646,4 +1646,77 @@ describe("sportsdesk-fraud cross-ref governance & R2 lineage envelope", () => {
       STAGE_4_LEDGER_PUBLISH_SNAPSHOT.sinks["edge-topology"].generation_u32,
     ).toBe(1);
   });
+
+  test("PR #340 follow-up invariants (#341, #342, #344): header validation before alloc, f402-weblog generationPrefix, and self-comparison guard", async () => {
+    // #342: f402-weblog generationPrefix matches generations/<sinkId>
+    expect(BRIDGE_R2_SINK_SPECS["f402-weblog"].generationPrefix).toBe(
+      "generations/f402-weblog",
+    );
+
+    // #344: evaluateColumnarPairwiseCrossRef rejects self-comparison after normalization
+    const store = new PairwiseWagerColumnStore(2);
+    expect(() =>
+      evaluateColumnarPairwiseCrossRef(store, " c001 ", "C001"),
+    ).toThrow("ERR_PAIRWISE_SELF_COMPARISON");
+
+    // #341: executePairwiseCrossRefFromR2 validates SoA header before allocating PairwiseWagerColumnStore
+    const malformedChunk = new Uint8Array(16);
+    const dv = new DataView(malformedChunk.buffer);
+    dv.setUint32(0, 0x534f4157, true);
+    dv.setUint32(4, 1, true);
+    dv.setUint32(8, 0xffff_ffff, true);
+    dv.setUint32(12, 0xffff_ffff, true);
+
+    const mockR2: PairwiseR2Reader = {
+      file(key: string) {
+        return {
+          async text() {
+            if (key === WAGERS_BY_STATE_MANIFEST_KEY) {
+              return JSON.stringify({
+                generation_u32: 1,
+                merkle_root_sha256: "a".repeat(64),
+                watermark_cursor: "wm-1",
+                data_window_max_epoch_ms: 1_763_400_000_000,
+                r2_published_at_epoch_ms: 1_763_400_000_000,
+                chunk_key: "chunks/corrupt.bin",
+                circuit_state: "CLOSED",
+                unresolved_gap_cents: "0",
+              });
+            }
+            return JSON.stringify({
+              domain: "[DOD Spine]",
+              generation_u32: 1,
+              spine_generation_u32: 1,
+              merkle_root_sha256: "b".repeat(64),
+              data_window_max_epoch_ms: 1_763_400_000_000,
+              r2_published_at_epoch_ms: 1_763_400_000_000,
+              poison_bit: 0,
+              circuit_state: "CLOSED",
+              active_edge_count_u32: 0,
+              ring_count_u32: 0,
+              unresolved_gap_cents: "0",
+            });
+          },
+          async bytes() {
+            return malformedChunk;
+          },
+        };
+      },
+    };
+
+    let chunkErr: unknown = null;
+    try {
+      await executePairwiseCrossRefFromR2({
+        r2: mockR2,
+        customerA: "C001",
+        customerB: "C002",
+      });
+    } catch (err) {
+      chunkErr = err;
+    }
+    expect((chunkErr as Error).message).toContain(
+      "ERR_SOA_BINARY_PAYLOAD_TRUNCATED",
+    );
+    expect((chunkErr as { exitCode?: number }).exitCode).toBe(65);
+  });
 });

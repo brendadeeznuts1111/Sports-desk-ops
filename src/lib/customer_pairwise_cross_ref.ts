@@ -608,15 +608,18 @@ export function encodePairwiseSoAChunk(
   return new Uint8Array(outBuffer);
 }
 
+export interface PairwiseSoAChunkHeader {
+  readonly rowCount: number;
+  readonly alignedCount: number;
+  readonly requiredBytes: number;
+}
+
 /**
- * Hydrates a contiguous SoA binary chunk into `targetStore`. Skips `INGEST_STAGE1_DROP` rows and
- * throws `ERR_BRIDGE_CHANNEL_CONTAMINATION` when `expectedBridgeId2 !== "ALL"` mismatches a row.
+ * Validates the 16-byte SoA chunk header and payload length without allocating column storage.
  */
-export function hydratePairwiseColumnStoreFromSoAChunk(
+export function parsePairwiseSoAChunkHeader(
   chunkBytes: Uint8Array,
-  expectedBridgeId2: SourceBridgeId2 | "ALL",
-  targetStore: PairwiseWagerColumnStore,
-): number {
+): PairwiseSoAChunkHeader {
   if (chunkBytes.byteLength < PAIRWISE_SOA_HEADER_BYTES) {
     throw new Error(
       "ERR_SOA_BINARY_TRUNCATED: chunk is smaller than 16-byte SoA header",
@@ -653,6 +656,24 @@ export function hydratePairwiseColumnStoreFromSoAChunk(
       `ERR_SOA_BINARY_PAYLOAD_TRUNCATED: expected ${requiredBytes} bytes, got ${chunkBytes.byteLength}`,
     );
   }
+  return { rowCount, alignedCount, requiredBytes };
+}
+
+/**
+ * Hydrates a contiguous SoA binary chunk into `targetStore`. Skips `INGEST_STAGE1_DROP` rows and
+ * throws `ERR_BRIDGE_CHANNEL_CONTAMINATION` when `expectedBridgeId2 !== "ALL"` mismatches a row.
+ */
+export function hydratePairwiseColumnStoreFromSoAChunk(
+  chunkBytes: Uint8Array,
+  expectedBridgeId2: SourceBridgeId2 | "ALL",
+  targetStore: PairwiseWagerColumnStore,
+): number {
+  const { rowCount, alignedCount } = parsePairwiseSoAChunkHeader(chunkBytes);
+  const view = new DataView(
+    chunkBytes.buffer,
+    chunkBytes.byteOffset,
+    chunkBytes.byteLength,
+  );
 
   const base = PAIRWISE_SOA_HEADER_BYTES;
   const offStake = base;
@@ -819,6 +840,11 @@ export function evaluateColumnarPairwiseCrossRef(
 ): PairwiseCrossRefResult {
   const normA = normalizeCustomerId(customerA);
   const normB = normalizeCustomerId(customerB);
+  if (normA === normB) {
+    throw new RangeError(
+      `ERR_PAIRWISE_SELF_COMPARISON: customerA and customerB both normalize to "${normA}"`,
+    );
+  }
   const bridgeFilter = options?.bridgeFilter ?? "ALL";
   const maxSampleOverlaps = options?.maxSampleOverlaps ?? 16;
 

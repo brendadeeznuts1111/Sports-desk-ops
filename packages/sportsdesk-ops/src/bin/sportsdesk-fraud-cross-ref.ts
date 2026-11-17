@@ -13,6 +13,7 @@ import { parseArgs } from "node:util";
 import {
   hydratePairwiseColumnStoreFromSoAChunk,
   evaluateColumnarPairwiseCrossRef,
+  parsePairwiseSoAChunkHeader,
   PairwiseWagerColumnStore,
   SOURCE_BRIDGE_IDS,
   type PairwiseCrossRefResult,
@@ -391,22 +392,11 @@ export async function executePairwiseCrossRefFromR2(params: {
     params.r2,
     wagersManifest.chunk_key,
   );
-  if (chunkBytes.byteLength < 16) {
-    throw new PairwiseCrossRefError(
-      "ERR_SOA_BINARY_TRUNCATED",
-      "ERR_SOA_BINARY_TRUNCATED: R2 SoA chunk smaller than 16-byte header",
-      65,
-    );
-  }
-  const declaredRowCount = new DataView(
-    chunkBytes.buffer,
-    chunkBytes.byteOffset,
-    16,
-  ).getUint32(8, true);
-
-  const store = new PairwiseWagerColumnStore(Math.max(1, declaredRowCount));
   let hydratedRows: number;
+  let store: PairwiseWagerColumnStore;
   try {
+    const { rowCount } = parsePairwiseSoAChunkHeader(chunkBytes);
+    store = new PairwiseWagerColumnStore(Math.max(1, rowCount));
     hydratedRows = hydratePairwiseColumnStoreFromSoAChunk(
       chunkBytes,
       "ALL",

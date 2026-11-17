@@ -11,13 +11,16 @@ so. Re-check any version-scoped claim against the pin before relying on it.
 
 ### Inner loop — during development
 
-Pull requests run **`verify-changed`** (`bun run test:changed` + `test:changed-plugins`), not the
+Pull requests run **`verify-changed`** (`bun fmt --check --changed`, `typecheck`, `lint:check`,
+`check:derived-contracts`, `verify:docs`, `test:changed`, `test:pm-contracts`,
+`test-changed-plugins`, `test-changed-nsh`, and `check:profile-code-mode-host-seal`), not the
 full `main`-branch ratchet. Never run the whole suite (`bun test` / `bun test tests/`) on iterative
 edits; use **`bun run verify:fast`**:
 
 ```sh
-bun run verify:fast          # auto-format changed files + typecheck (.ts+.tsx) + scoped oxlint +
-                             # path-triggered gates + test:changed, in parallel (~1–2s)
+bun run verify:fast          # auto-format (bun fmt) changed files + typecheck (.ts+.tsx) + scoped
+                             # oxlint (--deep adds --type-aware) + path-triggered gates +
+                             # test:changed, in parallel (~1–2s); --check for read-only fmt check
 bun run test:changed         # parallel changed-only tests
 bun run test:shard           # parallel head shard (1/8) when root configs are dirty
 ```
@@ -33,12 +36,14 @@ chain in order on `main` pushes and scheduled cadences and stops at the first fa
 assembling the steps by hand. This block is the canonical order:
 
 ```sh
+bun run --filter '@sportsdesk-ops/contracts' build
 bun run verify:manager-oracle-slices
 bash scripts/ci/run-manager-oracle-gates.sh
 bun test lib/f402_har_redaction_proof_verify.test.ts
 bun run format:check
 bun run typecheck
 bun run lint:check
+bun run check:derived-contracts
 bun run test:docs
 bun run verify:docs
 bun run check:route-surface
@@ -52,11 +57,22 @@ bun run gen:tokens:gate
 bun bin/check-fetch-init.ts --verbose
 bun bin/check-innerhtml.ts --verbose
 bun bin/check-signal-honesty.ts --verbose
+bash scripts/ci/install-nsh.sh && bun run nsh:doctor && bun run nsh:verify
 CI=true bun run schema:gate
 bun run test:market-index                       # CI: Validate market index (REQUIRE_MARKET_INDEX=1)
-bun test tests/ --path-ignore-patterns='**/market_index.test.ts'
-bun test                                        # not in CI: also runs the colocated tests
+bun test tests/ --path-ignore-patterns='**/market_index.test.ts' --timings=config/test-timings.json
+bun run test:db
+bun test scripts/capture/webview.test.ts scripts/capture/cookies.test.ts
+bun test --timings=config/test-timings.json      # not in CI: also runs all colocated tests
 ```
+
+`config/test-timings.json` is a committed scheduling hint: with `--timings`, `--parallel` starts the
+slowest files first, so the deliberate ~12.6 s SSE keepalive soak
+(`tests/sportsdesk_mcp_server_soak.test.ts`) overlaps the rest of the suite instead of extending it
+(plain `bun test` serializes it at the end and is ~12 s slower; measured 2026-11-17: 29.5 s vs 18.5 s).
+`bun run test` merges it with the gitignored `.bun-test-timings.json`, which `--update-timings` rewrites.
+Regenerate the committed baseline after large suite changes:
+`bun test --parallel --timings=config/test-timings.json --update-timings`.
 
 Actions do run on this repo (2026-11-02: PR #10's `verify` job ran and failed at `format:check`);
 because the job stops at the first failure, an early red step hides every later one.
@@ -69,7 +85,8 @@ in `.github/workflows/ci.yml`, run **`bun run test:market-index`** first. Discov
 ### Before a long run
 
 `bun run agent:doctor` reports the gaps that otherwise surface one failed call at a time: worktree
-`node_modules`, blocked dependency lifecycle scripts (`bun pm untrusted` exits 0 either way, so a
+`node_modules`, installed-package drift from `bun.lock` (the 2026-11-17 red-typecheck cause),
+blocked dependency lifecycle scripts (`bun pm untrusted` exits 0 either way, so a
 skipped native build is otherwise silent), the gitignored `enriched_customers_full.json`, feed
 provenance, dist staging, graphviz, a headless browser, the `:4020` daemon, sandbox write access and
 the Pages deploy token. The tool-call audit lives in
@@ -204,11 +221,14 @@ Do not delete these as redundant without reading the ADR:
 
 ## Layout
 
-`lib/` (ingestion, settlement, combo identity, venue stores) · `bin/` (dx, linters) ·
-`market/` (format-1 index for Discover) · `tests/` (`*.test.ts` suites plus fixtures) ·
-**colocated `*.test.ts` suites in `lib/` and `scripts/`** (CI runs only `tests/`, so run `bun test`
-before pushing) · `packages/` · `design/` · `schema/` · `infra/` · `docs/` · root runbooks
-(runtime shapes, guardrails, token architecture, R2/API, VPS domain).
+`lib/` (ingestion, settlement, R2 CAS manifests, hostname extraction, venue stores) · `src/lib/`
+(SoA analytics: `portal_taxonomy_normalizer.ts`, `syndicate_bot_detector.ts`,
+`syndicate_adjacency_rollup.ts`, `customer_pairwise_cross_ref.ts`) · `cli/` (`sportsdesk_cli.ts`,
+`sportsdesk_fraud_cli.ts`) · `bin/` (dx, linters) · `market/` (format-1 index for Discover) ·
+`tests/` (`*.test.ts` suites plus fixtures) · **colocated `*.test.ts` suites in `lib/` and
+`scripts/`** (CI runs `tests/` plus `scripts/capture/*.test.ts`, so run `bun test` before pushing) ·
+`packages/` · `design/` · `schema/` · `infra/` · `docs/` (including `docs/runbooks/` for runtime
+shapes, guardrails, token architecture, R2/API, and VPS domain).
 
 ## Hard rules
 
@@ -290,8 +310,16 @@ against `main` displayed the run from its stacked base (`43764453809`) until a b
   `tests/fixtures/live-wagers.partial.json`. `tests/data_artifacts_tracking.test.ts` fails if either
   path is tracked again.
 - Hot aggregation over roughly 10k+ rows uses fixed-capacity TypedArray arenas: no `Map`, `Set`,
-  `boolean[]` or growing `T[]` on the aggregation path. Reference: `lib/gslive_tally_rollup.ts`;
-  ratchet: `tests/tally_allocation_invariant.test.ts` (0 collection allocations).
+  `boolean[]` or growing `T[]` on the aggregation path. Reference: `lib/gslive_tally_rollup.ts`,
+  `src/lib/customer_pairwise_cross_ref.ts` (`PairwiseWagerColumnStore`,
+  `PairwiseOverlapColumnStore`); ratchet: `tests/tally_allocation_invariant.test.ts` (0 collection
+  allocations).
+- Canonical R2 CAS manifest promotion (`lib/r2_manifest_cas.ts`, `CANONICAL_R2_SINK_SPECS`,
+  `BRIDGE_R2_SINK_SPECS`): `If-None-Match: *` (gen 1) / `If-Match` (gen > 1) with zero rebases on
+  HTTP `412` (`ERR_R2_MANIFEST_CAS_REJECTED`, exit `74`), zero `unresolved_gap_cents`
+  (`ERR_OPS_RECONCILIATION_GAP`, exit `65`), and token-bleed isolation (`ERR_CF_TOKEN_BLEED_10000`,
+  exit `77`). `bun x sportsdesk-fraud cross-ref` hydrates R2 SoA chunks directly and fails closed on
+  local file inputs (`ERR_OPS_LOCAL_JSON_FORBIDDEN`, exit `78`).
 - Dense flags are `Uint32Array` bitsets. Do not add `boolean[]` to runtime aggregation.
 - DOD6 reader: `lookupInto(login, target)` in per-row loops; `lookup()` allocates a result and a
   handle union per call. Handles are opaque; use `rowOfHandle`, never sort by handle.
@@ -302,5 +330,5 @@ against `main` displayed the run from its stacked base (`43764453809`) until a b
 
 ## Doc ownership
 
-`README.md` = orientation + the runbook tree · the root runbooks = operational procedure ·
-`docs/` = long-form. Move procedure into `docs/` rather than growing the root.
+`README.md` = orientation + the runbook tree · `docs/runbooks/` = operational procedure ·
+`docs/` = long-form. Move procedure into `docs/runbooks/` rather than growing the root.

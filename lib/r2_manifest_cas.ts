@@ -544,7 +544,7 @@ export const BRIDGE_R2_SINK_SPECS: Readonly<
     domain: "[Ops & Governance]",
     r2Bucket: R2_BUCKET,
     manifestKey: "manifests/f402-weblog/latest",
-    generationPrefix: "f402-weblog",
+    generationPrefix: "generations/f402-weblog",
     lane: "ops-weblog-bridge",
     skillOrdinalU8: 12,
     slaMs: 90 * 60 * 1000,
@@ -959,6 +959,44 @@ export interface CanonicalSinkVerifyEntry {
   readonly ok: boolean;
 }
 
+function parseManifestGapAndGeneration(payload: CanonicalManifestRecord): {
+  readonly rawGap: string;
+  readonly gapBig: bigint;
+  readonly gapValid: boolean;
+  readonly generationU32: number;
+} {
+  const rawGap = String(payload.unresolved_gap_cents ?? "0").trim();
+  let gapBig = 0n;
+  let gapValid = true;
+  try {
+    assertZeroReconciliationGapCents(rawGap);
+  } catch {
+    gapValid = false;
+    try {
+      gapBig = /^[+-]?\d+$/.test(rawGap) ? BigInt(rawGap) : 1n;
+    } catch {
+      gapBig = 1n;
+    }
+  }
+  const hasDataWindow =
+    typeof payload.data_window_max_epoch_ms === "number" &&
+    Number.isFinite(payload.data_window_max_epoch_ms);
+  const hasPublishedAt =
+    typeof payload.r2_published_at_epoch_ms === "number" &&
+    Number.isFinite(payload.r2_published_at_epoch_ms);
+  const generationU32 =
+    typeof payload.generation_u32 === "number" ||
+    typeof payload.snapshot_gen_u32 === "number"
+      ? Number(payload.generation_u32 ?? payload.snapshot_gen_u32) >>> 0
+      : typeof payload.sha256 === "string" &&
+          payload.sha256.length > 0 &&
+          hasDataWindow &&
+          hasPublishedAt
+        ? 1
+        : 0;
+  return { rawGap, gapBig, gapValid, generationU32 };
+}
+
 export async function verifyCanonicalR2Manifests(options: {
   readonly client: CasR2ClientLike;
   readonly env?: R2CasEnv;
@@ -1020,23 +1058,8 @@ export async function verifyCanonicalR2Manifests(options: {
       continue;
     }
 
-    const rawGap = String(probe.payload.unresolved_gap_cents ?? "0").trim();
-    let gapBig = 0n;
-    let gapValid = true;
-    try {
-      assertZeroReconciliationGapCents(rawGap);
-    } catch {
-      gapValid = false;
-      try {
-        if (/^[+-]?\d+$/.test(rawGap)) {
-          gapBig = BigInt(rawGap);
-        } else {
-          gapBig = 1n;
-        }
-      } catch {
-        gapBig = 1n;
-      }
-    }
+    const { rawGap, gapBig, gapValid, generationU32 } =
+      parseManifestGapAndGeneration(probe.payload);
     totalGapCents += gapBig < 0n ? -gapBig : gapBig;
 
     const circuitState = probe.payload.circuit_state ?? "CLOSED";
@@ -1044,18 +1067,6 @@ export async function verifyCanonicalR2Manifests(options: {
     const driftExitCode = Number(probe.payload.drift_exit_code ?? 0);
     const merkleRoot =
       probe.payload.merkle_root_sha256 ?? probe.payload.sha256 ?? null;
-    const generationU32 =
-      typeof probe.payload.generation_u32 === "number" ||
-      typeof probe.payload.snapshot_gen_u32 === "number"
-        ? Number(
-            probe.payload.generation_u32 ?? probe.payload.snapshot_gen_u32,
-          ) >>> 0
-        : typeof probe.payload.sha256 === "string" &&
-            probe.payload.sha256.length > 0 &&
-            typeof probe.payload.data_window_max_epoch_ms === "number" &&
-            typeof probe.payload.r2_published_at_epoch_ms === "number"
-          ? 1
-          : 0;
     const sinkOk =
       gapValid &&
       circuitState === "CLOSED" &&
@@ -1203,28 +1214,7 @@ export async function evaluateCanonicalR2ManifestStaleness(options: {
     const pubAgeMs = pubMs === null ? null : Math.max(0, nowMs - pubMs);
     const poisonBit = Number(p.poison_bit ?? 0);
     const circuitState = p.circuit_state ?? "CLOSED";
-    const rawGap = String(p.unresolved_gap_cents ?? "0").trim();
-    const generationU32 =
-      typeof p.generation_u32 === "number" ||
-      typeof p.snapshot_gen_u32 === "number"
-        ? Number(p.generation_u32 ?? p.snapshot_gen_u32) >>> 0
-        : typeof p.sha256 === "string" &&
-            p.sha256.length > 0 &&
-            dataWinMs !== null &&
-            pubMs !== null
-          ? 1
-          : 0;
-
-    let gapBig = 0n;
-    try {
-      assertZeroReconciliationGapCents(rawGap);
-    } catch {
-      try {
-        gapBig = /^[+-]?\d+$/.test(rawGap) ? BigInt(rawGap) : 1n;
-      } catch {
-        gapBig = 1n;
-      }
-    }
+    const { rawGap, gapBig, generationU32 } = parseManifestGapAndGeneration(p);
     totalGapCents += gapBig < 0n ? -gapBig : gapBig;
 
     const reasons: string[] = [];
