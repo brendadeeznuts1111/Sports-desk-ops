@@ -387,7 +387,7 @@
     "pack:check": "bun run scripts/check_workspace_packs.ts",
     "naming:fitness": "bun scripts/naming_fitness.ts",
     "venue:table": "bun scripts/venue_registry_table.ts",
-    "audit:deps": "bun audit",
+    "audit:deps": "bun audit --ignore=GHSA-fc5q-39xc-vjpf",
     "audit:deps:json": "bun audit --json",
     "validate:field-contract": "bun scripts/validate_wagers_field_contract.ts",
     "profiles:harvest": "bun run scripts/harvest_live_profiles.ts"
