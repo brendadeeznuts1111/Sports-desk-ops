@@ -2,6 +2,14 @@
  * Bun 1.4.4 package-manager contracts.
  * Verified against Bun 1.4.4; changelog:
  * https://bun.sh/blog/bun-v1.4.4#bun-install-reads-the-npmrc-that-actions-setup-node-writes
+ *
+ * Exact stderr assertions (re-verify on a Bun bump):
+ * - `has no --frozen-lockfil flag`
+ * - `<pkg> was added` / `<pkg> changed from X to Y` (frozen lockfile)
+ * - `not a bun cache pack (record #0)` (cache unpack)
+ *
+ * bun pm fetch verified manually 2026-11-17: lockfile unchanged, no scripts,
+ * no node_modules; add a fixture if a Docker consumer appears.
  */
 import { afterAll, describe, expect, test } from "bun:test";
 import {
@@ -131,6 +139,28 @@ describe("Bun 1.4.4 package-manager behaviors", () => {
     const manifest = readManifest(dir);
     expect(manifest.devDependencies?.["local-fixture"]).toBeDefined();
     expect(manifest.dependencies?.["local-fixture"]).toBeUndefined();
+  });
+
+  test("bun add -d / --save-prod move an existing dependency group", () => {
+    const repoPkg = JSON.parse(
+      readFileSync(join(import.meta.dir, "..", "package.json"), "utf8"),
+    ) as { devDependencies?: Record<string, string> };
+    const version = repoPkg.devDependencies?.typescript ?? "^5.9.3";
+    const dir = fixture();
+    const manifest = readManifest(dir);
+    manifest.dependencies = { typescript: version };
+    writeFileSync(join(dir, "package.json"), JSON.stringify(manifest, null, 2));
+    expect(run(dir, ["install"]).exitCode).toBe(0);
+
+    expect(run(dir, ["add", "-d", "typescript"]).exitCode).toBe(0);
+    const dev = readManifest(dir);
+    expect(dev.devDependencies?.typescript).toBeDefined();
+    expect(dev.dependencies?.typescript).toBeUndefined();
+
+    expect(run(dir, ["add", "--save-prod", "typescript"]).exitCode).toBe(0);
+    const prod = readManifest(dir);
+    expect(prod.dependencies?.typescript).toBeDefined();
+    expect(prod.devDependencies?.typescript).toBeUndefined();
   });
 
   test("accepts translated hoist/omit flags", () => {
