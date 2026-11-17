@@ -1,12 +1,11 @@
 /**
  * @file f402_session_refresh.ts
  * @description Decide whether the cached F402 session file needs re-minting, and (via the runner)
- * spawn `session:login --from-keychain` when it does. The core bug this closes: the default
- * session TTL in `lib/f402_session.ts` is 30 minutes, so an operator who mints a session (even
- * via `--from-keychain`) and walks away gets a silent bridge outage half an hour later. That is
- * exactly what happened on 2026-11-04 (session minted 06:03 UTC, expired 06:33 UTC, every bridge
- * rollup since then failed with "missing credentials: no F402 session file" — see
- * `scratch/bridge-rollup-cron.jsonl` for the 36 consecutive ok:false entries).
+ * spawn `session:login --from-keychain` when it does. A bearer session's `expiresAtIso` is the
+ * server JWT's `exp` minus a small margin (see `sessionFromAuth`), so this decision tracks the
+ * real 21-minute window; cookie-only sessions fall back to the client TTL. The runner exists
+ * because of 2026-11-04 (session minted 06:03 UTC, expired 06:33 UTC, every bridge rollup after
+ * that failed for 14+ hours — see `scratch/bridge-rollup-cron.jsonl`).
  *
  * The decision logic lives here, in a pure function that takes a session + now + grace and
  * returns a `RefreshDecision`. The runner (`scripts/f402_session_refresh.ts`) drives it on a
@@ -17,15 +16,16 @@
  * password. It only sees the session's `expiresAtIso` timestamp and derived metadata.
  */
 
+import { decodeF402BearerWindow, type F402TokenWindow } from "./f402_jwt.ts";
 import type { F402Session } from "./f402_session.ts";
 
-/** How close to expiry triggers a refresh. 5 min default; 1/6 of the 30-min TTL. */
+/** How close to expiry triggers a refresh. 5 min default; about a quarter of the 21-min window. */
 export const DEFAULT_REFRESH_GRACE_MS = 5 * 60 * 1000;
 
 /**
- * Client-side TTL passed to the mint. The server's bearer `exp` is the real lifetime (measured
- * 2026-11-17: 21 minutes), so a 1440-minute file expiry overstates the session unless the runner
- * is overridden (`F402_REFRESH_TTL_MIN`). See `tokenWindowFromSession`.
+ * Client-side TTL cap passed to the mint. For a bearer session the file expiry is derived from
+ * the JWT `exp` (see `sessionFromAuth`), so this value only bounds cookie-only sessions and a
+ * deliberately shorter caller TTL. The 21-minute window is observational, not an input.
  */
 export const DEFAULT_REFRESH_TTL_MINUTES = 1440;
 
@@ -103,8 +103,9 @@ export type RefreshErrorKind =
   "exit-nonzero" | "post-read-missing" | "post-read-stale" | "spawn-error";
 
 /**
- * Observed F402 bearer window (`exp - nbf`), measured 2026-11-17: 21 minutes. The session file's
- * `expiresAtIso` is a client-side claim; this claim is the server's.
+ * Observed F402 bearer window (`exp - nbf`), measured 2026-11-17: 21 minutes. This is an
+ * observability threshold for the alert below, not the expiry input: `sessionFromAuth` derives
+ * `expiresAtIso` from the token's own `exp`.
  */
 export const EXPECTED_TOKEN_WINDOW_MINUTES = 21;
 
@@ -112,15 +113,7 @@ export const EXPECTED_TOKEN_WINDOW_MINUTES = 21;
 export const TOKEN_WINDOW_TOLERANCE_MINUTES = 2;
 
 /** Bearer validity window, decoded without exposing the token. */
-export interface TokenWindow {
-  readonly nbfIso: string;
-  readonly expIso: string;
-  readonly windowMinutes: number;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
+export type TokenWindow = F402TokenWindow;
 
 /**
  * Decode the bearer JWT's `nbf`/`exp` claims. Returns null for an opaque token, a missing header,
@@ -129,30 +122,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function tokenWindowFromSession(
   session: F402Session | null,
 ): TokenWindow | null {
-  if (session === null || session.authorizationHeader === undefined) {
-    return null;
-  }
-  const raw = session.authorizationHeader.replace(/^Bearer\s+/i, "");
-  const parts = raw.split(".");
-  if (parts.length !== 3) return null;
-  const payloadPart = parts[1];
-  if (payloadPart === undefined) return null;
-  let decoded: unknown;
-  try {
-    decoded = JSON.parse(
-      Buffer.from(payloadPart, "base64url").toString("utf8"),
-    );
-  } catch {
-    return null;
-  }
-  if (!isRecord(decoded)) return null;
-  const { nbf, exp } = decoded;
-  if (typeof nbf !== "number" || typeof exp !== "number") return null;
-  return {
-    nbfIso: new Date(nbf * 1000).toISOString(),
-    expIso: new Date(exp * 1000).toISOString(),
-    windowMinutes: Math.round((exp - nbf) / 60),
-  };
+  if (session === null) return null;
+  return decodeF402BearerWindow(session.authorizationHeader);
 }
 
 /** Build a stable JSONL line for the runner's journal. No cookie, password, or stderr leaks. */

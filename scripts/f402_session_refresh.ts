@@ -3,7 +3,8 @@
  * @file f402_session_refresh.ts
  * @description Thin runner for `lib/f402_session_refresh.ts`: read the current F402 session file,
  * ask the library whether a refresh is needed, and spawn `bun run session:login --from-keychain
- * --ttl-min 1440` when it is. Designed to be driven on a short interval by launchd (a user
+ * --ttl-min 1440` when it is. The TTL is an upper cap: a bearer session's file expiry is the JWT
+ * `exp` minus 2 minutes, so `decideRefresh()` tracks the real 21-minute window. Designed to be driven on a short interval by launchd (a user
  * `LaunchAgent` with `StartInterval` is the lightest supervision surface on macOS and does not
  * require a running webview daemon) or by the reporting scheduler as a future shellJob entry.
  *

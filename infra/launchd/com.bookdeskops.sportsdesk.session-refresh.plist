@@ -3,11 +3,12 @@
 <!--
   F402 session auto-refresh LaunchAgent (template).
 
-  Supervises `scripts/f402_session_refresh.ts` on a 5-minute interval so the 30-min default
-  session TTL cannot silently kill the bridge again. The script is idempotent — when the
-  session is fresh it is a no-op and the exit code is 0; it only spawns `session_login.ts
-  --ttl-min 1440` (using `op run` env credentials when present, or `--from-keychain` otherwise)
-  when the current session is missing, expired, or within 5 min of expiring.
+  Supervises `scripts/f402_session_refresh.ts` on a 5-minute interval so the 21-minute server
+  bearer cannot silently kill the bridge. The script is idempotent — when the session is fresh
+  it is a no-op and the exit code is 0; it only spawns `session_login.ts --ttl-min 1440` (the
+  TTL is a cap; a bearer session's file expiry is the JWT `exp` minus 2 minutes) using `op run`
+  env credentials when present, or `--from-keychain` otherwise, when the current session is
+  missing, expired, or within 5 min of expiring.
 
   Substitute these placeholders before loading (see `scripts/install_session_refresh_agent.sh`):
     __OPERATOR_HOME__             absolute path to $HOME on the target machine

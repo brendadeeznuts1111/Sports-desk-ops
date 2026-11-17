@@ -7,8 +7,9 @@
  *   F402_LIVE_LOGIN=1 ./bin/dx session login --from-keychain   # read both from the OS keychain
  *   ./bin/dx session [status] [--json]      (also: bun run session:login / session:status)
  *
- * `--ttl-min <minutes>` sets the session lifetime on both mint paths (default
- * `F402_SESSION_TTL_MIN`, then 30); it is not a login timeout.
+ * `--ttl-min <minutes>` is an upper cap on the session expiry (default `F402_SESSION_TTL_MIN`,
+ * then the 24h fallback). A bearer session derives its expiry from the JWT `exp` minus 2
+ * minutes, so a longer TTL cannot outlive the token; it is not a login timeout.
  *
  * Why this exists: `F402_WEBVIEW_PROFILE` names a WebView `dataStore` directory, and that directory
  * holds the cookies after a sign-in — but `createF402ReplayTransport()` never reads it
@@ -158,9 +159,9 @@ function liveLoginGateMessage(): string {
 }
 
 /**
- * `--ttl-min` is the session lifetime on both mint paths. A bad value is a
- * usage error: the credential path used to read it as a login timeout, which
- * silently left the TTL at the 30-minute default.
+ * `--ttl-min` is an upper cap on both mint paths; for bearer sessions the file expiry is the
+ * JWT `exp` minus 2 minutes. A bad value is a usage error: the credential path used to read it
+ * as a login timeout, which silently left the TTL at the fallback.
  */
 function parseTtlMinutes(raw: string | undefined): number | undefined {
   if (raw === undefined) return undefined;
