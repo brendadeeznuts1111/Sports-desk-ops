@@ -1017,6 +1017,9 @@ describe("sportsdesk-fraud cross-ref governance & R2 lineage envelope", () => {
 
     expect(payload.schemaVersion).toBe(1);
     expect(payload.command).toBe("cross-ref");
+    expect(payload.success).toBe(true);
+    expect(typeof payload.generatedAt).toBe("string");
+    expect(Number.isNaN(Date.parse(payload.generatedAt))).toBe(false);
     expect(payload.manifests.wagersByState.key).toBe(
       WAGERS_BY_STATE_MANIFEST_KEY,
     );

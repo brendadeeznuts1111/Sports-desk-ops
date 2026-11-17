@@ -93,8 +93,10 @@ export interface PairwiseCrossRefJsonAnalysis {
 }
 
 export interface PairwiseCrossRefR2Payload {
+  readonly success: true;
   readonly schemaVersion: 1;
   readonly command: "cross-ref";
+  readonly generatedAt: string;
   readonly domain: string;
   readonly sink_id: string;
   readonly r2_bucket: string;
@@ -431,8 +433,10 @@ export async function executePairwiseCrossRefFromR2(params: {
   const ringsPoisonBit: 0 | 1 = (ringsManifest.poison_bit ?? 0) === 1 ? 1 : 0;
 
   return {
+    success: true,
     schemaVersion: 1,
     command: "cross-ref",
+    generatedAt: new Date().toISOString(),
     domain: wagersManifest.domain ?? "[Ops & Governance]",
     sink_id: wagersManifest.sink_id ?? "wagers-by-state",
     r2_bucket: wagersManifest.r2_bucket ?? R2_BUCKET,
