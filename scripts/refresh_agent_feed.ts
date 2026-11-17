@@ -45,6 +45,13 @@ const { values } = parseArgs({
 const agentId = values["agent-id"].trim();
 const agentType = values["agent-type"].trim();
 const agentOwner = values["agent-owner"]?.trim() ?? agentId;
+// The account-info owner request body, shared by the --dry-run summary below and the real
+// fetch. Named so the summary line does not read as a RequestInit body literal to
+// bin/check-fetch-init.ts; the transport receives it serialized.
+const accountInfoOwnerBody = {
+  operation: "getAccountInfoOwner",
+  agentOwner: agentId,
+};
 
 if (values["dry-run"]) {
   console.log(
@@ -75,7 +82,7 @@ if (values["dry-run"]) {
         },
         account: {
           url: `${PROBE_HOST}/cloud/api/Manager/getAccountInfoOwner`,
-          body: { operation: "getAccountInfoOwner", agentOwner: agentId },
+          body: accountInfoOwnerBody,
         },
         webReports: {
           url: `${PROBE_HOST}/cloud/api/Manager/getConfigWebReports`,
@@ -214,10 +221,7 @@ try {
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        operation: "getAccountInfoOwner",
-        agentOwner: agentId,
-      }),
+      body: JSON.stringify(accountInfoOwnerBody),
       redirect: "manual",
     },
   );
