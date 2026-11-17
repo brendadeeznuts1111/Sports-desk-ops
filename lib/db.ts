@@ -11,11 +11,13 @@
  * Connect timeout precedence: `?connect_timeout=` in `DATABASE_URL`, then
  * `SPORTSDESK_DB_CONNECT_TIMEOUT`, then libpq's `PGCONNECT_TIMEOUT`, then 10 s.
  *
- * TLS hardening (non-local, or `SPORTSDESK_DB_TLS=1`): `SPORTSDESK_DB_CERT_FINGERPRINT`
- * pins the server certificate's SHA-256 (with the hostname check still applied),
- * `SPORTSDESK_DB_CA_FILE` supplies an explicit CA bundle, and channel binding defaults to
- * `prefer` (URL `?channel_binding=` > `SPORTSDESK_DB_CHANNEL_BINDING` > `PGCHANNELBINDING`).
+ * TLS hardening (non-local, or `SPORTSDESK_DB_TLS=1`): certificate verification is explicit
+ * (`rejectUnauthorized: true`), the client offers TLS 1.3 only (TLS 1.0/1.1/1.2 disabled),
+ * `SPORTSDESK_DB_CERT_FINGERPRINT` pins the server certificate's SHA-256 (with the hostname
+ * check still applied), `SPORTSDESK_DB_CA_FILE` supplies an explicit CA bundle, and channel
+ * binding defaults to `prefer` (URL `?channel_binding=` > `SPORTSDESK_DB_CHANNEL_BINDING` > `PGCHANNELBINDING`).
  */
+import { constants as nodeCryptoConstants } from "node:crypto";
 import { checkServerIdentity as nodeCheckServerIdentity } from "node:tls";
 import type { PeerCertificate } from "node:tls";
 
@@ -25,6 +27,15 @@ export const isLocalDbHost = (host: string): boolean =>
   host === "localhost" || host === "127.0.0.1" || host === "::1";
 
 export const DEFAULT_DB_CONNECT_TIMEOUT_SECONDS = 10;
+
+/**
+ * TLS 1.3 only: disabling TLS 1.0, 1.1 and 1.2 leaves 1.3 as the only protocol.
+ * The database server must offer TLS 1.3 or the connection fails closed.
+ */
+const DB_TLS_13_ONLY =
+  nodeCryptoConstants.SSL_OP_NO_TLSv1 |
+  nodeCryptoConstants.SSL_OP_NO_TLSv1_1 |
+  nodeCryptoConstants.SSL_OP_NO_TLSv1_2;
 
 function positiveSeconds(value: string | null | undefined): number | null {
   if (value === null || value === undefined) return null;
@@ -80,6 +91,7 @@ export function resolveDbChannelBinding(
 
 export interface DbTlsOptions {
   readonly rejectUnauthorized: true;
+  readonly secureOptions: number;
   readonly ca?: ReturnType<typeof Bun.file>;
   readonly checkServerIdentity?: (
     hostname: string,
@@ -109,6 +121,7 @@ export function resolveDbTlsConfig(
     caPath === undefined || caPath === "" ? undefined : Bun.file(caPath);
   const base = {
     rejectUnauthorized: true as const,
+    secureOptions: DB_TLS_13_ONLY,
     ...(ca === undefined ? {} : { ca }),
   };
   const rawPin = source.SPORTSDESK_DB_CERT_FINGERPRINT?.trim();

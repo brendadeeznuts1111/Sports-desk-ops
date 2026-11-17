@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { constants } from "node:crypto";
 
 import { resolveDbChannelBinding, resolveDbTlsConfig } from "../lib/db.ts";
 
@@ -56,13 +57,29 @@ describe("resolveDbTlsConfig", () => {
   test("remote hosts default to rejectUnauthorized", () => {
     expect(resolveDbTlsConfig({}, { local: false, forceTls: false })).toEqual({
       rejectUnauthorized: true,
+      secureOptions:
+        constants.SSL_OP_NO_TLSv1 |
+        constants.SSL_OP_NO_TLSv1_1 |
+        constants.SSL_OP_NO_TLSv1_2,
     });
   });
 
   test("force TLS enables it for localhost", () => {
     expect(resolveDbTlsConfig({}, { local: true, forceTls: true })).toEqual({
       rejectUnauthorized: true,
+      secureOptions:
+        constants.SSL_OP_NO_TLSv1 |
+        constants.SSL_OP_NO_TLSv1_1 |
+        constants.SSL_OP_NO_TLSv1_2,
     });
+  });
+
+  test("forces TLS 1.3 by disabling 1.0, 1.1 and 1.2", () => {
+    const config = resolveDbTlsConfig({}, { local: false, forceTls: false });
+    if (config === false) throw new Error("expected TLS config");
+    expect(config.secureOptions & constants.SSL_OP_NO_TLSv1).toBeTruthy();
+    expect(config.secureOptions & constants.SSL_OP_NO_TLSv1_1).toBeTruthy();
+    expect(config.secureOptions & constants.SSL_OP_NO_TLSv1_2).toBeTruthy();
   });
 
   test("loads an explicit CA bundle", () => {
