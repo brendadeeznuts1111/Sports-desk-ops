@@ -34,9 +34,13 @@ export interface PpmFrame {
 }
 
 export class PpmFeedError extends Error {
-  constructor(message: string) {
+  /** Node-style WebSocket error code, when the event carried one. */
+  readonly code: string | undefined;
+
+  constructor(message: string, code?: string) {
     super(message);
     this.name = "PpmFeedError";
+    this.code = code;
   }
 }
 
@@ -85,7 +89,10 @@ export interface PpmSocketLike {
   close(): void;
   addEventListener(
     type: string,
-    handler: (event: { data?: unknown }) => void,
+    handler: (event: {
+      data?: unknown;
+      error?: { code?: unknown } | undefined;
+    }) => void,
   ): void;
 }
 
@@ -229,9 +236,16 @@ export function connectPpmFeed(options: PpmSocketFeedOptions): {
     }
   });
 
-  socket.addEventListener("error", () =>
-    report(new PpmFeedError("socket error")),
-  );
+  socket.addEventListener("error", (event) => {
+    const code = event.error?.code;
+    const typed = typeof code === "string" ? code : undefined;
+    report(
+      new PpmFeedError(
+        typed === undefined ? "socket error" : `socket error: ${typed}`,
+        typed,
+      ),
+    );
+  });
 
   return {
     close: () => {

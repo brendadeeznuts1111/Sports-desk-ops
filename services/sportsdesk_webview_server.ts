@@ -4095,6 +4095,14 @@ export const bridgeWebsocket = {
     });
   },
   close(): void {},
+  error(error: Error, ws: BridgeSocket): void {
+    console.error("[bridge] websocket handler failed:", error);
+    try {
+      ws.close(1011);
+    } catch {
+      // The socket may already be closed.
+    }
+  },
 };
 
 /** Connect once to the blob gateway and republish its bridge frames onto the local hub. */

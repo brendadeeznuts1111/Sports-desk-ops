@@ -59,7 +59,7 @@ class FakeSocket implements PpmSocketLike {
   closed = false;
   private handlers = new Map<
     string,
-    Array<(event: { data?: unknown }) => void>
+    Array<(event: { data?: unknown; error?: { code?: unknown } }) => void>
   >();
 
   send(data: string): void {
@@ -72,14 +72,17 @@ class FakeSocket implements PpmSocketLike {
 
   addEventListener(
     type: string,
-    handler: (event: { data?: unknown }) => void,
+    handler: (event: { data?: unknown; error?: { code?: unknown } }) => void,
   ): void {
     const list = this.handlers.get(type) ?? [];
     list.push(handler);
     this.handlers.set(type, list);
   }
 
-  emit(type: string, event: { data?: unknown } = {}): void {
+  emit(
+    type: string,
+    event: { data?: unknown; error?: { code?: unknown } } = {},
+  ): void {
     for (const handler of this.handlers.get(type) ?? []) handler(event);
   }
 }
@@ -156,6 +159,24 @@ describe("connectPpmFeed", () => {
 
     socket.emit("message", { data: FRAME_BYTES.buffer });
     expect(frames).toHaveLength(2);
+  });
+
+  test("preserves the WebSocket error code", () => {
+    const socket = new FakeSocket();
+    const errors: Error[] = [];
+    connectPpmFeed({
+      socketFactory: () => socket,
+      onFrame: () => {},
+      onError: (error) => errors.push(error),
+    });
+
+    const event = { error: { code: "ECONNREFUSED" } };
+    socket.emit("error", event);
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toBeInstanceOf(PpmFeedError);
+    expect((errors[0] as PpmFeedError).code).toBe("ECONNREFUSED");
+    expect(errors[0]!.message).toContain("ECONNREFUSED");
   });
 
   test("defaults match the measured endpoint and topic", () => {

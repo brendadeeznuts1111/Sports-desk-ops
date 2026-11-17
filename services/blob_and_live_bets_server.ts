@@ -657,6 +657,14 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
         // Bun auto-corks open/message; this stays synchronous on purpose.
         ws.subscribe("live-bets");
       },
+      error(error, ws) {
+        console.error("[live-bets] websocket handler failed:", error);
+        try {
+          ws.close(1011);
+        } catch {
+          // The socket may already be closed.
+        }
+      },
       message(ws, message) {
         const size =
           typeof message === "string"
