@@ -142,14 +142,17 @@ export async function runReadOnlySql(options: {
     const local = isLocalDbHost(url.hostname);
     const forceTls = Bun.env.SPORTSDESK_DB_TLS === "1";
     const tls = resolveDbTlsConfig(Bun.env, { local, forceTls });
-    const channelBinding = resolveDbChannelBinding(Bun.env);
+    const channelBinding = resolveDbChannelBinding(
+      Bun.env,
+      url.searchParams.get("channel_binding"),
+    );
     db = new Bun.SQL(target.url as string, {
       connectionTimeout: resolveDbConnectionTimeout(
         Bun.env,
         url.searchParams.get("connect_timeout"),
       ),
       ...(tls === false ? {} : { tls }),
-      ...(channelBinding === undefined ? {} : { channelBinding }),
+      channelBinding,
     });
   }
 

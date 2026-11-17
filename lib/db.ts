@@ -12,8 +12,9 @@
  * `SPORTSDESK_DB_CONNECT_TIMEOUT`, then libpq's `PGCONNECT_TIMEOUT`, then 10 s.
  *
  * TLS hardening (non-local, or `SPORTSDESK_DB_TLS=1`): `SPORTSDESK_DB_CERT_FINGERPRINT`
- * pins the server certificate's SHA-256 (with the hostname check still applied), and
- * `SPORTSDESK_DB_CHANNEL_BINDING` selects SCRAM channel binding (disable|prefer|require).
+ * pins the server certificate's SHA-256 (with the hostname check still applied),
+ * `SPORTSDESK_DB_CA_FILE` supplies an explicit CA bundle, and channel binding defaults to
+ * `prefer` (URL `?channel_binding=` > `SPORTSDESK_DB_CHANNEL_BINDING` > `PGCHANNELBINDING`).
  */
 import { checkServerIdentity as nodeCheckServerIdentity } from "node:tls";
 import type { PeerCertificate } from "node:tls";
@@ -54,17 +55,32 @@ export type DbChannelBinding = "disable" | "prefer" | "require";
 
 export function resolveDbChannelBinding(
   source: Record<string, string | undefined> = env,
-): DbChannelBinding | undefined {
-  const raw = source.SPORTSDESK_DB_CHANNEL_BINDING?.trim().toLowerCase();
-  if (raw === undefined || raw === "") return undefined;
-  if (raw === "disable" || raw === "prefer" || raw === "require") return raw;
-  throw new Error(
-    "lib/db.ts: SPORTSDESK_DB_CHANNEL_BINDING must be disable, prefer or require",
-  );
+  urlChannelBinding?: string | null,
+): DbChannelBinding {
+  for (const candidate of [
+    urlChannelBinding,
+    source.SPORTSDESK_DB_CHANNEL_BINDING,
+    source.PGCHANNELBINDING,
+  ]) {
+    const normalized = candidate?.trim().toLowerCase();
+    if (normalized === undefined || normalized === "") continue;
+    if (
+      normalized === "disable" ||
+      normalized === "prefer" ||
+      normalized === "require"
+    ) {
+      return normalized;
+    }
+    throw new Error(
+      "lib/db.ts: channel binding must be disable, prefer or require (channel_binding / SPORTSDESK_DB_CHANNEL_BINDING / PGCHANNELBINDING)",
+    );
+  }
+  return "prefer";
 }
 
 export interface DbTlsOptions {
   readonly rejectUnauthorized: true;
+  readonly ca?: ReturnType<typeof Bun.file>;
   readonly checkServerIdentity?: (
     hostname: string,
     cert: PeerCertificate,
@@ -88,6 +104,13 @@ export function resolveDbTlsConfig(
   options: { readonly local: boolean; readonly forceTls: boolean },
 ): false | DbTlsOptions {
   if (options.local && !options.forceTls) return false;
+  const caPath = source.SPORTSDESK_DB_CA_FILE?.trim();
+  const ca =
+    caPath === undefined || caPath === "" ? undefined : Bun.file(caPath);
+  const base = {
+    rejectUnauthorized: true as const,
+    ...(ca === undefined ? {} : { ca }),
+  };
   const rawPin = source.SPORTSDESK_DB_CERT_FINGERPRINT?.trim();
   let expected: string | null = null;
   if (rawPin !== undefined && rawPin !== "") {
@@ -98,10 +121,10 @@ export function resolveDbTlsConfig(
       );
     }
   }
-  if (expected === null) return { rejectUnauthorized: true };
+  if (expected === null) return base;
   const pin = expected;
   return {
-    rejectUnauthorized: true,
+    ...base,
     checkServerIdentity: (hostname, cert) => {
       const actual = normalizeFingerprint(cert.fingerprint256);
       if (actual === null || actual !== pin) {
@@ -151,7 +174,10 @@ export function createConfiguredSql(): {
       return { db: defaultBunSql, isDefaultGlobal: true };
     }
     const tls = resolveDbTlsConfig(env, { local, forceTls });
-    const channelBinding = resolveDbChannelBinding(env);
+    const channelBinding = resolveDbChannelBinding(
+      env,
+      parsed.searchParams.get("channel_binding"),
+    );
     const connectionTimeout = resolveDbConnectionTimeout(
       env,
       parsed.searchParams.get("connect_timeout"),
@@ -162,7 +188,7 @@ export function createConfiguredSql(): {
         idleTimeout: 30,
         max: 20,
         connectionTimeout,
-        ...(channelBinding === undefined ? {} : { channelBinding }),
+        channelBinding,
         onconnect: (err) => {
           if (err) console.error("[db] connect failed:", err.message);
         },
@@ -199,7 +225,7 @@ export function createConfiguredSql(): {
       idleTimeout: 30, // seconds
       max: 20,
       connectionTimeout,
-      ...(channelBinding === undefined ? {} : { channelBinding }),
+      channelBinding,
       onconnect: (err) => {
         if (err) console.error("[db] connect failed:", err.message);
       },

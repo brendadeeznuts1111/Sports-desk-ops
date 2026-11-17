@@ -6,11 +6,24 @@ const FP_COMPACT = "ab".repeat(32);
 const FP_COLON = (FP_COMPACT.match(/.{2}/g) ?? []).join(":").toUpperCase();
 
 describe("resolveDbChannelBinding", () => {
-  test("is unset when the env is absent or empty", () => {
-    expect(resolveDbChannelBinding({})).toBeUndefined();
+  test("defaults to prefer and honors PGCHANNELBINDING and the URL", () => {
+    expect(resolveDbChannelBinding({})).toBe("prefer");
     expect(
       resolveDbChannelBinding({ SPORTSDESK_DB_CHANNEL_BINDING: " " }),
-    ).toBeUndefined();
+    ).toBe("prefer");
+    expect(resolveDbChannelBinding({ PGCHANNELBINDING: "require" })).toBe(
+      "require",
+    );
+    expect(resolveDbChannelBinding({}, "disable")).toBe("disable");
+    expect(
+      resolveDbChannelBinding({ PGCHANNELBINDING: "disable" }, "require"),
+    ).toBe("require");
+    expect(
+      resolveDbChannelBinding({
+        SPORTSDESK_DB_CHANNEL_BINDING: "require",
+        PGCHANNELBINDING: "disable",
+      }),
+    ).toBe("require");
   });
 
   test("accepts the three PostgreSQL modes", () => {
@@ -50,6 +63,15 @@ describe("resolveDbTlsConfig", () => {
     expect(resolveDbTlsConfig({}, { local: true, forceTls: true })).toEqual({
       rejectUnauthorized: true,
     });
+  });
+
+  test("loads an explicit CA bundle", () => {
+    const config = resolveDbTlsConfig(
+      { SPORTSDESK_DB_CA_FILE: "/tmp/desk-ca.pem" },
+      { local: false, forceTls: false },
+    );
+    if (config === false) throw new Error("expected TLS config");
+    expect(config.ca).toBeDefined();
   });
 
   test("pins a colon-separated SHA-256 fingerprint", () => {
