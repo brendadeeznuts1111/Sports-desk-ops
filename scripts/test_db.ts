@@ -41,6 +41,8 @@ const adminSql = new SQL({
   password,
   database: "postgres",
   tls: false,
+  // Keep a dead test Postgres from stalling the runner on the driver default.
+  connectionTimeout: 10,
 });
 
 try {

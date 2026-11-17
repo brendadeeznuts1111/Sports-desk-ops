@@ -135,6 +135,48 @@ describe("Bun.sql / Bun.SQL global surface & sql-query CLI", () => {
     }
   });
 
+  test("5. sql-query validates --timeout and includes result metadata", () => {
+    const cli = join(ROOT, "bin/sql-query.ts");
+    const help = Bun.spawnSync([process.execPath, cli, "--help"], {
+      cwd: ROOT,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(help.exitCode).toBe(0);
+    expect(help.stdout.toString()).toContain("--timeout");
+
+    const invalid = Bun.spawnSync(
+      [
+        process.execPath,
+        cli,
+        "--timeout",
+        "nope",
+        "--url",
+        ":memory:",
+        "SELECT 1",
+      ],
+      { cwd: ROOT, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(invalid.exitCode).toBe(2);
+    expect(invalid.stderr.toString()).toContain(
+      "--timeout must be a non-negative number",
+    );
+
+    const metadata = Bun.spawnSync(
+      [process.execPath, cli, "--url", ":memory:", "--json", "SELECT 1 AS one"],
+      { cwd: ROOT, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(metadata.exitCode).toBe(0);
+    const parsed = JSON.parse(metadata.stdout.toString()) as {
+      columns: unknown;
+      statement: unknown;
+      rows: Array<{ one: number }>;
+    };
+    expect(parsed.columns).toBeNull();
+    expect(parsed.statement).toBeNull();
+    expect(parsed.rows).toEqual([{ one: 1 }]);
+  });
+
   test("4. lib/db.ts enforces non-local password guard for DATABASE_URL and reuses Bun.sql for local URLs", () => {
     const badRemote = Bun.spawnSync(
       [

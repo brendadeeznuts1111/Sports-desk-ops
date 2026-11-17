@@ -459,7 +459,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/SQL)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (13):** snapshot in tests/bun_shape_members.json
-- **Here:** `lib/customer_index.ts`, `lib/probe_index.ts`
+- **Here:** `bin/sql-query.ts`, `lib/customer_index.ts`
 - **Evidence:** `surface:SQL`, `test:tests/bun_capabilities.test.ts`
 
 #### Bun.sql

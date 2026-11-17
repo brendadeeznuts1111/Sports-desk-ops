@@ -8,24 +8,29 @@
  *  - Explicit `sqlite://...`, `postgres://...`, `mysql://...`, or bare `.sqlite`/`.db` paths via `new Bun.SQL(url)`
  *  - `--tables` to list tables + row counts (`sqlite_master` or `pg_catalog.pg_tables`)
  *  - Read-only enforcement (`SELECT`, `WITH`, `EXPLAIN` only — refuses DDL/DML mutations)
- *  - Output via `Bun.inspect.table` (default), `--json`, or `--yaml` (`Bun.YAML.stringify`)
+ *  - `--timeout <seconds>` cancels a query through `query.cancel()` (0 disables)
+ *  - Output via `Bun.inspect.table` (default), `--json`, or `--yaml`; JSON/YAML include
+ *    PostgreSQL/MySQL `columns` and `statement` metadata (null on SQLite)
  */
 
 import { isAbsolute, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
+import { resolveDbConnectionTimeout } from "../lib/db.ts";
+
 const HELP = `sql-query — read-only unified SQL inspector (Bun.SQL / Bun.sql)
 
 Usage:
-  bun x sql-query [--url <url|sqlite-path>] "<SELECT ...>" [--limit <n>] [--json | --yaml]
-  bun x sql-query [--url <url|sqlite-path>] --tables [--json | --yaml]
+  bun x sql-query [--url <url|sqlite-path>] "<SELECT ...>" [--limit <n>] [--timeout <s>] [--json | --yaml]
+  bun x sql-query [--url <url|sqlite-path>] --tables [--limit <n>] [--timeout <s>] [--json | --yaml]
 
 Targets:
   --url <target>   sqlite://<path>, :memory:, ./path/to/file.sqlite, or postgres://...
                    When omitted, uses the default Bun.sql client (DATABASE_URL / PG* env).
   --tables         List tables in the target database
   --limit <n>      Cap returned rows in memory (default: 200)
-  --json           Emit JSON { adapter, rowCount, rows }
+  --timeout <s>    Cancel the query after s seconds; 0 disables (default: 30)
+  --json           Emit JSON { adapter, rowCount, rows, columns, statement }
   --yaml           Emit YAML via Bun.YAML.stringify
   -h, --help       Print this usage
 
@@ -93,23 +98,46 @@ export function validateReadOnlyQuery(query: string): string {
   return trimmed;
 }
 
+export interface SqlColumnMetadata {
+  readonly name: string;
+  readonly type: number;
+  readonly [key: string]: unknown;
+}
+
+export interface SqlStatementMetadata {
+  readonly string: string;
+  readonly types: readonly number[];
+  readonly [key: string]: unknown;
+}
+
 export async function runReadOnlySql(options: {
   readonly url?: string | undefined;
   readonly query?: string | undefined;
   readonly tables?: boolean | undefined;
   readonly limit?: number | undefined;
+  readonly timeoutSeconds?: number | undefined;
 }): Promise<{
   readonly adapter: "sqlite" | "postgres-or-other";
   readonly source: string;
   readonly rowCount: number;
   readonly rows: Record<string, unknown>[];
+  readonly columns: SqlColumnMetadata[] | null;
+  readonly statement: SqlStatementMetadata | null;
 }> {
   const target = normalizeSqlTarget(options.url);
   const limit = Math.max(1, Math.trunc(options.limit ?? 200));
+  const timeoutSeconds = Math.max(0, options.timeoutSeconds ?? 30);
   const db =
     target.mode === "default-bun-sql"
       ? Bun.sql
-      : new Bun.SQL(target.url as string);
+      : target.sqliteKind
+        ? new Bun.SQL(target.url as string)
+        : new Bun.SQL(target.url as string, {
+            connectionTimeout: resolveDbConnectionTimeout(
+              Bun.env,
+              new URL(target.url as string).searchParams.get("connect_timeout"),
+            ),
+          });
 
   try {
     let sqlText: string;
@@ -121,18 +149,40 @@ export async function runReadOnlySql(options: {
       sqlText = validateReadOnlyQuery(options.query ?? "");
     }
 
-    const result = (await db.unsafe(sqlText)) as Iterable<
-      Record<string, unknown>
-    >;
-    const allRows = [...result].map((row) => ({ ...row }));
-    const capped = allRows.slice(0, limit);
-    return {
-      adapter: target.sqliteKind ? "sqlite" : "postgres-or-other",
-      source:
-        target.mode === "default-bun-sql" ? "Bun.sql" : (target.url as string),
-      rowCount: capped.length,
-      rows: capped,
-    };
+    const pending = db.unsafe(sqlText);
+    const timer =
+      timeoutSeconds > 0
+        ? setTimeout(() => {
+            try {
+              void pending.cancel();
+            } catch {
+              // The awaited query below reports the cancellation failure.
+            }
+          }, timeoutSeconds * 1000)
+        : undefined;
+    timer?.unref?.();
+
+    try {
+      const result = (await pending) as Iterable<Record<string, unknown>> & {
+        columns?: SqlColumnMetadata[] | null;
+        statement?: SqlStatementMetadata | null;
+      };
+      const allRows = [...result].map((row) => ({ ...row }));
+      const capped = allRows.slice(0, limit);
+      return {
+        adapter: target.sqliteKind ? "sqlite" : "postgres-or-other",
+        source:
+          target.mode === "default-bun-sql"
+            ? "Bun.sql"
+            : (target.url as string),
+        rowCount: capped.length,
+        rows: capped,
+        columns: result.columns ?? null,
+        statement: result.statement ?? null,
+      };
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   } finally {
     if (target.mode === "explicit-url") {
       await db.close();
@@ -149,6 +199,7 @@ async function main(): Promise<number> {
         url: { type: "string", short: "u" },
         tables: { type: "boolean", default: false },
         limit: { type: "string", default: "200" },
+        timeout: { type: "string", default: "30" },
         json: { type: "boolean", default: false },
         yaml: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
@@ -174,6 +225,14 @@ async function main(): Promise<number> {
     return 2;
   }
 
+  const timeoutSeconds = Number(values.timeout ?? "30");
+  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds < 0) {
+    console.error(
+      "sql-query: --timeout must be a non-negative number of seconds",
+    );
+    return 2;
+  }
+
   const query = positionals.join(" ").trim();
   if (!values.tables && query === "") {
     console.error(
@@ -188,6 +247,7 @@ async function main(): Promise<number> {
       query,
       tables: Boolean(values.tables),
       limit: limitNum,
+      timeoutSeconds,
     });
 
     if (values.yaml) {
