@@ -50,5 +50,16 @@
     "type": 207,
     "value": 124
   },
-  "urlShapeMigration": "2026-11-14: /reference/globals/bun/* -> /reference/bun/* (old shape now 404); rows unchanged"
+  "urlShapeMigration": "2026-11-14: /reference/globals/bun/* -> /reference/bun/* (old shape now 404); rows unchanged",
+  "post144Rows": {
+    "note": "bun.sh docs are newer than the pinned runtime. These rows have no declaration in bun-types@1.4.4; their summaries are prefixed. Checked 2026-11-15 against bun-types@1.4.4 and the 1.4.4 / 1.4.5-canary.1 binaries (supply-chain binary diff DERIVED-14, DERIVED-25, DERIVED-65).",
+    "symbols": [
+      "globals.bun.int32",
+      "globals.bun.AotHeat",
+      "globals.bun.AotReport",
+      "globals.bun.TrimOptions",
+      "globals.bun.ImportMetaGlobOptions"
+    ],
+    "partial": ["globals.bun.Build"]
+  }
 }

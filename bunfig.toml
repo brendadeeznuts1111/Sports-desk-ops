@@ -47,8 +47,10 @@ ignorePatterns = [
 exact = true
 ignoreScripts = true
 
-# Native Bun lint (Bun 1.5+; also present in the 1.4.5 canary used by the CI `lint-native`
-# job). The pinned 1.4.4 runtime accepts but ignores this section, so the local gate remains
+# Native Bun lint config. Only the native linter reads it. That linter exists on the 1.4.5
+# canary (`bun lint --no-script`), which the CI `lint-native` job runs, and is expected in
+# Bun 1.5+; it is not on the pinned 1.4.4, which parses this section without error but has
+# no command that uses it. The enforced local gate remains
 # `bun run lint:check` (oxlint 1.90 + oxlint-tsgolint). Keep this block aligned with
 # .oxlintrc.json.
 #
@@ -66,7 +68,8 @@ ignorePatterns = [
 [lint.categories]
 correctness = "warn"
 
-# [[lint.overrides]] — measured 2026-11-11 (Bun 1.4.4-canary.1), before any override exists here.
+# [[lint.overrides]] — measured 2026-11-11 on a canary build (1.4.4-canary.1); not observable on
+# the pinned 1.4.4, which has no native linter. Measured before any override exists here.
 # Add the first one only after re-checking these rows; the dialect differs from minimatch.
 #   files         union of independent matchers, Bun.Glob syntax (braces, [ab], @(a|b) all work),
 #                 anchored to this file's directory rather than the invocation cwd.
@@ -135,8 +138,16 @@ noOrphans = true
 depth = 8
 
 [test]
-# Ignore scratch experiments, heavy fixtures, and generated gate artifacts from default test scans.
-# Keeps colocated tests in lib/ and scripts/ active without traversing scratch/.
+# Every key below is a Bun 1.4.4 [test] key, checked 2026-11-15 against the pinned binary in a
+# scratch project by toggling each one and watching discovery or coverage output change.
+# 1.4.4 does NOT warn on an unknown or misspelled [test] key, so re-check behaviour, not just
+# the absence of a warning.
+#
+# Ignore scratch experiments, heavy fixtures, and generated gate artifacts from test scans; this
+# also applies when a path is given (`bun test tests/` skips tests/fixtures/**).
+# Local bare `bun test` / `bun run test` also runs the colocated tests in lib/ and scripts/; CI's
+# full suite is `bun test tests/ --parallel --reporter=junit` and runs only the colocated files
+# its workflow names, so a colocated-only failure shows up locally first.
 pathIgnorePatterns = [
   "scratch/**",
   "Scratch/**",
@@ -147,7 +158,8 @@ pathIgnorePatterns = [
   "scripts/author_openapi_spec.mjs",
 ]
 
-# Dual coverage reporting: preserves console text table while producing lcov.info for CI
+# Only applies with `--coverage` (no CI job passes it today): console text table plus
+# coverage/lcov.info.
 coverageReporter = ["text", "lcov"]
 coverageDir = "coverage"
 coverageSkipTestFiles = true
