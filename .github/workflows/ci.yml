@@ -136,6 +136,12 @@ jobs:
       # `bun audit fix` bumped @hono/node-server to 2.1.6 and overrides carried
       # got to 11.8.5 and ws to 5.2.5 (both were pinned by @ganchrowsci/gs-sdk's
       # transitive diffusion/got ranges). Blocking from here on.
+      # 2026-11-17: `audit:deps` ignores one advisory — GHSA-fc5q-39xc-vjpf
+      # (CVE-2026-112366, high, picomatch <= 4.0.7, first_patched_version: null;
+      # advisory updated 2026-11-17T15:56Z). Resolved path is dev-only:
+      # @hughescr/stryker-bun-runner > tinyglobby > fdir > picomatch. Remove the
+      # --ignore when a patched release ships (#313). `--omit=dev` is not used:
+      # dev coverage stays on.
       - name: Dependency audit
         timeout-minutes: 2
         run: bun run audit:deps
