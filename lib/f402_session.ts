@@ -2,9 +2,17 @@
  * @file lib/f402_session.ts
  * @description F402 manager session cache for read-only ingestion.
  *
- * The cookie never leaves the process except into a 0600 cache file; logs may mention cookie
+ * The cookie never leaves the process except into the session store; logs may mention cookie
  * names, never values. The login step reuses the evidence-capture WebView flow, and only runs
  * when F402_LIVE_LOGIN=1 (plus credentials) is set.
+ *
+ * Session store (`F402_SESSION_STORE`):
+ * - `file` (default): the 0600 JSON file at `F402_SESSION_FILE` / `~/.cache/sportsdesk/f402-session.json`.
+ * - `keychain`: one Bun.secrets entry, service `com.bookdeskops.sportsdesk`, name `f402-session`
+ *   (legacy `sportsdesk-ops` is a read-only fallback). No session file is read or written.
+ *   Bun.secrets is async only, so a process loads the entry once with `await loadF402Session()`
+ *   and the synchronous `readF402Session()` then answers from that in-process copy. A process that
+ *   never loads it sees no session in keychain mode (it does not fall back to the file).
  */
 
 import {
@@ -20,6 +28,15 @@ import {
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
+import {
+  F402_READ_SERVICES,
+  readF402SecretStrict,
+  writeF402Secret,
+  deleteF402Secret,
+  type SecretsAdapter,
+} from "./f402_secret_store.ts";
+import { CANONICAL_SECRETS_SERVICE } from "./secrets.ts";
+
 export interface F402Session {
   /** Raw Cookie header value. Never log this field. */
   readonly cookieHeader: string;
@@ -32,9 +49,43 @@ export interface F402Session {
 }
 
 export interface F402SessionFileOptions {
+  /** An explicit path always means the file store, whatever `F402_SESSION_STORE` says. */
   readonly path?: string;
   readonly ttlMinutes?: number;
   readonly now?: number;
+  /** Overrides `F402_SESSION_STORE` (tests and explicit callers). */
+  readonly store?: F402SessionStoreKind;
+}
+
+export type F402SessionStoreKind = "file" | "keychain";
+
+/** Bun.secrets entry name for the session in keychain mode. */
+export const F402_SESSION_SECRET_NAME = "f402-session";
+
+/** `F402_SESSION_STORE=keychain` opts in; anything else (or unset) keeps the file store. */
+export function resolveF402SessionStore(
+  env: Readonly<Record<string, string | undefined>> = Bun.env,
+): F402SessionStoreKind {
+  return env["F402_SESSION_STORE"]?.trim().toLowerCase() === "keychain"
+    ? "keychain"
+    : "file";
+}
+
+function storeFor(options?: F402SessionFileOptions): F402SessionStoreKind {
+  if (options?.path !== undefined) return "file";
+  return options?.store ?? resolveF402SessionStore();
+}
+
+/** In-process copy of the keychain session (`undefined` = not loaded in this process yet). */
+let keychainSessionCache: { readonly raw: unknown } | undefined;
+let pendingKeychainWrites: Promise<void>[] = [];
+let warnedUnloaded = false;
+
+/** Reset the in-process keychain cache (tests). */
+export function resetF402SessionCacheForTests(): void {
+  keychainSessionCache = undefined;
+  pendingKeychainWrites = [];
+  warnedUnloaded = false;
 }
 
 /**
@@ -126,8 +177,32 @@ function parseF402SessionValue(
   return isExpired(session, now) ? null : session;
 }
 
-/** Reads a cached session; returns null when missing, expired, malformed, or group/world-readable. */
+/**
+ * Reads the current session; returns null when missing, expired, malformed, or (file store)
+ * group/world-readable. In keychain mode this answers from the copy `loadF402Session()` loaded.
+ */
 export function readF402Session(
+  options?: F402SessionFileOptions,
+): F402Session | null {
+  if (storeFor(options) === "keychain") {
+    if (keychainSessionCache === undefined) {
+      if (!warnedUnloaded) {
+        warnedUnloaded = true;
+        console.warn(
+          "[f402-session] F402_SESSION_STORE=keychain but this process has not loaded the session; call `await loadF402Session()` first",
+        );
+      }
+      return null;
+    }
+    return parseF402SessionValue(
+      keychainSessionCache.raw,
+      options?.now ?? Date.now(),
+    );
+  }
+  return readF402SessionFile(options);
+}
+
+function readF402SessionFile(
   options?: F402SessionFileOptions,
 ): F402Session | null {
   const path = options?.path ?? resolveF402SessionPath();
@@ -142,10 +217,118 @@ export function readF402Session(
 }
 
 /**
- * Writes the session with directory 0700 and file 0600, atomically: a same-directory `.tmp` is
- * written at 0600 and renamed over the target, so a reader never observes a partial JSON file.
+ * Persists the session. File store: directory 0700 and file 0600, written atomically (a
+ * same-directory `.tmp` at 0600 renamed over the target). Keychain store: updates the in-process
+ * copy at once and queues the Bun.secrets write; `await flushF402SessionWrites()` (or use
+ * {@link saveF402Session}) to know it landed. Returns where it went, never the value.
  */
 export function writeF402Session(
+  session: F402Session,
+  options?: F402SessionFileOptions,
+): string {
+  if (storeFor(options) === "keychain") {
+    keychainSessionCache = { raw: JSON.parse(JSON.stringify(session)) };
+    const write = writeF402Secret(
+      F402_SESSION_SECRET_NAME,
+      JSON.stringify(session),
+      { redact: sessionSecrets(session) },
+    ).catch((error: unknown) => {
+      const named = error as { name?: string; message?: string };
+      console.error(
+        `[f402-session] ${named.name ?? "Error"}: ${named.message ?? "keychain write failed"}`,
+      );
+      throw error;
+    });
+    // Keep the rejection observable through flush without an unhandled-rejection crash here.
+    write.catch(() => {});
+    pendingKeychainWrites.push(write);
+    return keychainSessionLocation();
+  }
+  return writeF402SessionFile(session, options);
+}
+
+/** Cookie values and the bearer token, scrubbed from any store error text. */
+function sessionSecrets(session: F402Session): string[] {
+  const values = session.cookieHeader
+    .split(";")
+    .map((pair) => pair.slice(pair.indexOf("=") + 1).trim())
+    .filter((value) => value.length >= 4);
+  values.push(session.cookieHeader);
+  if (session.authorizationHeader !== undefined) {
+    values.push(session.authorizationHeader);
+  }
+  return values;
+}
+
+function keychainSessionLocation(): string {
+  return `keychain:${CANONICAL_SECRETS_SERVICE}/${F402_SESSION_SECRET_NAME}`;
+}
+
+/** Wait for queued keychain session writes; rethrows the first named error. */
+export async function flushF402SessionWrites(): Promise<void> {
+  const writes = pendingKeychainWrites;
+  pendingKeychainWrites = [];
+  const results = await Promise.allSettled(writes);
+  const failed = results.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (failed !== undefined) throw failed.reason;
+}
+
+/**
+ * Async load. File store: same as {@link readF402Session}. Keychain store: reads Bun.secrets
+ * (canonical, then the legacy read-only fallback), keeps an in-process copy for sync readers.
+ * Throws F402KeychainUnavailable / F402SecretBackendError when the store itself is unusable.
+ */
+export async function loadF402Session(
+  options?: F402SessionFileOptions & { readonly adapter?: SecretsAdapter },
+): Promise<F402Session | null> {
+  if (storeFor(options) !== "keychain") return readF402SessionFile(options);
+  const found = await readF402SecretStrict(F402_SESSION_SECRET_NAME, {
+    ...(options?.adapter === undefined ? {} : { adapter: options.adapter }),
+    services: F402_READ_SERVICES,
+  });
+  let raw: unknown = null;
+  if (found !== null) {
+    try {
+      raw = JSON.parse(found.value);
+    } catch {
+      raw = null;
+    }
+  }
+  keychainSessionCache = { raw };
+  return parseF402SessionValue(raw, options?.now ?? Date.now());
+}
+
+/** Async save that resolves only once the session is stored. Returns the location label. */
+export async function saveF402Session(
+  session: F402Session,
+  options?: F402SessionFileOptions & { readonly adapter?: SecretsAdapter },
+): Promise<string> {
+  if (storeFor(options) !== "keychain") {
+    return writeF402SessionFile(session, options);
+  }
+  await writeF402Secret(F402_SESSION_SECRET_NAME, JSON.stringify(session), {
+    ...(options?.adapter === undefined ? {} : { adapter: options.adapter }),
+    redact: sessionSecrets(session),
+  });
+  keychainSessionCache = { raw: JSON.parse(JSON.stringify(session)) };
+  return keychainSessionLocation();
+}
+
+/** Remove the keychain session entry (canonical only; legacy is never written). */
+export async function clearF402KeychainSession(
+  options: { readonly adapter?: SecretsAdapter } = {},
+): Promise<boolean> {
+  keychainSessionCache = { raw: null };
+  return deleteF402Secret(
+    CANONICAL_SECRETS_SERVICE,
+    F402_SESSION_SECRET_NAME,
+    options,
+  );
+}
+
+function writeF402SessionFile(
   session: F402Session,
   options?: F402SessionFileOptions,
 ): string {
@@ -254,7 +437,7 @@ export async function ensureF402Session(
 ): Promise<void> {
   const env = options.env ?? Bun.env;
   const now = options.now ?? Date.now();
-  const existing = readF402Session({ now });
+  const existing = await loadF402Session({ now });
   if (existing !== null) return;
 
   const allow =
@@ -268,7 +451,7 @@ export async function ensureF402Session(
 
   const refreshEnv: NodeJS.ProcessEnv = { ...env, F402_LIVE_LOGIN: "1" };
   const session = await refreshF402Session({ ...options, env: refreshEnv });
-  writeF402Session(session, { now });
+  await saveF402Session(session, { now });
 }
 
 /** One-line, secret-free description for logs. */

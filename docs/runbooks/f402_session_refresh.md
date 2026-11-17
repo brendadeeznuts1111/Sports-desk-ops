@@ -122,6 +122,30 @@ place. They are complementary, not redundant: the refresh keeps the system healt
 notices when the refresh fails anyway (e.g., GSLive credentials are rotated server-side and
 the keychain is stale).
 
+## Credential and session storage (Bun.secrets)
+
+- **Credential.** `bun run secrets:f402 set --agent-id <id>` reads the password from stdin only
+  and stores `f402-agent-id` / `f402-password` with `Bun.secrets` under
+  `com.bookdeskops.sportsdesk`. Reads fall back to the legacy `sportsdesk-ops` service
+  read-only; `bun run secrets:f402 migrate` copies legacy entries across without touching the
+  legacy copy. `bun run secrets:f402 probe` checks for a working OS keychain using a throwaway
+  entry.
+- **Session.** `F402_SESSION_STORE=file` (default) keeps the 0600 file.
+  `F402_SESSION_STORE=keychain` stores it as the `f402-session` entry instead and writes no
+  file. Bun.secrets is async, so each process must `await loadF402Session()` before a sync
+  `readF402Session()` sees it. That is wired for `session:login`, `session:status`, the
+  refresher, `ensureF402Session` and the read-only puller. Other readers (bridge3a, live
+  ticker/pending, incoming bets, weblog bridge inputs, replay transport, capture scripts, the
+  graph poller and enhanced health) still read synchronously and must be primed before keychain
+  mode is turned on for them.
+- **Named errors** (`lib/f402_secret_store.ts`): `F402SecretNotFound`,
+  `F402KeychainUnavailable` (no libsecret / D-Bus / Secret Service, or a hung keychain; CLI exit
+  3) and `F402SecretBackendError` (access denied, cancelled, other; CLI exit 4). Messages carry
+  service, entry name, operation and Bun's error code, never a value.
+- **Linux.** Bun.secrets uses libsecret over the D-Bus Secret Service. Without a running
+  `org.freedesktop.secrets` provider (gnome-keyring, KeePassXC) every call fails with
+  `ERR_SECRETS_PLATFORM_ERROR`.
+
 ## Known limitations
 
 - **macOS only.** The LaunchAgent is a plist; Linux hosts would use systemd user units with

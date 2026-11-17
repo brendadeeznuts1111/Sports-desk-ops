@@ -36,9 +36,10 @@ import {
 } from "./f402_list_agents_by_agent.ts";
 import {
   ensureF402Session,
+  loadF402Session,
   readF402Session,
   refreshF402Session,
-  writeF402Session,
+  saveF402Session,
   type F402Session,
   type RefreshF402SessionOptions,
 } from "./f402_session.ts";
@@ -729,7 +730,7 @@ export function defaultSessionProvider(): SessionProvider {
     read: () => readF402Session(),
     async ensure(options) {
       await ensureF402Session(options);
-      const session = readF402Session();
+      const session = await loadF402Session();
       if (session === null) {
         throw new F402PullerError(
           "auth",
@@ -741,7 +742,7 @@ export function defaultSessionProvider(): SessionProvider {
     },
     async refresh(options) {
       const session = await refreshF402Session(options);
-      writeF402Session(session);
+      await saveF402Session(session);
       return session;
     },
   };
@@ -756,6 +757,18 @@ export async function resolvePullSession(options: {
 }): Promise<F402Session> {
   const provider = options.provider ?? defaultSessionProvider();
   const now = options.now ?? Date.now();
+  // Keychain store: load the Bun.secrets entry into this process before the sync read below.
+  if (options.provider === undefined) {
+    try {
+      await loadF402Session();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : "session store unreadable";
+      throw new F402PullerError("auth", "session", message);
+    }
+  }
   const refreshAfter =
     options.refreshAfterMs ?? F402_PULL_DEFAULT_REFRESH_AFTER_MS;
   const existing = provider.read();

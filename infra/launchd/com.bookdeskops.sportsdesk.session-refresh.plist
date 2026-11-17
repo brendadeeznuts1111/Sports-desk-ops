@@ -5,8 +5,9 @@
 
   Supervises `scripts/f402_session_refresh.ts` on a 5-minute interval so the 30-min default
   session TTL cannot silently kill the bridge again. The script is idempotent — when the
-  session is fresh it is a no-op and the exit code is 0; it only spawns `session_login.ts
-  --ttl-min 1440` (using `op run` env credentials when present, or `--from-keychain` otherwise)
+  session is fresh it is a no-op and the exit code is 0; it only spawns `session_login.ts`
+  with a 1440-minute TTL (using `op run` env credentials when present, or the from-keychain
+  flag otherwise; XML comments may not contain a double hyphen, so flag names are spelled out)
   when the current session is missing, expired, or within 5 min of expiring.
 
   Substitute these placeholders before loading (see `scripts/install_session_refresh_agent.sh`):
@@ -55,6 +56,15 @@
       <string>127.0.0.1,localhost,::1</string>
       <key>OP_SERVICE_ACCOUNT_TOKEN</key>
       <string>__OP_SERVICE_ACCOUNT_TOKEN__</string>
+      <!--
+        Session store. "file" keeps ~/.cache/sportsdesk/f402-session.json (0600). "keychain" keeps
+        the session in the login Keychain via Bun.secrets (service com.bookdeskops.sportsdesk,
+        entry f402-session) and writes no session file. Only switch to "keychain" once every
+        process that reads the session loads it with `await loadF402Session()` (see
+        docs/runbooks/f402_session_refresh.md), and set the same value for those processes.
+      -->
+      <key>F402_SESSION_STORE</key>
+      <string>file</string>
     </dict>
 
     <!-- Fire every 5 minutes. StartInterval is wall-clock seconds, not elapsed. -->

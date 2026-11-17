@@ -37,8 +37,17 @@ export class MissingF402CredentialsError extends Error {
 
 type Env = Record<string, string | undefined>;
 
-/** Keychain-backed credential storage, so a password need not sit in `.env`. */
+/**
+ * Keychain-backed credential storage, so a password need not sit in `.env`.
+ * @deprecated The legacy service; reads go canonical (`com.bookdeskops.sportsdesk`) first and
+ * fall back here read-only (see `PLAYER_SECRET_SERVICES`).
+ */
 export const SECRETS_SERVICE = "sportsdesk-ops";
+/** Canonical first, then the legacy read-only fallback (mirrors lib/secrets.ts; no import to keep this module light). */
+export const PLAYER_SECRET_SERVICES = [
+  "com.bookdeskops.sportsdesk",
+  SECRETS_SERVICE,
+] as const;
 export const SECRET_NAMES = {
   agentId: "f402-agent-id",
   password: "f402-password",
@@ -66,13 +75,15 @@ export async function loadF402PlayerCredentials(
 ): Promise<F402LoginIdentity> {
   const read = async (name: string): Promise<string> => {
     if (secrets === null) return "";
-    try {
-      return (
-        (await secrets.get({ service: SECRETS_SERVICE, name }))?.trim() ?? ""
-      );
-    } catch {
-      return "";
+    for (const service of PLAYER_SECRET_SERVICES) {
+      try {
+        const value = (await secrets.get({ service, name }))?.trim() ?? "";
+        if (value !== "") return value;
+      } catch {
+        // Locked/unavailable store: try the next service, then fall through to "missing".
+      }
     }
+    return "";
   };
   const envId = env["F402_PLAYER_ID"]?.trim() ?? "";
   const envPass = env["F402_PLAYER_PASSWORD"]?.trim() ?? "";

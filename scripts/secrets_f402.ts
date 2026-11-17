@@ -10,6 +10,11 @@
  *
  * `set` reads the password from stdin, so it composes with a password manager:
  * `op read ... | bun run secrets:f402 set --agent-id 118`.
+ *
+ * Storage is Bun.secrets only (macOS Keychain, Linux Secret Service via libsecret, Windows
+ * Credential Manager). Store failures surface as named errors from lib/f402_secret_store.ts:
+ * F402KeychainUnavailable (exit 3) or F402SecretBackendError (exit 4). Legacy entries are only
+ * read; `migrate` copies them to the canonical service without touching the legacy copy.
  */
 
 import {
@@ -19,10 +24,23 @@ import {
   wantsHelp,
 } from "../lib/cli_args.ts";
 import {
+  F402KeychainUnavailable,
+  F402SecretBackendError,
+  F402SecretError,
+  deleteF402Secret,
+  migrateLegacyF402Secrets,
+  probeSecretsBackend,
+  readF402SecretStrict,
+  writeF402Secret,
+} from "../lib/f402_secret_store.ts";
+import {
+  F402_SESSION_SECRET_NAME,
+  resolveF402SessionStore,
+} from "../lib/f402_session.ts";
+import {
   CANONICAL_SECRETS_SERVICE,
   F402_KEYCHAIN_NAMES,
   LEGACY_SECRETS_SERVICE,
-  readSecretWithSource,
 } from "../lib/secrets.ts";
 
 /**
@@ -40,6 +58,8 @@ Usage:
   bun run secrets:f402 status
   <password-source> | bun run secrets:f402 set --agent-id <id>
   bun run secrets:f402 delete
+  bun run secrets:f402 migrate     # copy legacy entries to the canonical service (legacy kept)
+  bun run secrets:f402 probe       # is there a working OS keychain here? (throwaway entry)
 
 Options:
   --agent-id <id>   Manager agent id (not secret)
@@ -51,8 +71,9 @@ Examples:
   bun run secrets:f402 delete
 
 Reads are canonical-first (${CANONICAL_SECRETS_SERVICE}) with the legacy
-${LEGACY_SECRETS_SERVICE} service as a fallback; set writes the canonical service;
-delete removes both. Capture login reads the store via lib/f402_credentials_policy.ts
+${LEGACY_SECRETS_SERVICE} service as a read-only fallback; set writes the canonical
+service; delete removes both. With F402_SESSION_STORE=keychain the portal session is
+the "${F402_SESSION_SECRET_NAME}" entry in the canonical service instead of a file. Capture login reads the store via lib/f402_credentials_policy.ts
 (not F402_PASSWORD in env).
 `.trim();
 
@@ -65,13 +86,36 @@ async function readLine(): Promise<string> {
   return chunks.join("").split("\n")[0]?.trim() ?? "";
 }
 
+/** Exit codes for store failures (2 stays "usage"). */
+export const EXIT_KEYCHAIN_UNAVAILABLE = 3;
+export const EXIT_SECRET_BACKEND = 4;
+
+function failWith(error: unknown): never {
+  if (error instanceof F402SecretError) {
+    // Named error + non-secret message only.
+    console.error(`secrets:f402: ${error.name}: ${error.message}`);
+    process.exit(
+      error instanceof F402KeychainUnavailable
+        ? EXIT_KEYCHAIN_UNAVAILABLE
+        : EXIT_SECRET_BACKEND,
+    );
+  }
+  const name = (error as { name?: string } | null)?.name ?? "Error";
+  console.error(`secrets:f402: unexpected ${name}`);
+  process.exit(1);
+}
+
 async function status(): Promise<void> {
   let absent = 0;
-  for (const [label, name] of [
+  const entries: (readonly [string, string])[] = [
     ["agent id", F402_KEYCHAIN_NAMES.agentId],
     ["password", F402_KEYCHAIN_NAMES.password],
-  ] as const) {
-    const found = await readSecretWithSource(name);
+  ];
+  if (resolveF402SessionStore() === "keychain") {
+    entries.push(["session", F402_SESSION_SECRET_NAME]);
+  }
+  for (const [label, name] of entries) {
+    const found = await readF402SecretStrict(name).catch(failWith);
     if (found === null) {
       absent += 1;
       console.log(`${label}: absent (checked ${SERVICES.join(", ")})`);
@@ -111,18 +155,12 @@ async function store(agentId: string): Promise<void> {
     );
     process.exit(2);
   }
-  await Bun.secrets.set({
-    service: CANONICAL_SECRETS_SERVICE,
-    name: F402_KEYCHAIN_NAMES.agentId,
-    value: agentId,
-    persist: "local",
-  });
-  await Bun.secrets.set({
-    service: CANONICAL_SECRETS_SERVICE,
-    name: F402_KEYCHAIN_NAMES.password,
-    value: password,
-    persist: "local",
-  });
+  try {
+    await writeF402Secret(F402_KEYCHAIN_NAMES.agentId, agentId);
+    await writeF402Secret(F402_KEYCHAIN_NAMES.password, password);
+  } catch (error) {
+    failWith(error);
+  }
   console.error(
     `secrets:f402: stored agent id and password under service ${CANONICAL_SECRETS_SERVICE}`,
   );
@@ -136,16 +174,42 @@ async function remove(): Promise<void> {
       F402_KEYCHAIN_NAMES.password,
     ]) {
       try {
-        const deleted = await Bun.secrets.delete({ service, name });
-        if (deleted) removed += 1;
-      } catch {
-        // A locked or unavailable keychain is not a deletion failure by itself.
+        if (await deleteF402Secret(service, name)) removed += 1;
+      } catch (error) {
+        if (error instanceof F402KeychainUnavailable) failWith(error);
+        // A locked entry in one service must not stop the other deletes; report its name.
+        if (error instanceof F402SecretBackendError) {
+          console.error(`secrets:f402: ${error.name}: ${error.message}`);
+        }
       }
     }
   }
   console.error(
     `secrets:f402: removed ${removed} F402 credential entr${removed === 1 ? "y" : "ies"} from ${SERVICES.join(", ")}`,
   );
+}
+
+async function migrate(): Promise<void> {
+  const results = await migrateLegacyF402Secrets([
+    F402_KEYCHAIN_NAMES.agentId,
+    F402_KEYCHAIN_NAMES.password,
+  ]).catch(failWith);
+  for (const result of results) {
+    // Names and outcomes only.
+    console.log(`${result.name}: ${result.outcome}`);
+  }
+  console.error(
+    `secrets:f402: legacy service ${LEGACY_SECRETS_SERVICE} was read only; nothing there was changed`,
+  );
+}
+
+async function probe(): Promise<void> {
+  const result = await probeSecretsBackend();
+  if (result.available) {
+    console.log("keychain: available (throwaway set/delete succeeded)");
+    return;
+  }
+  failWith(result.error);
 }
 
 const parsed = parseCliArgs(process.argv.slice(2), {
@@ -168,9 +232,15 @@ switch (command) {
   case "delete":
     await remove();
     break;
+  case "migrate":
+    await migrate();
+    break;
+  case "probe":
+    await probe();
+    break;
   default:
     console.error(
-      `secrets:f402: unknown command "${command}" (status|set|delete).`,
+      `secrets:f402: unknown command "${command}" (status|set|delete|migrate|probe).`,
     );
     console.error("  bun run secrets:f402 status");
     process.exit(2);

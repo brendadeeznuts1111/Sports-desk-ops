@@ -27,6 +27,10 @@
  *      required — the flag selects a source, it does not bypass the live-login gate. This is
  *      session-only: no bearer token is minted.
  *
+ * With `F402_SESSION_STORE=keychain` the session goes to Bun.secrets (service
+ * `com.bookdeskops.sportsdesk`, entry `f402-session`) instead of that file; `--out <path>` still
+ * forces a file.
+ *
  * Nothing here prints a cookie value or a credential — only names, expiry and the credential
  * source (`env` / `keychain`).
  */
@@ -44,11 +48,13 @@ import {
 } from "../lib/secrets.ts";
 import {
   describeF402Session,
+  F402_SESSION_SECRET_NAME,
   f402SessionTtlMinutesFromEnv,
-  readF402Session,
+  loadF402Session,
   refreshF402Session,
   resolveF402SessionPath,
-  writeF402Session,
+  resolveF402SessionStore,
+  saveF402Session,
   type F402Session,
 } from "../lib/f402_session.ts";
 import {
@@ -189,6 +195,22 @@ interface SessionStatusReport {
   readonly profileNote: string | null;
 }
 
+/** Persist through the configured store; a named store error exits 3 with no value printed. */
+async function saveSessionOrExit(
+  session: F402Session,
+  options: { readonly path: string } | undefined,
+): Promise<string> {
+  try {
+    return await saveF402Session(session, options);
+  } catch (error) {
+    const named = error as { name?: string; message?: string };
+    console.error(
+      `session:login: could not store the session: ${named.name ?? "Error"}: ${named.message ?? ""}`,
+    );
+    process.exit(3);
+  }
+}
+
 async function main(): Promise<void> {
   const REPO = join(import.meta.dir, "..");
   const { values } = parseArgs({
@@ -216,11 +238,24 @@ async function main(): Promise<void> {
   };
 
   if (values.status) {
-    const session = readF402Session(
-      values.out === undefined ? undefined : { path: values.out },
-    );
+    let session: F402Session | null;
+    try {
+      session = await loadF402Session(
+        values.out === undefined ? undefined : { path: values.out },
+      );
+    } catch (error) {
+      const named = error as { name?: string; message?: string };
+      console.error(
+        `session:status: ${named.name ?? "Error"}: ${named.message ?? "session store unreadable"}`,
+      );
+      process.exit(3);
+    }
     const report: SessionStatusReport = {
-      sessionPath: values.out ?? resolveF402SessionPath(),
+      sessionPath:
+        values.out ??
+        (resolveF402SessionStore() === "keychain"
+          ? `keychain:${CANONICAL_SECRETS_SERVICE}/${F402_SESSION_SECRET_NAME}`
+          : resolveF402SessionPath()),
       session: describeF402Session(session),
       ...(session === null
         ? {}
@@ -281,7 +316,7 @@ async function main(): Promise<void> {
       );
       process.exit(1);
     }
-    writeF402Session(session, sessionPathOptions);
+    await saveSessionOrExit(session, sessionPathOptions);
     console.log(`session:login: ${describeF402Session(session)}`);
     process.exit(0);
   }
@@ -327,10 +362,12 @@ async function main(): Promise<void> {
     }
     process.exit(1);
   }
-  const path = writeF402Session(session, sessionPathOptions);
+  const path = await saveSessionOrExit(session, sessionPathOptions);
   console.log(`session:login: ${describeF402Session(session)}`);
   console.log(
-    `  written to ${path} (0600, inside ${REPO === "" ? "the repo" : "the cache dir"})`,
+    path.startsWith("keychain:")
+      ? `  stored in ${path} (OS keychain via Bun.secrets)`
+      : `  written to ${path} (0600, inside ${REPO === "" ? "the repo" : "the cache dir"})`,
   );
   console.log("  next: bun run session:status, then bun run customers:crawl");
 }
