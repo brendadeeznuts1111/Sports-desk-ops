@@ -11,6 +11,12 @@ import type {
   SliceMetrics,
   SlicePolicy,
 } from "@sportsdesk-ops/contracts/slice-metrics";
+import { WAGER_TIERS_SSOT } from "./config/wager_tiers_ssot.ts";
+import {
+  rowMatchesFlagFilter,
+  SLICE_FLAG_ORDER,
+  summarizeSliceFloorSsot,
+} from "./slice_floor_ssot.ts";
 import type {
   RouterAuditMode,
   SliceMetricsDashboardBundle,
@@ -94,6 +100,7 @@ export function SliceMetricsViews({
 
   const [flushVersion, setFlushVersion] = useState<number>(0);
   const [flaggedOnly, setFlaggedOnly] = useState<boolean>(false);
+  const [flagFilter, setFlagFilter] = useState<SliceFlag | null>(null);
 
   // Stream flush boundary: compute derived columns & flags ONCE per incoming bundle, NOT per render.
   useEffect(() => {
@@ -105,10 +112,11 @@ export function SliceMetricsViews({
   const soaRows: readonly SliceMetrics[] =
     flushVersion > 0 && spine.rowCount > 0 ? spine.readAllRows() : bundle.rows;
 
-  const visibleRows = flaggedOnly
-    ? soaRows.filter((r) => r.flags.length > 0)
-    : soaRows;
-  const flaggedCount = soaRows.filter((r) => r.flags.length > 0).length;
+  const floorSsot = summarizeSliceFloorSsot(soaRows, bundle.floorFallbackSlo);
+  const flaggedCount = floorSsot.flaggedSlices;
+  const visibleRows = soaRows.filter((r) =>
+    rowMatchesFlagFilter(r, flaggedOnly, flagFilter),
+  );
   const slo = bundle.blendedHoldSlo;
   const diff = bundle.policyDiff;
 
@@ -153,10 +161,90 @@ export function SliceMetricsViews({
                 : `▲ BELOW SLO (${slo.slo_hold_pct.toFixed(2)}% vs ${slo.slo_floor_pct.toFixed(2)}% floor · ${formatSignedPct(slo.slo_delta_pct)})`}
             </span>
           </div>
-          <span className="sd-pill sd-mono">
-            Floor SSOT: config/wager_tiers.toml · Flagged Slices: {flaggedCount}
-            /{soaRows.length}
-          </span>
+          <div
+            data-floor-ssot="wager-tiers"
+            data-wager-tiers-schema={WAGER_TIERS_SSOT.schema}
+            data-wager-tiers-version={WAGER_TIERS_SSOT.version}
+            data-flagged-slices={`${flaggedCount}/${floorSsot.totalSlices}`}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              gap: "6px",
+              maxWidth: "min(100%, 28rem)",
+            }}
+          >
+            <span
+              className={`sd-pill sd-mono ${flaggedCount > 0 ? "sd-pill-alert" : "sd-pill-live"}`}
+              title={`Hold floor precedence: ${WAGER_TIERS_SSOT.holdFloorPrecedence.join(" → ")}`}
+            >
+              Floor SSOT: {WAGER_TIERS_SSOT.path} · {WAGER_TIERS_SSOT.schema} v
+              {WAGER_TIERS_SSOT.version} · default{" "}
+              {WAGER_TIERS_SSOT.defaultHoldFloorPct.toFixed(2)}%
+            </span>
+            <span className="sd-pill sd-mono">
+              Flagged Slices: {flaggedCount}/{floorSsot.totalSlices} ·{" "}
+              {floorSsot.cleanSlices} clean · default-fallback{" "}
+              {floorSsot.defaultFallbackSliceCount}/{floorSsot.totalSlices} (
+              {floorSsot.defaultFallbackHandleSharePct.toFixed(1)}% handle)
+            </span>
+            {floorSsot.worstFloorSliceId !== null &&
+            floorSsot.worstFloorDeltaPct !== null ? (
+              <span
+                className="sd-pill sd-mono sd-pill-fixture"
+                title="Largest negative floor delta vs configured hold_floors.*"
+              >
+                Worst Δ: {formatSignedPct(floorSsot.worstFloorDeltaPct)} ·{" "}
+                <code>{floorSsot.worstFloorSliceId}</code>
+              </span>
+            ) : null}
+            <div
+              data-slice-flag-breakdown="true"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "4px",
+                justifyContent: "flex-end",
+              }}
+            >
+              {SLICE_FLAG_ORDER.map((flag) => {
+                const count = floorSsot.byFlag[flag];
+                const active = flagFilter === flag;
+                return (
+                  <button
+                    key={flag}
+                    type="button"
+                    className="sd-preset-btn"
+                    data-active={active ? "true" : "false"}
+                    data-slice-flag={flag}
+                    disabled={count === 0}
+                    title={`Filter SoA table to rows with ${flag}`}
+                    onClick={() => {
+                      setFlaggedOnly(true);
+                      setFlagFilter((prev) => (prev === flag ? null : flag));
+                    }}
+                    style={{ fontSize: "10px", padding: "2px 8px" }}
+                  >
+                    {flag} ({count})
+                  </button>
+                );
+              })}
+              {flagFilter !== null || flaggedOnly ? (
+                <button
+                  type="button"
+                  className="sd-preset-btn"
+                  data-active="false"
+                  onClick={() => {
+                    setFlagFilter(null);
+                    setFlaggedOnly(false);
+                  }}
+                  style={{ fontSize: "10px", padding: "2px 8px" }}
+                >
+                  Clear filters
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         <div className="sd-kpi-grid">
@@ -282,10 +370,15 @@ export function SliceMetricsViews({
               type="button"
               className="sd-preset-btn"
               data-active={flaggedOnly ? "true" : "false"}
-              onClick={() => setFlaggedOnly((prev) => !prev)}
+              onClick={() => {
+                setFlaggedOnly((prev) => !prev);
+                if (flaggedOnly) {
+                  setFlagFilter(null);
+                }
+              }}
             >
               {flaggedOnly
-                ? `⚑ Showing Flagged (${flaggedCount})`
+                ? `⚑ Showing Flagged (${visibleRows.length}/${flaggedCount})`
                 : `⚑ Filter Flagged Only (${flaggedCount}/${soaRows.length})`}
             </button>
           </div>

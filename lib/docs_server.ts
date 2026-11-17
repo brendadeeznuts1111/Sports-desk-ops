@@ -8,6 +8,7 @@
  */
 
 import { join } from "node:path";
+import type { BunRequest } from "bun";
 import {
   type DocsManifest,
   type ManifestEntry,
@@ -120,7 +121,7 @@ export function createDocsServer(options: DocsServerOptions): DocsServer {
         return Response.json({ buildId: manifest.buildId, docs: rows });
       },
 
-      "/docs/:key": async (request) => {
+      "/docs/:key": async (request: BunRequest<"/docs/:key">) => {
         const manifest = await load();
         if (!manifest) {
           return new Response("manifest unavailable", { status: 503 });

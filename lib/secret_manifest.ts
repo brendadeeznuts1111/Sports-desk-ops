@@ -49,6 +49,7 @@ export const SECRET_MANIFEST: readonly SecretDefinition[] = [
     keychainName: "R2_ACCESS_KEY_ID",
     groups: ["r2"],
     inject: true,
+    aliases: ["AWS_ACCESS_KEY_ID", "S3_ACCESS_KEY_ID"],
     description: "R2 S3-compatible access key id (the S3 SDK fixes the name)",
   },
   {
@@ -56,6 +57,7 @@ export const SECRET_MANIFEST: readonly SecretDefinition[] = [
     keychainName: "R2_SECRET_ACCESS_KEY",
     groups: ["r2"],
     inject: true,
+    aliases: ["AWS_SECRET_ACCESS_KEY", "S3_SECRET_ACCESS_KEY"],
     description: "R2 S3-compatible secret key",
   },
   {

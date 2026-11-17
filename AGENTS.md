@@ -105,15 +105,20 @@ with `bun run audit:tool-calls`.
 
 **Bun toolchain**
 
-- **Linting is `oxlint` today; native `bun lint` exists.** `bun run lint:check` runs oxlint twice —
-  `.oxlintrc.json`, then `.oxlintrc.type-aware.json` passed explicitly as
-  `-c .oxlintrc.type-aware.json` (it is not auto-discovered). On this build `bun lint` is a real
-  subcommand, but the repo's `"lint"` script shadows it: `bun lint` runs that script, so reach the
-  built-in with `bun lint --no-script <flags>`. `--doctor` reports which configured rules run
-  natively and which packages are removable; this checkout's answer is that `oxlint-tsgolint` can
-  go, while `oxlint` stays because the script runs it — keep `oxlint` in `devDependencies` for
-  editor LSP (`oxlint --lsp`). The older note that `"lint": "bun lint"` recurses does **not**
-  reproduce on this build — re-check before trusting either claim on the stable tag.
+- **Linting is `oxlint` today; `bun lint` is not a native command on 1.4.4 stable.** `bun run
+lint:check` runs oxlint twice — `.oxlintrc.json`, then `.oxlintrc.type-aware.json` passed
+  explicitly as `-c .oxlintrc.type-aware.json` (it is not auto-discovered). The repo's `"lint"`
+  script is `bun --bun run oxlint --fix`: `bun lint` always runs that script and would autofix the
+  working tree, and `--no-script` does not bypass it (measured 2026-11-15: the flag is forwarded
+  to oxlint; outside a package.json `bun lint` reports `Script not found "lint"`). The `[lint]`
+  block in `bunfig.toml` is future-native configuration and is inert on this build. `oxlint`
+  stays in `devDependencies` because the `lint` script and `lint:check` run it — keep it for
+  editor LSP (`oxlint --lsp`). CI also runs the native linter on a canary runtime: job
+  `lint-native` installs `bun-version: canary` and runs `bun run lint:native` /
+  `bun run lint:native:type-aware` (both fail on 1.4.4 by design). The repo pin stays exact —
+  do not add canary to `.bun-version`; the pin contract requires one X.Y.Z across
+  `.bun-version`, `engines.bun`, `packageManager`, and `@types/bun`, and `@types/bun` has no
+  canary version. The older note that `"lint": "bun lint"` recurses still holds on 1.4.4.
 - **`bun:bundle` AST constraint:** `feature()` from `"bun:bundle"` can only appear directly inside
   an `if` condition or ternary (`feature("FLAG") ? true : false`). Passing it to functions like
   `expect()` or `expectTypeOf()` fails at parse time. Testing `--feature=FLAG` requires subprocess spawning
@@ -235,6 +240,42 @@ flags).
   fails when they are violated. It was reporting 239 matches over the frozen baseline across 91
   files (137 of them `zod-not-guard-calls`). Reintroducing it means restoring the copy, the
   baseline and a decision about that debt, not just re-adding a step.
+
+### PR bodies, commit messages, and closing keywords
+
+GitHub's auto-close parser reads closing keywords **literally — inside backticks, inside fenced
+code, in commit messages, and with the negation ignored**. The keywords are `close`, `closes`,
+`closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves`, `resolved`, each followed by an issue
+reference (`#248`, `GH-248`, or the issue URL).
+
+So a sentence _explaining that you are not closing an issue_ closes it. That happened twice on
+2026-11-15, both times writing `deliberately not Fixes #248` — the second time after the first had
+already been noticed. The second one is a documentation failure, not a parser surprise.
+
+- **Safe:** mention the number alone — `#248` with no keyword anywhere near it.
+- **Unsafe:** any closing keyword followed by a `#N` reference, however it is quoted or formatted.
+  Backticks do not protect it; a code fence does not protect it.
+- If you must discuss the mechanism, describe it without putting the keyword next to a reference:
+  "the closing keyword", "auto-close", "a `Fixes`-style reference".
+- To close deliberately, write it once on its own line: `Closes #248`.
+- **Check issue state after merging.** A premature close is silent, and reopening loses the
+  ordering a reader would expect from the thread.
+
+### Check the run, not the green tick
+
+Check runs attach to a **commit SHA**, not to a pull request. Retarget a PR, rebase it, or move a
+stacked base, and the PR can keep showing the results of a run against the **previous** head or
+base — passing, and no longer about the code being merged. Observed on 2026-11-15: a PR recreated
+against `main` displayed the run from its stacked base (`43764453809`) until a branch update fired
+`synchronize` and produced `43764621840`.
+
+- After a retarget, rebase, or base change, compare `git rev-parse HEAD` with the check run's head
+  SHA before trusting a green tick, and push or update to force a fresh run.
+- `strict: true` branch protection forces an update before merge, and the update fires
+  `synchronize`, so a fresh run normally exists by merge time. That is a backstop, not a
+  substitute for looking.
+- Same class as the closing-keyword rule above: what GitHub _displays_ as "your checks" is not
+  necessarily the run you think it is.
 
 ### Data-handling budgets
 

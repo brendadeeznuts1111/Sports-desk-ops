@@ -47,9 +47,10 @@ ignorePatterns = [
 exact = true
 ignoreScripts = true
 
-# Native Bun lint (Bun 1.5+). Bun 1.4.4 accepts but ignores this section; the enforced
-# gate is `bun run lint:check` (oxlint 1.90 + oxlint-tsgolint). Keep this block aligned
-# with .oxlintrc.json.
+# Native Bun lint (Bun 1.5+; also present in the 1.4.5 canary used by the CI `lint-native`
+# job). The pinned 1.4.4 runtime accepts but ignores this section, so the local gate remains
+# `bun run lint:check` (oxlint 1.90 + oxlint-tsgolint). Keep this block aligned with
+# .oxlintrc.json.
 #
 # `typeAware` stays off deliberately: the full type-aware pass currently reports 605
 # warnings (166 no-floating-promises), and `bun check` has 11 unrelated errors.
@@ -79,9 +80,14 @@ correctness = "warn"
 [lint.rules]
 # Off by default upstream: `with {}` is a leftover shell or a placeholder for a
 # missing `type`. Bun 1.4.4 has no native `bun lint` command (it resolves to the
-# package script and `--no-script` does not bypass it), and oxlint does not ship
-# this rule, so CI enforces the same intent in tests/module_attributes.test.ts.
+# package script and `--no-script` does not bypass it), so locally oxlint cannot
+# enforce this rule and tests/module_attributes.test.ts covers the intent; the CI
+# `lint-native` job on the canary runtime enforces it natively.
 "unicorn/require-module-attributes" = "error" # https://bun.com/docs/lint/rules/unicorn/require-module-attributes
+# Enforced today by oxlint 1.90 (.oxlintrc.json), which ships the same unicorn rule. Measured
+# with a probe: `.map(fn).flat()` and `.flat(1)` are reported and fixed to `.flatMap(fn)`;
+# `.flat(2)`/`.flat(Infinity)` are not (different semantics), and this repo has zero hits.
+"unicorn/prefer-array-flat-map" = "error" # https://bun.com/docs/lint/rules/unicorn/prefer-array-flat-map
 "eqeqeq" = ["error", "smart"] # same policy as .oxlintrc.json; "smart" keeps the `x == null` guards
 "@typescript-eslint/no-explicit-any" = "error"
 "@typescript-eslint/no-require-imports" = "error"

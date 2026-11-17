@@ -332,7 +332,7 @@ describe("idle timeout", () => {
     await login({ customerID: "CCC107", password: "PW" });
     expect(store.getItem("token")).toBe("tok_1");
 
-    await new Promise((r) => setTimeout(r, 60));
+    await Bun.sleep(60);
     expect(locationStub.href).toBe("/");
     expect(store.getItem("token")).toBeNull();
   });

@@ -62,11 +62,7 @@ export function defaultAgentGraphViewPaths(
 const VIEW_FILE_RE = /^[A-Za-z0-9._-]+\.(svg|webp)$/;
 
 function esc(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return Bun.escapeHTML(s);
 }
 
 function html(body: string, status = 200): Response {

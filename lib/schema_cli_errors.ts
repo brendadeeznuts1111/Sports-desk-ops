@@ -1,6 +1,7 @@
-import { fileURLToPath } from "node:url";
 import type { FileURL } from "./urls.ts";
 import { asFileURL } from "./urls.ts";
+import { createSourceLocationUrl } from "../src/lib/source_location_url.ts";
+import { osc8Link } from "../src/lib/terminal_links.ts";
 import {
   SchemaBrandError,
   type SchemaBrandKind,
@@ -117,7 +118,7 @@ export function parseSchemaErrorTarget(err: unknown): SchemaErrorJump | null {
 export async function resolveSchemaErrorJump(
   target: SchemaErrorJump,
 ): Promise<SchemaErrorJump> {
-  const text = await Bun.file(fileURLToPath(target.fileUrl)).text();
+  const text = await Bun.file(Bun.fileURLToPath(target.fileUrl)).text();
   switch (target.tag) {
     case "brand":
       if (target.kind === "column" || target.kind === "index") {
@@ -193,7 +194,7 @@ export function openAt(fileUrl: FileURL, line: number, column: number): void {
     (Bun.which("code") ? "vscode" : undefined);
 
   try {
-    const path = fileURLToPath(fileUrl);
+    const path = Bun.fileURLToPath(fileUrl);
     if (resolved === "vscode" || resolved === "subl") {
       Bun.openInEditor(path, { line, column, editor: resolved });
       return;
@@ -210,6 +211,16 @@ export function openAt(fileUrl: FileURL, line: number, column: number): void {
   } catch {
     // CI / headless — no editor available
   }
+}
+
+export function formatSchemaJumpLink(jump: SchemaErrorJump): string {
+  const locationUrl = createSourceLocationUrl(
+    Bun.fileURLToPath(jump.fileUrl),
+    jump.line,
+    jump.editorColumn,
+  );
+  const label = `${Bun.fileURLToPath(jump.fileUrl)}:${jump.line}:${jump.editorColumn}`;
+  return osc8Link(locationUrl, label);
 }
 
 export async function maybeOpenSchemaError(

@@ -17,6 +17,7 @@ const pkg = (await Bun.file(new URL("package.json", pkgDir)).json()) as {
   exports: Record<string, ExportTarget>;
 };
 const outdir = new URL("dist/", pkgDir);
+const outdirPath = Bun.fileURLToPath(outdir);
 
 const entries: string[] = [];
 const expected: string[] = [];
@@ -30,7 +31,7 @@ for (const target of Object.values(pkg.exports)) {
     console.error("build: an exports entry has no source target");
     process.exit(1);
   }
-  entries.push(new URL(source.replace(/^\.\//, ""), pkgDir).pathname);
+  entries.push(Bun.fileURLToPath(new URL(source.replace(/^\.\//, ""), pkgDir)));
   if (dist) expected.push(dist.split("/").pop()!);
 }
 if (entries.length === 0) {
@@ -38,14 +39,14 @@ if (entries.length === 0) {
   process.exit(1);
 }
 
-await rm(outdir, { recursive: true, force: true });
-await mkdir(outdir, { recursive: true });
+await rm(outdirPath, { recursive: true, force: true });
+await mkdir(outdirPath, { recursive: true });
 
-const srcRoot = new URL("src/", pkgDir).pathname;
+const srcRoot = Bun.fileURLToPath(new URL("src/", pkgDir));
 const result = await Bun.build({
   entrypoints: entries,
   root: srcRoot,
-  outdir: outdir.pathname,
+  outdir: outdirPath,
   format: "esm",
   target: "node",
 });
@@ -57,7 +58,7 @@ if (!result.success) {
 // Every conditional export must have produced its dist file, or a Node consumer
 // resolves a path that does not exist.
 const emitted = new Set(
-  result.outputs.map((o) => o.path.slice(outdir.pathname.length)),
+  result.outputs.map((o) => o.path.slice(outdirPath.length)),
 );
 const missing = expected.filter((f) => !emitted.has(f));
 if (missing.length > 0) {

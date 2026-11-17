@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ReportPlayerAnalysisRowRaw as RawPlayerAnalysisRow } from "./f402_report_player_analysis.ts";
+import { restrictGradedRowsToSummaryBook } from "./f402_population.ts";
 import {
   analyzeWeblogPatterns,
   parsePastedWeblogTable,
@@ -268,12 +269,14 @@ export interface DualTicketSignatureAudit {
   cccDualTicketShareOfNhl: number;
   cccDualTicketShareWilson95: ConfidenceInterval;
   matchesInFlaggedBotCorpus1560: Array<{
+    customerId: string;
     login: string;
     agentId: string;
     skin: string;
     pairsCount: number;
   }>;
-  matchesInGradedCorpus70869: Array<{
+  matchesInGradedCorpus: Array<{
+    customerId: string;
     login: string;
     agentId: string;
     skin: string;
@@ -853,7 +856,24 @@ export function computeWilson95(k: number, n: number): ConfidenceInterval {
 }
 
 /**
- * Normal-approximation 95% interval for sample mean of continuous values.
+ * Two-sided 95% Student-t critical values by degrees of freedom (df 1..30).
+ * `2.262` is the value for df 9 only; applying it at df 1..8 yields an interval narrower than the
+ * nominal 95%.
+ */
+const T_CRIT_95_BY_DF = [
+  12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201,
+  2.179, 2.16, 2.145, 2.131, 2.12, 2.11, 2.101, 2.093, 2.086, 2.08, 2.074,
+  2.069, 2.064, 2.06, 2.056, 2.052, 2.048, 2.045, 2.042,
+] as const;
+
+function tCritical95(df: number): number {
+  if (df < 1) return T_CRIT_95_BY_DF[0];
+  return T_CRIT_95_BY_DF[df - 1] ?? 1.96;
+}
+
+/**
+ * Student-t 95% interval for the sample mean of continuous values, converging to the normal
+ * critical value as n grows.
  */
 export function computeMeanInterval95(values: number[]): ConfidenceInterval {
   const n = values.length;
@@ -862,6 +882,8 @@ export function computeMeanInterval95(values: number[]): ConfidenceInterval {
   }
   const mean = values.reduce((s, v) => s + v, 0) / n;
   if (n === 1) {
+    // One observation carries no variance information: this zero-width interval is a degenerate
+    // placeholder, not evidence of precision.
     return {
       low: roundTo(mean, 4),
       high: roundTo(mean, 4),
@@ -874,8 +896,7 @@ export function computeMeanInterval95(values: number[]): ConfidenceInterval {
   }
   const sd = Math.sqrt(ss / (n - 1));
   const se = sd / Math.sqrt(n);
-  // Use conservative t-multiplier for small n, converging to 1.96
-  const tCrit = n < 10 ? 2.262 : n < 20 ? 2.093 : n < 35 ? 2.042 : 1.96;
+  const tCrit = tCritical95(n - 1);
   return {
     low: roundTo(mean - tCrit * se, 4),
     high: roundTo(mean + tCrit * se, 4),
@@ -935,7 +956,9 @@ export function computeBinomialPowerOneSided(
 }
 
 /**
- * Exact one-sided binomial p-value P(X >= k | n, p0).
+ * One-sided binomial tail P(X >= k | n, p0), approximated by the normal distribution with a
+ * continuity correction — not the exact binomial sum. At n=5, k=1, p0=0.2853 it returns 0.8206
+ * against an exact 0.8135, and these approximations are what the BH q-values are computed from.
  */
 export function computeOneSidedBinomialPValue(
   k: number,
@@ -991,8 +1014,8 @@ export function buildPreRegistrationEnvelope(
   p2Prior = 0.1483,
   winPrior = 0.5238,
 ): PreRegistrationEnvelope {
-  const minNClv15 = computeMinimumSampleSizePower80(p2Prior, p2Prior + 0.15); // 47
-  const minNWin10 = computeMinimumSampleSizePower80(winPrior, winPrior + 0.1); // 151
+  const minNClv15 = computeMinimumSampleSizePower80(p2Prior, p2Prior + 0.15); // 42
+  const minNWin10 = computeMinimumSampleSizePower80(winPrior, winPrior + 0.1); // 152
   const minNWin15 = computeMinimumSampleSizePower80(winPrior, winPrior + 0.15); // 66
   void p1Prior;
 
@@ -1118,7 +1141,7 @@ export function buildPreRegistrationEnvelope(
       patternName:
         "Systematic Strategy Signature Test: Same-Ticket NHL ML + (-1.5) Puckline Pairing + 0/33 Point-Beat + Negative-EV Entry vs. Full-Book Baseline",
       nullHypothesis:
-        "CCC88412's rate of same-ticket NHL Moneyline + (-1.5) Puckline paired submissions occurs at or near the full-book non-CCC baseline rate p_0 across all 70,869 graded wagers (12 / 2,519 = 0.476% of Hockey ticket-rotation events; 12 / 2,489 = 0.482% among unflagged accounts).",
+        "CCC88412's rate of same-ticket NHL Moneyline + (-1.5) Puckline paired submissions occurs at or near the full-book non-CCC baseline rate p_0 across all 57,633 graded wagers (12 / 2,096 = 0.572% of Hockey ticket-rotation events; 12 / 2,045 = 0.587% among unflagged accounts).",
       alternativeHypothesis:
         "CCC88412 exhibits a highly abnormal systematic strategy signature (SUPPORTED_SYSTEMATIC_STRATEGY_SIGNATURE): same-ticket NHL ML + Puckline pairing at >> book baseline (p < 0.001, lift >= 10x, powered at n >= 42 NHL legs), combined with 0/33 point-bearing closing-line beats (left-tail p = 0.0031 vs 16.09% book prior) and -4.62% post-vig EV. Note: because same-ticket multi-leg bets share a ticket timestamp by construction and distinct-ticket inter-bet gaps are >= 13.563s, automation is consistent with (not proven by) ticket-level data.",
       explicitFalsifier:
@@ -1143,7 +1166,7 @@ export function buildPreRegistrationEnvelope(
     prospectiveFirewallRequirementForW3:
       "True prospective walk-forward validation requires committing this envelope with a signed git tag prior to collecting Window 3 (2026-11-14..2026-11-27) and evaluating W3 without threshold edits.",
     executiveTableFootnote:
-      "† Footnote: The one SUPPORTED hypothesis (H7, SYSTEMATIC_STRATEGY_SIGNATURE) is post-hoc (formulated after W1/W2 inspection; see §0.1 & §3). Verdict KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV is contingent on H7. Furthermore, H7's p = 1.18e-16 is a null-hypothesis likelihood P(D >= 11 | H0: p_0 = 0.476%), NOT a posterior probability P(Bot | D); computing a posterior requires a labeled positive training set, which does not exist in F402.",
+      "† Footnote: The one SUPPORTED hypothesis (H7, SYSTEMATIC_STRATEGY_SIGNATURE) is post-hoc (formulated after W1/W2 inspection; see §0.1 & §3). Verdict KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV is contingent on H7. Furthermore, H7's p = 1.05e-15 is a null-hypothesis likelihood P(D >= 11 | H0: p_0 = 0.572%), NOT a posterior probability P(Bot | D); computing a posterior requires a labeled positive training set, which does not exist in F402.",
   };
 
   const baseEnvelope = {
@@ -1466,12 +1489,98 @@ export function computeBookPopulationPriors(
   };
 }
 
+/**
+ * Index summary rows by **verbatim `CustomerID`**.
+ *
+ * `PlayerLogin` is not unique: two customer records can share a login while belonging to
+ * different agents and skins (e.g. `A119` / `A119_1`). The `_N` suffix is part of the id, so it
+ * must not be stripped, and an id with a trailing dot (`CC103.`) must keep the dot. A summary
+ * lookup keyed by login — or by a normalized login — silently merges or misses those accounts.
+ */
+export function indexSummariesByCustomerId(
+  rows: readonly RawPlayerAnalysisRow[],
+): Map<string, RawPlayerAnalysisRow> {
+  const index = new Map<string, RawPlayerAnalysisRow>();
+  for (const row of rows) {
+    const customerId = String(row.CustomerID ?? "").trim();
+    if (customerId === "") continue;
+    index.set(customerId, row);
+  }
+  return index;
+}
+
+export interface NonCccHockeyEventCorpus {
+  /** Hockey accounts, including CCC88412. */
+  readonly accounts: ReadonlySet<string>;
+  /** Events keyed `customerId|ticket|rotation`; CCC88412 is excluded. */
+  readonly byTicketRotation: ReadonlyMap<string, readonly GradedWagerRawRow[]>;
+  /** Events keyed `customerId|timestamp|rotation`; CCC88412 is excluded. */
+  readonly byTimestampRotation: ReadonlyMap<
+    string,
+    readonly GradedWagerRawRow[]
+  >;
+  /** Events with 2+ rows on one ticket carrying both an M and an S leg. */
+  readonly sameTicketPairsK: number;
+}
+
+/**
+ * Collect the non-CCC88412 Hockey events the H7 peer baseline is computed over.
+ *
+ * `accounts` includes CCC88412 (it is a Hockey account); the event maps and pair count exclude
+ * it. Keeping the exclusion in one function is what lets a small fixture assert it in CI, where
+ * the full graded corpus is not available.
+ */
+export function collectNonCccHockeyEvents(
+  rows: readonly GradedWagerRawRow[],
+): NonCccHockeyEventCorpus {
+  const accounts = new Set<string>();
+  const byTicketRotation = new Map<string, GradedWagerRawRow[]>();
+  const byTimestampRotation = new Map<string, GradedWagerRawRow[]>();
+  for (const r of rows) {
+    if (
+      !String(r.Description ?? "")
+        .trim()
+        .startsWith("Hockey")
+    )
+      continue;
+    const customerId = String(r.CustomerID ?? "").trim();
+    accounts.add(customerId);
+    if (customerId === "CCC88412") continue;
+    const t = String(r.TicketNumber ?? "").trim();
+    const ts = String(r.AcceptedDateTime ?? "").trim();
+    const rot =
+      String(r.Description ?? "").match(/Hockey\s+#(\d+)/i)?.[1] ?? "";
+    if (!rot) continue;
+    const kT = `${customerId}|${t}|${rot}`;
+    const kTs = `${customerId}|${ts}|${rot}`;
+    byTicketRotation.set(kT, [...(byTicketRotation.get(kT) ?? []), r]);
+    byTimestampRotation.set(kTs, [...(byTimestampRotation.get(kTs) ?? []), r]);
+  }
+  let sameTicketPairsK = 0;
+  for (const arr of byTicketRotation.values()) {
+    if (arr.length < 2) continue;
+    const hasMl = arr.some((r) => String(r.WagerType ?? "").trim() === "M");
+    const hasPl = arr.some((r) => String(r.WagerType ?? "").trim() === "S");
+    if (hasMl && hasPl) sameTicketPairsK++;
+  }
+  return { accounts, byTicketRotation, byTimestampRotation, sameTicketPairsK };
+}
+
 export function buildCcc88412DecisionInstrument(
   input: BuildCcc88412InstrumentInput,
 ): Ccc88412DecisionInstrument {
+  // Population boundary (#234): one book, one population. Every count, baseline and z below sees
+  // the restricted rows, so the artifact cannot state a headline from one population and an
+  // appendix from another.
+  const population = restrictGradedRowsToSummaryBook(
+    input.gradedWagerRows,
+    input.allSummaryRows,
+  );
+  const gradedWagerRows = population.rows;
+
   const priors = computeBookPopulationPriors(
     input.allSummaryRows,
-    input.gradedWagerRows,
+    gradedWagerRows,
   );
   const preReg = buildPreRegistrationEnvelope(
     priors.beatPointsPriorP1,
@@ -1482,7 +1591,7 @@ export function buildCcc88412DecisionInstrument(
   const cccRows = input.suspectedBotDetailRows.filter(
     (r) => String(r.PlayerLogin ?? "").trim() === "CCC88412",
   );
-  const cccGradedRows = input.gradedWagerRows.filter((r) =>
+  const cccGradedRows = gradedWagerRows.filter((r) =>
     String(r.CustomerID ?? "")
       .trim()
       .startsWith("CCC88412"),
@@ -1520,7 +1629,7 @@ export function buildCcc88412DecisionInstrument(
       recordCount: 103,
       sourceDigestSha256: sha256Hex(input.cccRawWebLogText20261101),
       whatWasMeasuredAndWhen:
-        "Reconstructed from 2026-11-01 Mode C WebLog (103 events for CCC88412) and multi-account timestamped fills across 70,869 graded wagers + 1,560 SuspectedBot detail rows.",
+        "Reconstructed from 2026-11-01 Mode C WebLog (103 events for CCC88412) and multi-account timestamped fills across 57,633 graded wagers + 1,560 SuspectedBot detail rows.",
       limitationsAndTreatment:
         "Explicit manager limit-change tables are not exported in local fixtures; line-lock triggers are observed directly via BOT BLOCK LINE ST (bot_619115908_0_S__0 at 10:48:20 AM on 2026-11-01) and cross-account fill sequences.",
     },
@@ -1558,17 +1667,15 @@ export function buildCcc88412DecisionInstrument(
       sourceDigestSha256: sha256Hex(input.cccRawWebLogText20261101),
       whatWasMeasuredAndWhen:
         "Parsed all 103 Mode C WebLog events for CCC88412 on 2026-11-01 (12:25:16 AM to 08:29:03 PM EST) and checked scratch/weblog/rollup-2026-11-01..04.json.",
-      limitationsAndTreatment:
-        "Mode C customer-level WebLog is captured for 2026-11-01 (103 events, containing 1 BOT BLOCK LINE ST event at 10:48:20 AM and its 10:48:35 AM retry). Because n=1 < n_min=47, population rate inference is gated as INSUFFICIENT_EVIDENCE while the single event is deterministically classified.",
+      limitationsAndTreatment: `Mode C customer-level WebLog is captured for 2026-11-01 (103 events, containing 1 BOT BLOCK LINE ST event at 10:48:20 AM and its 10:48:35 AM retry). Because n=1 < n_min=${preReg.minimumSampleSizeClv15PctLift}, population rate inference is gated as INSUFFICIENT_EVIDENCE while the single event is deterministically classified.`,
     },
     {
       id: "book_hold_margin_by_segment",
       title: "Book Hold Percentage / Margin and CLV Priors by Segment",
       availability: "PRESENT_FULL",
-      recordCount: input.gradedWagerRows.length,
+      recordCount: gradedWagerRows.length,
       sourceDigestSha256: sha256Hex(JSON.stringify(priors)),
-      whatWasMeasuredAndWhen:
-        "Computed from 46,408 straight graded wagers (70,869 total graded wagers in /tmp/graded-oct-window.json + /tmp/graded-today.json) and 112,941 CLV-tracked wagers across 6,228 accounts in scratch/f402-player-analysis-all.json.",
+      whatWasMeasuredAndWhen: `Computed from straight graded wagers in the summary-book population (${gradedWagerRows.length.toLocaleString("en-US")} of ${input.gradedWagerRows.length.toLocaleString("en-US")} deduped graded wagers in /tmp/graded-oct-window.json + /tmp/graded-today.json; #234 excludes the rest) and 112,941 CLV-tracked wagers across 6,228 accounts in scratch/f402-player-analysis-all.json.`,
       limitationsAndTreatment:
         "Provides exact empirical Bayes shrinkage priors (p1_0=16.09%, p2_0=14.83%, P(AUB)_0=28.53%) and straight-bet book hold by segment (Football:Game +7.63%, Football:1H +6.02%, Football:2H -4.10%).",
     },
@@ -1864,8 +1971,7 @@ export function buildCcc88412DecisionInstrument(
   const segmentTable: SegmentStatisticalRow[] = prelimRows.map((r, idx) => {
     const winQ = winQs[idx] ?? 1;
     const clvQ = clvQs[idx] ?? 1;
-    let rec =
-      "INSUFFICIENT_EVIDENCE (n < 47 power gate; do not recommend limit change)";
+    let rec = `INSUFFICIENT_EVIDENCE (n < ${minNReq} power gate; do not recommend limit change)`;
     if (r.powerStatus === "POWERED") {
       if (r.netEvAfterVigPctMean > 0 && clvQ < 0.05) {
         rec = "POWERED_EDGE_DETECTED -> LIMIT";
@@ -2192,18 +2298,19 @@ export function buildCcc88412DecisionInstrument(
   // 5. Dual-Ticket Signature & Linkage Graph
   const byCustTsRot = new Map<string, RawPlayerAnalysisRow[]>();
   for (const r of input.suspectedBotDetailRows) {
-    const login = String(r.PlayerLogin ?? "").trim();
+    const customerId =
+      String(r.CustomerID ?? "").trim() || String(r.PlayerLogin ?? "").trim();
     const ts = String(r.POSTEDDATETIME ?? "").trim();
     const desc = String(r.DESCRIPTION ?? "").trim();
     const rotMatch = desc.match(/^Hockey\s+#(\d+)/i);
     if (!rotMatch) continue;
-    const key = `${login}|${ts}|${rotMatch[1]}`;
+    const key = `${customerId}|${ts}|${rotMatch[1]}`;
     const arr = byCustTsRot.get(key) ?? [];
     arr.push(r);
     byCustTsRot.set(key, arr);
   }
 
-  const flaggedPairsByLogin = new Map<string, number>();
+  const flaggedPairsByCustomerId = new Map<string, number>();
   for (const [key, arr] of byCustTsRot.entries()) {
     if (arr.length < 2) continue;
     const hasMl = arr.some(
@@ -2214,22 +2321,22 @@ export function buildCcc88412DecisionInstrument(
     );
     const hasPl = arr.some((r) => Math.abs(Number(r.BETPOINTS ?? 0)) === 1.5);
     if (hasMl && hasPl) {
-      const login = key.split("|")[0]!;
-      flaggedPairsByLogin.set(login, (flaggedPairsByLogin.get(login) ?? 0) + 1);
+      const customerId = key.split("|")[0]!;
+      flaggedPairsByCustomerId.set(
+        customerId,
+        (flaggedPairsByCustomerId.get(customerId) ?? 0) + 1,
+      );
     }
   }
 
-  const summaryByLogin = new Map<string, RawPlayerAnalysisRow>();
-  for (const r of input.allSummaryRows) {
-    const login = String(r.PlayerLogin ?? "").trim();
-    summaryByLogin.set(login, r);
-  }
+  const summaryByCustomerId = indexSummariesByCustomerId(input.allSummaryRows);
 
-  const matchesInFlaggedBotCorpus1560 = [...flaggedPairsByLogin.entries()]
-    .map(([login, pairsCount]) => {
-      const s = summaryByLogin.get(login);
+  const matchesInFlaggedBotCorpus1560 = [...flaggedPairsByCustomerId.entries()]
+    .map(([customerId, pairsCount]) => {
+      const s = summaryByCustomerId.get(customerId);
       return {
-        login,
+        customerId,
+        login: String(s?.PlayerLogin ?? "").trim(),
         agentId: String(s?.AgentID ?? "").trim(),
         skin: String(s?.InetTarget ?? "").trim(),
         pairsCount,
@@ -2237,36 +2344,38 @@ export function buildCcc88412DecisionInstrument(
     })
     .sort((a, b) => b.pairsCount - a.pairsCount);
 
-  // Also scan all 70,869 graded wagers by CustomerID + TicketNumber + Hockey rotation
+  // Also scan all 57,633 graded wagers by CustomerID + TicketNumber + Hockey rotation
   const gradedByTicketRot = new Map<string, GradedWagerRawRow[]>();
-  for (const r of input.gradedWagerRows) {
-    const cid = String(r.CustomerID ?? "")
-      .trim()
-      .replace(/_\d+$/, "");
+  for (const r of gradedWagerRows) {
+    const customerId = String(r.CustomerID ?? "").trim();
     const t = String(r.TicketNumber ?? "").trim();
     const desc = String(r.Description ?? "").trim();
     const rotMatch = desc.match(/Hockey\s+#(\d+)/i);
     if (!rotMatch) continue;
-    const key = `${cid}|${t}|${rotMatch[1]}`;
+    const key = `${customerId}|${t}|${rotMatch[1]}`;
     const arr = gradedByTicketRot.get(key) ?? [];
     arr.push(r);
     gradedByTicketRot.set(key, arr);
   }
-  const gradedPairsByLogin = new Map<string, number>();
+  const gradedPairsByCustomerId = new Map<string, number>();
   for (const [key, arr] of gradedByTicketRot.entries()) {
     if (arr.length < 2) continue;
     const hasMl = arr.some((r) => String(r.WagerType ?? "").trim() === "M");
     const hasSpread = arr.some((r) => String(r.WagerType ?? "").trim() === "S");
     if (hasMl && hasSpread) {
-      const login = key.split("|")[0]!;
-      gradedPairsByLogin.set(login, (gradedPairsByLogin.get(login) ?? 0) + 1);
+      const customerId = key.split("|")[0]!;
+      gradedPairsByCustomerId.set(
+        customerId,
+        (gradedPairsByCustomerId.get(customerId) ?? 0) + 1,
+      );
     }
   }
-  const matchesInGradedCorpus70869 = [...gradedPairsByLogin.entries()]
-    .map(([login, pairsCount]) => {
-      const s = summaryByLogin.get(login);
+  const matchesInGradedCorpus = [...gradedPairsByCustomerId.entries()]
+    .map(([customerId, pairsCount]) => {
+      const s = summaryByCustomerId.get(customerId);
       return {
-        login,
+        customerId,
+        login: String(s?.PlayerLogin ?? "").trim(),
         agentId: String(s?.AgentID ?? "").trim(),
         skin: String(s?.InetTarget ?? "").trim(),
         pairsCount,
@@ -2277,7 +2386,7 @@ export function buildCcc88412DecisionInstrument(
   const cccNhlTotalWagers = cccRows.filter(
     (r) => String(r.SPORTSUBTYPE ?? "").trim() === "NHL",
   ).length;
-  const cccDualPairs = flaggedPairsByLogin.get("CCC88412") ?? 11;
+  const cccDualPairs = flaggedPairsByCustomerId.get("CCC88412") ?? 11;
   const cccDualWagers = cccDualPairs * 2;
 
   const linkageEdges: LinkageEdge[] = [
@@ -2400,7 +2509,7 @@ export function buildCcc88412DecisionInstrument(
         cccNhlTotalWagers,
       ),
       matchesInFlaggedBotCorpus1560,
-      matchesInGradedCorpus70869,
+      matchesInGradedCorpus,
       aymMatchesCount: 0,
       fatsnobotPeerMatchesCount: 0,
     },
@@ -2462,8 +2571,7 @@ export function buildCcc88412DecisionInstrument(
       ticketCount: ip.wagerCount,
       botBlockCount: ip.botBlockCount,
     })),
-    interpretation:
-      "At 10:48:20 AM EST on 2026-11-01 (IP 107.115.171.78), CCC88412 triggered self-collision lock key bot_619115908_0_S__0 on #240 Lions. Exactly 15 seconds later (10:48:35 AM), Ticket 1073245580 was accepted at -3.0 -115 (deltaPoints = 0, deltaPrice = 0). This proves TTL_EXPIRY (the 15s lock cooldown expired while the line remained at -3 -115), NOT PRICE_CHASE. Because n = 1 < 47, population rate estimation is gated as INSUFFICIENT_EVIDENCE.",
+    interpretation: `At 10:48:20 AM EST on 2026-11-01 (IP 107.115.171.78), CCC88412 triggered self-collision lock key bot_619115908_0_S__0 on #240 Lions. Exactly 15 seconds later (10:48:35 AM), Ticket 1073245580 was accepted at -3.0 -115 (deltaPoints = 0, deltaPrice = 0). This proves TTL_EXPIRY (the 15s lock cooldown expired while the line remained at -3 -115), NOT PRICE_CHASE. Because n = 1 < ${minNReq}, population rate estimation is gated as INSUFFICIENT_EVIDENCE.`,
   };
 
   // 7. Key-Number Half-Point Buying Audit (H6)
@@ -3109,40 +3217,16 @@ export function buildCcc88412DecisionInstrument(
     });
 
   // 8d. Direct Bot-Classification Hypothesis Test H7 (Same-Second Dual-Ticket NHL Signature vs Full-Book Baseline)
-  const hockeyGradedRows = input.gradedWagerRows.filter((r) =>
+  const hockeyGradedRows = gradedWagerRows.filter((r) =>
     String(r.Description ?? "")
       .trim()
       .startsWith("Hockey"),
   );
-  const hockeyGradedAccounts = new Set<string>();
-  const nonCccHockeyEvents = new Map<string, GradedWagerRawRow[]>();
-  const nonCccHockeyTsEvents = new Map<string, GradedWagerRawRow[]>();
-  for (const r of hockeyGradedRows) {
-    const cid = String(r.CustomerID ?? "")
-      .trim()
-      .replace(/_\d+$/, "");
-    hockeyGradedAccounts.add(cid);
-    if (cid === "CCC88412") continue;
-    const t = String(r.TicketNumber ?? "").trim();
-    const ts = String(r.AcceptedDateTime ?? "").trim();
-    const rot =
-      String(r.Description ?? "").match(/Hockey\s+#(\d+)/i)?.[1] ?? "";
-    if (!rot) continue;
-    const kT = `${cid}|${t}|${rot}`;
-    const kTs = `${cid}|${ts}|${rot}`;
-    nonCccHockeyEvents.set(kT, [...(nonCccHockeyEvents.get(kT) ?? []), r]);
-    nonCccHockeyTsEvents.set(kTs, [
-      ...(nonCccHockeyTsEvents.get(kTs) ?? []),
-      r,
-    ]);
-  }
-  let nonCccSameTicketPairsK = 0;
-  for (const arr of nonCccHockeyEvents.values()) {
-    if (arr.length < 2) continue;
-    const hasMl = arr.some((r) => String(r.WagerType ?? "").trim() === "M");
-    const hasPl = arr.some((r) => String(r.WagerType ?? "").trim() === "S");
-    if (hasMl && hasPl) nonCccSameTicketPairsK++;
-  }
+  const hockeyCorpus = collectNonCccHockeyEvents(hockeyGradedRows);
+  const hockeyGradedAccounts = hockeyCorpus.accounts;
+  const nonCccHockeyEvents = hockeyCorpus.byTicketRotation;
+  const nonCccHockeyTsEvents = hockeyCorpus.byTimestampRotation;
+  const nonCccSameTicketPairsK = hockeyCorpus.sameTicketPairsK;
   let nonCccDistinctTicketSameSecondPairsK = 0;
   for (const arr of nonCccHockeyTsEvents.values()) {
     if (arr.length < 2) continue;
@@ -3155,19 +3239,19 @@ export function buildCcc88412DecisionInstrument(
       nonCccDistinctTicketSameSecondPairsK++;
     }
   }
-  const nonCccEventsN = Math.max(1, nonCccHockeyEvents.size); // 2,519 in full 70,869 corpus
+  const nonCccEventsN = Math.max(1, nonCccHockeyEvents.size); // 2,096 non-CCC events in the 57,633-wager summary-book corpus (#234; CCC88412 excluded above)
   const p0BookDualTicket =
     nonCccHockeyEvents.size >= 100
       ? nonCccSameTicketPairsK / nonCccEventsN
-      : 12 / 2519; // 0.004764
+      : 12 / 2096; // 0.005725 — summary-book population (#234)
   const cccEventsN = nhlByTsRot.size; // 43
   const cccEventRate = roundTo(cccDualPairs / Math.max(1, cccEventsN), 4); // 11 / 43 = 0.2558
-  const rateLiftMultiple = roundTo(cccEventRate / p0BookDualTicket, 1); // 53.7x
+  const rateLiftMultiple = roundTo(cccEventRate / p0BookDualTicket, 1); // 44.7x
   const h7Mean = cccEventsN * p0BookDualTicket;
   const h7Sd = Math.sqrt(
     cccEventsN * p0BookDualTicket * (1 - p0BookDualTicket),
   );
-  const h7Z = h7Sd > 0 ? roundTo((cccDualPairs - h7Mean) / h7Sd, 2) : 23.38;
+  const h7Z = h7Sd > 0 ? roundTo((cccDualPairs - h7Mean) / h7Sd, 2) : 21.74;
 
   // Exact upper-tail binomial sum P(X >= 11 | n=43, p0=0.004764)
   let binomTailP = 0;
@@ -3205,14 +3289,14 @@ export function buildCcc88412DecisionInstrument(
     (g) => g < 10,
   ).length;
 
-  // Compute unflagged vs flagged breakdown of the 2,519 non-CCC Hockey events
+  // Compute unflagged vs flagged breakdown of the 2,096 non-CCC Hockey events
   let nonCccUnflaggedEventsN = 0;
   let nonCccOtherFlaggedEventsN = 0;
   let nonCccUnflaggedPairsK = 0;
   let nonCccOtherFlaggedPairsK = 0;
   for (const [kT, arr] of nonCccHockeyEvents.entries()) {
-    const cid = kT.split("|")[0]!;
-    const sRow = summaryByLogin.get(cid);
+    const customerId = kT.split("|")[0]!;
+    const sRow = summaryByCustomerId.get(customerId);
     const sb = String(sRow?.SuspectedBot ?? "N").trim();
     const sbt = String(sRow?.SuspectedBotType ?? "0").trim();
     const isFlagged = sb === "Y" || sbt !== "0";
@@ -3258,21 +3342,19 @@ export function buildCcc88412DecisionInstrument(
       cccNhlTotalWagers,
     ),
     fullGradedCorpusTotalWagersN:
-      input.gradedWagerRows.length >= 1000
-        ? input.gradedWagerRows.length
-        : 70869,
+      gradedWagerRows.length >= 1000 ? gradedWagerRows.length : 57633,
     fullGradedCorpusHockeyWagersN:
-      hockeyGradedRows.length >= 100 ? hockeyGradedRows.length : 2701,
+      hockeyGradedRows.length >= 100 ? hockeyGradedRows.length : 2277,
     fullGradedCorpusHockeyAccountsN:
-      hockeyGradedAccounts.size >= 10 ? hockeyGradedAccounts.size : 793,
+      hockeyGradedAccounts.size >= 10 ? hockeyGradedAccounts.size : 596,
     fullGradedCorpusNonCccHockeyEventsN:
-      nonCccHockeyEvents.size >= 100 ? nonCccHockeyEvents.size : 2519,
+      nonCccHockeyEvents.size >= 100 ? nonCccHockeyEvents.size : 2096,
     fullGradedCorpusNonCccSameTicketPairsK:
       nonCccHockeyEvents.size >= 100 ? nonCccSameTicketPairsK : 12,
     fullGradedCorpusNonCccBaselineRateP0: roundTo(p0BookDualTicket, 6),
     fullGradedCorpusNonCccBaselineWilson95: computeWilson95(
       nonCccHockeyEvents.size >= 100 ? nonCccSameTicketPairsK : 12,
-      nonCccHockeyEvents.size >= 100 ? nonCccHockeyEvents.size : 2519,
+      nonCccHockeyEvents.size >= 100 ? nonCccHockeyEvents.size : 2096,
     ),
     fullGradedCorpusDistinctTicketSameSecondPairsK:
       nonCccDistinctTicketSameSecondPairsK,
@@ -3320,15 +3402,15 @@ export function buildCcc88412DecisionInstrument(
           skin: "vip365.com",
         },
       ],
-      biasDirectionStatement: `The pooled baseline (12 / 2,519 = 0.4764%, 53.7x lift) excludes CCC88412 and includes ${effectiveUnflaggedEventsN} unflagged events plus ${effectiveOtherFlaggedEventsN} events from other flagged accounts. All 12 baseline pairs come from 3 unflagged accounts (B9142: 6 pairs, SuspectedBot='N'; CH100: 5 pairs, SuspectedBot='N'; TR152: 1 pair, SuspectedBot='N'), while the ${effectiveOtherFlaggedEventsN} other-flagged events in the graded slice had 0 pairs (unflagged-only rate = 12 / ${effectiveUnflaggedEventsN} = ${(p0UnflaggedOnly * 100).toFixed(3)}%, ${liftUnflaggedOnly.toFixed(1)}x lift). If B9142/CH100 are themselves unflagged systematic specialists and are excluded from the recreational null, p_0 drops to 1 / 2,480 = 0.0403% (634x lift; direction of bias: conservative).`,
+      biasDirectionStatement: `The pooled baseline (12 / ${nonCccEventsN} = ${(p0BookDualTicket * 100).toFixed(4)}%, ${rateLiftMultiple.toFixed(1)}x lift) excludes CCC88412 and includes ${effectiveUnflaggedEventsN} unflagged events plus ${effectiveOtherFlaggedEventsN} events from other flagged accounts. All 12 baseline pairs come from 3 unflagged accounts (B9142: 6 pairs, SuspectedBot='N'; CH100: 5 pairs, SuspectedBot='N'; TR152: 1 pair, SuspectedBot='N'), while the ${effectiveOtherFlaggedEventsN} other-flagged events in the graded slice had 0 pairs (unflagged-only rate = 12 / ${effectiveUnflaggedEventsN} = ${(p0UnflaggedOnly * 100).toFixed(3)}%, ${liftUnflaggedOnly.toFixed(1)}x lift). If B9142/CH100 are themselves unflagged systematic specialists and are excluded from the recreational null, p_0 falls further and the lift rises correspondingly (direction of bias: conservative).`,
     },
     nullLikelihoodVsPosteriorCaveat:
-      "H7's p = 1.18e-16 is a null-hypothesis p-value P(D >= 11 | H0: p_0 = 0.476%), NOT a posterior probability P(Bot | D). It answers 'how unlikely is 11/43 if the account were a non-specialist drawn from p_0'; it does not answer 'what is the probability this account is automated,' which requires a labeled positive set that does not exist in F402.",
-    jointSystematicSignatureSynthesis: `Connecting the three NHL observations into one unified systematic signature: (1) 11/43 (25.58%) NHL events pair Moneyline + (-1.5) Puckline on the same ticket (53.7x book baseline, p = 1.18e-16), (2) 0/33 (0.0%) of point-bearing NHL legs (15 Pucklines + 18 Totals) beat the closing point spread/total (left-tail binomial p = ${ptBearingZeroBeatLeftTailProb.toFixed(4)} against the ${(priors.beatPointsPriorP1 * 100).toFixed(2)}% book prior), and (3) post-vig expected value is ${rowNhl.netEvAfterVigPctMean.toFixed(2)}% in NHL (${rowAll.netEvAfterVigPctMean.toFixed(2)}% overall). Together, these three metrics describe a single rule-based systematic strategy that mechanically fires NHL ML+Puckline pairs and Totals on stale/non-steam numbers without line-shopping, never beating closing points (0/33) and locking in structural negative EV.`,
+      "H7's p = 1.05e-15 is a null-hypothesis p-value P(D >= 11 | H0: p_0 = 0.572%), NOT a posterior probability P(Bot | D). It answers 'how unlikely is 11/43 if the account were a non-specialist drawn from p_0'; it does not answer 'what is the probability this account is automated,' which requires a labeled positive set that does not exist in F402.",
+    jointSystematicSignatureSynthesis: `Connecting the three NHL observations into one unified systematic signature: (1) 11/43 (25.58%) NHL events pair Moneyline + (-1.5) Puckline on the same ticket (44.7x book baseline, p = 1.05e-15), (2) 0/33 (0.0%) of point-bearing NHL legs (15 Pucklines + 18 Totals) beat the closing point spread/total (left-tail binomial p = ${ptBearingZeroBeatLeftTailProb.toFixed(4)} against the ${(priors.beatPointsPriorP1 * 100).toFixed(2)}% book prior), and (3) post-vig expected value is ${rowNhl.netEvAfterVigPctMean.toFixed(2)}% in NHL (${rowAll.netEvAfterVigPctMean.toFixed(2)}% overall). Together, these three metrics describe a single rule-based systematic strategy that mechanically fires NHL ML+Puckline pairs and Totals on stale/non-steam numbers without line-shopping, never beating closing points (0/33) and locking in structural negative EV.`,
     powerStatus:
       cccNhlTotalWagers >= minNReq ? "POWERED" : "INSUFFICIENT_EVIDENCE",
     verdict: "SUPPORTED",
-    operationalInterpretation: `H7 IS SUPPORTED AS A SYSTEMATIC STRATEGY SIGNATURE (POST-HOC, POWERED n = 54 NHL legs / 43 NHL events >= ${minNReq}): CCC88412 placed 11 same-ticket NHL Moneyline + (-1.5) Puckline pairs out of 43 NHL events (25.58%, 95% Wilson [14.9%, 40.2%]; 22/54 = 40.74% of NHL legs) vs 12/2,519 (0.476%) across the full 70,869-wager graded corpus (53.7x lift, z = +${h7Z.toFixed(2)}, null-likelihood p = 1.18e-16). Combined with 0/33 point-bearing NHL closing-line beats (left-tail p = 0.0031) and ${rowNhl.netEvAfterVigPctMean.toFixed(2)}% post-vig EV, this establishes SUPPORTED_SYSTEMATIC_STRATEGY_SIGNATURE -> KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV (automation is consistent with, not proven by, same-ticket data since distinct-ticket gaps are >= ${minInterTicketGapSec.toFixed(3)}s).`,
+    operationalInterpretation: `H7 IS SUPPORTED AS A SYSTEMATIC STRATEGY SIGNATURE (POST-HOC, POWERED n = 54 NHL legs / 43 NHL events >= ${minNReq}): CCC88412 placed 11 same-ticket NHL Moneyline + (-1.5) Puckline pairs out of 43 NHL events (25.58%, 95% Wilson [14.9%, 40.2%]; 22/54 = 40.74% of NHL legs) vs 12/${nonCccEventsN} (${(p0BookDualTicket * 100).toFixed(3)}%) across the ${gradedWagerRows.length.toLocaleString("en-US")}-wager summary-book graded corpus (${rateLiftMultiple.toFixed(1)}x lift, z = +${h7Z.toFixed(2)}, null-likelihood p = ${binomTailP.toExponential(2)}). Combined with 0/33 point-bearing NHL closing-line beats (left-tail p = 0.0031) and ${rowNhl.netEvAfterVigPctMean.toFixed(2)}% post-vig EV, this establishes SUPPORTED_SYSTEMATIC_STRATEGY_SIGNATURE -> KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV (automation is consistent with, not proven by, same-ticket data since distinct-ticket gaps are >= ${minInterTicketGapSec.toFixed(3)}s).`,
   };
 
   // 9. Hypothesis Evaluations (H1..H7)
@@ -3456,12 +3538,12 @@ export function buildCcc88412DecisionInstrument(
       powerStatus: "POWERED",
       verdict: "SUPPORTED",
       falsificationOrSupportBasis: "SUPPORTED_SYSTEMATIC_STRATEGY_SIGNATURE",
-      primaryMetricRaw: `CCC88412: 11/43 NHL events (25.58%) same-ticket ML+PL vs 12/2,519 (0.476%) pooled baseline (12/2,489 = 0.482% unflagged only); combined with 0/33 point-bearing beats (left-tail p=0.0031) & ${rowNhl.netEvAfterVigPctMean.toFixed(2)}% netEV; min distinct-ticket gap = ${minInterTicketGapSec.toFixed(3)}s`,
+      primaryMetricRaw: `CCC88412: 11/43 NHL events (25.58%) same-ticket ML+PL vs 12/2,096 (0.572%) pooled baseline (12/2,045 = 0.587% unflagged only); combined with 0/33 point-bearing beats (left-tail p=0.0031) & ${rowNhl.netEvAfterVigPctMean.toFixed(2)}% netEV; min distinct-ticket gap = ${minInterTicketGapSec.toFixed(3)}s`,
       primaryMetricShrunkOrNull: `Rate lift = ${automationSignatureTestH7.rateLiftMultipleOverBookBaseline.toFixed(1)}x pooled (${liftUnflaggedOnly.toFixed(1)}x unflagged); z = +${automationSignatureTestH7.zScoreVsBookBaseline.toFixed(2)}; null-likelihood p = ${automationSignatureTestH7.oneSidedBinomialPValueVsBookBaseline.toExponential(2)} (post-hoc; automation consistent with, not proven by, same-ticket data)`,
       interval95: `CCC event rate 95% Wilson [${(automationSignatureTestH7.cccDualTicketEventRateWilson95.low * 100).toFixed(1)}%, ${(automationSignatureTestH7.cccDualTicketEventRateWilson95.high * 100).toFixed(1)}%] vs Book baseline [0.27%, 0.83%]`,
       falsifierTriggered: false,
       falsifierReason:
-        "SUPPORTED AS A SYSTEMATIC STRATEGY SIGNATURE (POST-HOC, POWERED): CCC88412's same-ticket NHL ML + (-1.5) Puckline pairing rate (25.58% of NHL events) is 53.7x the full-book baseline (12/2,519 = 0.476%, null-likelihood p = 1.18e-16) and co-occurs with 0/33 closing-point beats (left-tail p = 0.0031) and -4.62% post-vig EV. Because same-ticket multi-leg bets share a ticket timestamp by construction and distinct-ticket inter-bet gaps are >= 13.563s, automation is marked 'consistent with, not proven by' same-ticket data -> KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV.",
+        "SUPPORTED AS A SYSTEMATIC STRATEGY SIGNATURE (POST-HOC, POWERED): CCC88412's same-ticket NHL ML + (-1.5) Puckline pairing rate (25.58% of NHL events) is 44.7x the full-book baseline (12/2,096 = 0.572%, null-likelihood p = 1.05e-15) and co-occurs with 0/33 closing-point beats (left-tail p = 0.0031) and -4.62% post-vig EV. Because same-ticket multi-leg bets share a ticket timestamp by construction and distinct-ticket inter-bet gaps are >= 13.563s, automation is marked 'consistent with, not proven by' same-ticket data -> KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV.",
     },
   ];
 
@@ -3824,8 +3906,7 @@ export function buildCcc88412DecisionInstrument(
     systematicSignaturePostHocSupportedCount: 1,
     postHocContingencyLeadStatement:
       "The one SUPPORTED hypothesis (H7: SYSTEMATIC_STRATEGY_SIGNATURE) is post-hoc; the report classifies it as such in the integrity audit (POST_HOC_PREREGISTERED_RETROSPECTIVE_SPLIT). The KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV verdict rests on that hypothesis. A genuinely pre-registered confirmation requires the W3 firewall specified in §0.1 / §3.",
-    honestExecutiveSummary:
-      "Zero pre-registered consequence/edge/linkage hypotheses (H1-H6) were confirmed: two powered tests came back null/falsified (H2 coordination crossed the >=50% absent falsifier threshold at 75.8% while Branch A permutation p=0.0958 was non-significant; H4 NHL union CLV was 13.0% vs 28.53% book prior with -4.62% post-vig EV), one structural IP test had zero overlap (H3), and three tests were underpowered (H1 halftime n=37 < 47, H5 BOT BLOCK n=1 < 47, H6 half-point buys n=4 < 47). The one SUPPORTED hypothesis (H7: SYSTEMATIC_STRATEGY_SIGNATURE) is post-hoc: CCC88412 pairs NHL ML + (-1.5) Puckline on the same ticket in 11/43 events (25.58% vs 0.476% book baseline, 53.7x lift, null-likelihood p = 1.18e-16), beats closing points on 0/33 point-bearing NHL legs (left-tail p = 0.0031), and runs at -4.62% NHL / -4.76% overall post-vig EV. Because same-ticket multi-leg bets share a timestamp by construction and distinct-ticket gaps are >= 13.563s, automation is marked 'consistent with, not proven by' same-ticket data, and the headline verdict is KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV with explicit MONITOR alerting triggers.",
+    honestExecutiveSummary: `Zero pre-registered consequence/edge/linkage hypotheses (H1-H6) were confirmed: two powered tests came back null/falsified (H2 coordination crossed the >=50% absent falsifier threshold at 75.8% while Branch A permutation p=0.0958 was non-significant; H4 NHL union CLV was 13.0% vs 28.53% book prior with -4.62% post-vig EV), one structural IP test had zero overlap (H3), and three tests were underpowered (H1 halftime n=37 < ${minNReq}, H5 BOT BLOCK n=1 < ${minNReq}, H6 half-point buys n=4 < ${minNReq}). The one SUPPORTED hypothesis (H7: SYSTEMATIC_STRATEGY_SIGNATURE) is post-hoc: CCC88412 pairs NHL ML + (-1.5) Puckline on the same ticket in 11/43 events (25.58% vs 0.572% book baseline, 44.7x lift, null-likelihood p = 1.05e-15), beats closing points on 0/33 point-bearing NHL legs (left-tail p = 0.0031), and runs at -4.62% NHL / -4.76% overall post-vig EV. Because same-ticket multi-leg bets share a timestamp by construction and distinct-ticket gaps are >= 13.563s, automation is marked 'consistent with, not proven by' same-ticket data, and the headline verdict is KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV with explicit MONITOR alerting triggers.`,
   };
 
   const monitorOperationalTriggers: MonitorOperationalTrigger[] = [
@@ -3906,7 +3987,7 @@ export function buildCcc88412DecisionInstrument(
     },
     primaryFindingsFromFailedNullsAndPowerGates: [
       `POST-HOC CONTINGENCY LEAD & HONEST HYPOTHESIS TALLY (0 Pre-Registered Consequence Hypotheses Confirmed [H1-H6], 2 Powered Nulls [H2, H4], 1 Structural Null [H3], 3 Underpowered [H1, H5, H6], 1 Post-Hoc Systematic Signature Supported [H7]): ${hypothesisTallySummary.postHocContingencyLeadStatement} ${hypothesisTallySummary.honestExecutiveSummary}`,
-      `FINDING 1 — H7 SUPPORTED AS SYSTEMATIC STRATEGY SIGNATURE (Post-Hoc; Unified with 0/33 Point Beats & ${rowNhl.netEvAfterVigPctMean.toFixed(2)}% EV): CCC88412 pairs NHL Moneyline + (-1.5) Puckline on the same ticket in 11/43 NHL events (25.58%, 95% Wilson [14.9%, 40.2%]) vs 12/2,519 (0.476%) in the full 70,869-wager graded corpus (53.7x pooled lift; 12/2,489 = 0.482%, 53.1x lift among unflagged accounts, where all 12 baseline pairs come from unflagged B9142 [6], CH100 [5], TR152 [1]; null-likelihood p = 1.18e-16, not a posterior). Connecting 11/43 pairing + 0/33 point-bearing beats (left-tail p = 0.0031) + ${rowNhl.netEvAfterVigPctMean.toFixed(2)}% net EV establishes a single systematic negative-EV strategy signature -> KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV. Because same-ticket legs share a timestamp by construction and distinct-ticket gaps are >= ${minInterTicketGapSec.toFixed(3)}s, automation is marked consistent with (not proven by) same-ticket data.`,
+      `FINDING 1 — H7 SUPPORTED AS SYSTEMATIC STRATEGY SIGNATURE (Post-Hoc; Unified with 0/33 Point Beats & ${rowNhl.netEvAfterVigPctMean.toFixed(2)}% EV): CCC88412 pairs NHL Moneyline + (-1.5) Puckline on the same ticket in 11/43 NHL events (25.58%, 95% Wilson [14.9%, 40.2%]) vs 12/2,096 (0.572%) in the full 57,633-wager graded corpus (44.7x pooled lift; 12/2,045 = 0.587%, 43.6x lift among unflagged accounts, where all 12 baseline pairs come from unflagged B9142 [6], CH100 [5], TR152 [1]; null-likelihood p = 1.05e-15, not a posterior). Connecting 11/43 pairing + 0/33 point-bearing beats (left-tail p = 0.0031) + ${rowNhl.netEvAfterVigPctMean.toFixed(2)}% net EV establishes a single systematic negative-EV strategy signature -> KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV. Because same-ticket legs share a timestamp by construction and distinct-ticket gaps are >= ${minInterTicketGapSec.toFixed(3)}s, automation is marked consistent with (not proven by) same-ticket data.`,
       "FINDING 2 — H2 FALSIFIED BY THRESHOLD CROSSING (Not p < alpha; W2 Outcome Silent): Across 33 2H Football games bet by AYMAN in W1, CCC88412 was absent in 25/33 (75.8% >= 50% pre-registered falsifier threshold), and multiple AYMAN accounts still fired in synchronized bursts in 18/25 (72.0%) of those CCC-absent games. Branch A overlap permutation p = 0.0958 is NOT significant at alpha = 0.05 (trending halftime-clock overlap). In W2, AYMAN placed 0 wagers (recall is undefined 0/0, not a test), so H2 falsification rests entirely on W1 Branch B.",
       `FINDING 3 — H4 FALSIFIED AT POWER ON UNION CLV (n=54 >= ${minNReq}) & UNDERPOWERED ON POINT-BEARING SUBSET (n=33 < ${minNReq}): NHL:Game (n=54) has 21 Moneylines (beatPrice = 3/21 = 14.3%), 15 Pucklines (beatPoints = 0/15 = 0.0%, beatPrice = 1/15 = 6.7%), and 18 Totals (beatPoints = 0/18 = 0.0%, beatPrice = 3/18 = 16.7%). Union CLV falsification (13.0% vs 28.53% prior, q=1.000) is POWERED at n=54 >= ${minNReq}. The point-bearing beatPointsRate (0/33 = 0.0%, 95% Wilson [0.0%, 10.4%]) is on n=33 < ${minNReq} legs (INSUFFICIENT_EVIDENCE for positive-edge detection, left-tail p = 0.0031 for stale-number entry). Realized +$${rowNhl.netUsd.toFixed(2)} vs $${nhlExpPnlUsd.toFixed(2)} expected P&L (${rowNhl.netEvAfterVigPctMean.toFixed(2)}% EV) is a +${nhlZCorr.toFixed(2)} sigma correlated swing (SD = $${nhlSdCorr.toFixed(2)}) that regressed to +$15.00 in W2.`,
       `FINDING 4 — H1, H5, H6 UNDERPOWERED (Insufficient Evidence, Not Closed): Pooled Football 1H+2H (n=${rowP1.n + rowP2.n} < ${minNReq}), BOT BLOCK LINE ST (n=1 < ${minNReq}, deterministic TTL_EXPIRY at 15s lag with deltaPoints=0, deltaPrice=0), and half-point buying (n=4 in-window < ${minNReq}) all fall below the 80% power threshold.`,
@@ -3914,7 +3995,7 @@ export function buildCcc88412DecisionInstrument(
     operationalActionPlan: [
       `RISK / LIMIT DECISION = MONITOR / NO_LIMIT (Plain uncalibrated heuristic score = 0.029 < cost ratio C_FP/(C_FP+C_FN) = 0.6027 in matched 36-day units [$2,200/$3,650, or $11,000/$18,250 in matched 6-month 5.0x units]; non-nested whole-account conjugate Normal-Normal P(mu_netEV > 0 | D) < 0.0001; verdict only flips if 36-day C_FP drops below $43.31 [$216.55 in 6-month units], a 50.8x reduction).`,
       "LINKAGE DECISION = DO_NOT_LINK_TO_AYMAN (Uncalibrated linear rubric score = 0.120 < cost ratio 0.7000; verdict only flips if 36-day C_FP drops below $204.55, a 17.1x reduction). Retire the 'CCC 2H spread -> AYMAN <= 280s' alert rule.",
-      `BOT CLASSIFICATION DECISION = KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV (H7 post-hoc SUPPORTED at null-likelihood p = 1.18e-16: 11/43 same-ticket NHL ML+Puckline pairs = 53.7x book baseline, unified with 0/33 point beats and ${rowNhl.netEvAfterVigPctMean.toFixed(2)}% NHL / ${rowAll.netEvAfterVigPctMean.toFixed(2)}% overall net EV; automation is consistent with, not proven by, same-ticket data).`,
+      `BOT CLASSIFICATION DECISION = KEEP_BOT_FLAG_ACTIVE_SYSTEMATIC_PATTERN_NEGATIVE_EV (H7 post-hoc SUPPORTED at null-likelihood p = 1.05e-15: 11/43 same-ticket NHL ML+Puckline pairs = 44.7x book baseline, unified with 0/33 point beats and ${rowNhl.netEvAfterVigPctMean.toFixed(2)}% NHL / ${rowAll.netEvAfterVigPctMean.toFixed(2)}% overall net EV; automation is consistent with, not proven by, same-ticket data).`,
       "MONITOR OPERATIONAL TRIGGERS ARMED: (1) 14-day rolling netEvAfterVig > -3.50% (n>=25), (2) rolling point-bearing beatPointsRate > 20.0% (n>=25), (3) NHL same-ticket ML+PL pairing rate < 10.0% (n>=20 events) or distinct-ticket gap < 5.0s, (4) 14-day handle > $27,945 (1.5x) or discounted juice > -108.",
       `PROSPECTIVE W3 PROTOCOL: Commit this v3.0.0 envelope with a signed git tag prior to collecting Window 3 (2026-11-14..2026-11-27) and re-evaluate Period:2H once CCC88412 accumulates ${minNReq - rowP2.n} additional 2H wagers (reaching n=${minNReq}).`,
     ],
@@ -3994,7 +4075,7 @@ export function renderCcc88412DecisionInstrumentMarkdown(
     `| **Link to \`AYMAN\` Syndicate** (\`LINK\`) | \`${(inst.decisionScorecard.linkToAymanHeuristicScore * 100).toFixed(1)}%\` (linear weight rubric) | Disjoint hierarchy/skin/juice; \`0\` shared dual-tickets | \`${(inst.decisionScorecard.linkCostRatioThreshold * 100).toFixed(2)}%\` (\`$3,500 / $5,000\` 36d) | \`<= $${inst.decisionScorecard.costMatrixSensitivity.linkFlipFrontier.maxCFpToFlipAtBaselineCFnUsd.toFixed(2)}\` (36d) (\`${inst.decisionScorecard.costMatrixSensitivity.linkFlipFrontier.reductionFactorFromBaselineCFpRequiredToFlip.toFixed(1)}x\` lower) | **\`DO_NOT_LINK_TO_AYMAN\`** |`,
   );
   lines.push(
-    `| **Systematic Pattern Flag** (\`H7\`)$^\\dagger$ | \`25.58%\` same-ticket ML+PL (\`11/43\`) + \`0/33\` point beats | \`53.7x\` pooled / \`53.1x\` unflagged baseline, null-likelihood $p = 1.18 \\times 10^{-16}$ (not posterior) | $p < 0.001$ & lift $\\ge 10\\times$ | N/A (post-hoc, powered $n=54 \\ge 47$) | **\`${inst.decisionScorecard.botFlagClassificationDecision}\`** |`,
+    `| **Systematic Pattern Flag** (\`H7\`)$^\\dagger$ | \`25.58%\` same-ticket ML+PL (\`11/43\`) + \`0/33\` point beats | \`44.7x\` pooled / \`43.6x\` unflagged baseline, null-likelihood $p = 1.18 \\times 10^{-16}$ (not posterior) | $p < 0.001$ & lift $\\ge 10\\times$ | N/A (post-hoc, powered $n=54 \\ge 47$) | **\`${inst.decisionScorecard.botFlagClassificationDecision}\`** |`,
   );
   lines.push(
     `| **Overall Risk Action** | — | 4 automated \`MONITOR\` triggers armed (§0.2) | — | — | **\`${inst.decisionScorecard.recommendedAction}\`** |`,
@@ -4093,7 +4174,7 @@ export function renderCcc88412DecisionInstrumentMarkdown(
   );
   lines.push("");
   lines.push(
-    "| Segment | Cat | $n$ | Power ($n \\ge 47$) | W-L-P | Net USD (ROI%) | Book Hold% | Win% Raw [95% Wilson] | Win% Shrunk ($q_{\\text{BH}}$) | $p_1$ Pts Raw / Shrunk | $p_2$ Prc Raw / Shrunk | Union $P(A\\cup B)$ Raw [95% CI] / Shrunk ($q_{\\text{BH}}$) | CLV Move Edge% [95% CI] | Net EV% After Vig [95% CI] |",
+    `| Segment | Cat | $n$ | Power ($n \\ge ${inst.preRegistration.minimumSampleSizeClv15PctLift}$) | W-L-P | Net USD (ROI%) | Book Hold% | Win% Raw [95% Wilson] | Win% Shrunk ($q_{\\text{BH}}$) | $p_1$ Pts Raw / Shrunk | $p_2$ Prc Raw / Shrunk | Union $P(A\\cup B)$ Raw [95% CI] / Shrunk ($q_{\\text{BH}}$) | CLV Move Edge% [95% CI] | Net EV% After Vig [95% CI] |`,
   );
   lines.push(
     "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",

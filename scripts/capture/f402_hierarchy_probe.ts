@@ -282,7 +282,7 @@ async function runPipeline(): Promise<void> {
   });
 }
 
-if (import.meta.path === Bun.main) {
+if (import.meta.main) {
   try {
     await runPipeline();
   } finally {

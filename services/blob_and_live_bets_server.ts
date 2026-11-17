@@ -14,6 +14,7 @@
 
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import type { BunRequest } from "bun";
 
 import { imageErrorCode } from "../lib/image_errors.ts";
 import {
@@ -365,8 +366,6 @@ async function transcodeToWebp(
   }
 }
 
-type KeyedRequest = Request & { readonly params: { readonly key: string } };
-
 function numberEnv(name: string, fallback: number, minimum = 1): number {
   const raw = Bun.env[name];
   if (raw === undefined || raw.trim() === "") return fallback;
@@ -515,7 +514,7 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
         },
       },
       "/api/v1/blobs/:key": {
-        GET: async (request: KeyedRequest) => {
+        GET: async (request: BunRequest<"/api/v1/blobs/:key">) => {
           if (!authorized(request, options.apiToken)) {
             return jsonError(401, "unauthorized", "Bearer token required");
           }
@@ -541,7 +540,7 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
           }
           return Response.redirect(url, 302);
         },
-        PUT: async (request: KeyedRequest) => {
+        PUT: async (request: BunRequest<"/api/v1/blobs/:key">) => {
           if (!authorized(request, options.apiToken)) {
             return jsonError(401, "unauthorized", "Bearer token required");
           }
@@ -598,7 +597,7 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
             return storeFailure(error, "store_failed");
           }
         },
-        DELETE: async (request: KeyedRequest) => {
+        DELETE: async (request: BunRequest<"/api/v1/blobs/:key">) => {
           if (!authorized(request, options.apiToken)) {
             return jsonError(401, "unauthorized", "Bearer token required");
           }

@@ -67,10 +67,12 @@ if (import.meta.main) {
     return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
   });
 
-  const decoder = new URL(
-    "../tests/fixtures/nsh_frames/reference_decoder.py",
-    import.meta.url,
-  ).pathname;
+  const decoder = Bun.fileURLToPath(
+    new URL(
+      "../tests/fixtures/nsh_frames/reference_decoder.py",
+      import.meta.url,
+    ),
+  );
 
   const proc = Bun.spawnSync({
     cmd: ["python3", decoder],

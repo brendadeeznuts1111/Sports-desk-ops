@@ -87,6 +87,7 @@ describe("getInfoPlayer envelope", () => {
         agentLogin: "BIGDAD",
         status: "Active",
         mappedProxyWallet: "0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
+        polyWalletAttribution: "VALID_MAPPED",
       },
     });
   });
@@ -275,7 +276,10 @@ describe("getInfoPlayer envelope", () => {
     expect(audit.effectiveLiveBettingStatus).toBe(
       "ULTRA_LIVE_ENABLED_EZLIVE_OFF",
     );
-    expect(audit.effectivePointBuyingStatus).toBe("DOW_SCHEDULE_OFF");
+    // `AllowBuyPointsExtraGames` is absent from the capture, so the posture is unknown rather
+    // than a confirmed DOW-only restriction.
+    expect(audit.effectivePointBuyingStatus).toBe("UNKNOWN");
+    expect(audit.riskFlags).toContain("CREDENTIAL_ENCRYPTION_DISABLED");
     expect(audit.riskFlags).toContain("PLAINTEXT_CREDENTIAL_EXPOSURE");
     expect(audit.riskFlags).toContain("LINE_MOVER_WEIGHT_ACTIVE");
     expect(audit.riskFlags).not.toContain("ELEVATED_LINE_MOVER_WEIGHT");
@@ -286,7 +290,7 @@ describe("getInfoPlayer envelope", () => {
     expect(audit.riskFlags).not.toContain("MAPPED_POLY_SYNDICATE_WALLET");
     expect(audit.riskFlags).not.toContain("CONTRACTUAL_FLAT_PRICE_ACTIVE");
     expect(audit.riskFlags).not.toContain("SUSPECTED_BOT_FLAGGED");
-    expect(audit.riskFlags).not.toContain("HIGH_CONFIRMATION_DELAY_CLAMP");
+    expect(audit.riskFlags).not.toContain("ELEVATED_CONFIRMATION_DELAY");
   });
 
   test("flags cross-venue Polymarket proxy wallet attribution (BGD101)", () => {
@@ -312,6 +316,7 @@ describe("getInfoPlayer envelope", () => {
     expect(summary.mappedProxyWallet).toBe(
       "0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
     );
+    expect(summary.polyWalletAttribution).toBe("VALID_MAPPED");
     const audit = auditPlayerRiskPosture(envelope);
     expect(audit.riskFlags).toContain("MAPPED_POLY_SYNDICATE_WALLET");
   });
@@ -353,8 +358,86 @@ describe("getInfoPlayer envelope", () => {
     const audit = auditPlayerRiskPosture(envelope);
     expect(audit.riskFlags).toContain("SUSPECTED_BOT_FLAGGED");
     expect(audit.riskFlags).toContain("CONTRACTUAL_FLAT_PRICE_ACTIVE");
-    expect(audit.riskFlags).toContain("HIGH_CONFIRMATION_DELAY_CLAMP");
+    expect(audit.riskFlags).toContain("ELEVATED_CONFIRMATION_DELAY");
+    expect(audit.riskFlags).not.toContain("CREDENTIAL_ENCRYPTION_DISABLED");
     expect(audit.riskFlags).not.toContain("PLAINTEXT_CREDENTIAL_EXPOSURE");
+  });
+
+  test("quarantines placeholder proxy-wallet entries instead of flagging a syndicate", () => {
+    const envelope = parseGetInfoPlayerEnvelope({
+      INFO: {
+        data: { Login: "CUB22_T1", AgentID: "XBEER", EncryptPassword: "Y" },
+        balance: { AvailableBalance: 0 },
+        added: { CustomerID: "CUB22_T1" },
+        thisWeek: { PreviousBalance: 0 },
+      },
+    });
+    const summary = summarizeGetInfoPlayer(envelope);
+    expect(summary.mappedProxyWallet).not.toBeNull();
+    expect(summary.mappedProxyWallet).not.toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(summary.polyWalletAttribution).toBe("PLACEHOLDER_QUARANTINED");
+    const audit = auditPlayerRiskPosture(envelope);
+    expect(audit.riskFlags).not.toContain("MAPPED_POLY_SYNDICATE_WALLET");
+  });
+
+  test("keeps live and point-buying posture UNKNOWN when the wire flags are absent", () => {
+    const envelope = parseGetInfoPlayerEnvelope({
+      INFO: {
+        data: { Login: "NOFLAGS", AgentID: "XBEER", EncryptPassword: "Y" },
+        balance: { AvailableBalance: 0 },
+        added: { CustomerID: "NOFLAGS" },
+        thisWeek: { PreviousBalance: 0 },
+      },
+    });
+    const audit = auditPlayerRiskPosture(envelope);
+    expect(audit.effectiveLiveBettingStatus).toBe("UNKNOWN");
+    expect(audit.effectivePointBuyingStatus).toBe("UNKNOWN");
+    expect(audit.riskFlags).not.toContain("LIVE_INPLAY_RESTRICTED");
+    expect(audit.riskFlags).not.toContain("HALF_POINT_BUY_RESTRICTED");
+
+    // The wire also returns explicit nulls (observed on `ConfirmationDelay`); null is still unknown.
+    const nulled = auditPlayerRiskPosture(
+      parseGetInfoPlayerEnvelope({
+        INFO: {
+          data: {
+            Login: "NULLFLAGS",
+            AgentID: "XBEER",
+            EncryptPassword: "Y",
+            AllowEZLive: null,
+            AllowNewLiveBetting: null,
+            AllowUltraLive: null,
+            HalfPointInetBasketballFlag: null,
+            HalfPointInetFootballFlag: null,
+            AllowBuyPointsExtraGames: null,
+          },
+          balance: { AvailableBalance: 0 },
+          added: { CustomerID: "NULLFLAGS" },
+          thisWeek: { PreviousBalance: 0 },
+        },
+      }),
+    );
+    expect(nulled.effectiveLiveBettingStatus).toBe("UNKNOWN");
+    expect(nulled.effectivePointBuyingStatus).toBe("UNKNOWN");
+  });
+
+  test("separates a disabled encryption setting from an observed plaintext credential", () => {
+    const envelope = parseGetInfoPlayerEnvelope({
+      INFO: {
+        data: { Login: "NOPASS", AgentID: "XBEER", EncryptPassword: "N" },
+        balance: { AvailableBalance: 0 },
+        added: { CustomerID: "NOPASS" },
+        thisWeek: { PreviousBalance: 0 },
+      },
+    });
+    const summary = summarizeGetInfoPlayer(envelope);
+    const audit = auditPlayerRiskPosture(envelope);
+    expect(summary.credentialEncryptionDisabled).toBe(true);
+    expect(summary.plaintextPasswordExposed).toBe(false);
+    expect(audit.riskFlags).toContain("CREDENTIAL_ENCRYPTION_DISABLED");
+    expect(audit.riskFlags).not.toContain("PLAINTEXT_CREDENTIAL_EXPOSURE");
+    expect(formatPlayerRiskPostureReport(audit, summary)).toContain(
+      "ENCRYPTION DISABLED (setting; no credential observed in this response)",
+    );
   });
 
   test("formatPlayerRiskPostureReport renders comprehensive terminal report with decision overlay", () => {
@@ -414,7 +497,13 @@ describe("getInfoPlayer envelope", () => {
     expect(report).toContain("Credit Identity: BALANCED [OK]");
     expect(report).toContain("Carryover Parity: MATCHED [OK]");
     expect(report).toContain("Surveillance Proxy Wallet: UNMAPPED");
-    expect(report).toContain("PLAINTEXT_CREDENTIAL_EXPOSURE");
+    // The fixture sets `EncryptPassword: "N"` but returns no password, so the report must show a
+    // disabled setting, not a credential that was never observed.
+    expect(report).toContain("CREDENTIAL_ENCRYPTION_DISABLED");
+    expect(report).toContain(
+      "Credential Wire Security : ENCRYPTION DISABLED (setting; no credential observed in this response)",
+    );
+    expect(report).not.toContain("OBSERVED PLAINTEXT CREDENTIAL");
     expect(report).toContain("[DEFAULT_BASELINE_1]");
     expect(report).toContain("[ULTRA_LIVE_ENABLED_EZLIVE_OFF]");
     expect(report).toContain("[EXTRA_GAMES_BUY_ENABLED_DOW_SCHEDULE_OFF]");
