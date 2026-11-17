@@ -144,6 +144,12 @@ describe("Bun 1.4.4 package-manager behaviors", () => {
   test("bun add -d / --save-prod move an existing dependency group", () => {
     // Hermetic: the dependency is a local file: package, so neither the install
     // nor the group move touches a registry.
+    //
+    // 1.4.4 observed normalization (not documented; assertions below are
+    // specifier-agnostic on purpose):
+    //   package.json           file:./local -> "./local"
+    //   bun.lock workspace map "./local"
+    //   bun.lock package       "local@file:local" (file: kept, ./ stripped)
     const dir = fixture();
     const ref = localPackage(dir, "local");
     const manifest = readManifest(dir);
