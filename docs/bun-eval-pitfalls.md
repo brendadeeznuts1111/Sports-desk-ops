@@ -64,11 +64,15 @@ drop a final empty element; the iterator is for streams that never end.
 
 ## color-env
 
-`Bun.enableANSIColors` is a writable data property (no getter), `false` when piped; assigning it
-changes the value, so read it once at startup rather than trusting it after other code ran. `NO_COLOR=1` disables and `FORCE_COLOR=1`
-enables; `FORCE_COLOR=0` and `NO_COLOR=0` do **not** disable colour on a TTY, unlike Node and the
-no-color.org convention. Use `NO_COLOR=1`. Agent shells often export both variables already, so
-clear them before measuring.
+`Bun.enableANSIColors` is a writable data property (no getter). Measured on Bun `1.4.4+38afee6c8`,
+it is `true` even when stdout is piped (`process.stdout.isTTY === undefined`) unless `NO_COLOR=1`
+is set; `FORCE_COLOR=1` overrides `NO_COLOR=1`. Assigning `Bun.enableANSIColors` mutates the global
+flag, so read it once at startup or gate through `useColor()` (`lib/ansi_color.ts`), which checks
+`FORCE_COLOR` (`"1"|"2"|"3"|"true"` / `"0"`) -> `"NO_COLOR" in env` (any value, even empty) ->
+`isTTY && Bun.enableANSIColors`. `FORCE_COLOR=0` and `NO_COLOR=0`
+do **not** disable colour on a TTY in Bun itself, unlike Node and the no-color.org convention. Use
+`NO_COLOR=1` (or `useColor()`). Agent shells often export both variables already, so clear them
+before measuring.
 
 ## mmap-truncate
 

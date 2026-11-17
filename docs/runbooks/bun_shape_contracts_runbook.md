@@ -193,7 +193,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/enableANSIColors)
 - **Shape:** value: `boolean` · writable true · enumerable true
-- **Here:** `lib/market_edge_engine.ts`, `lib/gslive_manager_endpoints.ts`
+- **Here:** `lib/ansi_color.ts`
 - **Evidence:** `probe:text.ansi`
 
 #### Bun.escapeHTML

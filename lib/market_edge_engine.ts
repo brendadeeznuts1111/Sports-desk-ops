@@ -18,6 +18,7 @@
 
 import * as readline from "node:readline";
 import { Readable } from "node:stream";
+import { useColor } from "./ansi_color.ts";
 import type { Cents } from "../design/domain-branded-types.ts";
 import { parseAsCents } from "../design/domain-branded-types.ts";
 import {
@@ -873,9 +874,7 @@ export function formatMarketEdgeTable(
   report: MarketEdgeReport,
   options: MarketEdgeTableOptions = {},
 ): string {
-  const useColors =
-    options.colors ??
-    (typeof Bun !== "undefined" ? Bun.enableANSIColors : false);
+  const useColors = options.colors ?? useColor();
 
   const colorOf = (
     name: "red" | "green" | "yellow" | "cyan" | "magenta" | "gray",
@@ -1055,9 +1054,7 @@ export class MarketEdgeInspection {
       readonly maxArrayLength?: number | undefined;
     } = {},
   ): string {
-    const colors =
-      opts?.colors ??
-      (typeof Bun !== "undefined" ? Bun.enableANSIColors : false);
+    const colors = opts?.colors ?? useColor();
     const maxArrayLength =
       typeof opts?.maxArrayLength === "number"
         ? opts.maxArrayLength
