@@ -516,9 +516,30 @@ function normalizePosixDir(raw: string): string {
   return raw.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/, "");
 }
 
+/** A leading `!` is a workspace negation; a leading `!(` is an extglob include. */
+function isWorkspaceNegation(pattern: string): boolean {
+  return pattern.startsWith("!") && !pattern.startsWith("!(");
+}
+
 /**
- * Finds non-empty child directories inside simple `<parent>/*` workspace patterns (e.g. `packages/*`)
- * that do not declare a `package.json` and are not excluded by `!` patterns.
+ * The static parent directory of a workspace glob, e.g. `packages` for `packages/!(internal)`.
+ * Returns null when the glob has no static parent segment (e.g. `**` or a leading `!(`).
+ */
+function staticWorkspaceParent(pattern: string): string | null {
+  const trimmed = pattern.replace(/\/+$/, "");
+  const firstMeta = trimmed.search(/[*?[\]{}()!]/);
+  if (firstMeta === -1) return null;
+  const prefix = trimmed.slice(0, firstMeta);
+  const slash = prefix.lastIndexOf("/");
+  if (slash <= 0) return null;
+  return normalizePosixDir(prefix.slice(0, slash));
+}
+
+/**
+ * Finds non-empty child directories matched by a workspace glob with a static parent
+ * (`packages/*` or `packages/!(internal)`) that do not declare a `package.json` and are not
+ * excluded by a leading `!` pattern. The workspace pattern is matched with `Bun.Glob`, so
+ * extglob is honored instead of being treated as a literal or a negation.
  */
 function findUnregisteredWorkspaceDirs(
   root: string,
@@ -527,10 +548,9 @@ function findUnregisteredWorkspaceDirs(
 ): string[] {
   const unregistered = new Set<string>();
   for (const pattern of patterns) {
-    if (pattern.startsWith("!")) continue;
-    const match = /^([^*?[\]{}()!]+)\/\*$/.exec(pattern.replace(/\/+$/, ""));
-    if (!match?.[1]) continue;
-    const parentRel = normalizePosixDir(match[1]);
+    if (isWorkspaceNegation(pattern)) continue;
+    const parentRel = staticWorkspaceParent(pattern);
+    if (parentRel === null) continue;
     const parentAbs = path.join(root, parentRel);
     if (!existsSync(parentAbs)) continue;
 
@@ -540,6 +560,7 @@ function findUnregisteredWorkspaceDirs(
     } catch {
       continue;
     }
+    const glob = new Bun.Glob(pattern.replace(/\/+$/, ""));
 
     for (const entry of entries) {
       if (entry.startsWith(".") || entry === "node_modules") continue;
@@ -550,6 +571,7 @@ function findUnregisteredWorkspaceDirs(
         continue;
       }
       const childRel = normalizePosixDir(path.posix.join(parentRel, entry));
+      if (!glob.match(childRel)) continue;
       const pkgRel = `${childRel}/package.json`;
       if (negated.some((g) => g.match(childRel) || g.match(pkgRel))) continue;
       if (existsSync(path.join(childAbs, "package.json"))) continue;
@@ -583,7 +605,7 @@ export async function inspectWorkspaces(
     ? rootRaw.workspaces
     : (rootRaw.workspaces?.packages ?? []);
   const negated = patterns
-    .filter((p) => p.startsWith("!"))
+    .filter(isWorkspaceNegation)
     .map((p) => new Bun.Glob(p.slice(1)));
 
   const wsObj =
@@ -611,7 +633,7 @@ export async function inspectWorkspaces(
   byDir.set("", toPackageInfo("", rootRaw));
   const namelessSet = new Set<string>();
 
-  for (const pattern of patterns.filter((p) => !p.startsWith("!"))) {
+  for (const pattern of patterns.filter((p) => !isWorkspaceNegation(p))) {
     const literal = !/[*?[\]{}()!]/.test(pattern);
     for await (const file of new Bun.Glob(`${pattern}/package.json`).scan(
       root,
@@ -656,8 +678,9 @@ export async function inspectWorkspaces(
 
 /**
  * The workspaces Bun installs, keyed by directory, plus the matched package.json files it skips
- * for having no "name". A `!` pattern removes what the globs match wherever it sits in the list,
- * but not a directory listed by its literal path (bun.com/docs/pm/workspaces).
+ * for having no "name". A leading `!` pattern removes what the globs match wherever it sits in
+ * the list, but not a directory listed by its literal path; a leading `!(` is an extglob include,
+ * not a negation (bun.com/docs/pm/workspaces).
  */
 export async function resolveWorkspaces(root: string): Promise<{
   workspaces: WorkspaceNames;

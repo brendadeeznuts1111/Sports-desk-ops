@@ -60,6 +60,16 @@ describe("pack allowlist", () => {
     }
   });
 
+  test("extglob includes stay includes; leading ! still excludes", () => {
+    expect(isPackedFileAllowed("src/a.ts", ["**/!(*.test).ts"])).toBe(true);
+    expect(isPackedFileAllowed("src/a.test.ts", ["**/!(*.test).ts"])).toBe(
+      false,
+    );
+    expect(isPackedFileAllowed("src/nested/a.ts", ["!src/nested/**"])).toBe(
+      false,
+    );
+  });
+
   test("entries match as an exact file or a directory prefix", () => {
     expect(isPackedFileAllowed("src/index.ts", ["src"])).toBe(true);
     expect(isPackedFileAllowed("dist/index.js", ["src", "dist"])).toBe(true);
