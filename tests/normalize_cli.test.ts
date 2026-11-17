@@ -16,7 +16,10 @@ import { Database } from "bun:sqlite";
 import { mkdirSync, rmSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { parseCliArgs, runNormalizer } from "../scripts/normalize.ts";
-import { registerPortalPeriodSqliteFunctions } from "../lib/portal_period_taxonomy.ts";
+import {
+  formatTaxonomyBreakdownTable,
+  registerPortalPeriodSqliteFunctions,
+} from "../lib/portal_period_taxonomy.ts";
 
 const TEST_TMP_DIR = join(import.meta.dir, "../scratch/test_normalize_tmp");
 
@@ -302,5 +305,125 @@ describe("runNormalizer execution", () => {
     } catch {
       // ignore
     }
+  });
+
+  it("formats taxonomy breakdown with share percentages and a total row", () => {
+    expect(formatTaxonomyBreakdownTable(undefined)).toBe("(no matched rows)");
+    const table = formatTaxonomyBreakdownTable(
+      {
+        "native:1": {
+          engine: "native",
+          code: "1",
+          label: "1st Half",
+          market: "Derivative Points Line",
+          count: 3,
+          risk: 150,
+        },
+        "gansrow:0": {
+          engine: "gansrow",
+          code: "0",
+          label: "Game",
+          market: "Gansrow In-Play Single",
+          count: 1,
+          risk: 50,
+        },
+      },
+      { colors: false },
+    );
+    expect(table).toContain("share");
+    expect(table).toContain("75.0%");
+    expect(table).toContain("25.0%");
+    expect(table).toContain("$50.00");
+    expect(table).toContain("TOTAL");
+    expect(table).toContain("$200.00");
+  });
+
+  it("emits valid JSON for --format json and enhanced table metadata for --format table", async () => {
+    const jsonRun = Bun.spawnSync(
+      [
+        "bun",
+        "run",
+        "scripts/normalize.ts",
+        "--input",
+        FIXTURE_PATH,
+        "--format",
+        "json",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(jsonRun.exitCode).toBe(0);
+    const parsed = JSON.parse(jsonRun.stdout.toString()) as {
+      provenance: { stats: { matchedRows: number } };
+      sample: unknown[];
+    };
+    expect(parsed.provenance.stats.matchedRows).toBe(5);
+    expect(parsed.sample.length).toBe(5);
+
+    const tableRun = Bun.spawnSync(
+      [
+        "bun",
+        "run",
+        "scripts/normalize.ts",
+        "--input",
+        FIXTURE_PATH,
+        "--format",
+        "table",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(tableRun.exitCode).toBe(0);
+    const tableOut = tableRun.stdout.toString();
+    expect(tableOut).toContain("Date Fields:     unbounded");
+    expect(tableOut).toContain("Matched Rows:    5 / 5 (100.0%)");
+    expect(tableOut).toContain("Throughput:");
+    expect(tableOut).toContain("TOTAL");
+  });
+
+  it("supports --yaml/--yml, --toml, --json, and --summary flag shortcuts", () => {
+    expect(parseCliArgs(["--yml"]).format).toBe("yaml");
+    expect(parseCliArgs(["--format=yml"]).format).toBe("yaml");
+    expect(parseCliArgs(["--toml"]).format).toBe("toml");
+    expect(parseCliArgs(["--json"]).format).toBe("json");
+    expect(parseCliArgs(["--summary"]).format).toBe("summary");
+
+    const yamlRun = Bun.spawnSync(
+      ["bun", "run", "scripts/normalize.ts", "--input", FIXTURE_PATH, "--yml"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(yamlRun.exitCode).toBe(0);
+    const yamlParsed = Bun.YAML.parse(yamlRun.stdout.toString()) as {
+      provenance: { stats: { matchedRows: number } };
+      sample: unknown[];
+    };
+    expect(yamlParsed.provenance.stats.matchedRows).toBe(5);
+    expect(yamlParsed.sample.length).toBe(5);
+
+    const tomlRun = Bun.spawnSync(
+      ["bun", "run", "scripts/normalize.ts", "--input", FIXTURE_PATH, "--toml"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(tomlRun.exitCode).toBe(0);
+    const tomlParsed = Bun.TOML.parse(tomlRun.stdout.toString()) as {
+      provenance: { stats: { matchedRows: number } };
+      sample: unknown[];
+    };
+    expect(tomlParsed.provenance.stats.matchedRows).toBe(5);
+    expect(tomlParsed.sample.length).toBe(5);
+
+    const summaryRun = Bun.spawnSync(
+      [
+        "bun",
+        "run",
+        "scripts/normalize.ts",
+        "--input",
+        FIXTURE_PATH,
+        "--summary",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(summaryRun.exitCode).toBe(0);
+    const summaryOut = summaryRun.stdout.toString();
+    expect(summaryOut).toContain("=== Provenance & Date Window Metadata ===");
+    expect(summaryOut).not.toContain("=== Taxonomy Breakdown");
   });
 });

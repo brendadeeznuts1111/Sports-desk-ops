@@ -27,6 +27,7 @@ import {
 import type { RankingInputProvenance } from "../lib/f402_customer_decision_ranking.ts";
 import type { GradedWagerRawRow } from "../lib/f402_ccc88412_decision_instrument.ts";
 import type { ReportPlayerAnalysisRowRaw } from "../lib/f402_report_player_analysis.ts";
+import { projectRankingsSummary } from "./project_rankings_summary.ts";
 
 function argValue(flag: string): string | null {
   const idx = Bun.argv.indexOf(flag);
@@ -200,6 +201,10 @@ async function main() {
 
   await Bun.write(OUT_JSON_PATH, json1);
   await Bun.write(OUT_MD_PATH, md1);
+
+  if (Bun.argv.includes("--project-summary")) {
+    projectRankingsSummary({ check: false, policy: false });
+  }
 
   console.log(
     JSON.stringify(

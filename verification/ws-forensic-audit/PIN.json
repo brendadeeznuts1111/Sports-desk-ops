@@ -1,0 +1,32 @@
+{
+  "bun": {
+    "version": "1.4.4",
+    "revision": "38afee6c84fcf48c0edb2466aa4b27d287a59c30"
+  },
+  "types": {
+    "s3": "9d6d1979f27b9e189b8ea90f553b345617eebf94b0fa6bfe4162f25ba6571a10",
+    "serve": "a006fe6f5a5c4b583ca303d5ed8e697ea506868d28e2a1d0401bbd64a915a6ec"
+  },
+  "git": {
+    "bookdeskops": {
+      "head": "38d496eac5a79cf26768326b91fb89b3443f8e65",
+      "dirty": 178
+    },
+    "sportsdesk-ops": {
+      "head": "58cdc65897e5f9febb8210c335147b37dc6ed219",
+      "dirty": 55
+    }
+  },
+  "pipeline": {
+    "src/lib/verify-gslive-r2-ticker.ts": "e41f4069e9ccc961ad6bcf28c84c1882e271ea549c53ba18975053339f9bfa38",
+    "src/lib/forensic-audit-sink.ts": "3889330284ebd2be75ed780c2227a62cd4403aece86b624f72fa3d47590cf54f",
+    "src/lib/syndicate-enforcement.ts": "d4b2640a5ccbeaa8e00cc8200b8e5d36b5bd9ced0528b1b0bbb436879e8360a8",
+    "src/lib/verify-gslive-report-writer.ts": "fef5075dc99e68f49ea44a2e97477ac7d6b1a67ae5cc05dfb98074709cbdea7c",
+    "scripts/verify-gslive-tickets.ts": "5afea780bad03f7b7ba8ecabe7fb2486f0f0a579e93faae9ae6f0df7fc362fa7"
+  },
+  "artifacts": {
+    "data/live-wagers.json": "df59bf328e169a7076db40022fd071a1fa96eab828dff42e1848c2c961efba34",
+    "enriched_customers_full.json": "ea9083230534b1b3b652993c170536be2549606f6c752e9a908804dc1ca3acea"
+  },
+  "pinnedAt": "2026-11-16T02:31:14.720Z"
+}

@@ -6,6 +6,7 @@ import {
 } from "../hydration.ts";
 import { getLocalAgentHref, getLocalCustomerHref } from "../links.ts";
 import type { RankingsFilter } from "../types.ts";
+import { PopulationStrip } from "./PopulationStrip.tsx";
 
 export type RankingsSourceStatus = "pending" | "ready" | "unavailable";
 
@@ -104,6 +105,7 @@ export function RankingsTabPanel({
         error={rankingsError}
         rejectedRows={rankings?.rejectedRows ?? 0}
       />
+      <PopulationStrip />
       {/* 30-Day Sharps & Agency Downlines View */}
       <div style={styles.kpiGrid}>
         <div style={styles.kpiCard}>

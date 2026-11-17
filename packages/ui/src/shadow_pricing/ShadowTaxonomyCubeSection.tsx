@@ -9,6 +9,8 @@ import type {
   MarketCode,
   MarketFilter,
   PeriodFilter,
+  RegimeCode,
+  RegimeFilter,
   ShadowPricingDashboardPayload,
   SportCode,
   SportFilter,
@@ -18,7 +20,9 @@ import type {
 } from "@sportsdesk-ops/contracts/shadow-pricing";
 import {
   type CubeTab,
+  formatBuyHandleSharePct,
   formatCompactLegs,
+  formatLegsSettledOpen,
   formatSignedUsd,
   formatUsd,
   QUICK_SLICE_PRESETS,
@@ -34,12 +38,14 @@ export interface ShadowTaxonomyCubeSectionProps {
   readonly subSport: SubSportFilter;
   readonly period: PeriodFilter;
   readonly market: MarketFilter;
+  readonly regime: RegimeFilter;
   readonly cubeTab: CubeTab;
   readonly hasAnyDimensionFilter: boolean;
   readonly onSelectSport: (nextSport: SportFilter) => void;
   readonly onSelectSubSport: (nextSubSport: SubSportFilter) => void;
   readonly onSelectPeriod: (nextPeriod: PeriodFilter) => void;
   readonly onSelectMarket: (nextMarket: MarketFilter) => void;
+  readonly onSelectRegime: (nextRegime: RegimeFilter) => void;
   readonly onSelectCubeTab: (nextTab: CubeTab) => void;
   readonly onApplyQuickPreset: (preset: QuickSlicePreset) => void;
   readonly onResetSlice: () => void;
@@ -52,18 +58,25 @@ export function ShadowTaxonomyCubeSection({
   subSport,
   period,
   market,
+  regime,
   cubeTab,
   hasAnyDimensionFilter,
   onSelectSport,
   onSelectSubSport,
   onSelectPeriod,
   onSelectMarket,
+  onSelectRegime,
   onSelectCubeTab,
   onApplyQuickPreset,
   onResetSlice,
   onDrillRow,
 }: ShadowTaxonomyCubeSectionProps): React.ReactElement {
   const activeSlice = taxonomy?.activeSlice;
+  const activeLegsBreakdown =
+    activeSlice !== undefined
+      ? formatLegsSettledOpen(activeSlice.totalLegs, activeSlice.settledLegs)
+      : null;
+  const byRegimeRows = taxonomy?.byRegime ?? [];
   const activeCubeRows: readonly TaxonomyRollupRow[] = taxonomy
     ? cubeTab === "sport"
       ? taxonomy.bySport
@@ -71,7 +84,9 @@ export function ShadowTaxonomyCubeSection({
         ? taxonomy.bySubSport
         : cubeTab === "period"
           ? taxonomy.byPeriod
-          : taxonomy.byMarket
+          : cubeTab === "regime"
+            ? byRegimeRows
+            : taxonomy.byMarket
     : [];
 
   return (
@@ -272,9 +287,38 @@ export function ShadowTaxonomyCubeSection({
             ))}
           </div>
         </div>
+
+        {/* Axis 5: Regime / Wager Type (packSubSportComboKey15 wagerType3) */}
+        <div className="sd-dim-row">
+          <div className="sd-dim-label">5. Regime / Wager Type</div>
+          <div className="sd-chip-strip">
+            <button
+              type="button"
+              className="sd-dim-chip"
+              data-active={regime === "ALL" ? "true" : "false"}
+              onClick={() => onSelectRegime("ALL")}
+            >
+              All Regimes
+            </button>
+            {byRegimeRows.map((regRow) => (
+              <button
+                key={regRow.code}
+                type="button"
+                className="sd-dim-chip"
+                data-active={regime === regRow.code ? "true" : "false"}
+                onClick={() => onSelectRegime(regRow.code as RegimeCode)}
+              >
+                <span>{regRow.label}</span>
+                <span className="sd-dim-count sd-mono">
+                  {formatCompactLegs(regRow.totalLegs)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Active Slice Summary Strip (All Legs + Hold % + Point-Buy Share + Risk Vector) */}
+      {/* Active Slice Summary Strip: exposure, settlement, hold, buy-handle mix, risk vector */}
       {activeSlice ? (
         <div className="sd-card-cli">
           <div
@@ -301,12 +345,12 @@ export function ShadowTaxonomyCubeSection({
                 className="sd-mono"
                 style={{ fontSize: "12px", color: "var(--sd-text-primary)" }}
               >
-                Slice Legs:{" "}
-                <strong>{activeSlice.totalLegs.toLocaleString()}</strong> (
-                {activeSlice.settledLegs.toLocaleString()} settled ·{" "}
+                Legs: <strong>{activeLegsBreakdown?.total ?? "0"}</strong> (
+                {activeLegsBreakdown?.settled ?? "0"} settled ·{" "}
+                {activeLegsBreakdown?.open ?? "0"} open ·{" "}
                 {activeSlice.winRatePct}% win) · Handle:{" "}
-                <strong>{formatUsd(activeSlice.handleUsd)}</strong> · Actual
-                Desk P&amp;L:{" "}
+                <strong>{formatUsd(activeSlice.handleUsd)}</strong> · Desk
+                P&amp;L / hold:{" "}
                 <strong
                   style={{
                     color:
@@ -316,11 +360,20 @@ export function ShadowTaxonomyCubeSection({
                   }}
                 >
                   {formatSignedUsd(activeSlice.actualDeskPnlUsd)} (
-                  {activeSlice.holdPct}% hold)
+                  {activeSlice.holdPct}%)
                 </strong>{" "}
-                · Point-Buy Share:{" "}
+                · Buy handle:{" "}
                 <strong>
-                  {activeSlice.buyLegs.toLocaleString()} legs (
+                  {formatUsd(activeSlice.buyHandleUsd)} (
+                  {formatBuyHandleSharePct(
+                    activeSlice.buyHandleUsd,
+                    activeSlice.handleUsd,
+                  )}{" "}
+                  of slice)
+                </strong>{" "}
+                · Point-buy legs:{" "}
+                <strong>
+                  {activeSlice.buyLegs.toLocaleString()} (
                   {activeSlice.buyRatePct}%)
                 </strong>
               </span>
@@ -346,10 +399,26 @@ export function ShadowTaxonomyCubeSection({
               marginBottom: "8px",
             }}
           >
-            <strong style={{ fontSize: "13px" }}>
-              📊 Hierarchical Exposure, Hold &amp; Point-Buy Matrix (Click any
-              row to drill in)
-            </strong>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+            >
+              <strong style={{ fontSize: "13px" }}>
+                📊 Hierarchical Exposure, Hold, P&amp;L &amp; Desk-Risk Matrix
+                (click any row to drill)
+              </strong>
+              <span
+                style={{
+                  fontSize: "11px",
+                  color: "var(--sd-text-muted)",
+                  fontWeight: 400,
+                  maxWidth: "52rem",
+                }}
+              >
+                Roll up handle, settlement mix, win rate, realized hold, shadow
+                repricing delta, and taxonomy risk — point-buy policy is one
+                pricing gate, not the only lens on the slice.
+              </span>
+            </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
               <button
                 type="button"
@@ -383,6 +452,16 @@ export function ShadowTaxonomyCubeSection({
               >
                 4. By Market ({taxonomy.byMarket.length})
               </button>
+              {byRegimeRows.length > 0 ? (
+                <button
+                  type="button"
+                  className="sd-preset-btn"
+                  data-active={cubeTab === "regime" ? "true" : "false"}
+                  onClick={() => onSelectCubeTab("regime")}
+                >
+                  5. By Regime ({byRegimeRows.length})
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -391,15 +470,26 @@ export function ShadowTaxonomyCubeSection({
               <thead>
                 <tr>
                   <th>Segment</th>
-                  <th>Point-Buy Policy</th>
-                  <th>Total Legs</th>
+                  <th title="Catalog point-buy gate for this segment (KEY leak / house hold / blocked)">
+                    Pricing gate
+                  </th>
+                  <th title="Total legs · settled vs still open">
+                    Legs (S / open)
+                  </th>
                   <th>Win %</th>
-                  <th>Total Handle</th>
-                  <th>Buy Legs (% Share)</th>
-                  <th>Actual Desk P&amp;L</th>
+                  <th>Handle</th>
+                  <th title="Staked USD on point-buy legs vs entire slice handle">
+                    Buy handle (%)
+                  </th>
+                  <th title="Count of point-buy legs (can differ from handle mix)">
+                    Buy legs (%)
+                  </th>
+                  <th>Desk P&amp;L</th>
                   <th>Hold %</th>
-                  <th>Shadow Δ</th>
-                  <th>Risk Status</th>
+                  <th title="Shadow ladder repricing minus observed desk P&amp;L">
+                    Shadow Δ
+                  </th>
+                  <th>Desk risk</th>
                 </tr>
               </thead>
               <tbody>
@@ -408,7 +498,8 @@ export function ShadowTaxonomyCubeSection({
                     (row.dimension === "sport" && sport === row.code) ||
                     (row.dimension === "subSport" && subSport === row.code) ||
                     (row.dimension === "period" && period === row.code) ||
-                    (row.dimension === "market" && market === row.code);
+                    (row.dimension === "market" && market === row.code) ||
+                    (row.dimension === "regime" && regime === row.code);
                   return (
                     <tr
                       key={`${row.dimension}:${row.code}`}
@@ -433,10 +524,46 @@ export function ShadowTaxonomyCubeSection({
                       </td>
                       <td>{renderPolicyBadge(row.pointBuyPolicy)}</td>
                       <td className="sd-mono">
-                        {row.totalLegs.toLocaleString()}
+                        {(() => {
+                          const legs = formatLegsSettledOpen(
+                            row.totalLegs,
+                            row.settledLegs,
+                          );
+                          return (
+                            <>
+                              {legs.total}
+                              <span
+                                style={{
+                                  display: "block",
+                                  fontSize: "10px",
+                                  color: "var(--sd-text-muted)",
+                                }}
+                              >
+                                {legs.settled} S · {legs.open} open
+                              </span>
+                            </>
+                          );
+                        })()}
                       </td>
                       <td className="sd-mono">{row.winRatePct.toFixed(1)}%</td>
                       <td className="sd-mono">{formatUsd(row.handleUsd)}</td>
+                      <td className="sd-mono">
+                        {formatUsd(row.buyHandleUsd)}
+                        <span
+                          style={{
+                            marginLeft: "4px",
+                            fontSize: "10px",
+                            color: "var(--sd-text-muted)",
+                          }}
+                        >
+                          (
+                          {formatBuyHandleSharePct(
+                            row.buyHandleUsd,
+                            row.handleUsd,
+                          )}
+                          )
+                        </span>
+                      </td>
                       <td className="sd-mono">
                         {row.buyLegs.toLocaleString()} ({row.buyRatePct}%)
                       </td>

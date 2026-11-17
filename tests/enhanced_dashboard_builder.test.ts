@@ -79,6 +79,17 @@ describe("Enhanced Dashboard Builder & Shadow-Pricing Suite", () => {
           join(outdir, "build-manifest.json"),
         ).json();
         expect(manifestDisk.target).toBe("prod");
+        expect(manifestDisk.bunVersion).toBe(Bun.version);
+        expect(manifestDisk.bunRevision).toBe(Bun.revision);
+        expect(manifestDisk.builtOn).toBe(
+          `${process.platform}/${process.arch}`,
+        );
+
+        // Build-time constants are inlined into the client bundle (Bun.build define).
+        const jsBundled = await Bun.file(join(outdir, jsArt!.fileName)).text();
+        expect(jsBundled).toContain(manifest.builtAt);
+        expect(jsBundled).toContain(Bun.version);
+        expect(jsBundled).toContain(Bun.revision);
       } finally {
         rmSync(outdir, { recursive: true, force: true });
       }
@@ -92,19 +103,29 @@ describe("Enhanced Dashboard Builder & Shadow-Pricing Suite", () => {
       const dev = matrix.find((r) => r.target === "dev")!;
       const testTarget = matrix.find((r) => r.target === "test")!;
 
-      // PROD keeps PROD sentinel and eliminates DEBUG + EXPERIMENTAL sentinels
+      // PROD keeps PROD + ANALYTICS sentinels and eliminates DEBUG, TEST, EXPERIMENTAL sentinels
       expect(prod.hasProdSentinel).toBe(true);
       expect(prod.hasDebugSentinel).toBe(false);
+      expect(prod.hasTestSentinel).toBe(false);
+      expect(prod.hasAnalyticsSentinel).toBe(true);
       expect(prod.hasExperimentalSentinel).toBe(false);
+      expect(prod.gzipJsBytes).toBeGreaterThan(0);
+      expect(prod.gzipJsBytes).toBeLessThan(prod.totalJsBytes);
+      expect(prod.inputFileCount).toBeGreaterThan(0);
+      expect(prod.bundleHash8).toMatch(/^[0-9a-f]{8}$/);
 
-      // DEV keeps DEBUG + EXPERIMENTAL sentinels and eliminates PROD sentinel
+      // DEV keeps DEBUG + TEST + ANALYTICS + EXPERIMENTAL sentinels and eliminates PROD sentinel
       expect(dev.hasProdSentinel).toBe(false);
       expect(dev.hasDebugSentinel).toBe(true);
+      expect(dev.hasTestSentinel).toBe(true);
+      expect(dev.hasAnalyticsSentinel).toBe(true);
       expect(dev.hasExperimentalSentinel).toBe(true);
 
-      // TEST keeps DEBUG sentinel and eliminates PROD + EXPERIMENTAL sentinels
+      // TEST keeps DEBUG + TEST + ANALYTICS sentinels and eliminates PROD + EXPERIMENTAL sentinels
       expect(testTarget.hasProdSentinel).toBe(false);
       expect(testTarget.hasDebugSentinel).toBe(true);
+      expect(testTarget.hasTestSentinel).toBe(true);
+      expect(testTarget.hasAnalyticsSentinel).toBe(true);
       expect(testTarget.hasExperimentalSentinel).toBe(false);
     });
   });
@@ -377,7 +398,7 @@ describe("Enhanced Dashboard Builder & Shadow-Pricing Suite", () => {
 
         const shadowGet = await fetch(
           new URL(
-            "api/shadow-pricing?sport=Football&subSport=NCAAF&period=game&market=spread&ladder3=-150&ladder7=-142&elasticity=0.2&mode=floor",
+            "api/shadow-pricing?sport=Football&subSport=NCAAF&period=game&market=spread&regime=pregame&ladder3=-150&ladder7=-142&elasticity=0.2&mode=floor",
             handle.url,
           ),
         );
@@ -391,6 +412,7 @@ describe("Enhanced Dashboard Builder & Shadow-Pricing Suite", () => {
         expect(shadowJson.parameters.subSport).toBe("NCAAF");
         expect(shadowJson.parameters.period).toBe("game");
         expect(shadowJson.parameters.market).toBe("spread");
+        expect(shadowJson.parameters.regime).toBe("pregame");
 
         const shadowPost = await fetch(
           new URL("api/shadow-pricing", handle.url),
@@ -402,6 +424,7 @@ describe("Enhanced Dashboard Builder & Shadow-Pricing Suite", () => {
               subSport: "NBA",
               period: "game",
               market: "spread",
+              regime: "pregame",
               ladderKey3: -138,
               ladderKey7: -132,
               ladderKey14_21: -123,
@@ -417,6 +440,7 @@ describe("Enhanced Dashboard Builder & Shadow-Pricing Suite", () => {
         expect(postJson.parameters.repriceMode).toBe("exact");
         expect(postJson.parameters.sport).toBe("Basketball");
         expect(postJson.parameters.subSport).toBe("NBA");
+        expect(postJson.parameters.regime).toBe("pregame");
 
         const matrixRes = await fetch(new URL("api/build-matrix", handle.url));
         expect(matrixRes.status).toBe(200);

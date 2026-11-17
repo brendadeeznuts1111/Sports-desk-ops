@@ -340,7 +340,7 @@ describe("cross-implementation differential", () => {
     () => {
       const proc = Bun.spawnSync({
         cmd: ["bun", "scripts/nsh_frame_differential.ts", "500"],
-        cwd: new URL("..", import.meta.url).pathname,
+        cwd: Bun.fileURLToPath(new URL("..", import.meta.url)),
         stdout: "pipe",
         stderr: "pipe",
       });

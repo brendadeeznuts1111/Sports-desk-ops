@@ -1,10 +1,9 @@
 
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { FEATURES } from "../types/features.ts";
 
 const out = join(
-  dirname(fileURLToPath(import.meta.url)),
+  dirname(Bun.fileURLToPath(import.meta.url)),
   "../tests/bundle_types.test-d.ts",
 );
 

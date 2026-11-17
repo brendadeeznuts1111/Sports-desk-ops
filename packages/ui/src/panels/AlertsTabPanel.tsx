@@ -1,5 +1,14 @@
 import type React from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  alertAuditJson,
+  alertMatchesQuery,
+  countAlerts,
+  formatAlertAuditJsonl,
+} from "../alert_audit.ts";
+import { copyText } from "../clipboard.ts";
 import { styles } from "../dashboard_styles.ts";
+import { formatRelativeAge } from "../relative_time.ts";
 import type {
   AlertFilter,
   AlertToastState,
@@ -7,6 +16,7 @@ import type {
   HealthData,
   TierStyleConfig,
 } from "../types.ts";
+import { AlertAuditDetail } from "./AlertAuditDetail.tsx";
 
 export interface AlertsTabPanelProps {
   readonly alertToast: AlertToastState | null;
@@ -41,6 +51,68 @@ export function AlertsTabPanel({
   onAckAlert,
   onRetryAlert,
 }: AlertsTabPanelProps): React.ReactElement {
+  const [query, setQuery] = useState<string>("");
+  const [expanded, setExpanded] = useState<readonly string[]>([]);
+  const [now, setNow] = useState<number>(() => Date.now());
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
+  const [copiedJsonId, setCopiedJsonId] = useState<string | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jsonTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+      if (jsonTimer.current !== null) clearTimeout(jsonTimer.current);
+    },
+    [],
+  );
+
+  const visibleRecords = useMemo(
+    () => alertRecords.filter((alert) => alertMatchesQuery(alert, query)),
+    [alertRecords, query],
+  );
+  const visibleCounts = useMemo(
+    () => countAlerts(visibleRecords),
+    [visibleRecords],
+  );
+
+  const toggleExpanded = (deliveryId: string) => {
+    setExpanded((prev) =>
+      prev.includes(deliveryId)
+        ? prev.filter((id) => id !== deliveryId)
+        : [...prev, deliveryId],
+    );
+  };
+
+  const copyAudit = () => {
+    const text = formatAlertAuditJsonl(visibleRecords);
+    if (text.length === 0) return;
+    void copyText(text).then((result) => {
+      setCopyState(result.ok ? "copied" : "failed");
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopyState("idle"), 1_800);
+    });
+  };
+
+  const copyAlertJson = (alert: DashboardAlertRecord) => {
+    void copyText(alertAuditJson(alert)).then((result) => {
+      if (!result.ok) {
+        setCopyState("failed");
+        return;
+      }
+      setCopiedJsonId(alert.deliveryId);
+      if (jsonTimer.current !== null) clearTimeout(jsonTimer.current);
+      jsonTimer.current = setTimeout(() => setCopiedJsonId(null), 1_800);
+    });
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       {/* Alert Toast Notification Banner */}
@@ -181,7 +253,31 @@ export function AlertsTabPanel({
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <input
+            type="search"
+            data-alert-search="true"
+            aria-label="Filter alerts by delivery id, ticket, customer, tier or error"
+            placeholder="delivery id, ticket, customer, error…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            style={{
+              width: "230px",
+              padding: "6px 10px",
+              borderRadius: "6px",
+              border: "1px solid #1e293b",
+              backgroundColor: "#0d1527",
+              color: "#f1f5f9",
+              fontSize: "11px",
+            }}
+          />
           <button
             type="button"
             onClick={onSweepAlerts}
@@ -241,26 +337,83 @@ export function AlertsTabPanel({
           <h3 style={styles.tableTitle}>
             🚨 Surveillance Alert Audit Stream & Dead-Letter Management
           </h3>
-          <span style={{ fontSize: "11px", color: "#64748b" }}>
-            Durable JSONL audit log · Replay lineage tracked via retriedFrom ·
-            Total: {alertRecords.length}
-          </span>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap",
+            }}
+          >
+            <span style={{ fontSize: "11px", color: "#64748b" }}>
+              Showing {visibleRecords.length}/{alertRecords.length}
+              {visibleCounts.dead > 0 ? ` · ${visibleCounts.dead} dead` : ""} ·
+              durable JSONL audit log · replay lineage via retriedFrom
+            </span>
+            <button
+              type="button"
+              data-alert-copy-audit="true"
+              onClick={copyAudit}
+              disabled={visibleRecords.length === 0}
+              title={
+                visibleRecords.length === 0
+                  ? "No visible audit rows to copy"
+                  : `Copy ${visibleRecords.length} visible audit row(s) as newline-delimited JSON`
+              }
+              style={{
+                padding: "4px 9px",
+                borderRadius: "6px",
+                fontSize: "11px",
+                fontWeight: 600,
+                backgroundColor: "rgba(34, 197, 94, 0.12)",
+                border: "1px solid rgba(34, 197, 94, 0.38)",
+                color: visibleRecords.length === 0 ? "#475569" : "#4ade80",
+                cursor: visibleRecords.length === 0 ? "default" : "pointer",
+              }}
+            >
+              {copyState === "copied"
+                ? "✓ Copied"
+                : copyState === "failed"
+                  ? "⚠ Copy blocked"
+                  : `⧉ Copy audit (${visibleRecords.length})`}
+            </button>
+          </div>
         </div>
 
         <div style={styles.tableScroll}>
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>Timestamp</th>
-                <th style={styles.th}>Status</th>
-                <th style={styles.th}>Delivery ID</th>
-                <th style={styles.th}>Ticket / Wager</th>
-                <th style={styles.th}>Customer</th>
-                <th style={styles.th}>Tier</th>
-                <th style={styles.th}>Amount / CLV</th>
-                <th style={styles.th}>Attempts</th>
-                <th style={styles.th}>Directive / Final Error</th>
-                <th style={styles.th}>Operator Actions</th>
+                <th scope="col" style={styles.th}>
+                  Timestamp
+                </th>
+                <th scope="col" style={styles.th}>
+                  Status
+                </th>
+                <th scope="col" style={styles.th}>
+                  Delivery ID
+                </th>
+                <th scope="col" style={styles.th}>
+                  Ticket / Wager
+                </th>
+                <th scope="col" style={styles.th}>
+                  Customer
+                </th>
+                <th scope="col" style={styles.th}>
+                  Tier
+                </th>
+                <th scope="col" style={styles.th}>
+                  Amount / CLV
+                </th>
+                <th scope="col" style={styles.th}>
+                  Attempts
+                </th>
+                <th scope="col" style={styles.th}>
+                  Directive / Final Error
+                </th>
+                <th scope="col" style={styles.th}>
+                  Operator Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -275,204 +428,293 @@ export function AlertsTabPanel({
                       fontSize: "13px",
                     }}
                   >
-                    No alerts matching filter "{alertFilter}".
+                    {alertRecords.length === 0
+                      ? `No alerts matching filter "${alertFilter}".`
+                      : `No audit rows match "${query}" in this filter.`}
                   </td>
                 </tr>
               ) : (
-                alertRecords.map((alert) => {
+                visibleRecords.map((alert) => {
                   const isDead = alert.status === "dead";
                   const isAcked = alert.status === "acknowledged";
                   const isQueued = alert.status === "queued";
                   const isDelivered = alert.status === "delivered";
+                  const isExpanded = expanded.includes(alert.deliveryId);
 
                   return (
-                    <tr
-                      key={alert.deliveryId}
-                      style={{
-                        borderBottom: "1px solid #1e293b",
-                        background: isDead
-                          ? "rgba(239, 68, 68, 0.06)"
-                          : "transparent",
-                      }}
-                    >
-                      <td style={styles.td}>
-                        <div style={{ fontSize: "12px", color: "#f1f5f9" }}>
-                          {new Date(alert.createdAt).toLocaleTimeString()}
-                        </div>
-                        <div style={{ fontSize: "10px", color: "#64748b" }}>
-                          {
-                            new Date(alert.createdAt)
-                              .toISOString()
-                              .split("T")[0]
-                          }
-                        </div>
-                      </td>
-                      <td style={styles.td}>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            padding: "2px 8px",
-                            borderRadius: "4px",
-                            fontSize: "10px",
-                            fontWeight: 700,
-                            background: isDead
-                              ? "rgba(239, 68, 68, 0.2)"
-                              : isQueued
-                                ? "rgba(245, 158, 11, 0.2)"
-                                : isDelivered
-                                  ? "rgba(34, 197, 94, 0.2)"
-                                  : "rgba(168, 85, 247, 0.2)",
-                            color: isDead
-                              ? "#f87171"
-                              : isQueued
-                                ? "#fbbf24"
-                                : isDelivered
-                                  ? "#4ade80"
-                                  : "#c084fc",
-                            border: `1px solid ${
-                              isDead
-                                ? "#ef4444"
-                                : isQueued
-                                  ? "#f59e0b"
-                                  : isDelivered
-                                    ? "#22c55e"
-                                    : "#a855f7"
-                            }`,
-                          }}
-                        >
-                          {alert.status.toUpperCase()}
-                        </span>
-                      </td>
-                      <td style={styles.td}>
-                        <span
-                          style={{
-                            fontFamily:
-                              "ui-monospace, SFMono-Regular, Menlo, monospace",
-                            fontSize: "11px",
-                            color: "#94a3b8",
-                            cursor: "pointer",
-                          }}
-                          title={`Click to copy: ${alert.deliveryId}`}
-                          onClick={() => onCopyDeliveryId(alert.deliveryId)}
-                        >
-                          {alert.deliveryId.slice(0, 8)}...
-                        </span>
-                        {alert.retriedFrom && (
+                    <Fragment key={alert.deliveryId}>
+                      <tr
+                        style={{
+                          borderBottom: "1px solid #1e293b",
+                          background: isDead
+                            ? "rgba(239, 68, 68, 0.06)"
+                            : "transparent",
+                        }}
+                      >
+                        <td style={styles.td}>
                           <div
                             style={{
-                              fontSize: "9px",
-                              color: "#64748b",
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: "6px",
                             }}
-                            title={`Retried from prior delivery: ${alert.retriedFrom}`}
                           >
-                            ↳ retried from {alert.retriedFrom.slice(0, 6)}
+                            <button
+                              type="button"
+                              data-alert-expand={alert.deliveryId}
+                              aria-expanded={isExpanded}
+                              aria-controls={`alert-detail-${alert.deliveryId}`}
+                              onClick={() => toggleExpanded(alert.deliveryId)}
+                              title={
+                                isExpanded
+                                  ? "Collapse the audit record"
+                                  : "Expand the full audit record"
+                              }
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "#38bdf8",
+                                cursor: "pointer",
+                                fontSize: "11px",
+                                lineHeight: 1.2,
+                                padding: "0 2px",
+                              }}
+                            >
+                              {isExpanded ? "▾" : "▸"}
+                            </button>
+                            <div>
+                              <div
+                                style={{ fontSize: "12px", color: "#f1f5f9" }}
+                              >
+                                {new Date(alert.createdAt).toLocaleTimeString()}
+                              </div>
+                              <div
+                                style={{ fontSize: "10px", color: "#64748b" }}
+                                data-alert-age="true"
+                              >
+                                {formatRelativeAge(
+                                  now,
+                                  Date.parse(alert.createdAt),
+                                ) ?? "—"}{" "}
+                                ·{" "}
+                                {
+                                  new Date(alert.createdAt)
+                                    .toISOString()
+                                    .split("T")[0]
+                                }
+                              </div>
+                            </div>
                           </div>
-                        )}
-                      </td>
-                      <td style={styles.td}>
-                        <span
-                          style={{
-                            fontFamily:
-                              "ui-monospace, SFMono-Regular, Menlo, monospace",
-                            fontWeight: 600,
-                            color: "#38bdf8",
-                          }}
-                        >
-                          {alert.wagerId || "—"}
-                        </span>
-                      </td>
-                      <td style={styles.td}>
-                        <span style={{ fontWeight: 600, color: "#f1f5f9" }}>
-                          {alert.payload.customerId}
-                        </span>
-                      </td>
-                      <td style={styles.td}>
-                        <span
-                          style={{
-                            ...styles.wagerBadge(alert.tier, tiersConfig),
-                            display: "inline-block",
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            fontSize: "11px",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {alert.tier}
-                        </span>
-                      </td>
-                      <td style={styles.td}>
-                        <div style={{ fontWeight: 600, color: "#f1f5f9" }}>
-                          ${alert.payload.amountUsd?.toLocaleString() ?? "—"}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "10px",
-                            color:
-                              (alert.payload.clvCents ?? 0) >= 7
-                                ? "#4ade80"
-                                : "#94a3b8",
-                          }}
-                        >
-                          CLV: {alert.payload.clvCents ?? 0}¢
-                        </div>
-                      </td>
-                      <td style={styles.td}>
-                        <span style={{ fontSize: "11px", color: "#94a3b8" }}>
-                          {alert.attempts ?? 1} / 5
-                        </span>
-                      </td>
-                      <td style={styles.td}>
-                        {isDead ? (
-                          <div
+                        </td>
+                        <td style={styles.td}>
+                          <span
                             style={{
-                              fontSize: "11px",
-                              color: "#f87171",
+                              display: "inline-block",
+                              padding: "2px 8px",
+                              borderRadius: "4px",
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              background: isDead
+                                ? "rgba(239, 68, 68, 0.2)"
+                                : isQueued
+                                  ? "rgba(245, 158, 11, 0.2)"
+                                  : isDelivered
+                                    ? "rgba(34, 197, 94, 0.2)"
+                                    : "rgba(168, 85, 247, 0.2)",
+                              color: isDead
+                                ? "#f87171"
+                                : isQueued
+                                  ? "#fbbf24"
+                                  : isDelivered
+                                    ? "#4ade80"
+                                    : "#c084fc",
+                              border: `1px solid ${
+                                isDead
+                                  ? "#ef4444"
+                                  : isQueued
+                                    ? "#f59e0b"
+                                    : isDelivered
+                                      ? "#22c55e"
+                                      : "#a855f7"
+                              }`,
+                            }}
+                          >
+                            {alert.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <span
+                            style={{
                               fontFamily:
                                 "ui-monospace, SFMono-Regular, Menlo, monospace",
+                              fontSize: "11px",
+                              color: "#94a3b8",
+                              cursor: "pointer",
+                            }}
+                            title={`Click to copy: ${alert.deliveryId}`}
+                            onClick={() => onCopyDeliveryId(alert.deliveryId)}
+                          >
+                            {alert.deliveryId.slice(0, 8)}...
+                          </span>
+                          {alert.retriedFrom && (
+                            <div
+                              style={{
+                                fontSize: "9px",
+                                color: "#64748b",
+                              }}
+                              title={`Retried from prior delivery: ${alert.retriedFrom}`}
+                            >
+                              ↳ retried from {alert.retriedFrom.slice(0, 6)}
+                            </div>
+                          )}
+                        </td>
+                        <td style={styles.td}>
+                          <span
+                            style={{
+                              fontFamily:
+                                "ui-monospace, SFMono-Regular, Menlo, monospace",
+                              fontWeight: 600,
+                              color: "#38bdf8",
                             }}
                           >
-                            ❌{" "}
-                            {alert.finalError ??
-                              "Max delivery attempts exceeded"}
+                            {alert.wagerId || "—"}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <span style={{ fontWeight: 600, color: "#f1f5f9" }}>
+                            {alert.payload.customerId}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <span
+                            style={{
+                              ...styles.wagerBadge(alert.tier, tiersConfig),
+                              display: "inline-block",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {alert.tier}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <div style={{ fontWeight: 600, color: "#f1f5f9" }}>
+                            ${alert.payload.amountUsd?.toLocaleString() ?? "—"}
                           </div>
-                        ) : isAcked ? (
-                          <div style={{ fontSize: "11px", color: "#c084fc" }}>
-                            ✓ Acked by {alert.acknowledgedBy ?? "operator"}
-                            {alert.acknowledgedNotes
-                              ? ` · "${alert.acknowledgedNotes}"`
-                              : ""}
+                          <div
+                            style={{
+                              fontSize: "10px",
+                              color:
+                                (alert.payload.clvCents ?? 0) >= 7
+                                  ? "#4ade80"
+                                  : "#94a3b8",
+                            }}
+                          >
+                            CLV: {alert.payload.clvCents ?? 0}¢
                           </div>
-                        ) : isDelivered ? (
-                          <div style={{ fontSize: "11px", color: "#4ade80" }}>
-                            📬 Delivered (Msg #{alert.messageId ?? "sent"})
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: "11px", color: "#38bdf8" }}>
-                            ⏳ {alert.payload.directive ?? "Pending sweep"}
-                          </div>
-                        )}
-                      </td>
-                      <td style={styles.td}>
-                        <div style={{ display: "flex", gap: "6px" }}>
-                          {isDead && (
-                            <>
+                        </td>
+                        <td style={styles.td}>
+                          <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                            {alert.attempts ?? 1} / 5
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          {isDead ? (
+                            <div
+                              style={{
+                                fontSize: "11px",
+                                color: "#f87171",
+                                fontFamily:
+                                  "ui-monospace, SFMono-Regular, Menlo, monospace",
+                              }}
+                            >
+                              ❌{" "}
+                              {alert.finalError ??
+                                "Max delivery attempts exceeded"}
+                            </div>
+                          ) : isAcked ? (
+                            <div style={{ fontSize: "11px", color: "#c084fc" }}>
+                              ✓ Acked by {alert.acknowledgedBy ?? "operator"}
+                              {alert.acknowledgedNotes
+                                ? ` · "${alert.acknowledgedNotes}"`
+                                : ""}
+                            </div>
+                          ) : isDelivered ? (
+                            <div style={{ fontSize: "11px", color: "#4ade80" }}>
+                              📬 Delivered (Msg #{alert.messageId ?? "sent"})
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: "11px", color: "#38bdf8" }}>
+                              ⏳ {alert.payload.directive ?? "Pending sweep"}
+                            </div>
+                          )}
+                        </td>
+                        <td style={styles.td}>
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            {isDead && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => onAckAlert(alert.deliveryId)}
+                                  style={{
+                                    padding: "3px 8px",
+                                    borderRadius: "4px",
+                                    fontSize: "11px",
+                                    fontWeight: 600,
+                                    background: "rgba(168, 85, 247, 0.2)",
+                                    border: "1px solid #a855f7",
+                                    color: "#c084fc",
+                                    cursor: "pointer",
+                                  }}
+                                  title="Clear dead status and acknowledge alert"
+                                >
+                                  Ack
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onRetryAlert(alert.deliveryId)}
+                                  style={{
+                                    padding: "3px 8px",
+                                    borderRadius: "4px",
+                                    fontSize: "11px",
+                                    fontWeight: 600,
+                                    background: "rgba(56, 189, 248, 0.2)",
+                                    border: "1px solid #38bdf8",
+                                    color: "#38bdf8",
+                                    cursor: "pointer",
+                                  }}
+                                  title="Replay from DLQ with linkage and trigger immediate send"
+                                >
+                                  Retry DLQ
+                                </button>
+                              </>
+                            )}
+                            {isQueued && (
                               <button
                                 type="button"
-                                onClick={() => onAckAlert(alert.deliveryId)}
+                                onClick={() =>
+                                  onAckAlert(
+                                    alert.deliveryId,
+                                    "Discarded from queue",
+                                  )
+                                }
                                 style={{
                                   padding: "3px 8px",
                                   borderRadius: "4px",
                                   fontSize: "11px",
                                   fontWeight: 600,
-                                  background: "rgba(168, 85, 247, 0.2)",
-                                  border: "1px solid #a855f7",
-                                  color: "#c084fc",
+                                  background: "#1e293b",
+                                  border: "1px solid #334155",
+                                  color: "#94a3b8",
                                   cursor: "pointer",
                                 }}
-                                title="Clear dead status and acknowledge alert"
                               >
-                                Ack
+                                Ack / Clear
                               </button>
+                            )}
+                            {isAcked && (
                               <button
                                 type="button"
                                 onClick={() => onRetryAlert(alert.deliveryId)}
@@ -481,71 +723,74 @@ export function AlertsTabPanel({
                                   borderRadius: "4px",
                                   fontSize: "11px",
                                   fontWeight: 600,
-                                  background: "rgba(56, 189, 248, 0.2)",
+                                  background: "rgba(56, 189, 248, 0.15)",
                                   border: "1px solid #38bdf8",
                                   color: "#38bdf8",
                                   cursor: "pointer",
                                 }}
-                                title="Replay from DLQ with linkage and trigger immediate send"
                               >
-                                Retry DLQ
+                                Re-queue
                               </button>
-                            </>
-                          )}
-                          {isQueued && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onAckAlert(
-                                  alert.deliveryId,
-                                  "Discarded from queue",
-                                )
-                              }
+                            )}
+                            {isDelivered && (
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  color: "#4ade80",
+                                }}
+                              >
+                                ✓ Sent
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr
+                          id={`alert-detail-${alert.deliveryId}`}
+                          data-alert-detail-row={alert.deliveryId}
+                        >
+                          <td
+                            colSpan={10}
+                            style={{
+                              padding: "0 12px",
+                              borderBottom: "1px solid #1e293b",
+                              backgroundColor: "rgba(2, 6, 23, 0.55)",
+                            }}
+                          >
+                            <AlertAuditDetail alert={alert} now={now} />
+                            <div
                               style={{
-                                padding: "3px 8px",
-                                borderRadius: "4px",
-                                fontSize: "11px",
-                                fontWeight: 600,
-                                background: "#1e293b",
-                                border: "1px solid #334155",
-                                color: "#94a3b8",
-                                cursor: "pointer",
+                                display: "flex",
+                                gap: "8px",
+                                paddingBottom: "12px",
                               }}
                             >
-                              Ack / Clear
-                            </button>
-                          )}
-                          {isAcked && (
-                            <button
-                              type="button"
-                              onClick={() => onRetryAlert(alert.deliveryId)}
-                              style={{
-                                padding: "3px 8px",
-                                borderRadius: "4px",
-                                fontSize: "11px",
-                                fontWeight: 600,
-                                background: "rgba(56, 189, 248, 0.15)",
-                                border: "1px solid #38bdf8",
-                                color: "#38bdf8",
-                                cursor: "pointer",
-                              }}
-                            >
-                              Re-queue
-                            </button>
-                          )}
-                          {isDelivered && (
-                            <span
-                              style={{
-                                fontSize: "11px",
-                                color: "#4ade80",
-                              }}
-                            >
-                              ✓ Sent
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                              <button
+                                type="button"
+                                data-alert-copy-json={alert.deliveryId}
+                                onClick={() => copyAlertJson(alert)}
+                                style={{
+                                  padding: "3px 8px",
+                                  borderRadius: "4px",
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  background: "rgba(34, 197, 94, 0.12)",
+                                  border: "1px solid rgba(34, 197, 94, 0.38)",
+                                  color: "#4ade80",
+                                  cursor: "pointer",
+                                }}
+                                title="Copy this delivery record as one JSON line"
+                              >
+                                {copiedJsonId === alert.deliveryId
+                                  ? "✓ JSON"
+                                  : "⧉ JSON"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
                   );
                 })
               )}

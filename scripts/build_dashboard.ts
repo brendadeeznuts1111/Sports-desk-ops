@@ -42,6 +42,9 @@ export interface DashboardBuildManifest {
   readonly minify: boolean;
   readonly elapsedMs: number;
   readonly entrypoint: string;
+  readonly bunVersion: string;
+  readonly bunRevision: string;
+  readonly builtOn: string;
   readonly artifacts: readonly DashboardArtifactSummary[];
 }
 
@@ -52,6 +55,23 @@ function isValidTarget(raw: string | undefined): raw is BuildTarget {
   return raw === "prod" || raw === "dev" || raw === "test";
 }
 
+/** Short commit for the build footer; "unknown" outside a git checkout. */
+function resolveGitCommit(): string {
+  try {
+    const result = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode === 0) {
+      const commit = result.stdout.toString().trim();
+      if (commit !== "") return commit;
+    }
+  } catch {
+    // A source archive has no .git; the build must still succeed.
+  }
+  return "unknown";
+}
+
 export async function buildEnhancedDashboard(
   options: DashboardBuildOptions = {},
 ): Promise<DashboardBuildManifest> {
@@ -59,6 +79,7 @@ export async function buildEnhancedDashboard(
   const outdir = options.outdir ?? DEFAULT_OUT_DIR;
   const minify = options.minify ?? target === "prod";
   const enabledFeatures = [...BUILD_FEATURES[target]];
+  const builtAt = new Date().toISOString();
 
   mkdirSync(outdir, { recursive: true });
 
@@ -71,6 +92,16 @@ export async function buildEnhancedDashboard(
     plugins: [slabConfigGuard],
     minify,
     sourcemap: target === "prod" ? "external" : "inline",
+    define: {
+      __DASHBOARD_BUILD_TARGET__: JSON.stringify(target),
+      __DASHBOARD_BUILD_TIME__: JSON.stringify(builtAt),
+      __DASHBOARD_BUILD_COMMIT__: JSON.stringify(resolveGitCommit()),
+      __DASHBOARD_BUILD_BUN_VERSION__: JSON.stringify(Bun.version),
+      __DASHBOARD_BUILD_BUN_REVISION__: JSON.stringify(Bun.revision),
+      __DASHBOARD_BUILD_PLATFORM__: JSON.stringify(
+        `${process.platform}/${process.arch}`,
+      ),
+    },
   });
 
   if (!result.success) {
@@ -119,12 +150,15 @@ export async function buildEnhancedDashboard(
   const elapsedMs = Number((performance.now() - start).toFixed(2));
   const manifest: DashboardBuildManifest = {
     schemaVersion: 1,
-    builtAt: new Date().toISOString(),
+    builtAt,
     target,
     enabledFeatures,
     minify,
     elapsedMs,
     entrypoint: "src/dashboard/index.html",
+    bunVersion: Bun.version,
+    bunRevision: Bun.revision,
+    builtOn: `${process.platform}/${process.arch}`,
     artifacts,
   };
 
@@ -145,9 +179,14 @@ export async function computeDashboardDceMatrix(): Promise<
     readonly features: readonly Feature[];
     readonly totalJsBytes: number;
     readonly totalCssBytes: number;
+    readonly gzipJsBytes: number;
+    readonly inputFileCount: number | null;
+    readonly bundleHash8: string;
     readonly hasDebugSentinel: boolean;
     readonly hasExperimentalSentinel: boolean;
     readonly hasProdSentinel: boolean;
+    readonly hasTestSentinel: boolean;
+    readonly hasAnalyticsSentinel: boolean;
   }[]
 > {
   const targets: readonly BuildTarget[] = ["prod", "dev", "test"];
@@ -159,6 +198,7 @@ export async function computeDashboardDceMatrix(): Promise<
         target: "browser",
         features: feats,
         minify: t === "prod",
+        metafile: true,
       });
       if (!build.success) {
         throw new Error(
@@ -181,17 +221,33 @@ export async function computeDashboardDceMatrix(): Promise<
         }),
       );
       const jsCombined = jsChunks.join("");
+      const gzipJsBytes = Bun.gzipSync(jsCombined).byteLength;
+      const inputFileCount =
+        build.metafile !== undefined
+          ? Object.keys(build.metafile.inputs).length
+          : null;
+      const bundleHash8 = new Bun.CryptoHasher("sha256")
+        .update(jsCombined)
+        .digest("hex")
+        .slice(0, 8);
 
       return {
         target: t,
         features: feats,
         totalJsBytes,
         totalCssBytes,
+        gzipJsBytes,
+        inputFileCount,
+        bundleHash8,
         hasDebugSentinel: jsCombined.includes("[DCE_DEBUG_TRACE_ACTIVE]"),
         hasExperimentalSentinel: jsCombined.includes(
           "[DCE_EXPERIMENTAL_MATRIX_ACTIVE]",
         ),
         hasProdSentinel: jsCombined.includes("[DCE_PROD_TARGET_ACTIVE]"),
+        hasTestSentinel: jsCombined.includes("[DCE_TEST_HARNESS_ACTIVE]"),
+        hasAnalyticsSentinel: jsCombined.includes(
+          "[DCE_ANALYTICS_TELEMETRY_ACTIVE]",
+        ),
       };
     }),
   );

@@ -249,6 +249,130 @@ describe("Bet-Ticker, R2 Pipeline & Agent Detail backend services", () => {
     expect(bridge3a.byChannel.ALERT?.volumeCents).toBe(0);
   });
 
+  test("createR2PipelineService correlates failing bridgeJobs into structured sink diagnostics and cached-republish ADR #78 alerts", async () => {
+    const fixedNow = new Date("2026-11-16T03:30:04.000Z");
+    const freshModified = new Date(fixedNow.getTime() - 3_000).toUTCString();
+    const staleModified = new Date(
+      fixedNow.getTime() - 2 * 3600 * 1000,
+    ).toUTCString();
+    const oldObsEnd = new Date(
+      fixedNow.getTime() - 6 * 86_400_000,
+    ).toISOString();
+
+    const mockFetch = async (url: string): Promise<Response> => {
+      if (url.startsWith("http://127.0.0.1:4020/")) {
+        throw new Error("ECONNREFUSED");
+      }
+      if (url.endsWith("/wagers-by-state/latest.json")) {
+        return new Response(
+          JSON.stringify({
+            window: { observedEnd: oldObsEnd, spanHours: 88.1 },
+            totals: { wagers: 100, legs: 120 },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "Last-Modified": freshModified,
+            },
+          },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          generatedAt: new Date(
+            fixedNow.getTime() - 2 * 3600 * 1000,
+          ).toISOString(),
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Last-Modified": staleModified,
+          },
+        },
+      );
+    };
+
+    const r2 = createR2PipelineService({
+      fetchImpl: mockFetch,
+      now: () => fixedNow,
+      getAutomationsSnapshot: () => ({
+        observedAt: fixedNow.toISOString(),
+        bridgeRollupUpdatedAt: fixedNow.toISOString(),
+        bridgeJobs: [
+          {
+            id: "bridge3a",
+            label: "Bet ticker poll (3a)",
+            ok: false,
+            durationMs: 317,
+            error: "exit 1: [bridge3a] fatal: F402 live login disabled",
+          },
+          {
+            id: "bridge3c",
+            label: "GSLive tally rollup (3c)",
+            ok: false,
+            durationMs: 0,
+            error: "GSLive expired. Manual dual-auth required.",
+          },
+          {
+            id: "weblog",
+            label: "WebLog overlap bridge",
+            ok: false,
+            durationMs: 5400,
+            error:
+              'F402 weblog pre-publish sanitization failed: forbidden key "LOGIN"',
+          },
+          {
+            id: "wagers-by-state",
+            label: "Wagers by State Publish",
+            ok: false,
+            durationMs: 0,
+            error: "GSLive expired. Manual dual-auth required.",
+          },
+          {
+            id: "wagers-publish",
+            label: "Wagers R2 Snapshot Publish",
+            ok: true,
+            durationMs: 850,
+          },
+        ],
+        schedules: [],
+        ticketVerification: null,
+      }),
+    });
+
+    const report = await r2.probeAll({ refresh: true });
+    expect(report.freshCount).toBe(1);
+    expect(report.dataStaleKeys).toContain("wagers-by-state/latest.json");
+
+    expect(
+      report.sinks.find((s) => s.id === "f402-bet-ticker")?.diagnostic,
+    ).toMatchObject({
+      blockerClass: "f402_auth_expired",
+      failedJobIds: ["bridge3a"],
+      suggestedCommand: "bun run session:login --from-keychain",
+    });
+    expect(
+      report.sinks.find((s) => s.id === "gslive-tally")?.diagnostic,
+    ).toMatchObject({
+      blockerClass: "gslive_auth_expired",
+      failedJobIds: ["bridge3c"],
+    });
+    expect(
+      report.sinks.find((s) => s.id === "f402-weblog")?.diagnostic,
+    ).toMatchObject({
+      blockerClass: "sanitization_guard",
+      failedJobIds: ["weblog"],
+    });
+    expect(
+      report.sinks.find((s) => s.id === "wagers-by-state")?.diagnostic,
+    ).toMatchObject({
+      blockerClass: "upstream_capture_stale",
+      failedJobIds: ["wagers-by-state"],
+    });
+  });
+
   test("createBetTickerService demuxes channels & wager types, excludes sentinel volume, and filters queries", async () => {
     const dir = makeTempDir("sd-ticker-");
     const wagersPath = join(dir, "live-wagers.json");

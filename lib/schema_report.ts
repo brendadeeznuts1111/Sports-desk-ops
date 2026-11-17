@@ -2,7 +2,6 @@
  * Bun.inspect.table schema report — summary / columns / keys rows.
  */
 
-import { pathToFileURL } from "node:url";
 import { isoTime, type IsoTime } from "./brand.ts";
 import {
   asDatabaseURL,
@@ -56,7 +55,7 @@ export function schemaReportUrl(value: URL | string): URL {
   try {
     return new URL(value);
   } catch {
-    return pathToFileURL(value);
+    return Bun.pathToFileURL(value);
   }
 }
 
@@ -95,7 +94,7 @@ export function defaultSchemaReportProvenance(overrides?: {
 
 /** file:// URL for a local SQLite path (pathname / searchParams without re-parsing). */
 export function sqliteDatabaseFileUrl(dbPath: string): FileURL {
-  return asFileURL(pathToFileURL(dbPath) as URL & { protocol: "file:" });
+  return asFileURL(Bun.pathToFileURL(dbPath) as URL & { protocol: "file:" });
 }
 
 export class SqliteSchemaReport {

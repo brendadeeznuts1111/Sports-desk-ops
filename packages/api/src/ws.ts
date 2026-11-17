@@ -15,6 +15,8 @@ export interface WsLike {
   subscribe(topic: string): void;
   unsubscribe(topic: string): void;
   send(data: string): unknown;
+  /** Present on a real `ServerWebSocket`; used to evict a socket that dropped a frame. */
+  close?(code?: number, reason?: string): unknown;
 }
 
 export interface DashboardWsStatusPayload {
@@ -32,6 +34,13 @@ export function createDashboardWebSocketHandler<TWs extends WsLike>(
   clients: Set<TWs>,
 ) {
   const websocket = {
+    // Dashboard control messages are tiny; the uWS defaults (16 MB) would let a stuck
+    // or hostile client buffer megabytes and mask a dead consumer on this socket.
+    maxPayloadLength: 16 * 1024,
+    backpressureLimit: 256 * 1024,
+    closeOnBackpressureLimit: true,
+    idleTimeout: 120,
+    sendPings: true,
     open(ws: TWs) {
       ws.subscribe("dashboard");
       ws.subscribe("live-bets");
@@ -138,7 +147,14 @@ export function createDashboardWebSocketHandler<TWs extends WsLike>(
   };
 }
 
-/** Broadcast a topic message once to every connected client subscribed to `topic` (or all if un-scoped). */
+/**
+ * Broadcast a topic message once to every connected client subscribed to `topic` (or all if un-scoped).
+ *
+ * `Bun.serve` drops frames instead of closing once a socket's send buffer is over
+ * `backpressureLimit`; measured on 1.4.4, frames vanish before the server eventually evicts the
+ * socket. A closed socket is recoverable (the dashboard reconnects and re-subscribes); a silent
+ * gap is not, so the first non-delivery closes with 1011 "backpressure".
+ */
 export function publishDashboardTopicEvent<TWs extends WsLike>(
   clients: Iterable<TWs>,
   topic: DashboardWsTopic,
@@ -148,7 +164,11 @@ export function publishDashboardTopicEvent<TWs extends WsLike>(
   for (const ws of clients) {
     const subs = ws.subscriptions;
     if (!subs || subs.length === 0 || subs.includes(topic)) {
-      ws.send(message);
+      const status = ws.send(message);
+      if (typeof status === "number" && status <= 0 && message !== "") {
+        ws.close?.(1011, "backpressure");
+        continue;
+      }
       delivered++;
     }
   }

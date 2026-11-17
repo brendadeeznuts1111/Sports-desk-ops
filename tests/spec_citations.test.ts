@@ -345,4 +345,24 @@ describe("--sync-anchors", () => {
       "see `handler.ts:3-5` for details\n",
     );
   });
+
+  test("CLI --json emits machine-readable citations and anchors", () => {
+    const proc = Bun.spawnSync({
+      cmd: [process.execPath, "scripts/run_check_spec_citations.ts", "--json"],
+      cwd: ROOT,
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    expect(proc.exitCode).toBe(0);
+    const payload = JSON.parse(new TextDecoder().decode(proc.stdout)) as {
+      ok: boolean;
+      citations: unknown[];
+      anchors: Record<string, string>;
+      gate: { gate: string };
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.gate.gate).toBe("GATE-BUN-DOC-BLOB-SHA-01");
+    expect(payload.citations.length).toBeGreaterThan(0);
+    expect(Object.keys(payload.anchors).length).toBeGreaterThan(0);
+  });
 });

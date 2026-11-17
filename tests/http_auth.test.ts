@@ -132,6 +132,34 @@ describe("HTTP Auth Layer (lib/http_auth.ts)", () => {
       expect(setCookie).toContain("Max-Age=0");
     });
 
+    it("reads the session from BunRequest.cookies without a Cookie header", async () => {
+      const mockVerified = {
+        operator: {
+          id: 7,
+          username: "cookie_path",
+          role: "operator" as const,
+          disabled: false,
+          created_at: new Date().toISOString(),
+        },
+        session: {
+          expiresAt: new Date(Date.now() + 100_000).toISOString(),
+          lastSeenAt: new Date().toISOString(),
+        },
+      };
+
+      const req = new Request("http://localhost:4022/api/dashboard");
+      Object.defineProperty(req, "cookies", {
+        value: new Bun.CookieMap(`${SESSION_COOKIE_NAME}=valid_active_token`),
+      });
+
+      const res = await requireSession(
+        req,
+        async () => new Response("OK"),
+        async () => mockVerified,
+      );
+      expect(res.status).toBe(200);
+    });
+
     it("forwards authed context to next handler when session is valid", async () => {
       const mockVerified = {
         operator: {
@@ -222,6 +250,20 @@ describe("HTTP Auth Layer (lib/http_auth.ts)", () => {
         async () => new Response("OK"),
       );
       expect(resHead.status).toBe(200);
+    });
+
+    it("reads the CSRF cookie from BunRequest.cookies", async () => {
+      const validToken = issueCsrf();
+      const req = new Request("http://localhost:4022/api/terminal/exec", {
+        method: "POST",
+        headers: { [CSRF_HEADER_NAME]: validToken },
+      });
+      Object.defineProperty(req, "cookies", {
+        value: new Bun.CookieMap(`${CSRF_COOKIE_NAME}=${validToken}`),
+      });
+
+      const res = await requireCsrf(req, async () => new Response("OK"));
+      expect(res.status).toBe(200);
     });
 
     it("returns 403 csrf_failed when mutating request lacks x-csrf-token header", async () => {

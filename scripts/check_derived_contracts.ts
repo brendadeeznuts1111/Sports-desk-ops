@@ -8,7 +8,6 @@
 
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   RUNTIME_PIN_DOCS,
   assertWorkspaceBunPins,
@@ -23,7 +22,7 @@ import {
 const MODULE_DIR =
   typeof import.meta.dir === "string"
     ? import.meta.dir
-    : dirname(fileURLToPath(import.meta.url));
+    : dirname(Bun.fileURLToPath(import.meta.url));
 const ROOT = join(MODULE_DIR, "..");
 
 function main(): void {

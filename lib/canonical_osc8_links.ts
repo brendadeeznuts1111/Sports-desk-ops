@@ -203,14 +203,27 @@ export const ANSI_THEME_PRESETS: Readonly<
   accessible: ACCESSIBLE_OSC8_THEME,
 } as const;
 
+export interface ParsedAnsiMarkdownCli {
+  readonly themeOptions: AnsiMarkdownOptions;
+  readonly positionalArgs: readonly string[];
+  readonly positionalIndices: readonly number[];
+  readonly hasNativeThemeFlag: boolean;
+  readonly hasColorFlag: boolean;
+  readonly wagerMode: boolean;
+  readonly helpRequested: boolean;
+  readonly invalidOptionError?: string;
+}
+
+const VALID_THEME_PRESET_NAMES = Object.keys(ANSI_THEME_PRESETS).join(", ");
+
 /**
  * Parse CLI arguments (`--theme`, `--colors` / `--no-color`, `--hyperlinks` / `--no-hyperlinks`,
- * `--light` / `--dark`, `--columns`, `--kitty-graphics`, `--linkify-symbols`) into an `AnsiMarkdownOptions`
- * object compatible with `Bun.markdown.AnsiTheme`.
+ * `--light` / `--dark`, `--columns`, `--kitty-graphics`, `--linkify-symbols`, `--ansi`, `--wager`, `--help`)
+ * into resolved `AnsiMarkdownOptions`, positional tokens, and validation metadata.
  */
-export function parseAnsiMarkdownCliOptions(
+export function parseAnsiMarkdownCliArgs(
   args: readonly string[] = [],
-): AnsiMarkdownOptions {
+): ParsedAnsiMarkdownCli {
   let preset: AnsiTheme | undefined;
   let colors: boolean | undefined;
   let hyperlinks: boolean | undefined;
@@ -218,79 +231,125 @@ export function parseAnsiMarkdownCliOptions(
   let columns: number | undefined;
   let kittyGraphics: boolean | undefined;
   let linkifySymbols: boolean | undefined;
+  let hasNativeThemeFlag = false;
+  let hasColorFlag = false;
+  let wagerMode = false;
+  let helpRequested = false;
+  let invalidOptionError: string | undefined;
+  const positionalArgs: string[] = [];
+  const positionalIndices: number[] = [];
+
+  const applyPresetName = (rawName: string): void => {
+    const normalized = rawName.trim().toLowerCase();
+    if (normalized in ANSI_THEME_PRESETS) {
+      preset = ANSI_THEME_PRESETS[normalized as AnsiThemePresetName];
+      hasNativeThemeFlag = true;
+      return;
+    }
+    invalidOptionError ??= `Unknown theme preset '${rawName}'. Expected one of: ${VALID_THEME_PRESET_NAMES}.`;
+  };
+
+  const applyColumnsValue = (rawVal: string): void => {
+    const parsed = Number(rawVal);
+    if (rawVal.trim().length > 0 && Number.isInteger(parsed) && parsed >= 0) {
+      columns = parsed;
+      hasNativeThemeFlag = true;
+      return;
+    }
+    invalidOptionError ??= `Invalid --columns value '${rawVal}'. Expected a non-negative integer.`;
+  };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
-    if (arg === "--theme" && i + 1 < args.length) {
-      const name = args[++i]!.toLowerCase() as AnsiThemePresetName;
-      if (name in ANSI_THEME_PRESETS) {
-        preset = ANSI_THEME_PRESETS[name];
+    if (arg === "--help" || arg === "-h") {
+      helpRequested = true;
+      continue;
+    }
+    if (arg === "--ansi") {
+      hasNativeThemeFlag = true;
+      continue;
+    }
+    if (arg === "--wager") {
+      wagerMode = true;
+      continue;
+    }
+    if (arg === "--theme") {
+      if (i + 1 >= args.length) {
+        invalidOptionError ??= `Missing value for --theme. Expected one of: ${VALID_THEME_PRESET_NAMES}.`;
+      } else {
+        applyPresetName(args[++i]!);
       }
       continue;
     }
     if (arg.startsWith("--theme=")) {
-      const name = arg
-        .slice("--theme=".length)
-        .toLowerCase() as AnsiThemePresetName;
-      if (name in ANSI_THEME_PRESETS) {
-        preset = ANSI_THEME_PRESETS[name];
-      }
+      applyPresetName(arg.slice("--theme=".length));
       continue;
     }
     if (arg === "--colors" || arg === "--color") {
       colors = true;
+      hasColorFlag = true;
       continue;
     }
     if (arg === "--no-colors" || arg === "--no-color") {
       colors = false;
+      hasColorFlag = true;
       continue;
     }
     if (arg === "--hyperlinks") {
       hyperlinks = true;
+      hasNativeThemeFlag = true;
       continue;
     }
     if (arg === "--no-hyperlinks") {
       hyperlinks = false;
+      hasNativeThemeFlag = true;
       continue;
     }
     if (arg === "--light") {
       light = true;
+      hasNativeThemeFlag = true;
       continue;
     }
     if (arg === "--dark" || arg === "--no-light") {
       light = false;
+      hasNativeThemeFlag = true;
       continue;
     }
-    if (arg === "--columns" && i + 1 < args.length) {
-      const parsed = Number(args[++i]);
-      if (Number.isInteger(parsed) && parsed >= 0) {
-        columns = parsed;
+    if (arg === "--columns") {
+      if (i + 1 >= args.length) {
+        invalidOptionError ??=
+          "Missing value for --columns. Expected a non-negative integer.";
+      } else {
+        applyColumnsValue(args[++i]!);
       }
       continue;
     }
     if (arg.startsWith("--columns=")) {
-      const parsed = Number(arg.slice("--columns=".length));
-      if (Number.isInteger(parsed) && parsed >= 0) {
-        columns = parsed;
-      }
+      applyColumnsValue(arg.slice("--columns=".length));
       continue;
     }
     if (arg === "--kitty-graphics" || arg === "--kitty") {
       kittyGraphics = true;
+      hasNativeThemeFlag = true;
       continue;
     }
     if (arg === "--no-kitty-graphics" || arg === "--no-kitty") {
       kittyGraphics = false;
+      hasNativeThemeFlag = true;
       continue;
     }
     if (arg === "--linkify-symbols") {
       linkifySymbols = true;
+      hasNativeThemeFlag = true;
       continue;
     }
     if (arg === "--no-linkify-symbols") {
       linkifySymbols = false;
+      hasNativeThemeFlag = true;
       continue;
     }
+    positionalArgs.push(arg);
+    positionalIndices.push(i);
   }
 
   const resolvedColors =
@@ -301,13 +360,33 @@ export function parseAnsiMarkdownCliOptions(
   const resolvedKitty = kittyGraphics ?? preset?.kittyGraphics;
 
   return {
-    colors: resolvedColors,
-    hyperlinks: resolvedHyperlinks,
-    ...(resolvedLight !== undefined ? { light: resolvedLight } : {}),
-    ...(resolvedColumns !== undefined ? { columns: resolvedColumns } : {}),
-    ...(resolvedKitty !== undefined ? { kittyGraphics: resolvedKitty } : {}),
-    ...(linkifySymbols !== undefined ? { linkifySymbols } : {}),
+    themeOptions: {
+      colors: resolvedColors,
+      hyperlinks: resolvedHyperlinks,
+      ...(resolvedLight !== undefined ? { light: resolvedLight } : {}),
+      ...(resolvedColumns !== undefined ? { columns: resolvedColumns } : {}),
+      ...(resolvedKitty !== undefined ? { kittyGraphics: resolvedKitty } : {}),
+      ...(linkifySymbols !== undefined ? { linkifySymbols } : {}),
+    },
+    positionalArgs,
+    positionalIndices,
+    hasNativeThemeFlag,
+    hasColorFlag,
+    wagerMode,
+    helpRequested,
+    ...(invalidOptionError ? { invalidOptionError } : {}),
   };
+}
+
+/**
+ * Parse CLI arguments (`--theme`, `--colors` / `--no-color`, `--hyperlinks` / `--no-hyperlinks`,
+ * `--light` / `--dark`, `--columns`, `--kitty-graphics`, `--linkify-symbols`) into an `AnsiMarkdownOptions`
+ * object compatible with `Bun.markdown.AnsiTheme`.
+ */
+export function parseAnsiMarkdownCliOptions(
+  args: readonly string[] = [],
+): AnsiMarkdownOptions {
+  return parseAnsiMarkdownCliArgs(args).themeOptions;
 }
 
 /**

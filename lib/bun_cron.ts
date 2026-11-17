@@ -27,7 +27,6 @@
  * @see docs/runbooks/os_bun_cron_integration_guide.md
  */
 
-import { fileURLToPath } from "node:url";
 import { bunUrl, textFragment } from "./bun_urls.ts";
 
 /** Verbatim v1.4 blog line; {@link BUN_CRON_V14_BLOG_LOCAL_TZ_URL} links to it. */
@@ -48,7 +47,7 @@ export function isBunOsCronInvocation(
 
 /** Absolute script path for `await Bun.cron(path, schedule, title)` (launchd/crontab). */
 export function osCronWorkerPath(importMetaUrl: string): string {
-  return fileURLToPath(importMetaUrl);
+  return Bun.fileURLToPath(importMetaUrl);
 }
 
 export type InProcessCronJob = {

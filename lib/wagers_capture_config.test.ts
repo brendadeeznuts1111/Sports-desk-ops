@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import {
   alertThresholdsFromConfig,
@@ -198,7 +197,7 @@ describe("TOML capture config", () => {
 });
 
 describe("CLI precedence: flag > TOML > built-in", () => {
-  const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+  const repoRoot = Bun.fileURLToPath(new URL("..", import.meta.url));
   const script = join(repoRoot, "scripts", "wagers_by_state_capture.ts");
 
   function dryRun(

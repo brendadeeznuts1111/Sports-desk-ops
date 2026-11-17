@@ -11,6 +11,11 @@ import {
   type GradedWagerRawRow,
   type PowerStatus,
 } from "./f402_ccc88412_decision_instrument.ts";
+import {
+  restrictGradedRowsToSummaryBook,
+  summarizePopulationRestriction,
+} from "./f402_population.ts";
+import type { PopulationRestrictionSummary } from "./f402_population.ts";
 import type { ReportPlayerAnalysisRowRaw } from "./f402_report_player_analysis.ts";
 
 export type BotFlagStatusCategory =
@@ -193,6 +198,8 @@ export interface AllCustomerDecisionRankingSystem {
   ccc88412BenchmarkRow: CustomerRankingRow | null;
   allCustomerRows: CustomerRankingRow[];
   conservationOracles: AllCustomerRankingConservationProof;
+  /** Population boundary applied to the graded corpus (#234). */
+  populationRestriction: PopulationRestrictionSummary;
   deterministicDigestSha256: string;
 }
 
@@ -253,6 +260,15 @@ export function computePlainUncalibratedLimitScore(
 export function buildAllCustomerDecisionRankingSystem(
   input: BuildAllCustomerDecisionRankingInput,
 ): AllCustomerDecisionRankingSystem {
+  // Population boundary (#234): this artifact describes the summary book only, so graded rows
+  // from outside that downline leave the analysis before any per-customer or per-skin metric is
+  // accumulated — the same restriction the CCC88412 instrument applies, for one population.
+  const population = restrictGradedRowsToSummaryBook(
+    input.gradedWagerRows,
+    input.allSummaryRows,
+  );
+  const gradedWagerRows = population.rows;
+
   // 1. Compute book-wide priors and skin-level hold
   let totalBetsN = 0;
   let totalBeatPoints = 0;
@@ -290,7 +306,7 @@ export function buildAllCustomerDecisionRankingSystem(
   >();
   const gradedByCustomerId = new Map<string, GradedWagerRawRow[]>();
 
-  for (const g of input.gradedWagerRows) {
+  for (const g of gradedWagerRows) {
     const cid = String(g.CustomerID ?? "").trim();
     if (!cid) continue;
     const list = gradedByCustomerId.get(cid);
@@ -1042,6 +1058,7 @@ export function buildAllCustomerDecisionRankingSystem(
       "POST_HOC_PREREGISTERED_RETROSPECTIVE_RANKING" as const,
     frozenTimestampIso: "2026-11-14T00:00:00.000Z",
     inputProvenance: input.inputProvenance ?? [],
+    populationRestriction: summarizePopulationRestriction(population),
     bookPriors: {
       totalCustomersN: scoredRows.length,
       poweredCustomersN,

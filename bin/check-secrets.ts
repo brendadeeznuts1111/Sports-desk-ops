@@ -13,7 +13,6 @@
  */
 
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   looksBinary,
   scanText,
@@ -22,7 +21,7 @@ import {
 
 // `URL.pathname` percent-encodes the checkout path (`my%20repo`), so it is not a filesystem path:
 // on a checkout with a space this scanner would find no files and pass. `fileURLToPath` decodes it.
-const ROOT = fileURLToPath(new URL("..", import.meta.url));
+const ROOT = Bun.fileURLToPath(new URL("..", import.meta.url));
 
 /** Paths whose contents are vendored, generated, or deliberately scratch. */
 const SKIP = [

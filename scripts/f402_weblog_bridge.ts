@@ -101,9 +101,14 @@ function assertCleanWeblogValue(
   for (const [key, entry] of Object.entries(value)) {
     const childPath = `${path}.${key}`;
     const lower = key.toLowerCase();
+    const allowActionLoginCount =
+      lower === "login" &&
+      path === "$.operations.actions" &&
+      typeof entry === "number";
     if (
-      FORBIDDEN_WEBLOG_KEYS.has(lower) ||
-      (lower === "logins" && typeof entry !== "number")
+      !allowActionLoginCount &&
+      (FORBIDDEN_WEBLOG_KEYS.has(lower) ||
+        (lower === "logins" && typeof entry !== "number"))
     ) {
       throw new Error(
         `F402 weblog pre-publish sanitization failed: forbidden key "${key}" at ${childPath}`,

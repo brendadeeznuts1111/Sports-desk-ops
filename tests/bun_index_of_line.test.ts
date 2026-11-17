@@ -37,6 +37,14 @@ describe("Bun.indexOfLine", () => {
     expect(Bun.indexOfLine(buf, buf.length + 10)).toBe(-1);
   });
 
+  test("rejects a string instead of returning -1", () => {
+    // Next-release contract: this used to return -1 for any non-buffer first
+    // argument. A TypeError makes the misuse visible at the call site.
+    expect(() => Bun.indexOfLine("a\nb" as unknown as Uint8Array)).toThrow(
+      TypeError,
+    );
+  });
+
   test("accepts a raw ArrayBuffer as well as a view", () => {
     const bytes = new TextEncoder().encode("x\ny");
     expect(Bun.indexOfLine(bytes)).toBe(1);

@@ -96,6 +96,31 @@
 
 ### Profiled Customer Cohorts & Corpora
 
+**Two layers (do not conflate counts):**
+
+1. **Live strip** — `GET /api/customers` → `computeCustomersCohortPayload` (`packages/backend/src/customers.ts`). The Customers tab **Corpora & Surveillance Cohorts** header hydrates six KPI cards via `deriveCustomerCohortKpiCards` (`packages/ui/src/hydration.ts`). Counts are computed at request time; `pending` / `unavailable` never masquerade as zero.
+2. **Reference registry** — long-horizon corpus sizes and desk evidence below. Refresh with measured artifacts (`bun run audit:customer-book`, `./bin/dx bridge coverage`, `bun run customers:profiles`), not hand edits.
+
+#### Live KPI strip (`http://127.0.0.1:4022/?tab=customers` · matrix overlay `?matrix=1&tab=customers`)
+
+| KPI card (UI)         | `CustomersCohortsSummary` field | Tier filter (chip) | Aggregation rule                                                          |
+| :-------------------- | :------------------------------ | :----------------- | :------------------------------------------------------------------------ |
+| 4-Wk Backtest Cohort  | `backtestCount`                 | —                  | Rows in backtest leaderboard ingest                                       |
+| Key Number Sharps     | `keyNumberSharpsCount`          | `ELITE`            | `KEY_NUMBER_BUYER_PROFILES` IDs ∪ leaderboard/fixtures                    |
+| Hook Syndicates       | `hookSyndicateCount`            | `SYNDICATE`        | `HALF_POINT_HOOK_SYNDICATE_PROFILES` IDs ∪ leaderboard/fixtures           |
+| CI Synthetic Fixtures | `fixtureCount`                  | —                  | Synthetic fixture corpus rows                                             |
+| Enriched Book Spec    | `fullBookSpecCount`             | —                  | Local `enriched_customers_full.json` when present, else fixture row count |
+| Unique Surveillance   | `uniqueSurveillanceCount`       | `ALL` (default)    | Deduped uppercase customer IDs across all sources above                   |
+
+Provenance badge: `capture` (live enriched book), `fixture` (backtest/fixture only), or `unavailable` — surfaced next to the cohort title with `sourcePath` when known. Matrix mode merges cohort rankings, 30d batch tiers, and live-open wagers (`mergeMatrixProfileOverlay` in `packages/ui/src/App.tsx`).
+
+```sh
+# Live cohort JSON (same contract as the dashboard strip)
+curl -sS http://127.0.0.1:4022/api/customers | jq '{cohorts, provenance}'
+```
+
+#### Reference registry (measured snapshots — not the live KPI denominators)
+
 | Cohort / Registry                     |   Count    | Description & Evidence Source                                                                                       |
 | :------------------------------------ | :--------: | :------------------------------------------------------------------------------------------------------------------ |
 | **DOD6 v5.4 Binary Columnar Spine**   | **14,534** | 88-section SoA binary spine (`data/sportsdesk_unified_baseline_v54.dodbin`, 84.1 MB, 64-bit base-40 + radix lookup) |
@@ -118,12 +143,27 @@
 - **Timing Fingerprints**: Classification into Early Originators (>24h), Steam Chasers, Closing Line Snipers (<15m), and Halftime Specialists.
 - **Operator Desk Directives**: Automated stake limit caps ($250 - $25,000), in-play delays (3s), line shading (10-20¢), and shadow copy multipliers.
 
+### 🧪 Bun 1.4.4 test harness — runtime beats stale `@types/bun`
+
+Pinned binary: `Bun 1.4.4` (`38afee6c84…`). When TypeScript and `bun test` disagree, trust the runner and `./bin/dx bun --types`:
+
+| Surface                                 | Declarations said                    | Runtime / tests use                                                     |
+| :-------------------------------------- | :----------------------------------- | :---------------------------------------------------------------------- |
+| `expect(…).toHaveBeenCalledOnce()`      | Missing from early bun-types typings | **Available** in `bun:test` — matcher works at runtime; do not polyfill |
+| `Bun.hash(input)`                       | `number \| bigint`                   | Always **`bigint`** (use `expectTypeOf` / bigint compares)              |
+| `Bun.mmap(path)`                        | `string \| Buffer \| URL` accepted   | **`string` path only** — `Buffer` / `URL` throw                         |
+| `Bun.MD5` / `Bun.SHA256` / hash classes | No `byteLength` on instances         | Instances expose **`byteLength`** after update/digest                   |
+| `subprocess.resourceUsage().cpuTime`    | `number`                             | **`bigint`** microsecond fields                                         |
+| `FileSystemRouter.origin`               | `string`                             | **`string \| null`** when unresolved                                    |
+
+Contract probes: `bun test tests/bun_capabilities.test.ts`, `bun x bun-surface --filter which --json`, `bun run check:spec-citations` (pinned `packages/bun-types/*` blob URLs).
+
 ---
 
 ## ⚙️ Automated Shell Directives
 
 > Executed by `./bin/dx dashboard --exec` (`handleDashboardCli` in `cli/sportsdesk_cli.ts`).
-> `Bun.markdown.ansi` [`AnsiTheme`](https://bun.com/reference/bun/markdown/AnsiTheme) flags: `--theme dark|light|mono|accessible`, `--columns <n>` (`0` disables wrapping), `--light` / `--dark`, `--colors` / `--no-color`, `--hyperlinks` / `--no-hyperlinks`, `--kitty-graphics`, `--linkify-symbols`.
+> `Bun.markdown.ansi` `AnsiTheme` flags: `--theme dark|light|mono|accessible`, `--columns <n>` (`0` disables wrapping), `--light` / `--dark`, `--colors` / `--no-color`, `--hyperlinks` / `--no-hyperlinks`, `--kitty-graphics`, `--linkify-symbols`.
 > Customer CLI helpers: `bun run customers index|list|find|search`, `bun run customers:profiles`, `bun run audit:customer-book`, `bun run normalize:customer-book`, `./bin/dx bridge coverage|value|match`.
 
 ```sh

@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { gzipSync } from "node:zlib";
 import {
   computeWagerSoAMetrics,
   deserializeWagerSoABinary,
@@ -22,7 +21,7 @@ describe("processBridge3cStream", () => {
       JSON.stringify({ spread: -70, total: 515, odds: 105 }),
     ].join("\n");
 
-    const compressed = gzipSync(Buffer.from(lines, "utf-8"));
+    const compressed = Bun.gzipSync(Buffer.from(lines, "utf-8"));
     const response = new Response(compressed);
 
     const result = await processBridge3cStream(response);
