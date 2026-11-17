@@ -46,6 +46,8 @@ export class PpmFeedError extends Error {
 
 const GZIP_MAGIC_0 = 0x1f;
 const GZIP_MAGIC_1 = 0x8b;
+/** Frames are complete gzip payloads; a cached strict decoder rejects bad UTF-8 instead of U+FFFD. */
+const PPM_UTF8 = new TextDecoder("utf-8", { fatal: true });
 
 /** Decodes one binary attachment from the feed. */
 export function decodePpmFrame(bytes: Uint8Array<ArrayBuffer>): PpmFrame {
@@ -60,11 +62,17 @@ export function decodePpmFrame(bytes: Uint8Array<ArrayBuffer>): PpmFrame {
         .join(" ")})`,
     );
   }
-  let text: string;
+  let decompressed: ReturnType<typeof Bun.gunzipSync>;
   try {
-    text = new TextDecoder().decode(Bun.gunzipSync(bytes));
+    decompressed = Bun.gunzipSync(bytes);
   } catch (error) {
     throw new PpmFeedError(`gunzip failed: ${(error as Error).message}`);
+  }
+  let text: string;
+  try {
+    text = PPM_UTF8.decode(decompressed);
+  } catch (error) {
+    throw new PpmFeedError(`frame is not UTF-8: ${(error as Error).message}`);
   }
   let parsed: unknown;
   try {
