@@ -111,3 +111,6 @@ pages.env
 
 # Local real projection of the operator book (never commit: customer data).
 data/profile-snapshot.real.json
+
+# local Bun cache packs (bun pm cache pack)
+.ci/
