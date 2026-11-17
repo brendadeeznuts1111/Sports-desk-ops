@@ -484,6 +484,16 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(matches("!(g)/a.ts", "x/a.ts")).toBe(true);
     expect(matches("!(g)/a.ts", "g/a.ts")).toBe(false);
 
+    // v1.4.3 → v1.4.4 migration: bracket-class the paren to retain the old literal match.
+    expect(matches("*[(]1).txt", "copy(1).txt")).toBe(true);
+    expect(matches("*[(]1).txt", "1.txt")).toBe(false);
+    expect(matches("*\\{1..3\\}.txt", "x{1..3}.txt")).toBe(true);
+
+    // Patterns changed; paths are still literal, so ordinary globs match these names.
+    expect(matches("**/*.ts", "src/copy(1).ts")).toBe(true);
+    expect(matches("**/*.ts", "src/{1..3}.ts")).toBe(true);
+    expect(matches("**/*.ts", "src/!(g).ts")).toBe(true);
+
     // A leading `!` negates the whole pattern: it matches what the inner pattern does not.
     // Both inputs must be tested, or a `.ts`-vs-`.ts` pair looks like "matches nothing".
     expect(matches("!*.ts", "a.ts")).toBe(false);
