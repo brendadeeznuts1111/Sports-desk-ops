@@ -7,11 +7,41 @@
  *     and TLS guards, and reuses `sql` (`Bun.sql`) when TLS policy matches or constructs an explicit
  *     `new SQL(url, { tls, idleTimeout, max })` pool.
  *  2. `env.PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE`: constructs `new SQL(...)`.
+ *
+ * Connect timeout precedence: `?connect_timeout=` in `DATABASE_URL`, then
+ * `SPORTSDESK_DB_CONNECT_TIMEOUT`, then libpq's `PGCONNECT_TIMEOUT`, then 10 s.
  */
 import { env, sql as defaultBunSql, SQL } from "bun";
 
 export const isLocalDbHost = (host: string): boolean =>
   host === "localhost" || host === "127.0.0.1" || host === "::1";
+
+export const DEFAULT_DB_CONNECT_TIMEOUT_SECONDS = 10;
+
+function positiveSeconds(value: string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const seconds = Number(trimmed);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
+/**
+ * Resolve the PostgreSQL connect timeout in seconds. An explicit URL
+ * `connect_timeout` wins, then the repo override, then libpq's env var, then 10 s.
+ * Invalid or non-positive values fall through instead of failing pool construction.
+ */
+export function resolveDbConnectionTimeout(
+  source: Record<string, string | undefined> = env,
+  urlConnectTimeout?: string | null,
+): number {
+  return (
+    positiveSeconds(urlConnectTimeout) ??
+    positiveSeconds(source.SPORTSDESK_DB_CONNECT_TIMEOUT) ??
+    positiveSeconds(source.PGCONNECT_TIMEOUT) ??
+    DEFAULT_DB_CONNECT_TIMEOUT_SECONDS
+  );
+}
 
 const required = (k: keyof Bun.Env): string => {
   const v = env[k];
@@ -50,11 +80,16 @@ export function createConfiguredSql(): {
       return { db: defaultBunSql, isDefaultGlobal: true };
     }
     const tls = local && !forceTls ? false : { rejectUnauthorized: true };
+    const connectionTimeout = resolveDbConnectionTimeout(
+      env,
+      parsed.searchParams.get("connect_timeout"),
+    );
     return {
       db: new SQL(databaseUrl, {
         tls,
         idleTimeout: 30,
         max: 20,
+        connectionTimeout,
         onconnect: (err) => {
           if (err) console.error("[db] connect failed:", err.message);
         },
@@ -81,6 +116,7 @@ export function createConfiguredSql(): {
     local && env.SPORTSDESK_DB_TLS !== "1"
       ? false
       : { rejectUnauthorized: true };
+  const connectionTimeout = resolveDbConnectionTimeout(env);
 
   return {
     db: new SQL({
@@ -92,6 +128,7 @@ export function createConfiguredSql(): {
       tls,
       idleTimeout: 30, // seconds
       max: 20,
+      connectionTimeout,
       onconnect: (err) => {
         if (err) console.error("[db] connect failed:", err.message);
       },
