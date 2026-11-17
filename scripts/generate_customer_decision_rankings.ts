@@ -117,11 +117,24 @@ async function describeInput(
   const bytes = await Bun.file(path).arrayBuffer();
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(bytes);
+  const isGraded = /graded/i.test(path);
   return {
     path,
     sha256: hasher.digest("hex"),
     bytes: bytes.byteLength,
     records,
+    capturedAtIso: new Date(
+      (await Bun.file(path).lastModified) ?? Date.now(),
+    ).toISOString(),
+    capturedAtSource:
+      "file mtime; the export payload carries no capture timestamp of its own",
+    capturedBy: "operator (local F402 manager export)",
+    request: isGraded
+      ? "getWagersByFigureDate, graded=1 — retrieval windows documented in this file header"
+      : "getReportPlayerAnalysis — agentID=BILLY666 summary book",
+    scope: isGraded
+      ? "unknown"
+      : "summary book: agentID=BILLY666, 610 offices, captured 2026-10-31..2026-11-14",
   };
 }
 
