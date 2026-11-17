@@ -45,6 +45,30 @@ function positiveSeconds(value: string | null | undefined): number | null {
   return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
 }
 
+function positiveInteger(value: string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+/**
+ * Pool sizing from PostgreSQL URL parameters: `idle_timeout` and `max_lifetime`
+ * (seconds) and `max` (connections). Defaults: 30 s idle, no lifetime cap, 20 connections.
+ */
+export function resolveDbPoolOptions(urlSearchParams?: URLSearchParams): {
+  readonly idleTimeout: number;
+  readonly maxLifetime: number;
+  readonly max: number;
+} {
+  return {
+    idleTimeout: positiveSeconds(urlSearchParams?.get("idle_timeout")) ?? 30,
+    maxLifetime: positiveSeconds(urlSearchParams?.get("max_lifetime")) ?? 0,
+    max: positiveInteger(urlSearchParams?.get("max")) ?? 20,
+  };
+}
+
 /**
  * Resolve the PostgreSQL connect timeout in seconds. An explicit URL
  * `connect_timeout` wins, then the repo override, then libpq's env var, then 10 s.
@@ -195,11 +219,11 @@ export function createConfiguredSql(): {
       env,
       parsed.searchParams.get("connect_timeout"),
     );
+    const pool = resolveDbPoolOptions(parsed.searchParams);
     return {
       db: new SQL(databaseUrl, {
         tls,
-        idleTimeout: 30,
-        max: 20,
+        ...pool,
         connectionTimeout,
         channelBinding,
         onconnect: (err) => {
@@ -226,6 +250,7 @@ export function createConfiguredSql(): {
   const tls = resolveDbTlsConfig(env, { local, forceTls });
   const channelBinding = resolveDbChannelBinding(env);
   const connectionTimeout = resolveDbConnectionTimeout(env);
+  const pool = resolveDbPoolOptions();
 
   return {
     db: new SQL({
@@ -235,8 +260,7 @@ export function createConfiguredSql(): {
       password,
       database: env.PGDATABASE ?? "myapp",
       tls,
-      idleTimeout: 30, // seconds
-      max: 20,
+      ...pool,
       connectionTimeout,
       channelBinding,
       onconnect: (err) => {
