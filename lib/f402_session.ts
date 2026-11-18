@@ -36,6 +36,7 @@ import {
   type SecretsAdapter,
 } from "./f402_secret_store.ts";
 import { CANONICAL_SECRETS_SERVICE } from "./secrets.ts";
+import { decodeF402BearerWindow } from "./f402_jwt.ts";
 
 export interface F402Session {
   /** Raw Cookie header value. Never log this field. */
@@ -89,13 +90,17 @@ export function resetF402SessionCacheForTests(): void {
 }
 
 /**
- * 24h: the session refresher (`scripts/f402_session_refresh.ts`, launchd `com.bookdeskops.sportsdesk.session-refresh`)
- * re-mints every 5 min with a 5-min grace window, so the 30-min default that caused the
- * 2026-11-04 bridge outage (session minted 06:03 UTC, expired 06:33, every bridge rollup after
- * that failed for 14+ hours) is no longer a defensible default. Override via
- * `F402_SESSION_TTL_MIN` if you want the paranoid old behavior.
+ * Fallback lifetime for sessions with no bearer JWT (cookie-only), and an upper cap on a
+ * caller-supplied TTL. A session with a bearer derives `expiresAtIso` from the token's `exp`
+ * minus {@link F402_DERIVED_EXPIRY_MARGIN_MS}, so the file never claims a lifetime the server
+ * does not grant (measured 2026-11-17: 21 minutes). The 24h fallback is kept for the
+ * 2026-11-04 manual-login case; it is not an effective expiry for bearer sessions.
+ * Override via `F402_SESSION_TTL_MIN`.
  */
 const DEFAULT_TTL_MINUTES = 1440;
+
+/** How far before the bearer's `exp` a derived session expiry sits. */
+export const F402_DERIVED_EXPIRY_MARGIN_MS = 2 * 60 * 1000;
 
 export function resolveF402SessionPath(
   env: NodeJS.ProcessEnv = Bun.env,
@@ -365,7 +370,16 @@ export function sessionFromAuth(
   options?: { readonly ttlMinutes?: number; readonly now?: number },
 ): F402Session {
   const now = options?.now ?? Date.now();
-  const ttl = (options?.ttlMinutes ?? DEFAULT_TTL_MINUTES) * 60_000;
+  const ttlExpiresAtMs =
+    now + (options?.ttlMinutes ?? DEFAULT_TTL_MINUTES) * 60_000;
+  const tokenWindow = decodeF402BearerWindow(auth.authorizationHeader);
+  const expiresAtMs =
+    tokenWindow === null
+      ? ttlExpiresAtMs
+      : Math.min(
+          ttlExpiresAtMs,
+          tokenWindow.expMs - F402_DERIVED_EXPIRY_MARGIN_MS,
+        );
   return {
     cookieHeader: auth.cookieHeader,
     cookieNames: auth.cookieNames,
@@ -373,7 +387,7 @@ export function sessionFromAuth(
       ? {}
       : { authorizationHeader: auth.authorizationHeader }),
     obtainedAtIso: new Date(now).toISOString(),
-    expiresAtIso: new Date(now + ttl).toISOString(),
+    expiresAtIso: new Date(expiresAtMs).toISOString(),
   };
 }
 

@@ -85,6 +85,7 @@ interface LiveStatusBody {
   fetchedAt: string | null;
   servedFromCache: boolean;
   transport: string | null;
+  scopeSource?: "env" | "ticker" | "none";
   diagnostic: {
     code: string;
     message?: string;
@@ -323,6 +324,7 @@ describe("GET /api/live-bets live-first", () => {
       fetchedAt: observedAt,
       servedFromCache: false,
       transport: "injected-fetch",
+      scopeSource: "env",
       diagnostic: null,
       customersAttempted: LIVE_CUSTOMERS.length,
       customersFailed: 0,
@@ -714,6 +716,7 @@ describe("live Pending with no customer scope", () => {
     expect(body.live?.status).toBe("unavailable");
     expect(body.live?.ok).toBe(false);
     expect(body.live?.diagnostic?.code).toBe("no_customer_scope");
+    expect(body.live?.scopeSource).toBe("none");
     expect(body.live?.customersAttempted).toBe(0);
     expect(stub.calls()).toBe(0);
   });
@@ -749,6 +752,7 @@ describe("GET /api/kpis live Pending provenance", () => {
       fetchedAt: OBSERVED_AT,
       servedFromCache: false,
       transport: "injected-fetch",
+      scopeSource: "env",
       diagnostic: null,
       customersAttempted: LIVE_CUSTOMERS.length,
       customersFailed: 0,
@@ -855,6 +859,7 @@ describe("live Pending customer scope from the ticker cache", () => {
     );
     expect(status).toBe(200);
     expect(body.live?.status).toBe("live");
+    expect(body.live?.scopeSource).toBe("ticker");
     expect(body.live?.customersAttempted).toBe(scopeTickerRows.length);
     expect(body.live?.customersFailed).toBe(0);
     expect(pendingStub.calls()).toBe(scopeTickerRows.length);

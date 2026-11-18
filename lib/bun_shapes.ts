@@ -235,6 +235,13 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: ["probe:proc.paths"],
   },
   {
+    name: "pathToFileURL",
+    kind: "value",
+    subsystem: "process",
+    heading: "Bun.pathToFileURL",
+    evidence: ["test:tests/bun_url_native_utils.test.ts"],
+  },
+  {
     name: "gc",
     kind: "value",
     subsystem: "process",
@@ -746,6 +753,13 @@ export const BUN_SHAPES: readonly BunShape[] = [
   },
   // network
   {
+    name: "BunRequest",
+    kind: "type",
+    subsystem: "network",
+    heading: "Bun.BunRequest (type)",
+    evidence: ["test:tests/bun_request_contract.test.ts"],
+  },
+  {
     name: "FetchProxyOption",
     kind: "type",
     subsystem: "network",
@@ -765,6 +779,13 @@ export const BUN_SHAPES: readonly BunShape[] = [
     subsystem: "network",
     heading: "Bun.FetchSession",
     evidence: ["surface:FetchSession", "test:tests/bun_capabilities.test.ts"],
+  },
+  {
+    name: "Serve",
+    kind: "type",
+    subsystem: "network",
+    heading: "Bun.Serve (type)",
+    evidence: ["test:tests/live_bets_typed_server.test.ts"],
   },
   {
     name: "Server",

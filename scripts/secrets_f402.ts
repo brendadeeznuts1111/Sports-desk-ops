@@ -168,6 +168,8 @@ async function store(agentId: string): Promise<void> {
 
 async function remove(): Promise<void> {
   let removed = 0;
+  let alreadyAbsent = 0;
+  const failures: string[] = [];
   for (const service of SERVICES) {
     for (const name of [
       F402_KEYCHAIN_NAMES.agentId,
@@ -175,18 +177,30 @@ async function remove(): Promise<void> {
     ]) {
       try {
         if (await deleteF402Secret(service, name)) removed += 1;
+        else alreadyAbsent += 1;
       } catch (error) {
         if (error instanceof F402KeychainUnavailable) failWith(error);
-        // A locked entry in one service must not stop the other deletes; report its name.
-        if (error instanceof F402SecretBackendError) {
-          console.error(`secrets:f402: ${error.name}: ${error.message}`);
-        }
+        // A refused delete on one entry must not stop the others; the stale entry may remain.
+        failures.push(
+          `${service}/${name}: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+        );
       }
     }
   }
   console.error(
-    `secrets:f402: removed ${removed} F402 credential entr${removed === 1 ? "y" : "ies"} from ${SERVICES.join(", ")}`,
+    `secrets:f402: removed ${removed}, already absent ${alreadyAbsent} F402 credential entr${
+      removed + alreadyAbsent === 1 ? "y" : "ies"
+    } from ${SERVICES.join(", ")}`,
   );
+  if (failures.length > 0) {
+    for (const failure of failures) {
+      console.error(`secrets:f402: delete failed — ${failure}`);
+    }
+    console.error(
+      `secrets:f402: ${failures.length} keychain delete(s) failed; entries may still be present`,
+    );
+    process.exitCode = 1;
+  }
 }
 
 async function migrate(): Promise<void> {

@@ -2,7 +2,7 @@
  * @file fraud_patterns.ts
  * @description Named sportsbook fraud/surveillance detectors for the SportsDesk security console.
  *
- * The detector ids are API (frozen in `Scratch/security/SECURITY-PLUGIN-CONTRACT.md` rev 2): the
+ * The detector ids are API (frozen in `docs/security-plugin-contract.md` rev 3): the
  * client half renders `counts.bySeverity`/`counts.byCategory` and the Findings tab, so ids and
  * severities must not drift. Each finding carries its own provenance, evidence pointers and an
  * explicit `insufficientData` flag instead of a fabricated zero.

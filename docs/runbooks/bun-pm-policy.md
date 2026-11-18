@@ -203,13 +203,13 @@ Catalog and workspace-scoped adds: run **`bun-deps`** (or `bun run deps` / `./bi
 
 ### Operator commands
 
-| Goal                          | Command                                                                                                              |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Clone / CI parity             | `bun install --frozen-lockfile` (README, `.github/workflows/ci.yml`; local full chain: `bun run ci:local --install`) |
-| Machine policy audit          | `bun run pm:doctor` or `./bin/dx deps check`                                                                         |
-| Lock drift only (offline)     | `bun run pm:doctor --only lock` (matches workspaces, versions, patches)                                              |
-| Manifest vs lock (no install) | `bun install --frozen-lockfile --dry-run`                                                                            |
-| Change dependencies           | `bun-deps add                                                                                                        | remove | update | install …`via`deps`/`dx deps`(uses`~/dotfiles/bun/unfrozen.bunfig.toml`with`frozenLockfile = false` only) |
+| Goal                          | Command                                                                                                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Clone / CI parity             | `bun install --frozen-lockfile` (README, `.github/workflows/ci.yml`; local full chain: `bun run ci:local --install`)                                   |
+| Machine policy audit          | `bun run pm:doctor` or `./bin/dx deps check`                                                                                                           |
+| Lock drift only (offline)     | `bun run pm:doctor --only lock` (matches workspaces, versions, patches)                                                                                |
+| Manifest vs lock (no install) | `bun install --frozen-lockfile --dry-run`                                                                                                              |
+| Change dependencies           | `bun-deps add \| remove \| update \| install …` via `deps` / `dx deps` (uses `~/dotfiles/bun/unfrozen.bunfig.toml` with `frozenLockfile = false` only) |
 
 `pm:doctor` is read-only (no install). Registry probes for scopes declared in the user-level `~/.npmrc` are **warn**-level and skipped when `--only` filters exclude registry/token names.
 

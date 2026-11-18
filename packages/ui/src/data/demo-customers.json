@@ -1,0 +1,50 @@
+[
+  {
+    "customer_id": "SYNTH_SYN_01",
+    "agent_id": "SYNTH_AGENT_01",
+    "status": "Active",
+    "wager_limit_usd": 15000,
+    "delay_seconds": 0,
+    "clv_bps": 40,
+    "sharp_score": 81.5,
+    "hold_pct": -15,
+    "lifetime_volume_usd": 500000,
+    "lifetime_net_usd": -75000
+  },
+  {
+    "customer_id": "SYNTH_SNIPER_02",
+    "agent_id": "SYNTH_AGENT_02",
+    "status": "Active",
+    "wager_limit_usd": 5000,
+    "delay_seconds": 0,
+    "clv_bps": 120,
+    "sharp_score": 88,
+    "hold_pct": -2,
+    "lifetime_volume_usd": 250000,
+    "lifetime_net_usd": -5000
+  },
+  {
+    "customer_id": "SYNTH_REC_03",
+    "agent_id": "SYNTH_AGENT_03",
+    "status": "Active",
+    "wager_limit_usd": 2000,
+    "delay_seconds": 0,
+    "clv_bps": 10,
+    "sharp_score": 33.2,
+    "hold_pct": 0,
+    "lifetime_volume_usd": 0,
+    "lifetime_net_usd": 0
+  },
+  {
+    "customer_id": "SYNTH_REC_04",
+    "agent_id": "SYNTH_AGENT_04",
+    "status": "Active",
+    "wager_limit_usd": 2000,
+    "delay_seconds": 0,
+    "clv_bps": -20,
+    "sharp_score": 22,
+    "hold_pct": -4,
+    "lifetime_volume_usd": 10000,
+    "lifetime_net_usd": -400
+  }
+]

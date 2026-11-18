@@ -205,4 +205,73 @@ describe("f402_customer_decision_ranking (v3.0.0)", () => {
     );
     expect(md).toContain("CCC88412");
   });
+
+  test("detail and graded maps key by verbatim CustomerID, not by shared PlayerLogin", () => {
+    const summaryRows: ReportPlayerAnalysisRowRaw[] = [
+      {
+        AgentID: "AGONE",
+        CustomerID: "DUP1",
+        PlayerLogin: "DUPLE",
+        InetTarget: "skin1.com",
+        SuspectedBot: "N",
+        SuspectedBotType: "0",
+        TOTALBETS: 10,
+        BETTERPOINTSLINES: 2,
+        BETTERPRICELINES: 2,
+        POINTS: -1,
+        PRICE: -2,
+        WINLOSE: -100,
+      },
+      {
+        AgentID: "AGTWO",
+        CustomerID: "DUP1_1",
+        PlayerLogin: "DUPLE",
+        InetTarget: "skin2.com",
+        SuspectedBot: "N",
+        SuspectedBotType: "0",
+        TOTALBETS: 2,
+        BETTERPOINTSLINES: 1,
+        BETTERPRICELINES: 0,
+        POINTS: 0.5,
+        PRICE: 0.5,
+        WINLOSE: 50,
+      },
+    ];
+    const detailRow = (
+      customerId: string,
+      agent: string,
+      points: number,
+      minute: string,
+    ): ReportPlayerAnalysisRowRaw => ({
+      AgentID: agent,
+      CustomerID: customerId,
+      PlayerLogin: "DUPLE",
+      DESCRIPTION: `Hockey #${minute} Team -110 - For Game`,
+      POSTEDDATETIME: `2026-10-31 13:${minute}:00.000`,
+      PERIODNUMBER: "0",
+      POINTS: points,
+      PRICE: points,
+    });
+    const detailRows: ReportPlayerAnalysisRowRaw[] = [
+      detailRow("DUP1", "AGONE", -1, "00"),
+      detailRow("DUP1", "AGONE", -1, "01"),
+      detailRow("DUP1", "AGONE", -1, "02"),
+      detailRow("DUP1_1", "AGTWO", 0.5, "03"),
+    ];
+
+    const sys = buildAllCustomerDecisionRankingSystem({
+      allSummaryRows: summaryRows,
+      suspectedBotDetailRows: detailRows,
+      gradedWagerRows: [],
+    });
+    const one = sys.allCustomerRows.find((r) => r.customerId === "DUP1");
+    const two = sys.allCustomerRows.find((r) => r.customerId === "DUP1_1");
+
+    // A login-keyed map pools both accounts (4 each); verbatim ids keep them separate.
+    expect(one?.observedDetailWagersN).toBe(3);
+    expect(two?.observedDetailWagersN).toBe(1);
+    expect(one?.estimatedNetEvAfterVigPct).not.toBe(
+      two?.estimatedNetEvAfterVigPct,
+    );
+  });
 });

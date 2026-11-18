@@ -7,11 +7,172 @@
  *     and TLS guards, and reuses `sql` (`Bun.sql`) when TLS policy matches or constructs an explicit
  *     `new SQL(url, { tls, idleTimeout, max })` pool.
  *  2. `env.PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE`: constructs `new SQL(...)`.
+ *
+ * Connect timeout precedence: `?connect_timeout=` in `DATABASE_URL`, then
+ * `SPORTSDESK_DB_CONNECT_TIMEOUT`, then libpq's `PGCONNECT_TIMEOUT`, then 10 s.
+ *
+ * TLS hardening (non-local, or `SPORTSDESK_DB_TLS=1`): certificate verification is explicit
+ * (`rejectUnauthorized: true`), the client offers TLS 1.3 only (TLS 1.0/1.1/1.2 disabled),
+ * `SPORTSDESK_DB_CERT_FINGERPRINT` pins the server certificate's SHA-256 (with the hostname
+ * check still applied), `SPORTSDESK_DB_CA_FILE` supplies an explicit CA bundle, and channel
+ * binding defaults to `prefer` (URL `?channel_binding=` > `SPORTSDESK_DB_CHANNEL_BINDING` > `PGCHANNELBINDING`).
  */
+import { constants as nodeCryptoConstants } from "node:crypto";
+import { checkServerIdentity as nodeCheckServerIdentity } from "node:tls";
+import type { PeerCertificate } from "node:tls";
+
 import { env, sql as defaultBunSql, SQL } from "bun";
 
 export const isLocalDbHost = (host: string): boolean =>
   host === "localhost" || host === "127.0.0.1" || host === "::1";
+
+export const DEFAULT_DB_CONNECT_TIMEOUT_SECONDS = 10;
+
+/**
+ * TLS 1.3 only: disabling TLS 1.0, 1.1 and 1.2 leaves 1.3 as the only protocol.
+ * The database server must offer TLS 1.3 or the connection fails closed.
+ */
+const DB_TLS_13_ONLY =
+  nodeCryptoConstants.SSL_OP_NO_TLSv1 |
+  nodeCryptoConstants.SSL_OP_NO_TLSv1_1 |
+  nodeCryptoConstants.SSL_OP_NO_TLSv1_2;
+
+function positiveSeconds(value: string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const seconds = Number(trimmed);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
+function positiveInteger(value: string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+/**
+ * Pool sizing from PostgreSQL URL parameters: `idle_timeout` and `max_lifetime`
+ * (seconds) and `max` (connections). Defaults: 30 s idle, no lifetime cap, 20 connections.
+ */
+export function resolveDbPoolOptions(urlSearchParams?: URLSearchParams): {
+  readonly idleTimeout: number;
+  readonly maxLifetime: number;
+  readonly max: number;
+} {
+  return {
+    idleTimeout: positiveSeconds(urlSearchParams?.get("idle_timeout")) ?? 30,
+    maxLifetime: positiveSeconds(urlSearchParams?.get("max_lifetime")) ?? 0,
+    max: positiveInteger(urlSearchParams?.get("max")) ?? 20,
+  };
+}
+
+/**
+ * Resolve the PostgreSQL connect timeout in seconds. An explicit URL
+ * `connect_timeout` wins, then the repo override, then libpq's env var, then 10 s.
+ * Invalid or non-positive values fall through instead of failing pool construction.
+ */
+export function resolveDbConnectionTimeout(
+  source: Record<string, string | undefined> = env,
+  urlConnectTimeout?: string | null,
+): number {
+  return (
+    positiveSeconds(urlConnectTimeout) ??
+    positiveSeconds(source.SPORTSDESK_DB_CONNECT_TIMEOUT) ??
+    positiveSeconds(source.PGCONNECT_TIMEOUT) ??
+    DEFAULT_DB_CONNECT_TIMEOUT_SECONDS
+  );
+}
+
+export type DbChannelBinding = "disable" | "prefer" | "require";
+
+export function resolveDbChannelBinding(
+  source: Record<string, string | undefined> = env,
+  urlChannelBinding?: string | null,
+): DbChannelBinding {
+  for (const candidate of [
+    urlChannelBinding,
+    source.SPORTSDESK_DB_CHANNEL_BINDING,
+    source.PGCHANNELBINDING,
+  ]) {
+    const normalized = candidate?.trim().toLowerCase();
+    if (normalized === undefined || normalized === "") continue;
+    if (
+      normalized === "disable" ||
+      normalized === "prefer" ||
+      normalized === "require"
+    ) {
+      return normalized;
+    }
+    throw new Error(
+      "lib/db.ts: channel binding must be disable, prefer or require (channel_binding / SPORTSDESK_DB_CHANNEL_BINDING / PGCHANNELBINDING)",
+    );
+  }
+  return "prefer";
+}
+
+export interface DbTlsOptions {
+  readonly rejectUnauthorized: true;
+  readonly secureOptions: number;
+  readonly ca?: ReturnType<typeof Bun.file>;
+  readonly checkServerIdentity?: (
+    hostname: string,
+    cert: PeerCertificate,
+  ) => Error | undefined;
+}
+
+function normalizeFingerprint(raw: string | undefined): string | null {
+  const compact = raw?.replace(/[^0-9a-f]/gi, "") ?? "";
+  return /^[0-9a-f]{64}$/i.test(compact) ? compact.toUpperCase() : null;
+}
+
+/**
+ * TLS policy for PostgreSQL/MySQL. Localhost stays plaintext unless
+ * `SPORTSDESK_DB_TLS=1`. A non-empty `SPORTSDESK_DB_CERT_FINGERPRINT` pins the
+ * server certificate's SHA-256 (colon-separated or bare, 64 hex chars) and still
+ * runs the hostname check; a malformed pin fails closed rather than silently
+ * disabling the pin.
+ */
+export function resolveDbTlsConfig(
+  source: Record<string, string | undefined> = env,
+  options: { readonly local: boolean; readonly forceTls: boolean },
+): false | DbTlsOptions {
+  if (options.local && !options.forceTls) return false;
+  const caPath = source.SPORTSDESK_DB_CA_FILE?.trim();
+  const ca =
+    caPath === undefined || caPath === "" ? undefined : Bun.file(caPath);
+  const base = {
+    rejectUnauthorized: true as const,
+    secureOptions: DB_TLS_13_ONLY,
+    ...(ca === undefined ? {} : { ca }),
+  };
+  const rawPin = source.SPORTSDESK_DB_CERT_FINGERPRINT?.trim();
+  let expected: string | null = null;
+  if (rawPin !== undefined && rawPin !== "") {
+    expected = normalizeFingerprint(rawPin);
+    if (expected === null) {
+      throw new Error(
+        "lib/db.ts: SPORTSDESK_DB_CERT_FINGERPRINT must be a SHA-256 fingerprint (64 hex chars)",
+      );
+    }
+  }
+  if (expected === null) return base;
+  const pin = expected;
+  return {
+    ...base,
+    checkServerIdentity: (hostname, cert) => {
+      const actual = normalizeFingerprint(cert.fingerprint256);
+      if (actual === null || actual !== pin) {
+        return new Error(
+          "lib/db.ts: database certificate fingerprint mismatch",
+        );
+      }
+      return nodeCheckServerIdentity(hostname, cert);
+    },
+  };
+}
 
 const required = (k: keyof Bun.Env): string => {
   const v = env[k];
@@ -49,12 +210,22 @@ export function createConfiguredSql(): {
     if (local && !forceTls) {
       return { db: defaultBunSql, isDefaultGlobal: true };
     }
-    const tls = local && !forceTls ? false : { rejectUnauthorized: true };
+    const tls = resolveDbTlsConfig(env, { local, forceTls });
+    const channelBinding = resolveDbChannelBinding(
+      env,
+      parsed.searchParams.get("channel_binding"),
+    );
+    const connectionTimeout = resolveDbConnectionTimeout(
+      env,
+      parsed.searchParams.get("connect_timeout"),
+    );
+    const pool = resolveDbPoolOptions(parsed.searchParams);
     return {
       db: new SQL(databaseUrl, {
         tls,
-        idleTimeout: 30,
-        max: 20,
+        ...pool,
+        connectionTimeout,
+        channelBinding,
         onconnect: (err) => {
           if (err) console.error("[db] connect failed:", err.message);
         },
@@ -75,12 +246,11 @@ export function createConfiguredSql(): {
     );
   }
 
-  // TLS: forced off for localhost (dev), required everywhere else.
-  // SPORTSDESK_DB_TLS=1 flips it on even for local (e.g. docker with certs).
-  const tls =
-    local && env.SPORTSDESK_DB_TLS !== "1"
-      ? false
-      : { rejectUnauthorized: true };
+  const forceTls = env.SPORTSDESK_DB_TLS === "1";
+  const tls = resolveDbTlsConfig(env, { local, forceTls });
+  const channelBinding = resolveDbChannelBinding(env);
+  const connectionTimeout = resolveDbConnectionTimeout(env);
+  const pool = resolveDbPoolOptions();
 
   return {
     db: new SQL({
@@ -90,8 +260,9 @@ export function createConfiguredSql(): {
       password,
       database: env.PGDATABASE ?? "myapp",
       tls,
-      idleTimeout: 30, // seconds
-      max: 20,
+      ...pool,
+      connectionTimeout,
+      channelBinding,
       onconnect: (err) => {
         if (err) console.error("[db] connect failed:", err.message);
       },

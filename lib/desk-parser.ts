@@ -32,6 +32,7 @@ export type DeskCompression =
 export type DeskStreamSource =
   | ReadableStream<Uint8Array>
   | ReadableStream<string>
+  | ReadableStream<string | Uint8Array>
   | Response
   | Request
   | Blob
@@ -1232,15 +1233,23 @@ async function* iterateDecodedTextChunks(
     }
     if (typeof first.value === "string") {
       yield first.value;
+      // One decoder for the whole stream: decoding each chunk separately loses a
+      // multi-byte character split across chunk boundaries and allocates per chunk.
+      const decoder = new TextDecoder();
       while (true) {
         const next = await reader.read();
         if (next.done) break;
         if (typeof next.value === "string") {
+          const pending = decoder.decode();
+          if (pending !== "") yield pending;
           yield next.value;
         } else {
-          yield new TextDecoder().decode(next.value);
+          const text = decoder.decode(next.value, { stream: true });
+          if (text !== "") yield text;
         }
       }
+      const tail = decoder.decode();
+      if (tail !== "") yield tail;
       return;
     }
 

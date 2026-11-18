@@ -20,6 +20,8 @@
  * turns the `&lt;img …&gt;` that `noHtml*` produced back into live markup. Always escape `&` first.
  */
 
+import { useColor } from "../lib/ansi_color.ts";
+
 const IFRAME_TITLE = "Remaining tasks — SportsDesk ops";
 
 /**
@@ -113,21 +115,10 @@ if (mdOpen !== htmlOpen || mdDone !== htmlDone) {
 }
 
 const outIsTTY = process.stdout.isTTY === true;
-const forceColor = Bun.env.FORCE_COLOR;
-const forcedColor =
-  forceColor === "1" ||
-  forceColor === "true" ||
-  forceColor === "2" ||
-  forceColor === "3"
-    ? true
-    : forceColor === "0"
-      ? false
-      : undefined;
-const color =
-  forcedColor ??
-  ("NO_COLOR" in Bun.env
-    ? false
-    : wantColor || (outPath === "" && outIsTTY && Bun.enableANSIColors));
+const color = useColor({
+  isTTY: outPath === "" && outIsTTY,
+  wantColor,
+});
 const columns =
   columnsFlag !== ""
     ? Math.max(0, Number(columnsFlag))

@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
 
 import {
   bunCronLaunchAgentPlistPath,
@@ -37,7 +36,7 @@ describe("bun_cron", () => {
 
   test("osCronWorkerPath resolves import.meta.url", () => {
     expect(osCronWorkerPath(import.meta.url)).toBe(
-      fileURLToPath(import.meta.url),
+      Bun.fileURLToPath(import.meta.url),
     );
   });
 

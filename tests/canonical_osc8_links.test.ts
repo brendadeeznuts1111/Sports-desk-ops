@@ -11,6 +11,7 @@ import {
   formatBunSymbolOsc8Markdown,
   formatOsc8Hyperlink,
   renderAnsiMarkdown,
+  parseAnsiMarkdownCliArgs,
   parseAnsiMarkdownCliOptions,
   describeAnsiTheme,
   DARK_ANSI_THEME,
@@ -156,5 +157,29 @@ describe("Canonical OSC 8 Links & Terminal Hyperlinks Engine", () => {
       describeAnsiTheme(monoOpts),
       "colors=false, hyperlinks=false, columns=0",
     );
+  });
+
+  it("extracts positional args and reports invalid --theme / --columns options", () => {
+    const parsed = parseAnsiMarkdownCliArgs([
+      "--no-color",
+      "--wager",
+      "alert.md",
+      "--columns",
+      "90",
+    ]);
+    assert.deepEqual(parsed.positionalArgs, ["alert.md"]);
+    assert.deepEqual(parsed.positionalIndices, [2]);
+    assert.equal(parsed.hasColorFlag, true);
+    assert.equal(parsed.hasNativeThemeFlag, true);
+    assert.equal(parsed.wagerMode, true);
+    assert.equal(parsed.themeOptions.colors, false);
+    assert.equal(parsed.themeOptions.columns, 90);
+    assert.equal(parsed.invalidOptionError, undefined);
+
+    const badTheme = parseAnsiMarkdownCliArgs(["--theme=neon"]);
+    assert.ok(badTheme.invalidOptionError?.includes("neon"));
+
+    const badCols = parseAnsiMarkdownCliArgs(["--columns=-5"]);
+    assert.ok(badCols.invalidOptionError?.includes("-5"));
   });
 });

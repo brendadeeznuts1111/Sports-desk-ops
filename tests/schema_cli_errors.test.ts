@@ -5,6 +5,7 @@ import { SchemaBrandError } from "../lib/schema_brand_error.ts";
 import {
   findColumnLine,
   formatSchemaError,
+  formatSchemaJumpLink,
   parseSchemaErrorTarget,
   resolveSchemaErrorJump,
 } from "../lib/schema_cli_errors.ts";
@@ -58,6 +59,10 @@ describe("schema_cli_errors", () => {
     expect(line).toBeGreaterThan(1);
     const resolved = await resolveSchemaErrorJump(target!);
     expect(resolved.line).toBe(line);
+
+    const oscLink = formatSchemaJumpLink(resolved);
+    expect(oscLink).toContain(`line=${line}&column=1`);
+    expect(oscLink).toContain(`sqlite_schema_ssot.ts:${line}:1`);
   });
 
   test("formatSchemaError includes message", () => {

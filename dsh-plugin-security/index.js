@@ -43,7 +43,7 @@
  * peer. A raw ToolDefinition needs no dependencies. The trade-off: raw registration does NOT
  * validate arguments, so every tool validates its own and returns a structured refusal.
  *
- * THE CLI CONTRACT (frozen in Scratch/security/SECURITY-PLUGIN-CONTRACT.md)
+ * THE CLI CONTRACT (frozen in docs/security-plugin-contract.md rev 3)
  *
  * `bun run cli/sportsdesk_fraud_cli.ts <command> [flags]`, `--json` always, plus `--root`.
  * Success JSON carries `{ success: true, schemaVersion: 1, command, generatedAt, ...payload }`;

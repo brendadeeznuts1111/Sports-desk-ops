@@ -75,6 +75,27 @@ describe("cookie jar", () => {
     ).toBeNull();
   });
 
+  test("CookieMap.set and delete emit only their Set-Cookie mutations", () => {
+    const map = new Bun.CookieMap("a=1; b=2");
+    map.set("__Host-x", "t", {
+      secure: true,
+      httpOnly: true,
+      sameSite: "strict",
+      path: "/",
+    });
+    expect([...map].map(([name]) => name)).toEqual(["__Host-x", "a", "b"]);
+    expect(map.toSetCookieHeaders()).toEqual([
+      "__Host-x=t; Path=/; Secure; HttpOnly; SameSite=Strict",
+    ]);
+
+    map.delete("a", { path: "/" });
+    expect([...map].map(([name]) => name)).toEqual(["__Host-x", "b"]);
+    expect(map.toSetCookieHeaders()).toEqual([
+      "__Host-x=t; Path=/; Secure; HttpOnly; SameSite=Strict",
+      "a=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax",
+    ]);
+  });
+
   test("serializes without the CookieMap toString trap", () => {
     const header = cookieHeaderFrom([
       ["a", "1"],

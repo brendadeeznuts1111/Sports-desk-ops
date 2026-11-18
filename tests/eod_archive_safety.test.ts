@@ -1,6 +1,20 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 
-import { assertSafeTar, assertSafeTarGz } from "../lib/eod_archive.ts";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import {
+  assertSafeTar,
+  assertSafeTarGz,
+  extractIntoEmptyDir,
+} from "../lib/eod_archive.ts";
 
 /**
  * `Bun.Archive.extract()` contains `../` and absolute paths, but follows symlink entries:
@@ -105,4 +119,42 @@ describe("EOD archive safety guard", () => {
     const hardlink = tar([{ name: "link", type: "1", link: "safe/ok.txt" }]);
     expect(() => assertSafeTar(hardlink)).toThrow(/unsupported tar entry type/);
   });
+});
+
+describe("extractIntoEmptyDir", () => {
+  const root = mkdtempSync(join(tmpdir(), "eod-dest-"));
+  const archive = () =>
+    new Bun.Archive({ "esc/pwned.txt": "PWN", "ok.txt": "ok" });
+
+  test("refuses a destination that already holds a symlink leading outside", async () => {
+    const outside = join(root, "outside");
+    const dest = join(root, "dest-with-link");
+    mkdirSync(outside);
+    mkdirSync(dest);
+    symlinkSync(outside, join(dest, "esc"));
+    await expect(extractIntoEmptyDir(archive(), dest)).rejects.toThrow(
+      /extract target is not empty/,
+    );
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
+  test("refuses a destination that is itself a symlink", async () => {
+    const real = join(root, "real");
+    const link = join(root, "link");
+    mkdirSync(real);
+    symlinkSync(real, link);
+    await expect(extractIntoEmptyDir(archive(), link)).rejects.toThrow(
+      /not a real directory/,
+    );
+    expect(readdirSync(real)).toEqual([]);
+  });
+
+  test("extracts into a fresh empty directory", async () => {
+    const dest = join(root, "fresh");
+    mkdirSync(dest);
+    await extractIntoEmptyDir(archive(), dest);
+    expect(readdirSync(dest).sort()).toEqual(["esc", "ok.txt"]);
+  });
+
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
 });

@@ -12,6 +12,15 @@
 
 import { readdirSync, statSync, existsSync } from "node:fs";
 import { resolve, join, basename } from "node:path";
+import {
+  type R2CasEnv,
+  assertR2TokenIsolationAndEnv,
+  createScopedR2S3Client,
+  evaluateCanonicalR2ManifestStaleness,
+  mapR2ErrorExitCode,
+  syncCanonicalGovernanceManifestsToR2,
+  verifyCanonicalR2Manifests,
+} from "../lib/r2_manifest_cas.ts";
 
 export interface R2Config {
   readonly accountId: string;
@@ -151,14 +160,117 @@ export async function syncReportsDirectory(dirPath: string): Promise<void> {
   );
 }
 
+export async function verifyCanonicalR2Surface(options?: {
+  readonly json?: boolean;
+  readonly includeBridges?: boolean;
+  readonly env?: R2CasEnv;
+}): Promise<boolean> {
+  const env = options?.env ?? Bun.env;
+  assertR2TokenIsolationAndEnv(env);
+  const wantJson = Boolean(options?.json);
+  const useScopedS3 =
+    wantJson ||
+    (!env.CLOUDFLARE_API_TOKEN &&
+      Boolean(env.R2_ACCESS_KEY_ID) &&
+      Boolean(env.R2_SECRET_ACCESS_KEY));
+
+  if (!useScopedS3) {
+    return verifyR2Connection();
+  }
+
+  const client = createScopedR2S3Client(env);
+  const report = await verifyCanonicalR2Manifests({
+    client,
+    env,
+    ...(options?.includeBridges === undefined
+      ? {}
+      : { includeBridges: options.includeBridges }),
+  });
+  if (wantJson) {
+    process.stdout.write(`${JSON.stringify(report)}\n`);
+  } else {
+    console.log(
+      `[R2 Verify] bucket=${report.r2_bucket} circuit=${report.circuit_state} gap=${report.unresolved_gap_cents}`,
+    );
+    for (const sink of report.sinks) {
+      console.log(
+        `  - ${sink.sink_id.padEnd(16)} gen=${String(sink.generation_u32).padEnd(4)} state=${sink.circuit_state.padEnd(6)} exists=${String(sink.exists)} etag=${sink.etag ?? "null"}`,
+      );
+    }
+  }
+  return report.ok;
+}
+
+export async function syncCanonicalR2Surface(options?: {
+  readonly targetDir?: string;
+  readonly json?: boolean;
+  readonly env?: R2CasEnv;
+}): Promise<void> {
+  const env = options?.env ?? Bun.env;
+  assertR2TokenIsolationAndEnv(env);
+  const wantJson = Boolean(options?.json);
+  if (env.SPORTSDESK_LIVE_INGEST === "1" || wantJson) {
+    const client = createScopedR2S3Client(env);
+    const result = await syncCanonicalGovernanceManifestsToR2({ client, env });
+    if (wantJson) {
+      process.stdout.write(`${JSON.stringify(result)}\n`);
+    } else {
+      console.log(
+        `[R2 Sync] bucket=${result.r2_bucket} circuit=${result.circuit_state} ops-supervisor@gen${result.opsSupervisor.manifest.generation_u32} edge-topology@gen${result.edgeTopology.manifest.generation_u32}`,
+      );
+    }
+    return;
+  }
+  await syncReportsDirectory(options?.targetDir || "reports");
+}
+
+export async function runCanonicalStaleSurface(options?: {
+  readonly json?: boolean;
+  readonly includeBridges?: boolean;
+  readonly slaMs?: number;
+  readonly env?: R2CasEnv;
+}): Promise<boolean> {
+  const env = options?.env ?? Bun.env;
+  const client = createScopedR2S3Client(env);
+  const report = await evaluateCanonicalR2ManifestStaleness({
+    client,
+    env,
+    ...(options?.includeBridges === undefined
+      ? {}
+      : { includeBridges: options.includeBridges }),
+    ...(options?.slaMs === undefined ? {} : { slaMs: options.slaMs }),
+  });
+  if (options?.json) {
+    process.stdout.write(`${JSON.stringify(report)}\n`);
+  } else {
+    console.log(
+      `[R2 Staleness] bucket=${report.r2_bucket} circuit=${report.circuit_state} degraded=${report.degraded_count}`,
+    );
+    for (const sink of report.sinks) {
+      console.log(
+        `  - ${sink.sink_id.padEnd(16)} state=${sink.state.padEnd(8)} gen=${String(sink.generation_u32).padEnd(4)} dwAge=${String(sink.data_window_age_ms ?? "null")}ms pubAge=${String(sink.published_age_ms ?? "null")}ms (${sink.reason})`,
+      );
+    }
+  }
+  return report.ok;
+}
+
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  if (args.includes("--info")) {
-    getR2ConfigInfo();
-  } else if (args.includes("--verify")) {
-    verifyR2Connection();
-  } else {
-    const target = args[0] || "reports";
-    syncReportsDirectory(target);
-  }
+  const json = args.includes("--json");
+  const includeBridges = args.includes("--include-bridges");
+  (async () => {
+    if (args.includes("--info")) {
+      getR2ConfigInfo();
+    } else if (args.includes("--verify")) {
+      const ok = await verifyCanonicalR2Surface({ json, includeBridges });
+      if (!ok) process.exitCode = 65;
+    } else {
+      const target = args.find((a) => !a.startsWith("-")) ?? "reports";
+      await syncCanonicalR2Surface({ targetDir: target, json });
+    }
+  })().catch((err: unknown) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(mapR2ErrorExitCode(err));
+  });
 }

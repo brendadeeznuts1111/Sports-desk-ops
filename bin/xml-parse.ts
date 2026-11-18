@@ -11,6 +11,11 @@
  * --xml is the writer path: it drops the XML/DOCTYPE declaration and re-escapes
  * text, so it is for inspection/round-trips, not for byte-identical archives.
  */
+import {
+  assertXmlIngestBytesNotHtmlOn200,
+  parseXmlCompactDocument,
+} from "../src/lib/xml_ingest_preflight.ts";
+
 const args = process.argv.slice(2);
 const file = args[0];
 const tree = args.includes("--tree");
@@ -41,10 +46,11 @@ if (indentAt >= 0) {
 const input =
   file === "-" ? await Bun.stdin.bytes() : await Bun.file(file).bytes();
 try {
+  assertXmlIngestBytesNotHtmlOn200(input);
   const parsed =
     tree || xml
       ? Bun.XML.parse(input, { compact: false })
-      : Bun.XML.parse(input);
+      : parseXmlCompactDocument(input);
   if (xml) {
     const serialized = Bun.XML.stringify(parsed, null, indent);
     if (serialized === undefined) {

@@ -1,6 +1,7 @@
 export const CONTRACTS_PACKAGE = "@sportsdesk-ops/contracts" as const;
 
 export * from "./wager_tokens.ts";
+export * from "./wager_channels.ts";
 export * from "./slice_metrics.ts";
 export * from "./slice_registry.ts";
 export * from "./slice_data_table.ts";

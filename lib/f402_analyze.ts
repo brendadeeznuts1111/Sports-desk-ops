@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { sha256Hex } from "./f402_bet_ticker_delta.ts";
+import { replaceIpsInText, textContainsIp } from "./f402_ip_text.ts";
 import { F402_PULL_DEFAULT_OUT_DIR } from "./f402_readonly_puller.ts";
 import {
   F402AnalyzeError,
@@ -94,9 +95,7 @@ export interface AnalyzeRunOptions {
   readonly otherDir?: string;
 }
 
-const IPV4 =
-  /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/;
-const IPV6 = /\b(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\b/;
+const IP_KEY = /^(?:ip|ipaddress|ip_address)$/i;
 
 export function hashIp(ip: string): string {
   const trimmed = ip.trim();
@@ -105,16 +104,7 @@ export function hashIp(ip: string): string {
 }
 
 function hashIpsInString(value: string): string {
-  return value
-    .replace(IPV4, (match) => hashIp(match))
-    .replace(IPV6, (match) => {
-      if (/^\d{4}-\d{2}-\d{2}T/.test(value) || /T\d{2}:\d{2}/.test(value)) {
-        return match;
-      }
-      return match.includes("::") || match.split(":").length >= 5
-        ? hashIp(match)
-        : match;
-    });
+  return replaceIpsInText(value, (match) => hashIp(match));
 }
 
 export function hashIpsDeep(value: unknown): unknown {
@@ -123,10 +113,7 @@ export function hashIpsDeep(value: unknown): unknown {
   if (value !== null && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(value)) {
-      if (
-        /^(?:ip|ipaddress|ip_address)$/i.test(key) &&
-        typeof child === "string"
-      ) {
+      if (IP_KEY.test(key) && typeof child === "string") {
         out[key] =
           child === "" || child.startsWith("ip:") ? child : hashIp(child);
         continue;
@@ -138,11 +125,23 @@ export function hashIpsDeep(value: unknown): unknown {
   return value;
 }
 
+function isUnhashedIpField(child: unknown): boolean {
+  return typeof child === "string" && child !== "" && !child.startsWith("ip:");
+}
+
+/**
+ * Final backstop, mirroring the puller's `containsRawIp`: any IPv4/IPv6 left
+ * in text, or an IP-named field whose value is not an `ip:` hash, is raw.
+ */
 export function containsUnhashedIp(value: unknown): boolean {
-  if (typeof value === "string") return IPV4.test(value);
+  if (typeof value === "string") return textContainsIp(value);
   if (Array.isArray(value)) return value.some(containsUnhashedIp);
   if (value !== null && typeof value === "object") {
-    return Object.values(value).some(containsUnhashedIp);
+    return Object.entries(value).some(
+      ([key, child]) =>
+        (IP_KEY.test(key) && isUnhashedIpField(child)) ||
+        containsUnhashedIp(child),
+    );
   }
   return false;
 }

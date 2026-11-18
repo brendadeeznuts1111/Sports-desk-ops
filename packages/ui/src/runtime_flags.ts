@@ -18,6 +18,7 @@ export interface DashboardRuntimeFlags {
   readonly isExperimental: boolean;
   readonly enabledFeatures: readonly Feature[];
   readonly dceMarker: string;
+  readonly sentinels: readonly string[];
 }
 
 export const IS_PROD_BUILD: boolean = feature("PROD") ? true : false;
@@ -30,25 +31,31 @@ export const IS_EXPERIMENTAL_BUILD: boolean = feature("EXPERIMENTAL")
 
 export function getDashboardRuntimeFlags(): DashboardRuntimeFlags {
   const enabled: Feature[] = [];
+  const sentinels: string[] = [];
   let dceMarker = "[DCE_UNBUNDLED_HMR]";
 
   if (feature("PROD")) {
     enabled.push("PROD");
     dceMarker = "[DCE_PROD_TARGET_ACTIVE]";
+    sentinels.push("[DCE_PROD_TARGET_ACTIVE]");
   }
   if (feature("DEBUG")) {
     enabled.push("DEBUG");
     dceMarker = "[DCE_DEBUG_TRACE_ACTIVE]";
+    sentinels.push("[DCE_DEBUG_TRACE_ACTIVE]");
   }
   if (feature("TEST")) {
     enabled.push("TEST");
+    sentinels.push("[DCE_TEST_HARNESS_ACTIVE]");
   }
   if (feature("ANALYTICS")) {
     enabled.push("ANALYTICS");
+    sentinels.push("[DCE_ANALYTICS_TELEMETRY_ACTIVE]");
   }
   if (feature("EXPERIMENTAL")) {
     enabled.push("EXPERIMENTAL");
     dceMarker = "[DCE_EXPERIMENTAL_MATRIX_ACTIVE]";
+    sentinels.push("[DCE_EXPERIMENTAL_MATRIX_ACTIVE]");
   }
 
   let target: DashboardRuntimeFlags["target"] = "unbundled-hmr";
@@ -69,6 +76,7 @@ export function getDashboardRuntimeFlags(): DashboardRuntimeFlags {
     isExperimental: IS_EXPERIMENTAL_BUILD,
     enabledFeatures: enabled,
     dceMarker,
+    sentinels,
   };
 }
 

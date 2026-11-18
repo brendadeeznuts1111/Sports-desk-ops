@@ -3,20 +3,24 @@
 Operator tooling for the Fantasy402 sports desk: ingestion, settlement, combo/CLV analytics, the R2
 portal and the VPS service. Bun **1.4.4** (`package.json` `engines.bun` / `.bun-version`).
 
-The notes below were measured on the `1.4.4-canary.1` build this checkout runs. Where a claim is
-scoped to a version, re-check it before relying on it for the stable tag.
+The pinned runtime is stable `1.4.4+38afee6c8`. Some notes below were first measured on canary
+builds (`1.4.4-canary.1`, `1.4.5-canary.1`); where a behaviour exists only on a canary the note says
+so. Re-check any version-scoped claim against the pin before relying on it.
 
 ## Verification loop
 
 ### Inner loop — during development
 
-Pull requests run **`verify-changed`** (`bun run test:changed` + `test:changed-plugins`), not the
+Pull requests run **`verify-changed`** (`bun fmt --check --changed`, `typecheck`, `lint:check`,
+`check:derived-contracts`, `verify:docs`, `test:changed`, `test:pm-contracts`,
+`test-changed-plugins`, `test-changed-nsh`, and `check:profile-code-mode-host-seal`), not the
 full `main`-branch ratchet. Never run the whole suite (`bun test` / `bun test tests/`) on iterative
 edits; use **`bun run verify:fast`**:
 
 ```sh
-bun run verify:fast          # auto-format changed files + typecheck (.ts+.tsx) + scoped oxlint +
-                             # path-triggered gates + test:changed, in parallel (~1–2s)
+bun run verify:fast          # auto-format (bun fmt) changed files + typecheck (.ts+.tsx) + scoped
+                             # oxlint (--deep adds --type-aware) + path-triggered gates +
+                             # test:changed, in parallel (~1–2s); --check for read-only fmt check
 bun run test:changed         # parallel changed-only tests
 bun run test:shard           # parallel head shard (1/8) when root configs are dirty
 ```
@@ -32,12 +36,14 @@ chain in order on `main` pushes and scheduled cadences and stops at the first fa
 assembling the steps by hand. This block is the canonical order:
 
 ```sh
+bun run --filter '@sportsdesk-ops/contracts' build
 bun run verify:manager-oracle-slices
 bash scripts/ci/run-manager-oracle-gates.sh
 bun test lib/f402_har_redaction_proof_verify.test.ts
 bun run format:check
 bun run typecheck
 bun run lint:check
+bun run check:derived-contracts
 bun run test:docs
 bun run verify:docs
 bun run check:route-surface
@@ -51,11 +57,22 @@ bun run gen:tokens:gate
 bun bin/check-fetch-init.ts --verbose
 bun bin/check-innerhtml.ts --verbose
 bun bin/check-signal-honesty.ts --verbose
+bash scripts/ci/install-nsh.sh && bun run nsh:doctor && bun run nsh:verify
 CI=true bun run schema:gate
 bun run test:market-index                       # CI: Validate market index (REQUIRE_MARKET_INDEX=1)
-bun test tests/ --path-ignore-patterns='**/market_index.test.ts'
-bun test                                        # not in CI: also runs the colocated tests
+bun test tests/ --path-ignore-patterns='**/market_index.test.ts' --timings=config/test-timings.json
+bun run test:db
+bun test scripts/capture/webview.test.ts scripts/capture/cookies.test.ts
+bun test --timings=config/test-timings.json      # not in CI: also runs all colocated tests
 ```
+
+`config/test-timings.json` is a committed scheduling hint: with `--timings`, `--parallel` starts the
+slowest files first, so the deliberate ~12.6 s SSE keepalive soak
+(`tests/sportsdesk_mcp_server_soak.test.ts`) overlaps the rest of the suite instead of extending it
+(plain `bun test` serializes it at the end and is ~12 s slower; measured 2026-11-17: 29.5 s vs 18.5 s).
+`bun run test` merges it with the gitignored `.bun-test-timings.json`, which `--update-timings` rewrites.
+Regenerate the committed baseline after large suite changes:
+`bun test --parallel --timings=config/test-timings.json --update-timings`.
 
 Actions do run on this repo (2026-11-02: PR #10's `verify` job ran and failed at `format:check`);
 because the job stops at the first failure, an early red step hides every later one.
@@ -68,7 +85,8 @@ in `.github/workflows/ci.yml`, run **`bun run test:market-index`** first. Discov
 ### Before a long run
 
 `bun run agent:doctor` reports the gaps that otherwise surface one failed call at a time: worktree
-`node_modules`, blocked dependency lifecycle scripts (`bun pm untrusted` exits 0 either way, so a
+`node_modules`, installed-package drift from `bun.lock` (the 2026-11-17 red-typecheck cause),
+blocked dependency lifecycle scripts (`bun pm untrusted` exits 0 either way, so a
 skipped native build is otherwise silent), the gitignored `enriched_customers_full.json`, feed
 provenance, dist staging, graphviz, a headless browser, the `:4020` daemon, sandbox write access and
 the Pages deploy token. The tool-call audit lives in
@@ -105,15 +123,25 @@ with `bun run audit:tool-calls`.
 
 **Bun toolchain**
 
-- **Linting is `oxlint` today; native `bun lint` exists.** `bun run lint:check` runs oxlint twice —
-  `.oxlintrc.json`, then `.oxlintrc.type-aware.json` passed explicitly as
-  `-c .oxlintrc.type-aware.json` (it is not auto-discovered). On this build `bun lint` is a real
-  subcommand, but the repo's `"lint"` script shadows it: `bun lint` runs that script, so reach the
-  built-in with `bun lint --no-script <flags>`. `--doctor` reports which configured rules run
-  natively and which packages are removable; this checkout's answer is that `oxlint-tsgolint` can
-  go, while `oxlint` stays because the script runs it — keep `oxlint` in `devDependencies` for
-  editor LSP (`oxlint --lsp`). The older note that `"lint": "bun lint"` recurses does **not**
-  reproduce on this build — re-check before trusting either claim on the stable tag.
+- **Linting is `oxlint`; stable Bun 1.4.4 has no native `bun lint`.** `bun run lint:check` runs
+  oxlint twice — `.oxlintrc.json`, then `.oxlintrc.type-aware.json` passed explicitly as
+  `-c .oxlintrc.type-aware.json` (it is not auto-discovered). On the pinned 1.4.4, `bun lint` is not
+  a subcommand: it resolves to the package `"lint"` script, which is `bun --bun run oxlint --fix`
+  and **rewrites files**, and `--no-script` does not bypass it (measured 2026-11-15: the flag is
+  forwarded to oxlint; outside a package.json `bun lint` reports `Script not found "lint"`). So
+  never run bare `bun lint` / `bun run lint` as a check; use `bun run lint:check`. The older note
+  that `"lint": "bun lint"` recurses still holds on 1.4.4. A native linter (`bun lint`,
+  `--no-script`, `--doctor`, `--type-aware`, `[lint]` in `bunfig.toml`) exists only on the 1.4.5
+  canary (measured on `1.4.5-canary.1+ed4363334`); there the package script still wins unless
+  `--no-script` is passed. On 1.4.4 the `[lint]` block is inert future-native configuration.
+- **CI runs the native linter on a canary runtime:** job `lint-native` installs
+  `bun-version: canary` and runs `bun run lint:native` / `bun run lint:native:type-aware` (both
+  fail on 1.4.4 by design). The repo pin stays exact — do not add canary to `.bun-version`; the pin
+  contract requires one X.Y.Z across `.bun-version`, `engines.bun`, `packageManager`, and
+  `@types/bun`, and `@types/bun` has no canary version.
+- Keep `oxlint` in `devDependencies`: the `lint` script and `lint:check` run it, and editors use
+  it via `oxlint --lsp`. The canary's `--doctor` view of which packages are removable does not
+  apply to 1.4.4.
 - **`bun:bundle` AST constraint:** `feature()` from `"bun:bundle"` can only appear directly inside
   an `if` condition or ternary (`feature("FLAG") ? true : false`). Passing it to functions like
   `expect()` or `expectTypeOf()` fails at parse time. Testing `--feature=FLAG` requires subprocess spawning
@@ -121,6 +149,16 @@ with `bun run audit:tool-calls`.
 - **`Bun.semver` vs npm `semver`:** `Bun.semver.satisfies` takes only `(version, range)` and does
   NOT support `{ includePrerelease: true }`. The npm `semver` package in `devDependencies` is required by
   `tests/market_index.test.ts` to match upstream Harness install behaviour. Do not swap it out.
+- **`bun run` flag position & profiling flags:**
+  - **Runtime & runner flags** (`--watch`, `--hot`, `--smol`, `--check`, `--bun`, `--console-depth=<val>`,
+    `--inspect`, `--cpu-prof`, `--heap-prof`, `--no-env-file`) must appear **before** the target script or
+    entrypoint (e.g. `bun --check run script.ts`, `bun run --bun vite`, or `bun --console-depth=5 dev`).
+    Value flags must use `--flag=<val>` to avoid argument ambiguity.
+  - **Always forwarded to `process.argv`:** Any flag placed **after** the target script or entrypoint
+    (e.g. `bun run dev --watch` or `bun run clean --bun`) is passed verbatim to the script as arguments,
+    bypassing Bun's runtime controls completely.
+  - **Profiling flags:** Bun's native profiler flags are `--cpu-prof` (with `--cpu-prof-md` for LLM analysis),
+    `--cpu-prof-name`, `--cpu-prof-dir`, and `--heap-prof` — never `--profile-cpu`.
 
 **Environment and tooling**
 
@@ -183,11 +221,14 @@ Do not delete these as redundant without reading the ADR:
 
 ## Layout
 
-`lib/` (ingestion, settlement, combo identity, venue stores) · `bin/` (dx, linters) ·
-`market/` (format-1 index for Discover) · `tests/` (`*.test.ts` suites plus fixtures) ·
-**colocated `*.test.ts` suites in `lib/` and `scripts/`** (CI runs only `tests/`, so run `bun test`
-before pushing) · `packages/` · `design/` · `schema/` · `infra/` · `docs/` · root runbooks
-(runtime shapes, guardrails, token architecture, R2/API, VPS domain).
+`lib/` (ingestion, settlement, R2 CAS manifests, hostname extraction, venue stores) · `src/lib/`
+(SoA analytics: `portal_taxonomy_normalizer.ts`, `syndicate_bot_detector.ts`,
+`syndicate_adjacency_rollup.ts`, `customer_pairwise_cross_ref.ts`) · `cli/` (`sportsdesk_cli.ts`,
+`sportsdesk_fraud_cli.ts`) · `bin/` (dx, linters) · `market/` (format-1 index for Discover) ·
+`tests/` (`*.test.ts` suites plus fixtures) · **colocated `*.test.ts` suites in `lib/` and
+`scripts/`** (CI runs `tests/` plus `scripts/capture/*.test.ts`, so run `bun test` before pushing) ·
+`packages/` · `design/` · `schema/` · `infra/` · `docs/` (including `docs/runbooks/` for runtime
+shapes, guardrails, token architecture, R2/API, and VPS domain).
 
 ## Hard rules
 
@@ -226,6 +267,42 @@ flags).
   files (137 of them `zod-not-guard-calls`). Reintroducing it means restoring the copy, the
   baseline and a decision about that debt, not just re-adding a step.
 
+### PR bodies, commit messages, and closing keywords
+
+GitHub's auto-close parser reads closing keywords **literally — inside backticks, inside fenced
+code, in commit messages, and with the negation ignored**. The keywords are `close`, `closes`,
+`closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves`, `resolved`, each followed by an issue
+reference (`#248`, `GH-248`, or the issue URL).
+
+So a sentence _explaining that you are not closing an issue_ closes it. That happened twice on
+2026-11-15, both times writing `deliberately not Fixes #248` — the second time after the first had
+already been noticed. The second one is a documentation failure, not a parser surprise.
+
+- **Safe:** mention the number alone — `#248` with no keyword anywhere near it.
+- **Unsafe:** any closing keyword followed by a `#N` reference, however it is quoted or formatted.
+  Backticks do not protect it; a code fence does not protect it.
+- If you must discuss the mechanism, describe it without putting the keyword next to a reference:
+  "the closing keyword", "auto-close", "a `Fixes`-style reference".
+- To close deliberately, write it once on its own line: `Closes #248`.
+- **Check issue state after merging.** A premature close is silent, and reopening loses the
+  ordering a reader would expect from the thread.
+
+### Check the run, not the green tick
+
+Check runs attach to a **commit SHA**, not to a pull request. Retarget a PR, rebase it, or move a
+stacked base, and the PR can keep showing the results of a run against the **previous** head or
+base — passing, and no longer about the code being merged. Observed on 2026-11-15: a PR recreated
+against `main` displayed the run from its stacked base (`43764453809`) until a branch update fired
+`synchronize` and produced `43764621840`.
+
+- After a retarget, rebase, or base change, compare `git rev-parse HEAD` with the check run's head
+  SHA before trusting a green tick, and push or update to force a fresh run.
+- `strict: true` branch protection forces an update before merge, and the update fires
+  `synchronize`, so a fresh run normally exists by merge time. That is a backstop, not a
+  substitute for looking.
+- Same class as the closing-keyword rule above: what GitHub _displays_ as "your checks" is not
+  necessarily the run you think it is.
+
 ### Data-handling budgets
 
 - Live captures `data/live-bets.json` and `data/live-wagers.json` stay **untracked**; `positions:cron`
@@ -233,8 +310,16 @@ flags).
   `tests/fixtures/live-wagers.partial.json`. `tests/data_artifacts_tracking.test.ts` fails if either
   path is tracked again.
 - Hot aggregation over roughly 10k+ rows uses fixed-capacity TypedArray arenas: no `Map`, `Set`,
-  `boolean[]` or growing `T[]` on the aggregation path. Reference: `lib/gslive_tally_rollup.ts`;
-  ratchet: `tests/tally_allocation_invariant.test.ts` (0 collection allocations).
+  `boolean[]` or growing `T[]` on the aggregation path. Reference: `lib/gslive_tally_rollup.ts`,
+  `src/lib/customer_pairwise_cross_ref.ts` (`PairwiseWagerColumnStore`,
+  `PairwiseOverlapColumnStore`); ratchet: `tests/tally_allocation_invariant.test.ts` (0 collection
+  allocations).
+- Canonical R2 CAS manifest promotion (`lib/r2_manifest_cas.ts`, `CANONICAL_R2_SINK_SPECS`,
+  `BRIDGE_R2_SINK_SPECS`): `If-None-Match: *` (gen 1) / `If-Match` (gen > 1) with zero rebases on
+  HTTP `412` (`ERR_R2_MANIFEST_CAS_REJECTED`, exit `74`), zero `unresolved_gap_cents`
+  (`ERR_OPS_RECONCILIATION_GAP`, exit `65`), and token-bleed isolation (`ERR_CF_TOKEN_BLEED_10000`,
+  exit `77`). `bun x sportsdesk-fraud cross-ref` hydrates R2 SoA chunks directly and fails closed on
+  local file inputs (`ERR_OPS_LOCAL_JSON_FORBIDDEN`, exit `78`).
 - Dense flags are `Uint32Array` bitsets. Do not add `boolean[]` to runtime aggregation.
 - DOD6 reader: `lookupInto(login, target)` in per-row loops; `lookup()` allocates a result and a
   handle union per call. Handles are opaque; use `rowOfHandle`, never sort by handle.
@@ -245,5 +330,5 @@ flags).
 
 ## Doc ownership
 
-`README.md` = orientation + the runbook tree · the root runbooks = operational procedure ·
-`docs/` = long-form. Move procedure into `docs/` rather than growing the root.
+`README.md` = orientation + the runbook tree · `docs/runbooks/` = operational procedure ·
+`docs/` = long-form. Move procedure into `docs/runbooks/` rather than growing the root.

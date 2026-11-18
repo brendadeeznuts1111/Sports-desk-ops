@@ -25,7 +25,6 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { markdownTable, type DashboardSection } from "./dashboard_markdown.ts";
 import {
   PER_OFFICE_IP_TRACKER_CLUSTERS,
@@ -44,7 +43,7 @@ import {
 const MODULE_DIR =
   typeof import.meta.dir === "string"
     ? import.meta.dir
-    : dirname(fileURLToPath(import.meta.url));
+    : dirname(Bun.fileURLToPath(import.meta.url));
 
 export const DEFAULT_REPO_ROOT = resolve(MODULE_DIR, "..");
 
@@ -5707,12 +5706,7 @@ export function buildGovernanceDashboardSection(
 }
 
 function escapeHtml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+  return Bun.escapeHTML(text);
 }
 
 /**

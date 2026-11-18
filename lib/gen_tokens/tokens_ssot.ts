@@ -39,6 +39,56 @@ export type TokensGatesToml = {
   readonly min_ui_component_contrast_milli: number;
   readonly min_cross_state_delta_e00_milli: number;
   readonly min_fresh_vs_stale_delta_e00_milli: number;
+  readonly min_adjacent_channel_delta_e00_milli?: number;
+};
+
+export type TokensLayoutToml = {
+  readonly grid_unit_px: number;
+  readonly card_padding_px: number;
+  readonly row_height_compact_px: number;
+  readonly row_height_comfortable_px: number;
+  readonly border_hairline_px: number;
+  readonly border_interactive_px: number;
+  readonly focus_ring_width_px: number;
+  readonly focus_ring_offset_px: number;
+  readonly radius_badge_px: number;
+  readonly radius_card_px: number;
+  readonly radius_modal_px: number;
+};
+
+export type TokensMotionToml = {
+  readonly aria_live_coalesce_ms: number;
+  readonly tooltip_delay_ms: number;
+  readonly drawer_transition_ms: number;
+  readonly pulse_critical_period_ms: number;
+};
+
+export type CasStateToml = {
+  readonly key: string;
+  readonly state_id: string;
+  readonly token_name: string;
+  readonly fg_hex: string;
+  readonly bg_hex: string;
+  readonly border_hex: string;
+  readonly glyph: string;
+  readonly description: string;
+};
+
+export type TomlAnsiProfile = {
+  readonly profile_id: string;
+  readonly colors: boolean;
+  readonly columns: number;
+  readonly hyperlinks: boolean;
+  readonly kitty_graphics: boolean;
+  readonly light: boolean;
+};
+
+export type TomlAnsiContract = {
+  readonly surface_token: string;
+  readonly max_dark_surface_l_star_milli: number;
+  readonly forbid_ambient_colorfgbg: boolean;
+  readonly forbid_kitty_disk_io_in_ci: boolean;
+  readonly ascii_fallback_profile: string;
 };
 
 export type SurfaceToml = {
@@ -59,6 +109,8 @@ export type SlaStateToml = {
   readonly fg_hex: string;
   readonly bg_hex: string;
   readonly border_hex: string;
+  readonly border_style?: string;
+  readonly glyph?: string;
   readonly description: string;
 };
 
@@ -74,6 +126,7 @@ export type IngestionChannelToml = {
   legacy_token_name?: string;
   hex: string;
   legacy_wire_hex?: string;
+  glyph?: string;
   channel_code: string;
   wire_aliases: readonly string[];
   signal_tier: string;
@@ -140,15 +193,38 @@ export type KeymapSlotToml = {
   readonly label: string;
 };
 
+/** One `:root` alias. Never emitted as an `@property`; never introduces a color. */
+export type AliasToml = {
+  /** `--kebab-case` custom property emitted as `<alias>: var(<target>);`. */
+  readonly alias: string;
+  /** Canonical `--sd-*` token the alias resolves to. */
+  readonly target: string;
+};
+
+export type TokenAliasesToml = {
+  /** Emitted into every generated stylesheet (dashboard + static snapshots). */
+  readonly legacy: readonly AliasToml[];
+  /** Emitted into `src/dashboard/tokens.generated.css` only. */
+  readonly dashboard: readonly AliasToml[];
+  /** Optional `@media (prefers-contrast: more)` alias overrides. */
+  readonly accessibility?: readonly AliasToml[];
+};
+
 export type TokensSsot = {
   meta: TokensMeta;
   gates: TokensGatesToml;
+  layout?: TokensLayoutToml;
+  motion?: TokensMotionToml;
   surfaces: SurfaceToml[];
   ui: UiTokenToml[];
   sla: SlaStateToml[];
+  cas_states?: CasStateToml[];
+  cli_ansi_profiles?: Readonly<Record<string, TomlAnsiProfile>>;
+  ansi_contract?: TomlAnsiContract;
   bridges: Readonly<Record<string, number>>;
   ingestion: IngestionChannelToml[];
   routes: RouteToml[];
+  aliases: TokenAliasesToml;
   bitmasks: BitmasksToml;
   keymap: KeymapSlotToml[];
   tokens: Readonly<Record<string, string>>;
@@ -307,10 +383,39 @@ function parseMeta(raw: unknown): TokensMeta {
   return out;
 }
 
+function optString(
+  obj: Record<string, unknown>,
+  key: string,
+  ctx: string,
+): string | undefined {
+  const raw = obj[key];
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "string" || raw.length === 0) {
+    throw new Error(
+      `[tokens_ssot] ${ctx}: ${key} must be a non-empty string if provided`,
+    );
+  }
+  return raw;
+}
+
+function optPositiveInt(
+  obj: Record<string, unknown>,
+  key: string,
+  ctx: string,
+): number | undefined {
+  if (obj[key] === undefined) return undefined;
+  return reqPositiveInt(obj, key, ctx);
+}
+
 function parseGates(raw: unknown): TokensGatesToml {
   if (!isRecord(raw)) {
     throw new Error("[tokens_ssot] gates must be a table");
   }
+  const minAdjChannel = optPositiveInt(
+    raw,
+    "min_adjacent_channel_delta_e00_milli",
+    "gates",
+  );
   return {
     min_body_contrast_ratio_milli: reqPositiveInt(
       raw,
@@ -336,6 +441,62 @@ function parseGates(raw: unknown): TokensGatesToml {
       raw,
       "min_fresh_vs_stale_delta_e00_milli",
       "gates",
+    ),
+    ...(minAdjChannel !== undefined
+      ? { min_adjacent_channel_delta_e00_milli: minAdjChannel }
+      : {}),
+  };
+}
+
+function parseLayout(raw: unknown): TokensLayoutToml | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    throw new Error("[tokens_ssot] layout must be a table");
+  }
+  return {
+    grid_unit_px: reqPositiveInt(raw, "grid_unit_px", "layout"),
+    card_padding_px: reqPositiveInt(raw, "card_padding_px", "layout"),
+    row_height_compact_px: reqPositiveInt(
+      raw,
+      "row_height_compact_px",
+      "layout",
+    ),
+    row_height_comfortable_px: reqPositiveInt(
+      raw,
+      "row_height_comfortable_px",
+      "layout",
+    ),
+    border_hairline_px: reqPositiveInt(raw, "border_hairline_px", "layout"),
+    border_interactive_px: reqPositiveInt(
+      raw,
+      "border_interactive_px",
+      "layout",
+    ),
+    focus_ring_width_px: reqPositiveInt(raw, "focus_ring_width_px", "layout"),
+    focus_ring_offset_px: reqPositiveInt(raw, "focus_ring_offset_px", "layout"),
+    radius_badge_px: reqPositiveInt(raw, "radius_badge_px", "layout"),
+    radius_card_px: reqPositiveInt(raw, "radius_card_px", "layout"),
+    radius_modal_px: reqPositiveInt(raw, "radius_modal_px", "layout"),
+  };
+}
+
+function parseMotion(raw: unknown): TokensMotionToml | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    throw new Error("[tokens_ssot] motion must be a table");
+  }
+  return {
+    aria_live_coalesce_ms: reqPositiveInt(
+      raw,
+      "aria_live_coalesce_ms",
+      "motion",
+    ),
+    tooltip_delay_ms: reqPositiveInt(raw, "tooltip_delay_ms", "motion"),
+    drawer_transition_ms: reqPositiveInt(raw, "drawer_transition_ms", "motion"),
+    pulse_critical_period_ms: reqPositiveInt(
+      raw,
+      "pulse_critical_period_ms",
+      "motion",
     ),
   };
 }
@@ -366,6 +527,8 @@ function parseSlaEntry(key: string, raw: unknown): SlaStateToml {
   if (!isRecord(raw)) {
     throw new Error(`[tokens_ssot] sla.${key}: expected table`);
   }
+  const border_style = optString(raw, "border_style", `sla.${key}`);
+  const glyph = optString(raw, "glyph", `sla.${key}`);
   return {
     key,
     state_id: reqString(raw, "state_id", `sla.${key}`),
@@ -373,7 +536,25 @@ function parseSlaEntry(key: string, raw: unknown): SlaStateToml {
     fg_hex: reqHex(raw, "fg_hex", `sla.${key}`),
     bg_hex: reqHex(raw, "bg_hex", `sla.${key}`),
     border_hex: reqHex(raw, "border_hex", `sla.${key}`),
+    ...(border_style !== undefined ? { border_style } : {}),
+    ...(glyph !== undefined ? { glyph } : {}),
     description: reqString(raw, "description", `sla.${key}`),
+  };
+}
+
+function parseCasStateEntry(key: string, raw: unknown): CasStateToml {
+  if (!isRecord(raw)) {
+    throw new Error(`[tokens_ssot] cas_states.${key}: expected table`);
+  }
+  return {
+    key,
+    state_id: reqString(raw, "state_id", `cas_states.${key}`),
+    token_name: reqString(raw, "token_name", `cas_states.${key}`),
+    fg_hex: reqHex(raw, "fg_hex", `cas_states.${key}`),
+    bg_hex: reqHex(raw, "bg_hex", `cas_states.${key}`),
+    border_hex: reqHex(raw, "border_hex", `cas_states.${key}`),
+    glyph: reqString(raw, "glyph", `cas_states.${key}`),
+    description: reqString(raw, "description", `cas_states.${key}`),
   };
 }
 
@@ -471,6 +652,7 @@ function parseIngestion(
     "legacy_token_name",
     `ingestion.${key}`,
   );
+  const glyph = optString(raw, "glyph", `ingestion.${key}`);
 
   const base: IngestionChannelToml = {
     channel_id,
@@ -485,6 +667,7 @@ function parseIngestion(
     ...(legacy_token_name !== undefined ? { legacy_token_name } : {}),
     hex: reqHex(raw, "hex", `ingestion.${key}`),
     ...(legacy_wire_hex !== undefined ? { legacy_wire_hex } : {}),
+    ...(glyph !== undefined ? { glyph } : {}),
     channel_code: reqString(raw, "channel_code", `ingestion.${key}`),
     wire_aliases: reqStringArray(raw, "wire_aliases", `ingestion.${key}`),
     signal_tier: reqString(raw, "signal_tier", `ingestion.${key}`),
@@ -723,6 +906,103 @@ function parseTokensMap(raw: unknown): Readonly<Record<string, string>> {
   return out;
 }
 
+const CUSTOM_PROPERTY_RE = /^--[a-z0-9][a-z0-9-]*$/;
+
+function parseAliasGroup(raw: unknown, ctx: string): AliasToml[] {
+  if (raw === undefined) return [];
+  if (!isRecord(raw)) {
+    throw new Error(`[tokens_ssot] ${ctx} must be a table`);
+  }
+  const out: AliasToml[] = [];
+  for (const [alias, target] of Object.entries(raw)) {
+    if (!CUSTOM_PROPERTY_RE.test(alias)) {
+      throw new Error(
+        `[tokens_ssot] ${ctx}: alias must be a --kebab-case custom property (got ${JSON.stringify(alias)})`,
+      );
+    }
+    if (typeof target !== "string" || !CUSTOM_PROPERTY_RE.test(target)) {
+      throw new Error(
+        `[tokens_ssot] ${ctx}.${alias}: target must be a --kebab-case token name (got ${String(target)})`,
+      );
+    }
+    out.push({ alias, target });
+  }
+  return out;
+}
+
+/** Every custom property the generator can emit as a canonical token. */
+function canonicalTokenNames(ssot: TokensSsot): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const surface of ssot.surfaces) names.add(surface.token_name);
+  for (const uiToken of ssot.ui) names.add(uiToken.token_name);
+  for (const slaState of ssot.sla) {
+    names.add(slaState.token_name);
+    names.add(`${slaState.token_name}-bg`);
+    names.add(`${slaState.token_name}-border`);
+  }
+  for (const channel of ssot.ingestion) names.add(channel.token_name);
+  for (const route of ssot.routes) names.add(route.token_name);
+  return names;
+}
+
+function validateAliases(ssot: TokensSsot): void {
+  const canonical = canonicalTokenNames(ssot);
+  const seen = new Set<string>();
+  const groups = [
+    ["legacy", ssot.aliases.legacy],
+    ["dashboard", ssot.aliases.dashboard],
+  ] as const;
+  for (const [groupName, group] of groups) {
+    for (const entry of group) {
+      if (canonical.has(entry.alias)) {
+        throw new Error(
+          `ERR_TOKEN_ALIAS_SHADOWS_TOKEN: aliases.${groupName}.${entry.alias} collides with a canonical token`,
+        );
+      }
+      if (!canonical.has(entry.target)) {
+        throw new Error(
+          `ERR_TOKEN_ALIAS_TARGET_UNKNOWN: aliases.${groupName}.${entry.alias} -> ${entry.target}`,
+        );
+      }
+      if (seen.has(entry.alias)) {
+        throw new Error(
+          `ERR_TOKEN_ALIAS_DUPLICATE: aliases define ${entry.alias} more than once`,
+        );
+      }
+      seen.add(entry.alias);
+    }
+  }
+  for (const entry of ssot.aliases.accessibility ?? []) {
+    if (canonical.has(entry.alias)) {
+      throw new Error(
+        `ERR_TOKEN_ALIAS_SHADOWS_TOKEN: aliases.accessibility.${entry.alias} collides with a canonical token`,
+      );
+    }
+    if (!canonical.has(entry.target)) {
+      throw new Error(
+        `ERR_TOKEN_ALIAS_TARGET_UNKNOWN: aliases.accessibility.${entry.alias} -> ${entry.target}`,
+      );
+    }
+  }
+  for (const channel of ssot.ingestion) {
+    const legacyToken = channel.legacy_token_name;
+    if (legacyToken === undefined) continue;
+    const alias = ssot.aliases.legacy.find(
+      (entry) => entry.alias === legacyToken,
+    );
+    if (alias === undefined) {
+      throw new Error(
+        `ERR_TOKEN_LEGACY_ALIAS_MISSING: ingestion ${channel.layer_id} declares ${legacyToken} but aliases.legacy does not define it`,
+      );
+    }
+    if (alias.target !== channel.token_name) {
+      throw new Error(
+        `ERR_TOKEN_LEGACY_ALIAS_MISMATCH: aliases.legacy.${legacyToken} -> ${alias.target}, ingestion ${channel.layer_id} -> ${channel.token_name}`,
+      );
+    }
+  }
+}
+
 function tableValues(section: string, raw: unknown): [string, unknown][] {
   if (!isRecord(raw)) {
     throw new Error(`[tokens_ssot] ${section} must be a table`);
@@ -730,7 +1010,190 @@ function tableValues(section: string, raw: unknown): [string, unknown][] {
   return Object.entries(raw);
 }
 
+/**
+ * Zero-allocation byte preflight before `Bun.TOML.parse`: rejects UTF-8 BOM (`0xEF 0xBB 0xBF`)
+ * and UTF-8 non-breaking space (`0xC2 0xA0`), which fail strict TOML v1.0 whitespace rules.
+ */
+export function assertCleanTomlBytes(buf: Uint8Array): void {
+  if (
+    buf.length >= 3 &&
+    buf[0] === 0xef &&
+    buf[1] === 0xbb &&
+    buf[2] === 0xbf
+  ) {
+    throw new Error("ERR_SPEC_TOML_BOM_BYTE at offset 0");
+  }
+  for (let i = 0; i < buf.length - 1; i++) {
+    if (buf[i] === 0xc2 && buf[i + 1] === 0xa0) {
+      throw new Error(`ERR_SPEC_TOML_NBSP_BYTE at offset ${i}`);
+    }
+  }
+}
+
+const ANSI_PROFILE_KEYS = [
+  "colors",
+  "columns",
+  "hyperlinks",
+  "kitty_graphics",
+  "light",
+  "profile_id",
+] as const;
+
+function parseLabLightnessMilli(hex: string): number {
+  const labStr = Bun.color(hex, "lab");
+  if (!labStr) {
+    throw new Error(`ERR_SPEC_INVALID_HEX: surfaces.cli (${hex})`);
+  }
+  const m = labStr.match(/^lab\(\s*([+-]?\d+(?:\.\d+)?)%?\s+/);
+  if (!m) {
+    throw new Error(`ERR_SPEC_INVALID_LAB: ${labStr}`);
+  }
+  return Math.round(Number(m[1]) * 1000);
+}
+
+export function validateAnsiThemeProfiles(
+  cliCanvasHex: string,
+  profiles: Readonly<Record<string, TomlAnsiProfile>>,
+  contract: TomlAnsiContract,
+): void {
+  const surfaceLStarMilli = parseLabLightnessMilli(cliCanvasHex);
+  const expectedLight =
+    surfaceLStarMilli > contract.max_dark_surface_l_star_milli;
+
+  const fallback = profiles[contract.ascii_fallback_profile];
+  if (
+    !fallback ||
+    fallback.colors !== false ||
+    fallback.hyperlinks !== false ||
+    fallback.columns !== 0
+  ) {
+    throw new Error(
+      `ERR_SPEC_ANSI_FALLBACK_INVALID: ${contract.ascii_fallback_profile} must set colors=false, hyperlinks=false, columns=0`,
+    );
+  }
+
+  for (const [name, p] of Object.entries(profiles)) {
+    const actualKeys = Object.keys(p).sort();
+    if (
+      actualKeys.length !== ANSI_PROFILE_KEYS.length ||
+      actualKeys.some((k, idx) => k !== ANSI_PROFILE_KEYS[idx])
+    ) {
+      throw new Error(
+        `ERR_SPEC_NON_UNIFORM_ANSI_PROFILE: [cli.markdown_ansi.${name}]`,
+      );
+    }
+    if (contract.forbid_ambient_colorfgbg && typeof p.light !== "boolean") {
+      throw new Error(
+        `ERR_SPEC_AMBIENT_COLORFGBG_RISK: [cli.markdown_ansi.${name}].light must be explicit`,
+      );
+    }
+    if (p.light !== expectedLight) {
+      throw new Error(
+        `ERR_A11Y_ANSI_POLARITY_MISMATCH: [cli.markdown_ansi.${name}].light=${String(p.light)} contradicts ${cliCanvasHex} (L*=${(surfaceLStarMilli / 1000).toFixed(2)})`,
+      );
+    }
+    if (!Number.isInteger(p.columns) || p.columns < 0 || p.columns > 512) {
+      throw new Error(
+        `ERR_SPEC_ANSI_COLUMNS_RANGE: [cli.markdown_ansi.${name}].columns=${String(p.columns)}`,
+      );
+    }
+    if (contract.forbid_kitty_disk_io_in_ci && p.kitty_graphics !== false) {
+      throw new Error(
+        `ERR_SPEC_KITTY_LOCAL_DISK_FORBIDDEN: [cli.markdown_ansi.${name}].kitty_graphics must be false`,
+      );
+    }
+  }
+}
+
+function parseBoolField(
+  obj: Record<string, unknown>,
+  key: string,
+  ctx: string,
+): boolean {
+  const v = obj[key];
+  if (typeof v !== "boolean") {
+    throw new Error(
+      `[tokens_ssot] ${ctx}: ${key} must be a boolean (got ${String(v)})`,
+    );
+  }
+  return v;
+}
+
+function parseAnsiProfiles(
+  rawCli: unknown,
+): Record<string, TomlAnsiProfile> | undefined {
+  if (rawCli === undefined) return undefined;
+  if (!isRecord(rawCli)) {
+    throw new Error("[tokens_ssot] cli must be a table");
+  }
+  if (rawCli.markdown_ansi === undefined) return undefined;
+  const entries = tableValues("cli.markdown_ansi", rawCli.markdown_ansi);
+  const profiles: Record<string, TomlAnsiProfile> = {};
+  for (const [name, raw] of entries) {
+    if (!isRecord(raw)) {
+      throw new Error(
+        `[tokens_ssot] cli.markdown_ansi.${name}: expected table`,
+      );
+    }
+    profiles[name] = {
+      profile_id: reqString(raw, "profile_id", `cli.markdown_ansi.${name}`),
+      colors: parseBoolField(raw, "colors", `cli.markdown_ansi.${name}`),
+      columns: reqIntRange(raw, "columns", 0, 512, `cli.markdown_ansi.${name}`),
+      hyperlinks: parseBoolField(
+        raw,
+        "hyperlinks",
+        `cli.markdown_ansi.${name}`,
+      ),
+      kitty_graphics: parseBoolField(
+        raw,
+        "kitty_graphics",
+        `cli.markdown_ansi.${name}`,
+      ),
+      light: parseBoolField(raw, "light", `cli.markdown_ansi.${name}`),
+    };
+  }
+  return profiles;
+}
+
+function parseAnsiContract(
+  rawContracts: unknown,
+): TomlAnsiContract | undefined {
+  if (rawContracts === undefined) return undefined;
+  if (!isRecord(rawContracts)) {
+    throw new Error("[tokens_ssot] contracts must be a table");
+  }
+  const raw = rawContracts.ansi_theme;
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    throw new Error("[tokens_ssot] contracts.ansi_theme must be a table");
+  }
+  return {
+    surface_token: reqString(raw, "surface_token", "contracts.ansi_theme"),
+    max_dark_surface_l_star_milli: reqPositiveInt(
+      raw,
+      "max_dark_surface_l_star_milli",
+      "contracts.ansi_theme",
+    ),
+    forbid_ambient_colorfgbg: parseBoolField(
+      raw,
+      "forbid_ambient_colorfgbg",
+      "contracts.ansi_theme",
+    ),
+    forbid_kitty_disk_io_in_ci: parseBoolField(
+      raw,
+      "forbid_kitty_disk_io_in_ci",
+      "contracts.ansi_theme",
+    ),
+    ascii_fallback_profile: reqString(
+      raw,
+      "ascii_fallback_profile",
+      "contracts.ansi_theme",
+    ),
+  };
+}
+
 export function parseTokensToml(tomlText: string): TokensSsot {
+  assertCleanTomlBytes(new TextEncoder().encode(tomlText));
   const parsed: unknown = Bun.TOML.parse(tomlText);
   return parseTokensTomlFromParsed(parsed);
 }
@@ -740,6 +1203,11 @@ export function parseTokensTomlFromParsed(parsed: unknown): TokensSsot {
     throw new Error("[tokens_ssot] root must be a TOML table");
   }
   if (parsed.gates !== undefined) scanNoFloats(parsed.gates, "gates");
+  if (parsed.layout !== undefined) scanNoFloats(parsed.layout, "layout");
+  if (parsed.motion !== undefined) scanNoFloats(parsed.motion, "motion");
+  if (parsed.cli !== undefined) scanNoFloats(parsed.cli, "cli");
+  if (parsed.contracts !== undefined)
+    scanNoFloats(parsed.contracts, "contracts");
   if (parsed.bridges !== undefined) scanNoFloats(parsed.bridges, "bridges");
   if (parsed.ingestion !== undefined)
     scanNoFloats(parsed.ingestion, "ingestion");
@@ -762,27 +1230,77 @@ export function parseTokensTomlFromParsed(parsed: unknown): TokensSsot {
   const ui = tableValues("ui", parsed.ui ?? {}).map(([k, v]) => parseUi(k, v));
 
   const gates = parseGates(parsed.gates);
+  const layout = parseLayout(parsed.layout);
+  const motion = parseMotion(parsed.motion);
   const sla = tableValues("sla", parsed.sla).map(([k, v]) =>
     parseSlaEntry(k, v),
   );
+  const cas_states =
+    parsed.cas_states === undefined
+      ? undefined
+      : tableValues("cas_states", parsed.cas_states).map(([k, v]) =>
+          parseCasStateEntry(k, v),
+        );
+  const cli_ansi_profiles = parseAnsiProfiles(parsed.cli);
+  const ansi_contract = parseAnsiContract(parsed.contracts);
+  if (cli_ansi_profiles !== undefined && ansi_contract !== undefined) {
+    const cliSurface = surfaces.find(
+      (s) => s.token_name === ansi_contract.surface_token,
+    );
+    if (!cliSurface) {
+      throw new Error(
+        `ERR_SPEC_ANSI_SURFACE_MISSING: ${ansi_contract.surface_token}`,
+      );
+    }
+    validateAnsiThemeProfiles(cliSurface.hex, cli_ansi_profiles, ansi_contract);
+  }
   const bridges = parseBridges(parsed.bridges);
   const bitmasks = parseBitmasks(parsed.bitmasks);
   const keymap = parseKeymap(parsed.keymap);
   const tokens = parseTokensMap(parsed.tokens);
+  const rawAliases = parsed.aliases;
+  if (rawAliases !== undefined && !isRecord(rawAliases)) {
+    throw new Error("[tokens_ssot] aliases must be a table");
+  }
+  const accessibilityAliases =
+    isRecord(rawAliases) && rawAliases.accessibility !== undefined
+      ? parseAliasGroup(rawAliases.accessibility, "aliases.accessibility")
+      : undefined;
+  const aliases: TokenAliasesToml = {
+    legacy: parseAliasGroup(
+      isRecord(rawAliases) ? rawAliases.legacy : undefined,
+      "aliases.legacy",
+    ),
+    dashboard: parseAliasGroup(
+      isRecord(rawAliases) ? rawAliases.dashboard : undefined,
+      "aliases.dashboard",
+    ),
+    ...(accessibilityAliases !== undefined
+      ? { accessibility: accessibilityAliases }
+      : {}),
+  };
 
-  return {
+  const ssot: TokensSsot = {
     meta,
     gates,
+    ...(layout !== undefined ? { layout } : {}),
+    ...(motion !== undefined ? { motion } : {}),
     surfaces,
     ui,
     sla,
+    ...(cas_states !== undefined ? { cas_states } : {}),
+    ...(cli_ansi_profiles !== undefined ? { cli_ansi_profiles } : {}),
+    ...(ansi_contract !== undefined ? { ansi_contract } : {}),
     bridges,
     ingestion,
     routes,
+    aliases,
     bitmasks,
     keymap,
     tokens,
   };
+  validateAliases(ssot);
+  return ssot;
 }
 
 /** Row shape accepted by formatRouteThreshold (threshold fields only). */

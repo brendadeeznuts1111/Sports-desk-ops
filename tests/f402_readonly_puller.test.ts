@@ -29,7 +29,11 @@ import {
   parseCheckpoint,
   parseHierarchyList,
   redactSecrets,
+  REDACTED,
   redactSecretsAndIps,
+  safePathSegment,
+  writeRawJson,
+  writeSummaryJson,
   resolvePullSession,
   runCensus,
   runContract,
@@ -170,6 +174,183 @@ describe("redaction", () => {
     expect(noIps.IPAddress).toBe("<redacted>");
     expect(containsRawIp(secretsOnly)).toBe(true);
     expect(containsRawIp(noIps)).toBe(false);
+  });
+});
+
+describe("secret key matching", () => {
+  test("strips password, phone and email variants by partial name, any case", () => {
+    const keys = [
+      "Password",
+      "NewPassword",
+      "PasswordHash",
+      "EncryptPassword",
+      "passwd",
+      "pass",
+      "HomePhone",
+      "Phone1",
+      "PhoneNumber",
+      "SMSPhoneNumber",
+      "smsNumber",
+      "EMail",
+      "Email",
+      "email_address",
+      "TelegramID",
+      "authToken",
+      "Authorization",
+      "Cookie",
+      "clientSecret",
+      "PIN",
+      "PinCode",
+    ];
+    const raw: Record<string, unknown> = {};
+    for (const key of keys) raw[key] = `value-of-${key}`;
+    const nested = redactSecrets({ rows: [raw] }) as {
+      rows: Record<string, unknown>[];
+    };
+    for (const key of keys) {
+      expect(nested.rows[0]![key]).toBe(REDACTED);
+    }
+    expect(JSON.stringify(nested)).not.toContain("value-of-");
+  });
+
+  test("keeps ordinary keys that only resemble secret names", () => {
+    const raw = {
+      Login: "CUST1",
+      CustomerID: "C1",
+      Bypass: "x",
+      Spin: "y",
+      Shipping: "z",
+      PinnedLine: "w",
+    };
+    expect(redactSecrets(raw)).toEqual(raw);
+  });
+});
+
+describe("redaction masks every IP", () => {
+  test("two or more IPs in one text field are all masked", () => {
+    const raw = {
+      Operation: "from 10.1.2.3 then 10.9.8.7 via 2600:380::1",
+      rows: ["a 198.51.100.1 b 198.51.100.2"],
+    };
+    const masked = redactSecretsAndIps(raw) as {
+      Operation: string;
+      rows: string[];
+    };
+    expect(masked.Operation).toBe(
+      "from <redacted> then <redacted> via <redacted>",
+    );
+    expect(masked.rows[0]).toBe("a <redacted> b <redacted>");
+    expect(containsRawIp(masked)).toBe(false);
+  });
+
+  test("containsRawIp sees a second IPv4 and a bare IPv6", () => {
+    expect(containsRawIp("ok <redacted> then 10.9.8.7")).toBe(true);
+    expect(containsRawIp({ note: "2607:fb90::5" })).toBe(true);
+    expect(containsRawIp({ at: "2026-11-01T10:00:00.000Z" })).toBe(false);
+  });
+
+  test("writeSummaryJson writes a summary with several IPs in one field", () => {
+    const dir = mkdtempSync(join(tmpdir(), "f402-multi-ip-"));
+    try {
+      const path = writeSummaryJson(dir, "s.json", {
+        note: "from 10.1.2.3 then 10.9.8.7",
+      });
+      const text = readFileSync(path, "utf8");
+      expect(text).not.toContain("10.1.2.3");
+      expect(text).not.toContain("10.9.8.7");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("raw file path safety", () => {
+  const unsafe = [
+    "../x",
+    "..",
+    "a/b",
+    "a\\b",
+    "/etc/passwd",
+    "C:\\x",
+    "",
+    " CUST1",
+    "CUST.1",
+  ];
+
+  test("safePathSegment accepts plain ids and refuses traversal and separators", () => {
+    for (const id of ["CUST1", "cust_2", "A-9", "2026-11-01"]) {
+      expect(safePathSegment(id, "test")).toBe(id);
+    }
+    for (const id of unsafe) {
+      let caught: unknown;
+      try {
+        safePathSegment(id, "test");
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(F402PullerError);
+      expect((caught as F402PullerError).code).toBe("unsafe-path");
+    }
+  });
+
+  test("writeRawJson refuses paths that leave raw/", () => {
+    const dir = mkdtempSync(join(tmpdir(), "f402-raw-path-"));
+    try {
+      for (const rel of [
+        "../escape.json",
+        "a/../../escape.json",
+        "/tmp/x.json",
+        "",
+      ]) {
+        expect(() => writeRawJson(dir, rel, {})).toThrow(F402PullerError);
+      }
+      expect(writeRawJson(dir, "contract/CUST1.json", {})).toBe(
+        join(dir, "raw", "contract/CUST1.json"),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("phases refuse an unsafe customer id before any request", async () => {
+    const calls: string[] = [];
+    const client = new F402PullClient({
+      session,
+      intervalMs: 0,
+      fetchImpl: async (url) => {
+        calls.push(String(url));
+        return new Response(JSON.stringify({ LIST: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+    const outDir = tempOut();
+    const context = {
+      client,
+      outDir,
+      agentId: "ROOT1",
+      agentOwner: "ROOT1",
+      agentType: "M",
+    } as const;
+    try {
+      await expect(
+        runContract(context, { customerId: "../../etc" }),
+      ).rejects.toMatchObject({ code: "unsafe-path" });
+      saveCheckpoint(outDir, {
+        ...emptyCheckpoint("ROOT1", "2026-11-14T00:00:00.000Z"),
+        customerIds: ["CUST1", "../CUST2"],
+      });
+      await expect(
+        runTransactions(context, { start: "" }),
+      ).rejects.toMatchObject({ code: "unsafe-path" });
+      await expect(
+        runWagers(context, { from: "2026-11-01", to: "2026-11-01" }),
+      ).rejects.toMatchObject({ code: "unsafe-path" });
+      expect(calls).toEqual([]);
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
   });
 });
 

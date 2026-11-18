@@ -5,7 +5,6 @@
  * Password is never accepted via argv or env: piped JSON or interactive TTY prompt only.
  */
 
-import { Buffer } from "node:buffer";
 import { sql } from "../lib/db.ts";
 import { hashPassword } from "../lib/auth.ts";
 

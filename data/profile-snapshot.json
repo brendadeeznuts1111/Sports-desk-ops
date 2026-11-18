@@ -1,0 +1,296 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": "synthetic fixture; no operator or customer data",
+  "fieldMap": {
+    "clv": "book.clvBps",
+    "vol": "book.lifetimeVolumeUsd",
+    "sharp": "book.sharpScore"
+  },
+  "profiles": [
+    {
+      "id": "P001",
+      "vol": 0,
+      "clv": -2000,
+      "sharp": 0,
+      "flags": [
+        "FIXTURE",
+        "SAMPLE"
+      ]
+    },
+    {
+      "id": "P002",
+      "vol": 7919,
+      "clv": -1903,
+      "sharp": 3.7,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P003",
+      "vol": 15838,
+      "clv": -1806,
+      "sharp": 7.4,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P004",
+      "vol": 23757,
+      "clv": -1709,
+      "sharp": 11.1,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P005",
+      "vol": 0,
+      "clv": -1612,
+      "sharp": 14.8,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P006",
+      "vol": 39595,
+      "clv": -1515,
+      "sharp": 18.5,
+      "flags": [
+        "FIXTURE",
+        "SAMPLE"
+      ]
+    },
+    {
+      "id": "P007",
+      "vol": 47514,
+      "clv": -1418,
+      "sharp": 22.2,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P008",
+      "vol": 55433,
+      "clv": -1321,
+      "sharp": 25.9,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P009",
+      "vol": 0,
+      "clv": -1224,
+      "sharp": 29.6,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P010",
+      "vol": 71271,
+      "clv": -1127,
+      "sharp": 33.3,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P011",
+      "vol": 79190,
+      "clv": -1030,
+      "sharp": 37,
+      "flags": [
+        "FIXTURE",
+        "SAMPLE"
+      ]
+    },
+    {
+      "id": "P012",
+      "vol": 87109,
+      "clv": -933,
+      "sharp": 40.7,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P013",
+      "vol": 0,
+      "clv": -836,
+      "sharp": 44.4,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P014",
+      "vol": 102947,
+      "clv": -739,
+      "sharp": 48.1,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P015",
+      "vol": 110866,
+      "clv": -642,
+      "sharp": 51.8,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P016",
+      "vol": 118785,
+      "clv": -545,
+      "sharp": 55.5,
+      "flags": [
+        "FIXTURE",
+        "SAMPLE"
+      ]
+    },
+    {
+      "id": "P017",
+      "vol": 0,
+      "clv": -448,
+      "sharp": 59.2,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P018",
+      "vol": 134623,
+      "clv": -351,
+      "sharp": 62.9,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P019",
+      "vol": 142542,
+      "clv": -254,
+      "sharp": 66.6,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P020",
+      "vol": 150461,
+      "clv": -157,
+      "sharp": 70.3,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P021",
+      "vol": 0,
+      "clv": -60,
+      "sharp": 74,
+      "flags": [
+        "FIXTURE",
+        "SAMPLE"
+      ]
+    },
+    {
+      "id": "P022",
+      "vol": 166299,
+      "clv": 37,
+      "sharp": 77.7,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P023",
+      "vol": 174218,
+      "clv": 134,
+      "sharp": 81.4,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P024",
+      "vol": 182137,
+      "clv": 231,
+      "sharp": 85.1,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P025",
+      "vol": 0,
+      "clv": 328,
+      "sharp": 88.8,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "P026",
+      "vol": 197975,
+      "clv": 425,
+      "sharp": 92.5,
+      "flags": [
+        "FIXTURE",
+        "SAMPLE"
+      ]
+    },
+    {
+      "id": "P027",
+      "vol": 205894,
+      "clv": 522,
+      "sharp": 96.2,
+      "flags": [
+        "FIXTURE"
+      ]
+    },
+    {
+      "id": "SYNTH_01",
+      "vol": 1000000,
+      "clv": 40,
+      "sharp": 80,
+      "flags": [
+        "SYNTHETIC"
+      ]
+    },
+    {
+      "id": "SYNTH_02",
+      "vol": 1250000,
+      "clv": 60,
+      "sharp": 81,
+      "flags": [
+        "SYNTHETIC"
+      ]
+    },
+    {
+      "id": "SYNTH_03",
+      "vol": 1500000,
+      "clv": 80,
+      "sharp": 82,
+      "flags": [
+        "SYNTHETIC"
+      ]
+    },
+    {
+      "id": "SYNTH_04",
+      "vol": 1750000,
+      "clv": 100,
+      "sharp": 83,
+      "flags": [
+        "SYNTHETIC"
+      ]
+    }
+  ]
+}

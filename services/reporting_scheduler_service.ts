@@ -49,8 +49,10 @@ export const BRIDGE_SCHEDULE_IDS = [
   "sched_bridge_weblog_hourly",
   "sched_agent_tree_hourly",
   "sched_customer_profiles_6h",
+  "sched_customer_decision_rankings_daily",
   "sched_f402_session_refresh",
   "sched_weblog_sentinel_daily",
+  "sched_gslive_tickets_verify_30m",
 ] as const;
 
 export type ReportType =
@@ -264,8 +266,8 @@ export class ReportingSchedulerService {
     return this.start({ only: BRIDGE_SCHEDULE_IDS });
   }
 
-  private initDefaultSchedules(): void {
-    const defaultList: ScheduleDefinition[] = [
+  public static defaultSchedules(): ScheduleDefinition[] {
+    return [
       {
         id: "sched_10m_positions_pulse",
         name: "10-Minute Live Volume & Positions Pulse",
@@ -371,6 +373,31 @@ export class ReportingSchedulerService {
         enabled: true,
       },
       {
+        id: "sched_customer_decision_rankings_daily",
+        name: "Customer Decision Rankings (03:15 daily)",
+        scheduleTime: "15 3 * * *",
+        reportType: "SHELL_CAPTURE",
+        description:
+          "Runs `workers/customer_rankings_daily.ts --once` once daily at 03:15 America/Chicago to rebuild the 6,228-customer decision ranking artifact (`scratch/f402-customer-decision-rankings.{json,md}`) and refresh `packages/ui/src/data/rankings-summary.json` when staged inputs change.",
+        tz: "America/Chicago",
+        shellJob: {
+          bin: "bun",
+          args: [
+            "--no-orphans",
+            "--no-env-file",
+            "run",
+            "workers/customer_rankings_daily.ts",
+            "--once",
+          ],
+          requires: [
+            "file:scratch/f402-player-analysis-all.json",
+            "file:scratch/graded/graded-oct-window.json",
+            "file:scratch/graded/graded-today.json",
+          ],
+        },
+        enabled: true,
+      },
+      {
         id: "sched_f402_session_refresh",
         name: "F402 Session Refresh (optional 5m)",
         scheduleTime: "*/5 * * * *",
@@ -411,9 +438,33 @@ export class ReportingSchedulerService {
         },
         enabled: true,
       },
+      {
+        id: "sched_gslive_tickets_verify_30m",
+        name: "GSLive Ticket & Canary Verify (30m)",
+        scheduleTime: "*/30 * * * *",
+        reportType: "SHELL_CAPTURE",
+        description:
+          "Runs `scripts/verify-gslive-tickets.ts --json` every 30 minutes to verify Fantasy402 tickets, run the #private/S3Client redaction canary, and stage a zero-secret receipt. Skipped when F402_AGENT_ID is unset.",
+        tz: "America/Chicago",
+        shellJob: {
+          bin: "bun",
+          args: [
+            "--no-orphans",
+            "--no-env-file",
+            "run",
+            "scripts/verify-gslive-tickets.ts",
+            "--json",
+          ],
+          requires: ["F402_AGENT_ID"],
+          timeoutSeconds: 120,
+        },
+        enabled: true,
+      },
     ];
+  }
 
-    for (const item of defaultList) {
+  private initDefaultSchedules(): void {
+    for (const item of ReportingSchedulerService.defaultSchedules()) {
       this.schedules.set(item.id, item);
     }
   }
@@ -660,6 +711,25 @@ export type ShellCaptureOutcome =
 /** Repo root; `file:` requires resolve relative to it. */
 const REPO_ROOT = resolve(import.meta.dir, "..");
 
+/** Check `requires` entries (`ENV_NAME` or `file:relative/path`) without leaking values. */
+export function checkShellJobRequirements(
+  requires: readonly string[] | undefined,
+  env: Readonly<Record<string, string | undefined>> = Bun.env,
+  repoRoot: string = REPO_ROOT,
+): readonly string[] {
+  const missing: string[] = [];
+  for (const requirement of requires ?? []) {
+    if (requirement.startsWith("file:")) {
+      const relative = requirement.slice("file:".length);
+      if (!existsSync(resolve(repoRoot, relative))) missing.push(requirement);
+      continue;
+    }
+    const value = (env[requirement] ?? "").toString().trim();
+    if (value === "") missing.push(requirement);
+  }
+  return missing;
+}
+
 /**
  * Check the requires list and spawn the capture CLI. Never prints env values, never passes the
  * parent environment with `inherit` — the spawned child inherits the daemon's env explicitly only
@@ -673,18 +743,7 @@ export async function runShellCaptureDefault(
     readonly warn: (line: string) => void;
   } = console,
 ): Promise<ShellCaptureOutcome> {
-  const missing: string[] = [];
-  for (const requirement of spec.requires ?? []) {
-    if (requirement.startsWith("file:")) {
-      const relative = requirement.slice("file:".length);
-      if (!existsSync(resolve(REPO_ROOT, relative))) missing.push(requirement);
-      continue;
-    }
-    const value = (Bun.env[requirement as keyof typeof Bun.env] ?? "")
-      .toString()
-      .trim();
-    if (value === "") missing.push(requirement);
-  }
+  const missing = checkShellJobRequirements(spec.requires);
   if (missing.length > 0) {
     // Only names are logged, never values.
     logger.log(

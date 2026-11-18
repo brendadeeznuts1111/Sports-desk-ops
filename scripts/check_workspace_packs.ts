@@ -79,7 +79,7 @@ export function isPackedFileAllowed(
   const includes: string[] = [];
   const excludes: string[] = [];
   for (const raw of filesAllowlist) {
-    const negated = raw.startsWith("!");
+    const negated = raw.startsWith("!") && !raw.startsWith("!(");
     const entry = (negated ? raw.slice(1) : raw)
       .replace(/^\.\//, "")
       .replace(/\/+$/, "");
@@ -88,7 +88,7 @@ export function isPackedFileAllowed(
   }
 
   const matches = (entry: string): boolean => {
-    if (/[*?[\]{}]/.test(entry)) return new Bun.Glob(entry).match(file);
+    if (/[*?[\]{}()!]/.test(entry)) return new Bun.Glob(entry).match(file);
     return file === entry || file.startsWith(`${entry}/`);
   };
 

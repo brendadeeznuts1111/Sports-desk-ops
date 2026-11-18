@@ -251,8 +251,10 @@ can finish before a debugger connects.
   keeps `--debug-wire` as the masked trace.
 - Stack traces are V8-formatted; `--debug` prints `Bun.inspect(error)` with source context.
 - Compiled executables do not support `--inspect` (`BUN_OPTIONS`/`BUN_INSPECT`); if this pipeline is
-  ever compiled, build with `--compile-inspector`. OS scheduling already refuses a standalone
-  executable because launchd/crontab needs a source worker path.
+  ever compiled, note that `--compile-inspector` is **not** a 1.4.4 flag: the pinned `bun build`
+  silently ignores it (measured: exit 0), and it exists only on the 1.4.5 canary, where it
+  also requires `--aot`. OS scheduling already refuses a standalone executable because
+  launchd/crontab needs a source worker path.
 - The VS Code debugger is experimental (needs the Bun extension); the inspector URL is the
   dependency-free path.
 

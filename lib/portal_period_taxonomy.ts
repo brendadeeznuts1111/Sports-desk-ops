@@ -550,6 +550,75 @@ export function formatNormalizedWagerInspect(
   ].join(" ");
 }
 
+type DetailedBreakdownEntry = NonNullable<
+  ProvenanceSidecar["stats"]["detailedBreakdown"]
+>[string];
+
+const formatUsd = (amount: number): string =>
+  `$${amount.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+/**
+ * Format sorted taxonomy breakdown rows with share percentage and average wager risk
+ * via `Bun.inspect.table`. Shared by `PeriodTaxonomyInspection` and `scripts/normalize.ts`.
+ */
+export function formatTaxonomyBreakdownTable(
+  detailedBreakdown:
+    Readonly<Record<string, DetailedBreakdownEntry>> | undefined,
+  options: { readonly colors?: boolean } = {},
+): string {
+  const entries = Object.values(detailedBreakdown ?? {});
+  if (entries.length === 0) return "(no matched rows)";
+
+  const sorted = [...entries].sort(
+    (a, b) =>
+      a.engine.localeCompare(b.engine) ||
+      (a.code === "∅" ? 99 : Number(a.code)) -
+        (b.code === "∅" ? 99 : Number(b.code)) ||
+      a.market.localeCompare(b.market),
+  );
+
+  const totalCount = sorted.reduce((acc, row) => acc + row.count, 0);
+  const totalRisk = sorted.reduce((acc, row) => acc + row.risk, 0);
+
+  const tableRows = sorted.map((row) => ({
+    engine: row.engine,
+    code: row.code,
+    label: row.label,
+    market: row.market,
+    count: row.count.toLocaleString("en-US"),
+    share:
+      totalCount > 0
+        ? `${((row.count / totalCount) * 100).toFixed(1)}%`
+        : "0.0%",
+    risk: formatUsd(row.risk),
+    avg: formatUsd(row.count > 0 ? row.risk / row.count : 0),
+  }));
+
+  if (sorted.length > 1) {
+    tableRows.push({
+      engine: "TOTAL",
+      code: "—",
+      label: "All Periods",
+      market: `${sorted.length} buckets`,
+      count: totalCount.toLocaleString("en-US"),
+      share: totalCount > 0 ? "100.0%" : "0.0%",
+      risk: formatUsd(totalRisk),
+      avg: formatUsd(totalCount > 0 ? totalRisk / totalCount : 0),
+    });
+  }
+
+  return Bun.inspect
+    .table(
+      tableRows,
+      ["engine", "code", "label", "market", "count", "share", "risk", "avg"],
+      { colors: options.colors === true },
+    )
+    .trimEnd();
+}
+
 export class PeriodTaxonomyInspection {
   readonly provenance: ProvenanceSidecar;
   readonly sample: readonly NormalizedWagerRecord[];
@@ -596,26 +665,11 @@ export class PeriodTaxonomyInspection {
         : []),
     ].join("\n");
 
-    const breakdownEntries = Object.entries(p.stats.detailedBreakdown ?? {});
-    let breakdownBlock = "";
-    if (breakdownEntries.length > 0) {
-      const rows = breakdownEntries.map(([, v]) => ({
-        engine: v.engine,
-        code: v.code,
-        label: v.label,
-        market: v.market,
-        count: v.count,
-        risk: `$${v.risk.toFixed(2)}`,
-      }));
-      const inspectTable = (
-        Bun.inspect as unknown as {
-          table?: (data: unknown, opts?: unknown) => string;
-        }
-      ).table;
-      if (typeof Bun !== "undefined" && typeof inspectTable === "function") {
-        breakdownBlock = `\n${bold("Taxonomy Breakdown:")}\n${inspectTable(rows, { colors })}`;
-      }
-    }
+    const breakdownEntries = Object.keys(p.stats.detailedBreakdown ?? {});
+    const breakdownBlock =
+      breakdownEntries.length > 0
+        ? `\n${bold("Taxonomy Breakdown:")}\n${formatTaxonomyBreakdownTable(p.stats.detailedBreakdown, { colors })}`
+        : "";
 
     const sampleBlock =
       this.sample.length > 0

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Partner 118 SOAP envelope seed (GATE-LOADER-TS71 text import; mutate via Bun.XML NodeInput). -->
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <m:Placeholder xmlns:m="https://partner118.example/gslive">
+      <m:SessionId>REPLACE_SESSION</m:SessionId>
+      <m:BetGroupId>0</m:BetGroupId>
+    </m:Placeholder>
+  </soap:Body>
+</soap:Envelope>

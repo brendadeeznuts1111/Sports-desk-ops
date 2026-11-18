@@ -31,6 +31,11 @@ import {
   searchCustomers,
   upsertCustomers,
 } from "../lib/customer_index.ts";
+import {
+  liveWagerCustomerId,
+  liveWagerRows,
+} from "../lib/customer_source_rows.ts";
+import { createDod6V54LifetimeReader } from "../lib/dod6_v54_lifetime_reader.ts";
 
 const HELP = `
 customers — index and look up customer records
@@ -124,6 +129,56 @@ try {
       }
     }
 
+    // Open wagers capture: the capture writes { LIST }, and the helper also reads a bare array.
+    const liveWagersFile = Bun.file("data/live-wagers.json");
+    if (await liveWagersFile.exists()) {
+      try {
+        for (const row of liveWagerRows(await liveWagersFile.json())) {
+          const id = liveWagerCustomerId(row);
+          if (id === null) continue;
+          const agent = String(
+            row["AgentID"] ?? row["AgentLogin"] ?? "",
+          ).trim();
+          const desc = String(row["ShortDesc"] ?? "").trim();
+          records.push({
+            id,
+            source: "live",
+            agent,
+            name: desc === "" ? "" : `Wager: ${desc}`,
+            updatedAt: now,
+          });
+        }
+      } catch {
+        // signal honesty: an unreadable capture indexes no live rows
+      }
+    }
+
+    // Live harvested profiles
+    const liveProfilesFile = Bun.file("reports/harvested-live-profiles.json");
+    if (await liveProfilesFile.exists()) {
+      try {
+        const payload = (await liveProfilesFile.json()) as {
+          profiles?: Array<Record<string, unknown>>;
+        };
+        for (const row of payload.profiles ?? []) {
+          const id = String(row["id"] ?? "").trim();
+          if (!id) continue;
+          const agent = String(row["agentId"] ?? "").trim();
+          const score = row["score"];
+          const tier = row["tier"];
+          records.push({
+            id,
+            source: "live",
+            agent,
+            name: score !== undefined ? `Live Score: ${score} (${tier})` : "",
+            updatedAt: now,
+          });
+        }
+      } catch {
+        // signal honesty: unreadable harvested profiles index no live rows
+      }
+    }
+
     const written = await upsertCustomers(db, records);
     const counts = await countBySource(db);
     console.error(
@@ -149,7 +204,41 @@ try {
       command === "find"
         ? await findCustomer(db, needle)
         : await searchCustomers(db, needle, limit);
-    render(rows, json, asEnv);
+
+    let displayRows = rows;
+    if (rows.length === 0 && command === "find") {
+      const reader = await createDod6V54LifetimeReader(
+        "data/sportsdesk_unified_baseline_v54.dodbin",
+      );
+      const dodMatch = reader?.lookup(needle);
+      if (dodMatch) {
+        const net = dodMatch.lifetimeNetUsd;
+        const netStr =
+          net === null
+            ? "N/A"
+            : `${net < 0 ? "-" : ""}$${Math.abs(net).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        // A null CLV and a zero-leg spine row are unmeasured, never "+0 bps" or a failed gate.
+        const clv = dodMatch.clvBps;
+        const clvStr = clv === null ? "n/a" : `${clv >= 0 ? "+" : ""}${clv}bps`;
+        const gate =
+          dodMatch.clvLegs === 0
+            ? "n/a (no measured legs)"
+            : dodMatch.sharpCandidateGatePassed
+              ? "PASS"
+              : "FAIL";
+        displayRows = [
+          {
+            id: needle.toUpperCase(),
+            source: "dod6-spine",
+            agent: `CLV:${clvStr}`,
+            name: `Lifetime Net:${netStr} (${dodMatch.clvLegs} legs, SharpGate:${gate})`,
+            updatedAt: new Date().toISOString(),
+          },
+        ];
+      }
+    }
+
+    render(displayRows, json, asEnv);
   } else {
     console.error(
       `customers: unknown command "${command}" (index|list|find|search).`,

@@ -56,6 +56,8 @@ const wagersPanelProps = {
   onWagerSportFilterChange: noop,
   wagerAlertFilter: "ALL",
   onWagerAlertFilterChange: noop,
+  wagerChannelFilter: "ALL",
+  onWagerChannelFilterChange: noop,
   wagerTypeFilter: "ALL",
   onWagerTypeFilterChange: noop,
   wagerSortField: "timestamp" as const,
@@ -254,7 +256,7 @@ describe("each dashboard panel names its endpoint when the source fails", () => 
         onSelectCustomer: noop,
         copiedCliId: null,
         onCopyCli: noop,
-        customerForensicResult: null,
+        customerReverseForensics: null,
         onClearForensicResult: noop,
         onRunReverseLookup: noop,
         onOpenTerminalProfile: noop,
@@ -263,7 +265,10 @@ describe("each dashboard panel names its endpoint when the source fails", () => 
     );
     expect(html).toContain('data-profiles-source="unavailable"');
     expect(html).toContain("No live profile source yet");
-    expect(html).toContain("GET /api/customer/profile?id=");
+    // The reason names the missing fields and the synthetic cohort instead of
+    // naming an endpoint that serves a different shape (#281 removed that claim).
+    expect(html).toContain("no source yet");
+    expect(html).toContain("a demo surface, not the book");
     expect(html).not.toContain("Profiled Bettors");
   });
 });

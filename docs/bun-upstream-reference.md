@@ -4,13 +4,13 @@ Canonical commit links for the pinned runtime (`Bun 1.4.4`, `38afee6c84fcf48c0ed
 
 ## Runtime & `bun-types` SSOT
 
-| Surface           | Canonical pin                                                                                                                          | Local verification                                                                 |
-| :---------------- | :------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------- |
-| Release tag       | [`bun-v1.4.4`](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) (`2026-10-22`)                                                  | `package.json` `engines.bun` / `.bun-version`                                      |
-| Release commit    | [`38afee6c84fcf48c0edb2466aa4b27d287a59c30`](https://github.com/oven-sh/bun/tree/38afee6c84fcf48c0edb2466aa4b27d287a59c30)             | `Bun.revision` (`bun run probe:bun` vs `tests/bun_baseline.json`)                  |
-| `bun-types` root  | [`packages/bun-types` @ `38afee6c84`](https://github.com/oven-sh/bun/tree/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types) | `@types/bun@1.4.4` (`./bin/dx bun --types --strict`)                               |
-| Shape catalog     | [`docs/runbooks/bun_shape_contracts_runbook.md`](./runbooks/bun_shape_contracts_runbook.md)                                            | `bun scripts/bun_shape_contracts.ts --check` (`tests/bun_shapes_coverage.test.ts`) |
-| Docs MCP baseline | [`https://bun.sh/docs/mcp`](https://bun.com/docs/mcp)                                                                                  | `bun run bun:docs-mcp surfaces --check tests/bun_docs_surface_baseline.json`       |
+| Surface           | Canonical pin                                                                                                                                     | Local verification                                                                 |
+| :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------- |
+| Release tag       | [`bun-v1.4.4`](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) (`2026-10-22`)                                                             | `package.json` `engines.bun` / `.bun-version`                                      |
+| Release commit    | [`38afee6c84fcf48c0edb2466aa4b27d287a59c30`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/package.json)           | `Bun.revision` (`bun run probe:bun` vs `tests/bun_baseline.json`)                  |
+| `bun-types` root  | [`packages/bun-types` @ `38afee6c84`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types/index.d.ts) | `@types/bun@1.4.4` (`./bin/dx bun --types --strict`)                               |
+| Shape catalog     | [`docs/runbooks/bun_shape_contracts_runbook.md`](./runbooks/bun_shape_contracts_runbook.md)                                                       | `bun scripts/bun_shape_contracts.ts --check` (`tests/bun_shapes_coverage.test.ts`) |
+| Docs MCP baseline | `bun.sh/docs/mcp` (scheme-less; transport endpoint, not a `bun-types` blob)                                                                       | `bun run bun:docs-mcp surfaces --check tests/bun_docs_surface_baseline.json`       |
 
 ## Canonical `bun-types` files (`38afee6c84fcf48c0edb2466aa4b27d287a59c30`)
 
@@ -36,17 +36,17 @@ Canonical commit links for the pinned runtime (`Bun 1.4.4`, `38afee6c84fcf48c0ed
 
 Do not hardcode member counts; run `./bin/dx bun --types` (or `./bin/dx bun --json`) to diff `bun-types@1.4.4` against the active binary. The two pinned drift IDs asserted in [`tests/bun_capabilities.test.ts`](../tests/bun_capabilities.test.ts) are:
 
-- **`dns-resolve`**: `bun-types` and [`/reference/bun/dns`](https://bun.com/reference/bun/dns) declare only `lookup`, `prefetch`, and `getCacheStats`, while the 1.4.4 binary also exposes the 15 `node:dns/promises` resolver methods (`resolve`, `resolve4`, `resolve6`, `resolveSrv`, `resolveTxt`, `resolveSoa`, `resolveNaptr`, `resolveMx`, `resolveCaa`, `resolveNs`, `resolvePtr`, `resolveCname`, `resolveAny`, `getServers`, `setServers`, `reverse`, `lookupService`).
-- **`websocket-global`**: [`/reference/bun/WebSocket`](https://bun.com/reference/bun/WebSocket) and [`/reference/bun/Worker`](https://bun.com/reference/bun/Worker) are filed under the `bun` module page, but `Bun.WebSocket` and `Bun.Worker` are `undefined` at runtime — the constructors live on `globalThis`.
+- **`dns-resolve`**: `bun-types` and [`dns` namespace](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types/bun.d.ts#L2503) declare only `lookup`, `prefetch`, and `getCacheStats`, while the 1.4.4 binary also exposes the 15 `node:dns/promises` resolver methods (`resolve`, `resolve4`, `resolve6`, `resolveSrv`, `resolveTxt`, `resolveSoa`, `resolveNaptr`, `resolveMx`, `resolveCaa`, `resolveNs`, `resolvePtr`, `resolveCname`, `resolveAny`, `getServers`, `setServers`, `reverse`, `lookupService`).
+- **`websocket-global`**: [`WebSocket`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types/bun.d.ts#L5178) and [`Worker`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types/bun.d.ts#L714) are filed under the `bun` module page, but `Bun.WebSocket` and `Bun.Worker` are `undefined` at runtime — the constructors live on `globalThis`.
 
 ## Upstream doc commit pins
 
-| Pin                                                                                                            | Tree                               | Use                                                                       |
-| :------------------------------------------------------------------------------------------------------------- | :--------------------------------- | :------------------------------------------------------------------------ |
-| [`38afee6c`](https://github.com/oven-sh/bun/tree/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs)                | `oven-sh/bun/docs` at `bun-v1.4.4` | Baseline runtime docs for the pinned binary                               |
-| [`6cdb3835`](https://github.com/oven-sh/bun/tree/6cdb3835d90f8e05e4ebff86c7135078c9eb7e88/docs#contributing)   | `docs#contributing`                | MDX [voice](https://bun.com/docs/project/contributing#voice)              |
-| [`6a380492`](https://github.com/oven-sh/bun/tree/6a38049270e99f0989c912aaa335f177c9d1bbf0/docs/snippets)       | `docs/snippets`                    | `guides.jsx` (guide index), `cli/*.mdx` (CLI flag blocks)                 |
-| [`b6e7b9cd`](https://github.com/oven-sh/bun/blob/b6e7b9cdc4e7e1720b65f2e43a62debb3ab61283/docs/runtime/s3.mdx) | `docs/runtime/s3.mdx`              | `Bun.S3Client`, `S3File`, `new Response(s3file)` 302 redirect, `ERR_S3_*` |
+| Pin                                                                                                                      | Tree                               | Use                                                                       |
+| :----------------------------------------------------------------------------------------------------------------------- | :--------------------------------- | :------------------------------------------------------------------------ |
+| [`38afee6c`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/README.md)                | `oven-sh/bun/docs` at `bun-v1.4.4` | Baseline runtime docs for the pinned binary                               |
+| [`6cdb3835`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/project/contributing.mdx) | `docs#contributing`                | MDX voice (same audited commit; tag `6cdb3835` is historical metadata)    |
+| [`6a380492`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/snippets)                 | `docs/snippets`                    | `guides.jsx` (guide index), `cli/*.mdx` (CLI flag blocks)                 |
+| [`b6e7b9cd`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/runtime/s3.mdx)           | `docs/runtime/s3.mdx`              | `Bun.S3Client`, `S3File`, `new Response(s3file)` 302 redirect, `ERR_S3_*` |
 
 ## Related runbooks in this repo
 
@@ -70,7 +70,7 @@ The repo uses `Bun.JSONL.parse()` / `Bun.JSONL.parseChunk()` by default on JSONL
 
 ## `Bun.$` — available, but argv-only for credentials (2026-11-04 audit)
 
-[`Bun.$`](https://bun.com/reference/bun/$) is pinned in [`bin/bun_surface.ts`](../bin/bun_surface.ts) and [`tests/bun_capabilities.test.ts`](../tests/bun_capabilities.test.ts), but [`lib/f402_credentials_policy.ts`](../lib/f402_credentials_policy.ts) enforces **argv-only (`Bun.spawn([argv…])`) for anything that touches a credential**:
+[`Bun.$`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types/shell.d.ts#L23) is pinned in [`bin/bun_surface.ts`](../bin/bun_surface.ts) and [`tests/bun_capabilities.test.ts`](../tests/bun_capabilities.test.ts), but [`lib/f402_credentials_policy.ts`](../lib/f402_credentials_policy.ts) enforces **argv-only (`Bun.spawn([argv…])`) for anything that touches a credential**:
 
 | Scenario                                                              | Use                                                   | Why                                                                                             |
 | :-------------------------------------------------------------------- | :---------------------------------------------------- | :---------------------------------------------------------------------------------------------- |
@@ -80,7 +80,7 @@ The repo uses `Bun.JSONL.parse()` / `Bun.JSONL.parseChunk()` by default on JSONL
 
 ## When to use `Bun.allocUnsafe` (and when NOT to) — 2026-11-04 audit
 
-[`Bun.allocUnsafe(size)`](https://bun.com/reference/bun/allocUnsafe) returns an unzeroed `Uint8Array`. Every call site must guarantee that only written bytes are exposed to callers (pinned in [`tests/bun_capabilities.test.ts`](../tests/bun_capabilities.test.ts)):
+[`Bun.allocUnsafe(size)`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types/bun.d.ts#L4954) returns an unzeroed `Uint8Array`. Every call site must guarantee that only written bytes are exposed to callers (pinned in [`tests/bun_capabilities.test.ts`](../tests/bun_capabilities.test.ts)):
 
 | File:line                            | Fill pattern                                    | Why it is safe                                                                                  |
 | :----------------------------------- | :---------------------------------------------- | :---------------------------------------------------------------------------------------------- |

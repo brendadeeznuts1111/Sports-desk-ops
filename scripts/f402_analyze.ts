@@ -17,6 +17,7 @@ import { parseArgs } from "node:util";
 import {
   F402_ANALYZE_DEFAULT_IN_DIR,
   F402AnalyzeError,
+  assertNoRawIp,
   hashIpsDeep,
   loadAnalyzeConfig,
   parseAnalyzeFormat,
@@ -180,9 +181,13 @@ async function main(argv: string[]): Promise<number> {
       format,
       title,
       hashed,
-      csvRows === undefined ? undefined : csvRows,
+      csvRows === undefined
+        ? undefined
+        : (hashIpsDeep(csvRows) as Record<string, unknown>[]),
     );
-    console.log(format === "json" ? JSON.stringify(hashed) : text.trimEnd());
+    const out = format === "json" ? JSON.stringify(hashed) : text.trimEnd();
+    assertNoRawIp(out, command);
+    console.log(out);
   };
   if (command === "link") {
     const { report, outPath, rings } = runLinkAnalysis(inDir, runOptions);

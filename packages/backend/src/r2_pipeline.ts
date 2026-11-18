@@ -4,10 +4,13 @@
  */
 
 import type {
+  AutomationsSnapshot,
   BetTickerBridge3aSnapshot,
+  BridgeJobStatusSummary,
   Daemon4020Status,
   R2PipelineApiResponse,
   R2SinkDetail,
+  R2SinkDiagnostic,
   R2SinkRollupMetric,
   R2SinkState,
 } from "@sportsdesk-ops/contracts";
@@ -24,6 +27,7 @@ export interface R2TargetSpec {
   readonly description: string;
   readonly slaSeconds: number;
   readonly remediationCommand: string;
+  readonly bridgeJobIds: readonly string[];
 }
 
 export const R2_PIPELINE_TARGETS: readonly R2TargetSpec[] = [
@@ -34,6 +38,7 @@ export const R2_PIPELINE_TARGETS: readonly R2TargetSpec[] = [
     description: "Bridge 3a channel/wager-type ticker rollup & watermark",
     slaSeconds: 3600,
     remediationCommand: "bun run positions:cron --once",
+    bridgeJobIds: ["bridge3a"],
   },
   {
     id: "gslive-tally",
@@ -42,6 +47,7 @@ export const R2_PIPELINE_TARGETS: readonly R2TargetSpec[] = [
     description: "Bridge 3c open-bets & CLV settlement pointer rollup",
     slaSeconds: 3600,
     remediationCommand: "bun run tally:bridge3c",
+    bridgeJobIds: ["bridge3c"],
   },
   {
     id: "f402-weblog",
@@ -50,6 +56,7 @@ export const R2_PIPELINE_TARGETS: readonly R2TargetSpec[] = [
     description: "Weblog access & device template corpus pointer rollup",
     slaSeconds: 5400,
     remediationCommand: "bun run weblog:cron",
+    bridgeJobIds: ["weblog"],
   },
   {
     id: "wagers-by-state",
@@ -58,6 +65,7 @@ export const R2_PIPELINE_TARGETS: readonly R2TargetSpec[] = [
     description: "88-hour win/lose/push & grade-lag histogram",
     slaSeconds: 3600,
     remediationCommand: "bun run wagers:publish-snapshot",
+    bridgeJobIds: ["wagers-by-state", "wagers-publish"],
   },
 ] as const;
 
@@ -519,6 +527,121 @@ export interface R2PipelineServiceOptions {
   readonly cacheTtlMs?: number | undefined;
   readonly fetchImpl?: R2Fetcher | undefined;
   readonly now?: (() => Date) | undefined;
+  readonly getAutomationsSnapshot?:
+    (() => Promise<AutomationsSnapshot> | AutomationsSnapshot) | undefined;
+}
+
+const GSLIVE_AUTH_RE = /gslive expired|secrets:gslive|manual dual-auth/i;
+const F402_AUTH_RE =
+  /f402 live login disabled|http 401|no f402 session|f402 auth failed/i;
+const SANITIZATION_GUARD_RE =
+  /sanitization failed|forbidden key|exceeds \d+ bytes/i;
+
+function classifyBridgeJobFailure(
+  errorText: string,
+  fallbackCommand: string,
+): {
+  readonly blockerClass: R2SinkDiagnostic["blockerClass"];
+  readonly headline: string;
+  readonly suggestedCommand: string;
+} {
+  if (GSLIVE_AUTH_RE.test(errorText)) {
+    return {
+      blockerClass: "gslive_auth_expired",
+      headline: "GSLive Dual-Auth Expired",
+      suggestedCommand:
+        "printf '%s' '<GSID>' | bun run secrets:gslive set && printf '%s' '<ganchrowSessionId>' | bun run secrets:gslive set-gate",
+    };
+  }
+  if (F402_AUTH_RE.test(errorText)) {
+    return {
+      blockerClass: "f402_auth_expired",
+      headline: "F402 Bearer / WebView Session Expired",
+      suggestedCommand: "bun run session:login --from-keychain",
+    };
+  }
+  if (SANITIZATION_GUARD_RE.test(errorText)) {
+    return {
+      blockerClass: "sanitization_guard",
+      headline: "Pre-Publish Sanitization Guard Blocked",
+      suggestedCommand: fallbackCommand,
+    };
+  }
+  return {
+    blockerClass: "sla_lag",
+    headline: "Bridge Rollup Job Failing",
+    suggestedCommand: fallbackCommand,
+  };
+}
+
+function diagnoseR2Sink(
+  sink: R2SinkDetail,
+  bridgeJobIds: readonly string[],
+  bridgeJobs: readonly BridgeJobStatusSummary[] | undefined,
+): R2SinkDiagnostic | undefined {
+  const correlatedFailed = (bridgeJobs ?? []).filter(
+    (job) => !job.ok && bridgeJobIds.includes(job.id),
+  );
+  if (correlatedFailed.length > 0) {
+    const primaryError = correlatedFailed
+      .map((j) => `${j.id}: ${j.error ?? "failed"}`)
+      .join(" | ");
+    const base = classifyBridgeJobFailure(
+      primaryError,
+      sink.remediationCommand,
+    );
+    const isCachedRepublish = !sink.stale && sink.dataStale;
+    return {
+      blockerClass: isCachedRepublish
+        ? "upstream_capture_stale"
+        : base.blockerClass,
+      headline: isCachedRepublish
+        ? `Cached Snapshot Republished · ${base.headline}`
+        : base.headline,
+      detail: primaryError,
+      failedJobIds: correlatedFailed.map((j) => j.id),
+      suggestedCommand: base.suggestedCommand,
+    };
+  }
+
+  if (sink.state === "missing") {
+    return {
+      blockerClass: "missing_artifact",
+      headline: "R2 Object Missing (HTTP 404)",
+      detail: sink.reason ?? "Key does not exist in public bucket",
+      failedJobIds: [],
+      suggestedCommand: sink.remediationCommand,
+    };
+  }
+  if (sink.state === "error") {
+    return {
+      blockerClass: "network_or_http",
+      headline: "R2 Probe / Header Error",
+      detail: sink.reason ?? "Upstream probe returned error status",
+      failedJobIds: [],
+      suggestedCommand: sink.remediationCommand,
+    };
+  }
+  if (!sink.stale && sink.dataStale) {
+    return {
+      blockerClass: "upstream_capture_stale",
+      headline: "Data Window Stale (>24h) Despite Fresh Publish",
+      detail:
+        "latest.json republished within SLA, but covered event timestamps exceed 24h.",
+      failedJobIds: [],
+      suggestedCommand: sink.remediationCommand,
+    };
+  }
+  if (sink.stale) {
+    return {
+      blockerClass: "sla_lag",
+      headline: "Publish Age Exceeds SLA",
+      detail: sink.reason ?? "Publish timestamp older than SLA",
+      failedJobIds: [],
+      suggestedCommand: sink.remediationCommand,
+    };
+  }
+  return undefined;
 }
 
 export function createR2PipelineService(
@@ -649,6 +772,7 @@ export function createR2PipelineService(
         sha256: pointer.sha256,
         reason,
         remediationCommand: target.remediationCommand,
+        bridgeJobIds: target.bridgeJobIds,
         metrics,
       },
       rawLatestBody: latestBody,
@@ -668,16 +792,29 @@ export function createR2PipelineService(
       return cachedResponse;
     }
 
-    const [sinkResults, daemon4020] = await Promise.all([
+    const [sinkResults, daemon4020, automations] = await Promise.all([
       Promise.all(R2_PIPELINE_TARGETS.map((t) => probeSingleSink(t, nowMs))),
       probeDaemon4020Status({
         origin: options.daemon4020Origin,
         fetchImpl: options.fetchImpl,
         now: getNow,
       }),
+      options.getAutomationsSnapshot
+        ? Promise.resolve(options.getAutomationsSnapshot()).catch(
+            () => undefined,
+          )
+        : Promise.resolve(undefined),
     ]);
 
-    const sinks = sinkResults.map((r) => r.sink);
+    const sinks: readonly R2SinkDetail[] = sinkResults.map((r, idx) => {
+      const target = R2_PIPELINE_TARGETS[idx]!;
+      const diagnostic = diagnoseR2Sink(
+        r.sink,
+        target.bridgeJobIds,
+        automations?.bridgeJobs,
+      );
+      return diagnostic === undefined ? r.sink : { ...r.sink, diagnostic };
+    });
     const freshCount = sinks.filter((s) => s.state === "fresh").length;
     const staleKeys = sinks.filter((s) => s.stale).map((s) => s.key);
     const dataStaleKeys = sinks.filter((s) => s.dataStale).map((s) => s.key);
@@ -719,6 +856,7 @@ export function createR2PipelineService(
       dataStaleKeys,
       sinks,
       daemon4020,
+      ...(automations === undefined ? {} : { automations }),
     };
 
     cachedResponse = response;

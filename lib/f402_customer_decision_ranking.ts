@@ -11,6 +11,11 @@ import {
   type GradedWagerRawRow,
   type PowerStatus,
 } from "./f402_ccc88412_decision_instrument.ts";
+import {
+  restrictGradedRowsToSummaryBook,
+  summarizePopulationRestriction,
+} from "./f402_population.ts";
+import type { PopulationRestrictionSummary } from "./f402_population.ts";
 import type { ReportPlayerAnalysisRowRaw } from "./f402_report_player_analysis.ts";
 
 export type BotFlagStatusCategory =
@@ -80,6 +85,8 @@ export interface CustomerRankingRow {
     | "PROVEN_BY_SUB5S_DISTINCT_TICKET_GAPS"
     | "CONSISTENT_WITH_NOT_PROVEN_BY_SAME_TICKET_DATA"
     | "NOT_INDICATED";
+  /** Synchronized 2H/rotation office bursts for this customer's agent; the TIER_2 input. */
+  officeBursts: number;
   limitHeuristicScore: number;
   systematicSignatureScore: number;
   syndicateLinkScore: number;
@@ -152,10 +159,31 @@ export interface AllCustomerRankingConservationProof {
   invariantsVerified: string[];
 }
 
+export interface RankingInputProvenance {
+  /** Path as resolved by the generator (repo-relative when under the checkout). */
+  readonly path: string;
+  readonly sha256: string;
+  readonly bytes: number;
+  readonly records: number;
+  /**
+   * Capture facts (#242): what the export can and cannot tell you about itself. A hash proves
+   * bytes, not provenance — without these fields a reader cannot say when the bytes were taken,
+   * by what request, or over what population.
+   */
+  readonly capturedAtIso: string;
+  /** How `capturedAtIso` was obtained, stated plainly so it is not mistaken for a payload field. */
+  readonly capturedAtSource: string;
+  readonly capturedBy: string;
+  readonly request: string;
+  /** `unknown` means "we looked and the export cannot say", never "recorded and empty". */
+  readonly scope: string;
+}
+
 export interface AllCustomerDecisionRankingSystem {
   schemaVersion: "3.0.0";
   integrityClassification: "POST_HOC_PREREGISTERED_RETROSPECTIVE_RANKING";
   frozenTimestampIso: string;
+  inputProvenance: RankingInputProvenance[];
   bookPriors: {
     totalCustomersN: number;
     poweredCustomersN: number;
@@ -182,6 +210,8 @@ export interface AllCustomerDecisionRankingSystem {
   ccc88412BenchmarkRow: CustomerRankingRow | null;
   allCustomerRows: CustomerRankingRow[];
   conservationOracles: AllCustomerRankingConservationProof;
+  /** Population boundary applied to the graded corpus (#234). */
+  populationRestriction: PopulationRestrictionSummary;
   deterministicDigestSha256: string;
 }
 
@@ -189,6 +219,8 @@ export interface BuildAllCustomerDecisionRankingInput {
   allSummaryRows: ReportPlayerAnalysisRowRaw[];
   suspectedBotDetailRows: ReportPlayerAnalysisRowRaw[];
   gradedWagerRows: GradedWagerRawRow[];
+  /** Hashes and record counts of the files the caller loaded; echoed into the artifact. */
+  inputProvenance?: RankingInputProvenance[];
 }
 
 function sha256Hex(content: string): string {
@@ -240,13 +272,22 @@ export function computePlainUncalibratedLimitScore(
 export function buildAllCustomerDecisionRankingSystem(
   input: BuildAllCustomerDecisionRankingInput,
 ): AllCustomerDecisionRankingSystem {
+  // Population boundary (#234): this artifact describes the summary book only, so graded rows
+  // from outside that downline leave the analysis before any per-customer or per-skin metric is
+  // accumulated — the same restriction the CCC88412 instrument applies, for one population.
+  const population = restrictGradedRowsToSummaryBook(
+    input.gradedWagerRows,
+    input.allSummaryRows,
+  );
+  const gradedWagerRows = population.rows;
+
   // 1. Compute book-wide priors and skin-level hold
   let totalBetsN = 0;
   let totalBeatPoints = 0;
   let totalBeatPrice = 0;
   let totalNetCents = 0;
 
-  const skinMapByLogin = new Map<string, string>();
+  const skinByCustomerId = new Map<string, string>();
   for (const r of input.allSummaryRows) {
     const n = Math.round(Number(r.TOTALBETS ?? 0));
     const bpPts = Math.round(Number(r.BETTERPOINTSLINES ?? 0));
@@ -256,11 +297,9 @@ export function buildAllCustomerDecisionRankingSystem(
     totalBeatPoints += bpPts;
     totalBeatPrice += bpPrc;
     totalNetCents += wlCents;
-    const login = String(r.PlayerLogin ?? r.CustomerID ?? "")
-      .trim()
-      .replace(/_\d+$/, "");
+    const customerId = String(r.CustomerID ?? "").trim();
     const skin = String(r.InetTarget ?? "unknown").trim() || "unknown";
-    if (login) skinMapByLogin.set(login, skin);
+    if (customerId) skinByCustomerId.set(customerId, skin);
   }
 
   const p1Prior =
@@ -277,20 +316,18 @@ export function buildAllCustomerDecisionRankingSystem(
     string,
     { risked: number; won: number; lost: number }
   >();
-  const gradedByLogin = new Map<string, GradedWagerRawRow[]>();
+  const gradedByCustomerId = new Map<string, GradedWagerRawRow[]>();
 
-  for (const g of input.gradedWagerRows) {
-    const cid = String(g.CustomerID ?? "")
-      .trim()
-      .replace(/_\d+$/, "");
+  for (const g of gradedWagerRows) {
+    const cid = String(g.CustomerID ?? "").trim();
     if (!cid) continue;
-    const list = gradedByLogin.get(cid);
+    const list = gradedByCustomerId.get(cid);
     if (list) list.push(g);
-    else gradedByLogin.set(cid, [g]);
+    else gradedByCustomerId.set(cid, [g]);
 
     const wt = String(g.WagerType ?? "").trim();
     if (!straightTypes.has(wt)) continue;
-    const skin = skinMapByLogin.get(cid) ?? "unknown";
+    const skin = skinByCustomerId.get(cid) ?? "unknown";
     const acc = skinHoldAccum.get(skin) ?? { risked: 0, won: 0, lost: 0 };
     acc.risked += Number(g.AmountWagered ?? 0);
     acc.won += Number(g.AmountWon ?? 0);
@@ -308,18 +345,23 @@ export function buildAllCustomerDecisionRankingSystem(
     }
   }
 
-  // Group detail rows by login and detect synchronized 2H office bursts
-  const detailByLogin = new Map<string, ReportPlayerAnalysisRowRaw[]>();
+  // Group detail rows by verbatim CustomerID and detect synchronized 2H office bursts.
+  // `playerLogin` remains the office-burst grouping key; `customerId` keys the per-account set.
+  const detailByCustomerId = new Map<string, ReportPlayerAnalysisRowRaw[]>();
+  // Intentionally login-level: an office burst is per-login behaviour, not per-account. A
+  // login->customerId sweep must leave this key alone — two records sharing a login are one
+  // login for burst detection.
   const office2hGameLogins = new Map<string, Set<string>>();
 
   for (const d of input.suspectedBotDetailRows) {
-    const login = String(d.PlayerLogin ?? d.CustomerID ?? "")
+    const playerLogin = String(d.PlayerLogin ?? d.CustomerID ?? "")
       .trim()
       .replace(/_\d+$/, "");
-    if (!login) continue;
-    const arr = detailByLogin.get(login);
+    const customerId = String(d.CustomerID ?? "").trim();
+    if (!customerId) continue;
+    const arr = detailByCustomerId.get(customerId);
     if (arr) arr.push(d);
-    else detailByLogin.set(login, [d]);
+    else detailByCustomerId.set(customerId, [d]);
 
     const agent = String(d.AgentID ?? "").trim();
     const per = String(d.PERIODNUMBER ?? "0").trim();
@@ -331,7 +373,7 @@ export function buildAllCustomerDecisionRankingSystem(
       const pairBase = rot % 2 === 1 ? rot : rot - 1;
       const key = `${agent}|${date}|#${pairBase}`;
       const set = office2hGameLogins.get(key) ?? new Set<string>();
-      set.add(login);
+      set.add(playerLogin);
       office2hGameLogins.set(key, set);
     }
   }
@@ -421,8 +463,8 @@ export function buildAllCustomerDecisionRankingSystem(
 
     // If detail rows exist (for the 159 flagged accounts), compute exact per-wager EV%;
     // otherwise derive from summary PRICE (cents vs close) and POINTS (points vs close).
-    const drows = detailByLogin.get(playerLogin) ?? [];
-    const grows = gradedByLogin.get(playerLogin) ?? [];
+    const drows = detailByCustomerId.get(customerId) ?? [];
+    const grows = gradedByCustomerId.get(customerId) ?? [];
 
     let estClvEdgePct = 0;
     let estNetEvPct = -4.55;
@@ -729,11 +771,8 @@ export function buildAllCustomerDecisionRankingSystem(
       4,
     );
 
-    const { officeBursts: _unusedBursts, ...rest } = r;
-    void _unusedBursts;
-
     return {
-      ...rest,
+      ...r,
       rankOverallSharp: 0,
       rankSystematicSignature: 0,
       unionClvBhQValueAllCustomers: qAll,
@@ -765,7 +804,11 @@ export function buildAllCustomerDecisionRankingSystem(
       );
     }
     if (b.totalBetsN !== a.totalBetsN) return b.totalBetsN - a.totalBetsN;
-    return a.customerId.localeCompare(b.customerId);
+    return a.customerId < b.customerId
+      ? -1
+      : a.customerId > b.customerId
+        ? 1
+        : 0;
   });
   for (let i = 0; i < bySharp.length; i++) {
     bySharp[i]!.rankOverallSharp = i + 1;
@@ -779,7 +822,11 @@ export function buildAllCustomerDecisionRankingSystem(
       return b.sameTicketMultiLegPairsCount - a.sameTicketMultiLegPairsCount;
     }
     if (b.totalBetsN !== a.totalBetsN) return b.totalBetsN - a.totalBetsN;
-    return a.customerId.localeCompare(b.customerId);
+    return a.customerId < b.customerId
+      ? -1
+      : a.customerId > b.customerId
+        ? 1
+        : 0;
   });
   for (let i = 0; i < bySys.length; i++) {
     bySys[i]!.rankSystematicSignature = i + 1;
@@ -1022,6 +1069,8 @@ export function buildAllCustomerDecisionRankingSystem(
     integrityClassification:
       "POST_HOC_PREREGISTERED_RETROSPECTIVE_RANKING" as const,
     frozenTimestampIso: "2026-11-14T00:00:00.000Z",
+    inputProvenance: input.inputProvenance ?? [],
+    populationRestriction: summarizePopulationRestriction(population),
     bookPriors: {
       totalCustomersN: scoredRows.length,
       poweredCustomersN,
@@ -1070,9 +1119,14 @@ export function renderAllCustomerDecisionRankingMarkdown(
   lines.push(
     `- **Deterministic Digest SHA-256**: \`${sys.deterministicDigestSha256}\` | **Conservation Oracles**: \`${sys.conservationOracles.passed ? `PASS (0 discrepancy across ${sys.bookPriors.totalCustomersN} customers & ${sys.bookPriors.totalBetsN} bets)` : "FAIL"}\``,
   );
+  if (sys.inputProvenance.length > 0) {
+    lines.push(
+      `- **Input Provenance**: ${sys.inputProvenance.map((p) => `\`${p.path}\` (${p.records} rows, sha256 \`${p.sha256.slice(0, 16)}...\`)`).join(" · ")}`,
+    );
+  }
   lines.push("");
   lines.push(
-    "> [!IMPORTANT]\n> **Methodological Contract (`v3.0.0`)**: Every customer is evaluated under the six standing guardrails: (1) plain uncalibrated heuristic scores vs matched 36-day cost ratios $\\tau^* = C_{\\text{FP}} / (C_{\\text{FP}} + C_{\\text{FN}})$ (no curve-fit $\\Phi$ posteriors), (2) power gating at $n \\ge 42$ ($80\\%$ power for $+15\\%$ CLV lift at $\\alpha = 0.05$), (3) Empirical-Bayes shrinkage ($\\kappa = 20$, audited across $\\kappa \\in \\{5, 20, 50\\}$) and Benjamini-Hochberg FDR across all active customers, (4) separation of `SYSTEMATIC_STRATEGY_SIGNATURE` (`H7` same-ticket multi-leg pairing, where automation is consistent with, not proven by, ticket-level timestamps) from sub-5-second distinct-ticket automation and from closing-line EV (`H1`/`H4`), and (5) exact conservation oracles across all partitions.",
+    "> [!IMPORTANT]\n> **Methodological Contract (`v3.0.0`)**: Every customer is evaluated under five headline guardrails: (1) plain uncalibrated heuristic scores vs matched 36-day cost ratios $\\tau^* = C_{\\text{FP}} / (C_{\\text{FP}} + C_{\\text{FN}})$ (no curve-fit $\\Phi$ posteriors), (2) power gating at $n \\ge 42$ ($80\\%$ power for $+15\\%$ CLV lift at $\\alpha = 0.05$), (3) Empirical-Bayes shrinkage ($\\kappa = 20$, audited across $\\kappa \\in \\{5, 20, 50\\}$) and Benjamini-Hochberg FDR across all active customers, (4) separation of `SYSTEMATIC_STRATEGY_SIGNATURE` (`H7` same-ticket multi-leg pairing, where automation is consistent with, not proven by, ticket-level timestamps) from sub-5-second distinct-ticket automation and from closing-line EV (`H1`/`H4`), and (5) exact conservation oracles across all partitions.",
   );
   lines.push("");
 

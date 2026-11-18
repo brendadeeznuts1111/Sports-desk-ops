@@ -16,7 +16,9 @@ import {
   renameSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+
+import { replaceIpsInText, textContainsIp } from "./f402_ip_text.ts";
 
 import {
   parseCustomerAdminListEnvelope,
@@ -80,7 +82,8 @@ export type F402PullerErrorCode =
   | "config"
   | "response"
   | "checkpoint"
-  | "rate-limited";
+  | "rate-limited"
+  | "unsafe-path";
 
 export class F402PullerError extends Error {
   readonly code: F402PullerErrorCode;
@@ -101,11 +104,15 @@ export class F402PullerError extends Error {
   }
 }
 
+/**
+ * Partial, case-insensitive key match so variants such as `NewPassword`,
+ * `EncryptPassword`, `HomePhone`, `Phone1`, `SMSPhoneNumber` and `EMail` are
+ * stripped too. `pass` and `pin` stay exact so `Bypass*` or `Spin*` keys
+ * are kept.
+ */
 const SECRET_KEY =
-  /^(?:password|pass|passwd|pin|phone|phonenumber|telegramid|token|authToken|authorization|cookie|secret)$/i;
+  /passw|^pass$|phone|sms|e-?mail|telegram|token|authorization|cookie|secret|^pin(?:code)?$/i;
 const IP_KEY = /^(?:ip|ipaddress|ip_address)$/i;
-const IPV4 =
-  /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/;
 
 export const REDACTED = "<redacted>";
 
@@ -118,8 +125,8 @@ function redactWalk(value: unknown, stripIps: boolean): unknown {
     return value.map((item) => redactWalk(item, stripIps));
   }
   if (!isPlainObject(value)) {
-    if (stripIps && typeof value === "string" && IPV4.test(value)) {
-      return value.replace(IPV4, REDACTED);
+    if (stripIps && typeof value === "string") {
+      return replaceIpsInText(value, () => REDACTED);
     }
     return value;
   }
@@ -149,7 +156,7 @@ export function redactSecretsAndIps(value: unknown): unknown {
 }
 
 export function containsRawIp(value: unknown): boolean {
-  if (typeof value === "string") return IPV4.test(value);
+  if (typeof value === "string") return textContainsIp(value);
   if (Array.isArray(value)) return value.some(containsRawIp);
   if (isPlainObject(value)) {
     return Object.entries(value).some(([key, child]) => {
@@ -334,12 +341,44 @@ export function saveCheckpoint(
   writePrivateJson(checkpointPath(outDir), checkpoint);
 }
 
+const SAFE_PATH_SEGMENT = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * API-supplied ids become file names under `raw/`. Only `[A-Za-z0-9_-]` is
+ * accepted, which rules out `..`, `/`, `\`, absolute paths and empty ids.
+ */
+export function safePathSegment(value: string, operation: string): string {
+  if (!SAFE_PATH_SEGMENT.test(value)) {
+    throw new F402PullerError(
+      "unsafe-path",
+      operation,
+      "refusing an id that is not a plain [A-Za-z0-9_-] path segment",
+    );
+  }
+  return value;
+}
+
 export function writeRawJson(
   outDir: string,
-  relative: string,
+  relativePath: string,
   value: unknown,
 ): string {
-  const path = join(outDir, "raw", relative);
+  const rawDir = resolve(outDir, "raw");
+  const inside = relative(rawDir, resolve(rawDir, relativePath));
+  if (
+    isAbsolute(relativePath) ||
+    inside === "" ||
+    inside === ".." ||
+    inside.startsWith(`..${sep}`) ||
+    isAbsolute(inside)
+  ) {
+    throw new F402PullerError(
+      "unsafe-path",
+      "raw",
+      "refusing to write a raw file outside the raw directory",
+    );
+  }
+  const path = join(outDir, "raw", relativePath);
   writePrivateJson(path, redactSecrets(value));
   return path;
 }
@@ -951,6 +990,7 @@ export async function runContract(
       "a test customer id is required",
     );
   }
+  safePathSegment(customerId, "contract");
   const datedStart = options.start ?? defaultTransactionStartDate();
   const common = {
     ...(ctx.agentId ? { agentID: ctx.agentId } : {}),
@@ -1038,6 +1078,9 @@ export async function runTransactions(
       "transactions",
       "no customer ids in the checkpoint — run census first",
     );
+  }
+  for (const customerId of customerIds) {
+    safePathSegment(customerId, "transactions");
   }
   const done = new Set(
     options.resume === false ? [] : previous.completedCustomers,
@@ -1222,6 +1265,14 @@ export async function runWagers(
     loadCheckpoint(ctx.outDir) ??
     emptyCheckpoint(ctx.agentId, nowIso(ctx.clock));
   const resume = options.resume !== false;
+  if (options.includeFigureDate !== false) {
+    for (const customerId of filterCustomerIds(
+      previous.customerIds,
+      options.accounts ?? [],
+    )) {
+      safePathSegment(customerId, "wagers");
+    }
+  }
   const common = {
     ...(ctx.agentId ? { agentID: ctx.agentId } : {}),
     ...(ctx.agentOwner ? { agentOwner: ctx.agentOwner } : {}),

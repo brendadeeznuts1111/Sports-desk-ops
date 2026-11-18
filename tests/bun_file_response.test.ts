@@ -2,7 +2,6 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { closeSync, openSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 
 /**
  * `Bun.file()` infers a MIME type, but `new Response(file)` does not put it on the response object.
@@ -80,7 +79,7 @@ describe("Bun.file response semantics", () => {
     const body = '{"hello":"world"}\n';
     await Bun.write(path, body);
 
-    const fromUrl = Bun.file(pathToFileURL(resolve(path)));
+    const fromUrl = Bun.file(Bun.pathToFileURL(resolve(path)));
     expect(await fromUrl.text()).toBe(body);
 
     const pathBytes = new TextEncoder().encode(path);

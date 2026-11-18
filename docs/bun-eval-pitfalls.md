@@ -64,11 +64,15 @@ drop a final empty element; the iterator is for streams that never end.
 
 ## color-env
 
-`Bun.enableANSIColors` is a writable data property (no getter), `false` when piped; assigning it
-changes the value, so read it once at startup rather than trusting it after other code ran. `NO_COLOR=1` disables and `FORCE_COLOR=1`
-enables; `FORCE_COLOR=0` and `NO_COLOR=0` do **not** disable colour on a TTY, unlike Node and the
-no-color.org convention. Use `NO_COLOR=1`. Agent shells often export both variables already, so
-clear them before measuring.
+`Bun.enableANSIColors` is a writable data property (no getter). Measured on Bun `1.4.4+38afee6c8`,
+it is `true` even when stdout is piped (`process.stdout.isTTY === undefined`) unless `NO_COLOR=1`
+is set; `FORCE_COLOR=1` overrides `NO_COLOR=1`. Assigning `Bun.enableANSIColors` mutates the global
+flag, so read it once at startup or gate through `useColor()` (`lib/ansi_color.ts`), which checks
+`FORCE_COLOR` (`"1"|"2"|"3"|"true"` / `"0"`) -> `"NO_COLOR" in env` (any value, even empty) ->
+`isTTY && Bun.enableANSIColors`. `FORCE_COLOR=0` and `NO_COLOR=0`
+do **not** disable colour on a TTY in Bun itself, unlike Node and the no-color.org convention. Use
+`NO_COLOR=1` (or `useColor()`). Agent shells often export both variables already, so clear them
+before measuring.
 
 ## mmap-truncate
 
@@ -84,9 +88,20 @@ in a child process when anything else may write the file.
 
 ## archive-files
 
-`new Bun.Archive(bytes)` needs bytes (`await Bun.file(p).bytes()`); a `BunFile` is "Unrecognized
-archive format". `.files()` is the in-memory listing (`Map<path, Blob>`); `.extract(dir)` writes to
-disk and requires the path.
+`new Bun.Archive(bytes)` needs bytes (`await Bun.file(p).bytes()`). Passing the
+handle itself is _type-correct_ — `Blob` is a legal `ArchiveInput`, and `S3File`
+extends `Blob` — but the runtime then splits by method (measured 2026-11-17 on
+1.4.4, pinned in `tests/bun_runtime_contracts.test.ts`):
+
+- `.bytes()` / `.blob()` re-serialise the member set: **0 bytes, no error**
+- `.files()` throws `Unrecognized archive format`; `.extract(dir)` throws too
+
+So a forgotten `await` is silent only if the caller never parses. `.files()` is
+the in-memory listing (`Map<path, File>`, regular files only); `.extract(dir)`
+writes to disk and returns the entry count. Also: `{ compress: "gzip" }` is
+honoured by `bytes()` / `blob()` / static `write()`, but **not** by
+`Bun.write(destination, archiveInstance)`, which writes an uncompressed tar —
+see `lib/eod_archive.ts` and #353.
 
 ## sql-sqlite-url
 

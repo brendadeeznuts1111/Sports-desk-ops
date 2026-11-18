@@ -398,6 +398,11 @@ interface SurfaceReport {
   readonly missing: string[];
   readonly drift: Drift[];
   readonly proxy: ReturnType<typeof proxyReport> | null;
+  readonly pipeline: readonly {
+    readonly id: string;
+    readonly bun: string;
+    readonly ok: boolean;
+  }[];
 }
 
 async function typesVersion(): Promise<string | null> {
@@ -517,6 +522,25 @@ const report: SurfaceReport = {
     typesReport !== null && typesReport.error === null,
   ),
   proxy: proxyReport(url),
+  pipeline: [
+    {
+      id: "xml-ingest",
+      bun: "Bun.XML.parse",
+      ok:
+        results.find((r) => r.name === "xmlParse")?.ok ??
+        typeof Bun.XML?.parse === "function",
+    },
+    {
+      id: "r2-chunk-hasher",
+      bun: "Bun.CryptoHasher",
+      ok: typeof Bun.CryptoHasher === "function",
+    },
+    {
+      id: "cli-bins-shim",
+      bun: "Bun.which",
+      ok: typeof Bun.which === "function",
+    },
+  ],
 };
 
 if (hasFlag(parsed, "--json")) {

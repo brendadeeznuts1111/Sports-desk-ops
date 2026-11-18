@@ -4,7 +4,7 @@
  * Large verify: use extract() — `.files()` loads the whole archive into memory.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
+import { lstatSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ARCHIVE_COMPRESS } from "./archive_policy.ts";
@@ -170,6 +170,29 @@ export function assertSafeTarGz(bytes: Uint8Array): void {
 }
 
 /**
+ * Extract only into a real, empty directory. `assertSafeTar` covers hostile entries; this covers a
+ * hostile destination. On Bun 1.4.4, `extract()` follows a symlink that already exists in the
+ * target: with `dir/esc -> /outside`, an entry `esc/x` is written to `/outside/x` (measured
+ * 2026-11-15, Linux x64). The 1.4.5 canary refuses that itself ("A symlink in the destination is
+ * absolute or leads outside of it"); this keeps the pinned runtime equally strict.
+ */
+export async function extractIntoEmptyDir(
+  archive: InstanceType<typeof Bun.Archive>,
+  dir: string,
+): Promise<void> {
+  const st = lstatSync(dir);
+  if (st.isSymbolicLink() || !st.isDirectory()) {
+    throw new Error(
+      `eod archive: extract target is not a real directory: ${dir}`,
+    );
+  }
+  if (readdirSync(dir).length > 0) {
+    throw new Error(`eod archive: extract target is not empty: ${dir}`);
+  }
+  await archive.extract(dir);
+}
+
+/**
  * Hash selected members. Uses `.files(glob)` when small; `extract()` when large.
  */
 export async function sha256MembersInTarGz(
@@ -209,7 +232,7 @@ export async function sha256MembersInTarGz(
   assertSafeTarGz(bytes);
   const dir = mkdtempSync(join(tmpdir(), "eod-verify-"));
   try {
-    await archive.extract(dir);
+    await extractIntoEmptyDir(archive, dir);
     const out = new Map<string, string>();
     const globber = new Bun.Glob(glob);
     for await (const rel of globber.scan({ cwd: dir, onlyFiles: true })) {

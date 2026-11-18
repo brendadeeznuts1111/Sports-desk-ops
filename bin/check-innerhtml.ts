@@ -199,6 +199,8 @@ async function main(): Promise<void> {
     "html",
   ])) {
     if (file.includes("/verification/manager-boot-oracle/pinned/")) continue;
+    // Stryker HTML report (vendor bundle); artifact-only, not app-authored DOM.
+    if (file.includes("reports/mutation/")) continue;
     scannedCount++;
     const fullPath = path.join(ROOT, file);
     const content = await Bun.file(fullPath).text();

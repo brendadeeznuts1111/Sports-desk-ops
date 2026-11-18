@@ -4,11 +4,12 @@
  * Signal-Honesty provenance badges, and zero-DOM feed loader for `@sportsdesk-ops/ui`.
  */
 
-import type {
-  SlabPolicySummary,
-  WagerTier,
-  WagersWireContractSummary,
-  WagersWireViolation,
+import {
+  wagerChannelOf,
+  type SlabPolicySummary,
+  type WagerTier,
+  type WagersWireContractSummary,
+  type WagersWireViolation,
 } from "@sportsdesk-ops/contracts";
 import type {
   CustomersApiResponse,
@@ -227,13 +228,24 @@ export function normalizeHydratedWagerRow(
       : null;
   const maxRecommendedStake = Number(raw.maxRecommendedStake ?? 0);
   const alertTier = normalizeAlertTier(raw.alertTier);
+  const ticketWriter =
+    typeof raw.ticketWriter === "string" ? raw.ticketWriter.trim() : "";
+  const volumeUsd = Number(raw.volumeUsd);
   return {
     ticketId: String(raw.ticketId ?? `W-HYD-${idx}`),
     timestamp: String(raw.timestamp ?? "—"),
     customerId: String(raw.customerId ?? `CUST-${idx}`),
     agentId: String(raw.agentId ?? "AG01"),
     masterAgent: String(raw.masterAgent ?? "MASTER_A"),
-    sport: String(raw.sport ?? "OTHER").toUpperCase(),
+    ...(ticketWriter === "" ? {} : { ticketWriter }),
+    writer: wagerChannelOf(raw.writer ?? ticketWriter),
+    ...(Number.isFinite(volumeUsd) ? { volumeUsd } : {}),
+    ...(raw.vip === true ? { vip: true } : {}),
+    sport: raw.sport == null ? "" : String(raw.sport).toUpperCase(),
+    subSport:
+      raw.subSport == null || String(raw.subSport).trim() === ""
+        ? null
+        : String(raw.subSport).toUpperCase(),
     betType: String(raw.betType ?? "Straight"),
     event: String(raw.event ?? "Event Matchup"),
     selection: String(raw.selection ?? "Selection"),
@@ -404,6 +416,11 @@ export function normalizeCustomersCohortResponse(
     backtestTop: Array.isArray(rec.backtestTop)
       ? (rec.backtestTop as ReadonlyArray<Record<string, unknown>>)
       : [],
+    backtestAll: Array.isArray(rec.backtestAll)
+      ? (rec.backtestAll as ReadonlyArray<Record<string, unknown>>)
+      : Array.isArray(rec.backtestTop)
+        ? (rec.backtestTop as ReadonlyArray<Record<string, unknown>>)
+        : [],
     fixtures: Array.isArray(rec.fixtures)
       ? (rec.fixtures as ReadonlyArray<Record<string, unknown>>)
       : [],

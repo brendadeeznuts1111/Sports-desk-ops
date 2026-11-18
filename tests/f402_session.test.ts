@@ -3,6 +3,7 @@ import { chmodSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  F402_DERIVED_EXPIRY_MARGIN_MS,
   describeF402Session,
   readF402Session,
   refreshF402Session,
@@ -102,6 +103,87 @@ describe("F402 session cache", () => {
     const described = describeF402Session(session);
     expect(described).toContain("session");
     expect(described).not.toContain("SECRET");
+  });
+
+  const b64 = (value: unknown): string =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+  const jwtAt = (nbf: number, exp: number): string =>
+    `Bearer ${b64({ alg: "none" })}.${b64({ nbf, exp })}.sig`;
+
+  test("derives a bearer session expiry from exp, not the fallback TTL", () => {
+    const now = Date.parse("2026-11-17T16:00:00.000Z");
+    const exp = Math.floor(now / 1000) + 21 * 60;
+    const session = sessionFromAuth(
+      {
+        cookieHeader: "",
+        cookieNames: [],
+        authorizationHeader: jwtAt(exp - 21 * 60, exp),
+      },
+      { now },
+    );
+    expect(session.expiresAtIso).toBe(
+      new Date((exp - 2 * 60) * 1000).toISOString(),
+    );
+  });
+
+  test("derived expiry sits the pinned 2-minute margin before exp", () => {
+    expect(F402_DERIVED_EXPIRY_MARGIN_MS).toBe(2 * 60 * 1000);
+    const now = Date.parse("2026-11-17T16:00:00.000Z");
+    const exp = Math.floor(now / 1000) + 21 * 60;
+    const session = sessionFromAuth(
+      {
+        cookieHeader: "",
+        cookieNames: [],
+        authorizationHeader: jwtAt(exp - 21 * 60, exp),
+      },
+      { now },
+    );
+    expect(Date.parse(session.expiresAtIso)).toBe(
+      exp * 1000 - F402_DERIVED_EXPIRY_MARGIN_MS,
+    );
+  });
+
+  test("a shorter caller TTL still wins over the bearer exp", () => {
+    const now = Date.parse("2026-11-17T16:00:00.000Z");
+    const exp = Math.floor(now / 1000) + 21 * 60;
+    const session = sessionFromAuth(
+      {
+        cookieHeader: "",
+        cookieNames: [],
+        authorizationHeader: jwtAt(exp - 21 * 60, exp),
+      },
+      { now, ttlMinutes: 5 },
+    );
+    expect(session.expiresAtIso).toBe(new Date(now + 5 * 60_000).toISOString());
+  });
+
+  test("an opaque bearer keeps the TTL fallback", () => {
+    const now = Date.parse("2026-11-17T16:00:00.000Z");
+    const session = sessionFromAuth(
+      {
+        cookieHeader: "",
+        cookieNames: [],
+        authorizationHeader: "Bearer opaque-token",
+      },
+      { now, ttlMinutes: 15 },
+    );
+    expect(session.expiresAtIso).toBe(
+      new Date(now + 15 * 60_000).toISOString(),
+    );
+  });
+
+  test("an already-expired bearer derives a past expiry", () => {
+    const now = Date.parse("2026-11-17T16:00:00.000Z");
+    const exp = Math.floor(now / 1000) - 60;
+    const session = sessionFromAuth(
+      {
+        cookieHeader: "",
+        cookieNames: [],
+        authorizationHeader: jwtAt(exp - 21 * 60, exp),
+      },
+      { now },
+    );
+    expect(Date.parse(session.expiresAtIso)).toBeLessThan(now);
   });
 
   test("live login stays disabled without F402_LIVE_LOGIN=1", async () => {

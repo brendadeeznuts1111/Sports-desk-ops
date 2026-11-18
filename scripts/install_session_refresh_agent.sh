@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# Install, remove, or inspect the SportsDesk LaunchAgents (`session-refresh` and/or `daemon`).
+# Install, remove, or inspect the SportsDesk LaunchAgents (`session-refresh` + its silence
+# watchdog, and/or `daemon`).
 #
-# Both plists use Option A (`op run --env-file=__REPO_PATH__/.env.op -- __BUN_BIN__ --no-env-file
-# run ...`) with `OP_SERVICE_ACCOUNT_TOKEN` stored inside a `chmod 0600` LaunchAgent plist so
-# unattended boots never block on the `.env` 1Password Desktop FIFO.
+# `session-refresh` (the refresher and its watchdog) runs Bun directly with `--no-env-file` and
+# takes its credentials from the login keychain. It does not require `.env.op`, `op`, or
+# `OP_SERVICE_ACCOUNT_TOKEN`.
+#
+# `daemon` still uses the op wrapper (`op run --env-file=__REPO_PATH__/.env.op -- __BUN_BIN__
+# --no-env-file run ...`) with `OP_SERVICE_ACCOUNT_TOKEN` stored inside a `chmod 0600`
+# LaunchAgent plist, so an unattended boot never blocks on the `.env` 1Password Desktop FIFO.
 #
 # Usage:
 #   scripts/install_session_refresh_agent.sh install [--target session-refresh|daemon|both]
@@ -11,13 +16,15 @@
 #   scripts/install_session_refresh_agent.sh status [--target session-refresh|daemon|both]
 #
 # Defaults to `--target session-refresh` so existing runbooks continue to work unchanged.
-# Requires `.env.op` in the repo root and `OP_SERVICE_ACCOUNT_TOKEN` exported in the calling
-# interactive shell when running `install`. No secret is printed or passed via command-line argv.
+# `--target daemon` (or `both`) requires `.env.op` in the repo root and
+# `OP_SERVICE_ACCOUNT_TOKEN` exported in the calling interactive shell. No secret is printed or
+# passed via command-line argv.
 
 set -euo pipefail
 
 REPO_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SESSION_REFRESH_LABEL="com.bookdeskops.sportsdesk.session-refresh"
+SESSION_WATCH_LABEL="com.bookdeskops.sportsdesk.session-watch"
 DAEMON_LABEL="com.bookdeskops.sportsdesk.daemon"
 
 TARGET="session-refresh"
@@ -29,7 +36,10 @@ install_session_refresh_agent.sh install|uninstall|status [--target session-refr
 
   install    Substitute placeholders in the selected template(s), write chmod 0600 plist(s) to
              ~/Library/LaunchAgents/, run `plutil -lint`, and `launchctl bootstrap` them.
-             Requires `${REPO_PATH}/.env.op` and `OP_SERVICE_ACCOUNT_TOKEN` in the environment.
+             `--target session-refresh` installs the keychain-direct refresher and its
+             independent watchdog; no `.env.op`/op token is needed.
+             `--target daemon` (or `both`) also installs the op-wrapped webview daemon and
+             requires `${REPO_PATH}/.env.op` plus `OP_SERVICE_ACCOUNT_TOKEN`.
   uninstall  `launchctl bootout` the selected agent(s) and remove the installed plist(s).
   status     Print `launchctl print` / `launchctl list` state for the selected agent(s).
 USAGE
@@ -87,10 +97,25 @@ parse_args() {
 
 selected_labels() {
   case "${TARGET}" in
-    session-refresh) printf '%s\n' "${SESSION_REFRESH_LABEL}" ;;
+    session-refresh) printf '%s\n%s\n' "${SESSION_REFRESH_LABEL}" "${SESSION_WATCH_LABEL}" ;;
     daemon) printf '%s\n' "${DAEMON_LABEL}" ;;
-    both) printf '%s\n%s\n' "${DAEMON_LABEL}" "${SESSION_REFRESH_LABEL}" ;;
+    both)
+      printf '%s\n%s\n%s\n' "${DAEMON_LABEL}" "${SESSION_REFRESH_LABEL}" "${SESSION_WATCH_LABEL}"
+      ;;
   esac
+}
+
+# True when any selected template still uses the op wrapper. Keychain-direct templates do not,
+# so `session-refresh` needs no `.env.op`, `op`, or service-account token.
+templates_need_op() {
+  local label template
+  while IFS= read -r label; do
+    template="${REPO_PATH}/infra/launchd/${label}.plist"
+    if [[ -f "${template}" ]] && grep -qE '__OP_BIN__|__OP_SERVICE_ACCOUNT_TOKEN__' "${template}"; then
+      return 0
+    fi
+  done < <(selected_labels)
+  return 1
 }
 
 resolve_bun_bin() {
@@ -158,21 +183,30 @@ render_plist_from_env() {
 }
 
 cmd_install() {
-  local env_op_file="${REPO_PATH}/.env.op"
-  if [[ ! -f "${env_op_file}" ]]; then
-    echo "error: ${env_op_file} is missing; copy .env.op.example to .env.op and fill op:// refs" >&2
-    exit 1
-  fi
-  chmod 0600 "${env_op_file}"
+  local needs_op=0
+  if templates_need_op; then needs_op=1; fi
 
-  if [[ -z "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
-    echo "error: OP_SERVICE_ACCOUNT_TOKEN is unset; export your 1Password service-account token first" >&2
-    exit 1
+  local env_op_file="${REPO_PATH}/.env.op"
+  if [[ "${needs_op}" -eq 1 ]]; then
+    if [[ ! -f "${env_op_file}" ]]; then
+      echo "error: ${env_op_file} is missing; copy .env.op.example to .env.op and fill op:// refs" >&2
+      exit 1
+    fi
+    chmod 0600 "${env_op_file}"
+
+    if [[ -z "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
+      echo "error: OP_SERVICE_ACCOUNT_TOKEN is unset; export your 1Password service-account token first" >&2
+      exit 1
+    fi
   fi
 
   local bun_bin op_bin bun_bin_dir uid
   bun_bin="$(resolve_bun_bin)"
-  op_bin="$(resolve_op_bin)"
+  if [[ "${needs_op}" -eq 1 ]]; then
+    op_bin="$(resolve_op_bin)"
+  else
+    op_bin=""
+  fi
   bun_bin_dir="$(dirname "${bun_bin}")"
   uid="$(id -u)"
 
@@ -202,6 +236,7 @@ cmd_install() {
 
   if [[ "${TARGET}" == "session-refresh" || "${TARGET}" == "both" ]]; then
     echo "next: tail -f ${REPO_PATH}/scratch/f402-session-refresh.jsonl"
+    echo "watch: tail -f ${REPO_PATH}/scratch/f402-session-watch.stderr.log"
   fi
   if [[ "${TARGET}" == "daemon" || "${TARGET}" == "both" ]]; then
     echo "next: curl -fsS http://127.0.0.1:4020/health"

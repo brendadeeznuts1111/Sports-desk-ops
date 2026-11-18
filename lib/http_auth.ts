@@ -58,6 +58,25 @@ export const parseCookies = (header: string | null): Record<string, string> => {
   return out;
 };
 
+/**
+ * Read one cookie from a `BunRequest` when the runtime exposes its parsed
+ * `CookieMap`, falling back to the header parser for plain `Request`s (the
+ * in-process dispatcher and unit tests).
+ */
+function cookieValue(req: Request, name: string): string | undefined {
+  const cookies = (req as Request & { readonly cookies?: Bun.CookieMap })
+    .cookies;
+  if (cookies !== undefined) {
+    try {
+      const value = cookies.get(name);
+      if (value !== null && value !== undefined) return value;
+    } catch {
+      // A malformed Cookie header falls through to the tolerant parser.
+    }
+  }
+  return parseCookies(req.headers.get("cookie"))[name];
+}
+
 export const clientIp = (
   req: Request,
   server?: { requestIP?: (req: Request) => { address: string } | null },
@@ -212,7 +231,7 @@ export const handleLogout = async (
   req: Request,
   revokeSession = sessionRevoke,
 ): Promise<Response> => {
-  const token = parseCookies(req.headers.get("cookie"))[SESSION_COOKIE_NAME];
+  const token = cookieValue(req, SESSION_COOKIE_NAME);
   if (token) await revokeSession(token);
   auditAuth({
     action: "logout",
@@ -256,7 +275,7 @@ export const requireSession = async (
   next: (ctx: AuthedContext) => Promise<Response>,
   verifySession = sessionVerify,
 ): Promise<Response> => {
-  const token = parseCookies(req.headers.get("cookie"))[SESSION_COOKIE_NAME];
+  const token = cookieValue(req, SESSION_COOKIE_NAME);
   if (!token) return json(401, { error: "unauthenticated" });
   const verified = await verifySession(token);
   if (!verified) {
@@ -278,8 +297,7 @@ export const requireCsrf = async (
   verifyCsrfFn = verifyCsrf,
 ): Promise<Response> => {
   if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
-    const cookies = parseCookies(req.headers.get("cookie"));
-    const cookieToken = cookies[CSRF_COOKIE_NAME];
+    const cookieToken = cookieValue(req, CSRF_COOKIE_NAME);
     const headerToken = req.headers.get(CSRF_HEADER_NAME);
     if (
       !cookieToken ||

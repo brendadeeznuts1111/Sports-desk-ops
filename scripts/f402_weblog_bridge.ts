@@ -101,9 +101,14 @@ function assertCleanWeblogValue(
   for (const [key, entry] of Object.entries(value)) {
     const childPath = `${path}.${key}`;
     const lower = key.toLowerCase();
+    const allowActionLoginCount =
+      lower === "login" &&
+      path === "$.operations.actions" &&
+      typeof entry === "number";
     if (
-      FORBIDDEN_WEBLOG_KEYS.has(lower) ||
-      (lower === "logins" && typeof entry !== "number")
+      !allowActionLoginCount &&
+      (FORBIDDEN_WEBLOG_KEYS.has(lower) ||
+        (lower === "logins" && typeof entry !== "number"))
     ) {
       throw new Error(
         `F402 weblog pre-publish sanitization failed: forbidden key "${key}" at ${childPath}`,
@@ -436,7 +441,15 @@ async function main(): Promise<void> {
     if (client === null) {
       console.error("[weblog] R2 unavailable; local artifact only");
     } else {
-      const published = await publishF402WeblogRollup({ client, rollup });
+      let published: Awaited<ReturnType<typeof publishF402WeblogRollup>>;
+      try {
+        published = await publishF402WeblogRollup({ client, rollup });
+      } catch (error) {
+        console.error(
+          `[weblog] R2 publish failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        throw error;
+      }
       console.error(
         `[weblog] published ${published.dailyKey} bytes=${published.bytes} + ${published.manifestKey} + ${published.latestKey} pointer=${published.pointerOutcome}`,
       );
