@@ -196,7 +196,7 @@ export function assertAllowedRead(pathOrName: string): AllowedReadOp {
   refuseIfBlocked(name);
 }
 
-/** Assert that `pathOrName` is one of the puller's seven read operations. */
+/** Assert that `pathOrName` is in `PULL_READ_ONLY_OPS`. */
 export function assertPullReadOnly(pathOrName: string): PullReadOnlyOp {
   const name = normalizeOperationName(pathOrName);
   if (isPullReadOnlyOp(name)) return name;

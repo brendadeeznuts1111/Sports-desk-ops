@@ -1,9 +1,7 @@
 /**
- * Per-signal weight and threshold overrides for analyze. Unknown keys fail
- * loudly; omitted keys keep the stock defaults so existing tests stay put.
+ * Per-signal weight, threshold and list overrides for analyze. Unknown keys
+ * fail loudly; omitted keys keep the stock defaults so existing tests stay put.
  */
-
-import { readFileSync } from "node:fs";
 
 import { F402AnalyzeError } from "./f402_analyze_ingest.ts";
 
@@ -53,6 +51,37 @@ export const DEFAULT_LINK_THRESHOLDS = {
 
 export type LinkThresholdName = keyof typeof DEFAULT_LINK_THRESHOLDS;
 
+/**
+ * `genericEnteredBy`: ledger `EnteredBy` values (trimmed, lower-cased) that
+ * name a channel or the system, not a person, so they are never
+ * `same_entered_by` evidence. `sharedInfraClasses`: IP classes from
+ * `classifyWeblogIpExtended` that many unrelated customers share, so a
+ * `shared_ip` match there is down-weighted. A configured list replaces the
+ * default; it does not extend it.
+ */
+export const DEFAULT_LINK_LISTS = {
+  genericEnteredBy: ["", "system", "internet", "ggl-livedealer"],
+  sharedInfraClasses: [
+    "CGNAT",
+    "T_MOBILE",
+    "VERIZON_192",
+    "VERIZON_208",
+    "ICLOUD_RELAY",
+    "BOT_RING_140_248",
+    "IPV6_CARRIER:T_MOBILE",
+    "IPV6_CARRIER:VERIZON",
+    "IPV6_CARRIER:ATT",
+    "IPV6_CARRIER:ICLOUD",
+  ],
+} as const satisfies Record<string, readonly string[]>;
+
+export type LinkListName = keyof typeof DEFAULT_LINK_LISTS;
+
+export interface ResolvedLinkLists {
+  readonly genericEnteredBy: ReadonlySet<string>;
+  readonly sharedInfraClasses: ReadonlySet<string>;
+}
+
 export interface AnalyzeConfig {
   readonly weights: {
     readonly link: Readonly<Partial<Record<LinkEvidenceTypeName, number>>>;
@@ -61,17 +90,20 @@ export interface AnalyzeConfig {
     >;
   };
   readonly thresholds: Readonly<Partial<Record<LinkThresholdName, number>>>;
+  readonly lists?: Readonly<Partial<Record<LinkListName, readonly string[]>>>;
 }
 
 export const EMPTY_ANALYZE_CONFIG: AnalyzeConfig = {
   weights: { link: {}, predict: {} },
   thresholds: {},
+  lists: {},
 };
 
 const PREDICT_NAMES = new Set<string>(PREDICT_SIGNAL_NAMES);
 const LINK_NAMES = new Set<string>(LINK_EVIDENCE_TYPES);
 const THRESHOLD_NAMES = new Set<string>(Object.keys(DEFAULT_LINK_THRESHOLDS));
-const ROOT_KEYS = new Set(["weights", "thresholds"]);
+const LIST_NAMES = new Set<string>(Object.keys(DEFAULT_LINK_LISTS));
+const ROOT_KEYS = new Set(["weights", "thresholds", "lists"]);
 const WEIGHT_ROOT_KEYS = new Set(["link", "predict"]);
 
 function fail(message: string): never {
@@ -109,6 +141,23 @@ function parseWeightMap<K extends string>(
   return out;
 }
 
+function parseLinkList(name: string, raw: unknown): string[] {
+  if (!Array.isArray(raw)) fail(`lists.${name} must be an array of strings`);
+  const out: string[] = [];
+  for (const [index, item] of raw.entries()) {
+    if (typeof item !== "string") {
+      fail(`lists.${name}[${index}] must be a string`);
+    }
+    const value =
+      name === "genericEnteredBy" ? item.trim().toLowerCase() : item.trim();
+    if (value === "" && name !== "genericEnteredBy") {
+      fail(`lists.${name}[${index}] must not be empty`);
+    }
+    out.push(value);
+  }
+  return out;
+}
+
 /** Validate and normalize a config object (already parsed JSON). */
 export function parseAnalyzeConfig(raw: unknown): AnalyzeConfig {
   const obj = asObject(raw, "config");
@@ -136,15 +185,23 @@ export function parseAnalyzeConfig(raw: unknown): AnalyzeConfig {
       thresholds[key as LinkThresholdName] = n;
     }
   }
-  return { weights: { link, predict }, thresholds };
+  const lists: Partial<Record<LinkListName, readonly string[]>> = {};
+  if (obj.lists !== undefined) {
+    const rawLists = asObject(obj.lists, "lists");
+    for (const [key, value] of Object.entries(rawLists)) {
+      if (!LIST_NAMES.has(key)) fail(`unknown list "${key}"`);
+      lists[key as LinkListName] = parseLinkList(key, value);
+    }
+  }
+  return { weights: { link, predict }, thresholds, lists };
 }
 
-export function loadAnalyzeConfig(path: string): AnalyzeConfig {
+export async function loadAnalyzeConfig(path: string): Promise<AnalyzeConfig> {
   const trimmed = path.trim();
   if (trimmed === "") fail("missing --config path");
   let text: string;
   try {
-    text = readFileSync(trimmed, "utf8");
+    text = await Bun.file(trimmed).text();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     fail(`cannot read --config ${trimmed}: ${message}`);
@@ -163,4 +220,18 @@ export function resolvedLinkThresholds(config: AnalyzeConfig | undefined): {
   readonly [K in LinkThresholdName]: number;
 } {
   return { ...DEFAULT_LINK_THRESHOLDS, ...config?.thresholds };
+}
+
+export function resolvedLinkLists(
+  config: AnalyzeConfig | undefined,
+): ResolvedLinkLists {
+  return {
+    genericEnteredBy: new Set(
+      config?.lists?.genericEnteredBy ?? DEFAULT_LINK_LISTS.genericEnteredBy,
+    ),
+    sharedInfraClasses: new Set(
+      config?.lists?.sharedInfraClasses ??
+        DEFAULT_LINK_LISTS.sharedInfraClasses,
+    ),
+  };
 }

@@ -67,7 +67,8 @@ import {
 } from "../scripts/capture/allowlist.ts";
 
 export const F402_PULL_DEFAULT_OUT_DIR = "/workspace/f402-pull";
-export const F402_PULL_DEFAULT_BASE_URL = "https://fantasy402.com";
+export const F402_PULL_DEFAULT_BASE_URL = "https://www.fantasy402.com";
+export const F402_PULL_BASE_URL_ENV = "F402_BASE_URL";
 export const F402_PULL_DEFAULT_INTERVAL_MS = 1000;
 export const F402_PULL_DEFAULT_REFRESH_AFTER_MS = 15 * 60_000;
 export const F402_PULL_CHECKPOINT_VERSION = 1 as const;
@@ -349,10 +350,13 @@ export function saveCheckpoint(
 }
 
 const SAFE_PATH_SEGMENT = /^[A-Za-z0-9_-]+$/;
+export const SAFE_PATH_SEGMENT_MAX_LENGTH = 128;
 
 /**
- * API-supplied ids become file names under `raw/`. Only `[A-Za-z0-9_-]` is
- * accepted, which rules out `..`, `/`, `\`, absolute paths and empty ids.
+ * API-supplied ids become file names under `raw/`. Only `[A-Za-z0-9_-]`, at
+ * most `SAFE_PATH_SEGMENT_MAX_LENGTH` characters, is accepted. No dot is
+ * allowed anywhere, so `.`, `..`, hidden names and ids that would add their
+ * own extension are all refused, as are separators and empty ids.
  */
 export function safePathSegment(value: string, operation: string): string {
   if (!SAFE_PATH_SEGMENT.test(value)) {
@@ -362,7 +366,29 @@ export function safePathSegment(value: string, operation: string): string {
       "refusing an id that is not a plain [A-Za-z0-9_-] path segment",
     );
   }
+  if (value.length > SAFE_PATH_SEGMENT_MAX_LENGTH) {
+    throw new F402PullerError(
+      "unsafe-path",
+      operation,
+      `refusing an id longer than ${SAFE_PATH_SEGMENT_MAX_LENGTH} characters`,
+    );
+  }
   return value;
+}
+
+const SAFE_RAW_FILE_SEGMENT = /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/;
+
+function assertSafeRawRelativePath(relativePath: string): void {
+  const segments = relativePath.split("/");
+  for (const segment of segments) {
+    if (!SAFE_RAW_FILE_SEGMENT.test(segment) || segment.includes("..")) {
+      throw new F402PullerError(
+        "unsafe-path",
+        "raw",
+        "refusing a raw path segment that is empty, starts with a dot, contains .. or a character outside [A-Za-z0-9_.-]",
+      );
+    }
+  }
 }
 
 export function writeRawJson(
@@ -385,6 +411,7 @@ export function writeRawJson(
       "refusing to write a raw file outside the raw directory",
     );
   }
+  assertSafeRawRelativePath(relativePath);
   const path = join(outDir, "raw", relativePath);
   writePrivateJson(path, redactSecrets(value));
   return path;
@@ -406,6 +433,55 @@ export function writeSummaryJson(
   const path = join(outDir, name);
   writePrivateJson(path, sanitized);
   return path;
+}
+
+/**
+ * The portal origin for every puller request. Sessions are minted on
+ * `F402_BASE_URL` (default `https://www.fantasy402.com`, see
+ * `lib/f402_session.ts`), so the puller reads the same variable to keep the
+ * bearer and cookies on the host that issued them. Only a bare `https:`
+ * origin is accepted.
+ */
+export function normalizePullBaseUrl(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    throw new F402PullerError("config", "base-url", "not a valid URL");
+  }
+  if (url.protocol !== "https:") {
+    throw new F402PullerError(
+      "config",
+      "base-url",
+      `must use https:, got ${url.protocol}`,
+    );
+  }
+  if (url.username !== "" || url.password !== "") {
+    throw new F402PullerError(
+      "config",
+      "base-url",
+      "must not carry credentials",
+    );
+  }
+  if (url.pathname !== "/" || url.search !== "" || url.hash !== "") {
+    throw new F402PullerError(
+      "config",
+      "base-url",
+      "must be a bare origin with no path, query or fragment",
+    );
+  }
+  return url.origin;
+}
+
+export function resolvePullBaseUrl(
+  flag: string | undefined,
+  env: Record<string, string | undefined> = Bun.env,
+): string {
+  const fromFlag = flag?.trim();
+  if (fromFlag) return normalizePullBaseUrl(fromFlag);
+  const fromEnv = env[F402_PULL_BASE_URL_ENV]?.trim();
+  if (fromEnv) return normalizePullBaseUrl(fromEnv);
+  return F402_PULL_DEFAULT_BASE_URL;
 }
 
 export interface ManagerPostOptions {
@@ -488,9 +564,8 @@ export class F402PullClient {
 
   constructor(options: PullClientOptions) {
     this.session = options.session;
-    this.baseUrl = (options.baseUrl ?? F402_PULL_DEFAULT_BASE_URL).replace(
-      /\/+$/,
-      "",
+    this.baseUrl = normalizePullBaseUrl(
+      options.baseUrl ?? F402_PULL_DEFAULT_BASE_URL,
     );
     this.fetchImpl = options.fetchImpl ?? f402Fetch;
     this.clock = options.clock ?? createPaceClock();
@@ -911,6 +986,7 @@ export async function runCensus(
       const allow = new Set(options.agents.map((id) => id.toLowerCase()));
       targets = targets.filter((id) => allow.has(id.toLowerCase()));
     }
+    for (const agentId of targets) safePathSegment(agentId, "census");
     for (const agentId of targets) {
       const row = general.find((item) => item.agentId === agentId);
       const childRaw = await ctx.client.post("getListAgenstByAgent", {

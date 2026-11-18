@@ -8,6 +8,7 @@ import {
   type LedgerRow,
   type PullProjection,
   type WagerRow,
+  type WagerSource,
   type WeblogRow,
 } from "./f402_analyze_ingest.ts";
 
@@ -73,9 +74,9 @@ export const JOIN_ASSUMPTIONS: readonly string[] = [
   "Weblog tickets are parsed from Operation/Data free text (Ticket: N or Wager ticket N).",
   "TicketNumber is the primary join key; it is unique per wager on getGraded.",
   "WagerNumber is a fallback only when that number is unique in the ingested wager set (graded WagerNumber can be a per-customer sequence).",
-  "Ledger DocumentNumber and GradeNum are used when present; otherwise the same account plus a close time and matching amount (cents, then dollars) is a low-confidence fallback.",
+  "Ledger DocumentNumber and GradeNum are used when present; otherwise the same account plus a close time and matching amount is a low-confidence fallback.",
   "getBetTicker is a live window, not a historical book; settled coverage comes from getGraded and getWagersByFigureDate.",
-  "Amount units on graded/pending rows are treated as cents first, then dollars, when matching the #55 ledger.",
+  "Ledger amounts are wire cents. Pending, graded and figure-date AmountWagered are wire cents; ticker amounts are unconfirmed and may be cents or whole dollars.",
 ];
 
 const LEDGER_WAGER_TYPES = new Set(["A", "W", "L", "X"]);
@@ -97,16 +98,48 @@ function uniqueWagerNumbers(
   return unique;
 }
 
+/**
+ * `cents`: integer wire cents. `dollars`: whole or decimal dollars.
+ * `unknown`: either of the two, for a feed whose unit is not confirmed.
+ */
+export type WagerAmountUnit = "cents" | "dollars" | "unknown";
+
+/**
+ * Pending: `AmountWagered = 240000` matched the portal's $2,400
+ * (docs/analysis/defense-measurement-2026-11-03/08). Graded and figure-date:
+ * wire cents (lib/customer_wager_artifacts.ts). Ticker: the local paste was
+ * whole dollars (docs/design/bridge3a_f402_betticker.md) while the enricher
+ * reads it as cents, so it stays `unknown`.
+ */
+export const WAGER_AMOUNT_UNIT_BY_SOURCE: Readonly<
+  Record<WagerSource, WagerAmountUnit>
+> = {
+  pending: "cents",
+  graded: "cents",
+  "figure-date": "cents",
+  ticker: "unknown",
+};
+
+export function wagerAmountCentsCandidates(
+  amount: number,
+  unit: WagerAmountUnit,
+): number[] {
+  if (!Number.isFinite(amount)) return [];
+  const asCents = Math.trunc(amount);
+  const fromDollars = Math.round(amount * 100);
+  if (unit === "cents") return [asCents];
+  if (unit === "dollars") return [fromDollars];
+  return asCents === fromDollars ? [asCents] : [asCents, fromDollars];
+}
+
+/** `ledgerCents` is always wire cents; `unit` says how to read `wagerAmount`. */
 export function amountsMatch(
   wagerAmount: number,
   ledgerCents: number,
+  unit: WagerAmountUnit = "unknown",
 ): boolean {
-  if (!Number.isFinite(wagerAmount) || !Number.isFinite(ledgerCents))
-    return false;
-  if (Math.trunc(wagerAmount) === ledgerCents) return true;
-  if (Math.round(wagerAmount * 100) === ledgerCents) return true;
-  if (Math.round(wagerAmount / 100) === ledgerCents) return true;
-  return false;
+  if (!Number.isFinite(ledgerCents)) return false;
+  return wagerAmountCentsCandidates(wagerAmount, unit).includes(ledgerCents);
 }
 
 export function joinWeblogToWagers(
@@ -215,7 +248,11 @@ export function joinWagersToLedger(
           Number.isFinite(wager.acceptedMs) &&
           Number.isFinite(row.tranMs) &&
           Math.abs(row.tranMs - wager.acceptedMs) <= TIME_AMOUNT_WINDOW_MS &&
-          amountsMatch(wager.amountWagered, row.amountCents),
+          amountsMatch(
+            wager.amountWagered,
+            row.amountCents,
+            WAGER_AMOUNT_UNIT_BY_SOURCE[wager.source],
+          ),
       )
       .sort(
         (a, b) =>

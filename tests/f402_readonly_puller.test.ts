@@ -15,6 +15,8 @@ import {
   parseOpsArgument,
 } from "../scripts/capture/allowlist.ts";
 import {
+  F402_PULL_BASE_URL_ENV,
+  F402_PULL_DEFAULT_BASE_URL,
   F402PullClient,
   F402PullerError,
   RequestPacer,
@@ -26,14 +28,17 @@ import {
   eachUtcDateInclusive,
   emptyCheckpoint,
   loadCheckpoint,
+  normalizePullBaseUrl,
   parseCheckpoint,
   parseHierarchyList,
   redactSecrets,
   REDACTED,
   redactSecretsAndIps,
+  SAFE_PATH_SEGMENT_MAX_LENGTH,
   safePathSegment,
   writeRawJson,
   writeSummaryJson,
+  resolvePullBaseUrl,
   resolvePullSession,
   runCensus,
   runContract,
@@ -290,6 +295,69 @@ describe("raw file path safety", () => {
       }
       expect(caught).toBeInstanceOf(F402PullerError);
       expect((caught as F402PullerError).code).toBe("unsafe-path");
+    }
+  });
+
+  test("safePathSegment refuses every dot form, odd characters and over-long ids", () => {
+    const max = "a".repeat(SAFE_PATH_SEGMENT_MAX_LENGTH);
+    expect(safePathSegment(max, "test")).toBe(max);
+    for (const id of [
+      ".",
+      "...",
+      ".hidden",
+      ".CUST1",
+      "CUST1.",
+      "CUST1.json",
+      "CUST1/.",
+      "CUST1\0",
+      "CUST 1",
+      "CUST1\n",
+      "ÇUST1",
+      "a".repeat(SAFE_PATH_SEGMENT_MAX_LENGTH + 1),
+    ]) {
+      let caught: unknown;
+      try {
+        safePathSegment(id, "test");
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(F402PullerError);
+      expect((caught as F402PullerError).code).toBe("unsafe-path");
+      expect((caught as F402PullerError).operation).toBe("test");
+    }
+  });
+
+  test("writeRawJson refuses dot, empty and hidden segments inside raw/", () => {
+    const dir = mkdtempSync(join(tmpdir(), "f402-raw-dots-"));
+    try {
+      for (const rel of [
+        ".hidden.json",
+        "contract/.CUST1.json",
+        "contract/./CUST1.json",
+        "contract//CUST1.json",
+        "contract/CUST1..json",
+        "contract/a/../CUST1.json",
+        "contract/",
+        "contract\\CUST1.json",
+      ]) {
+        let caught: unknown;
+        try {
+          writeRawJson(dir, rel, {});
+        } catch (error) {
+          caught = error;
+        }
+        expect(caught).toBeInstanceOf(F402PullerError);
+        expect((caught as F402PullerError).code).toBe("unsafe-path");
+      }
+      for (const rel of [
+        "census/getHeriarchy.json",
+        "contract/CUST1.empty-start.json",
+        "wagers/figure-date/CUST1/2026-11-01.json",
+      ]) {
+        expect(writeRawJson(dir, rel, {})).toBe(join(dir, "raw", rel));
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 
@@ -554,6 +622,47 @@ describe("phases with synthetic fixtures", () => {
     expect(summary.customerIds).toBeUndefined();
     const checkpoint = loadCheckpoint(outDir);
     expect(checkpoint?.customerIds).toEqual(["CUST1", "CUST2"]);
+  });
+
+  test("census refuses an unsafe downline agent id before any child request", async () => {
+    const outDir = tempOut();
+    dirs.push(outDir);
+    const childCalls: string[] = [];
+    const client = new F402PullClient({
+      session,
+      intervalMs: 0,
+      fetchImpl: async (_url, init) => {
+        const form = formOf(init);
+        const op = form.get("operation");
+        if (op === "getHeriarchy") {
+          return Response.json(loadFixture("hierarchy.json"));
+        }
+        if (form.get("agentID") !== "ROOT1") {
+          childCalls.push(String(form.get("agentID")));
+        }
+        return Response.json({
+          GENERAL: [
+            { AgentID: "ROOT1", Login: "ROOT1", Level: 0, AgentType: "M" },
+            { AgentID: "SUB1", Login: "SUB1", Level: 1, AgentType: "A" },
+            { AgentID: "../SUB2", Login: "x", Level: 1, AgentType: "A" },
+          ],
+          PLAYERS: [],
+        });
+      },
+    });
+    await expect(
+      runCensus(
+        {
+          client,
+          outDir,
+          agentId: "ROOT1",
+          agentOwner: "ROOT1",
+          agentType: "M",
+        },
+        { recurseDownline: true },
+      ),
+    ).rejects.toMatchObject({ code: "unsafe-path", operation: "census" });
+    expect(childCalls).toEqual([]);
   });
 
   test("contract hits dated start, empty start, and deleted history", async () => {
@@ -828,5 +937,96 @@ describe("wagers phase", () => {
     expect(result.gradedSkipped).toBe(1);
     expect(result.figureDateSkipped).toBe(1);
     expect(urls).toEqual([]);
+  });
+});
+
+describe("base URL", () => {
+  function configError(fn: () => unknown): F402PullerError {
+    let caught: unknown;
+    try {
+      fn();
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(F402PullerError);
+    const error = caught as F402PullerError;
+    expect(error.code).toBe("config");
+    expect(error.operation).toBe("base-url");
+    return error;
+  }
+
+  test("defaults to the host sessions are minted on", () => {
+    expect(F402_PULL_DEFAULT_BASE_URL).toBe("https://www.fantasy402.com");
+    expect(F402_PULL_BASE_URL_ENV).toBe("F402_BASE_URL");
+    expect(resolvePullBaseUrl(undefined, {})).toBe(F402_PULL_DEFAULT_BASE_URL);
+    expect(resolvePullBaseUrl("  ", { F402_BASE_URL: " " })).toBe(
+      F402_PULL_DEFAULT_BASE_URL,
+    );
+  });
+
+  test("the env overrides the default and the flag overrides the env", () => {
+    const env = { F402_BASE_URL: "https://portal.example.test/" };
+    expect(resolvePullBaseUrl(undefined, env)).toBe(
+      "https://portal.example.test",
+    );
+    expect(resolvePullBaseUrl("https://flag.example.test:8443", env)).toBe(
+      "https://flag.example.test:8443",
+    );
+  });
+
+  test("accepts only a bare https origin", () => {
+    expect(normalizePullBaseUrl("https://WWW.Fantasy402.com/")).toBe(
+      "https://www.fantasy402.com",
+    );
+    expect(
+      configError(() => normalizePullBaseUrl("http://www.fantasy402.com"))
+        .message,
+    ).toContain("https:");
+    configError(() => normalizePullBaseUrl("www.fantasy402.com"));
+    configError(() => normalizePullBaseUrl(""));
+    const withUser = new URL(F402_PULL_DEFAULT_BASE_URL);
+    withUser.username = "user";
+    configError(() => normalizePullBaseUrl(withUser.href));
+    withUser.password = "pw";
+    configError(() => normalizePullBaseUrl(withUser.href));
+    configError(() => normalizePullBaseUrl("https://www.fantasy402.com/cloud"));
+    configError(() => normalizePullBaseUrl("https://www.fantasy402.com/?a=1"));
+    configError(() => normalizePullBaseUrl("https://www.fantasy402.com/#x"));
+    configError(() =>
+      resolvePullBaseUrl(undefined, { F402_BASE_URL: "http://x.test" }),
+    );
+  });
+
+  test("the client refuses a non-https base before any request", () => {
+    const calls: string[] = [];
+    configError(
+      () =>
+        new F402PullClient({
+          session,
+          baseUrl: "http://127.0.0.1:1",
+          intervalMs: 0,
+          fetchImpl: async (url) => {
+            calls.push(url);
+            return Response.json({});
+          },
+        }),
+    );
+    expect(calls).toEqual([]);
+  });
+
+  test("the client posts to the default host when no base is given", async () => {
+    const calls: string[] = [];
+    const client = new F402PullClient({
+      session,
+      intervalMs: 0,
+      fetchImpl: async (url) => {
+        calls.push(url);
+        return Response.json({ LIST: [] });
+      },
+    });
+    await client.post("getPlayers", {});
+    expect(calls[0]).toBe(
+      "https://www.fantasy402.com/cloud/api/Manager/getPlayers",
+    );
   });
 });

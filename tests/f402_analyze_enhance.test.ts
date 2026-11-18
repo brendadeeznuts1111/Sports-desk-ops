@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -16,9 +24,20 @@ import {
   renderAnalyzeOutput,
   runCalibrateAnalysis,
   runDiffAnalysis,
+  runLinkAnalysis,
+  runReviewAnalysis,
   runExplainAnalysis,
 } from "../lib/f402_analyze.ts";
 import { F402AnalyzeError } from "../lib/f402_analyze_ingest.ts";
+import {
+  DEFAULT_LINK_LISTS,
+  resolvedLinkLists,
+} from "../lib/f402_analyze_config.ts";
+import {
+  GENERIC_ENTERED_BY,
+  SHARED_INFRA_CLASSES,
+  isSharedInfraIp,
+} from "../lib/f402_analyze_link.ts";
 import { buildRings } from "../lib/f402_analyze_rings.ts";
 import { buildAccountTimeline } from "../lib/f402_analyze_timeline.ts";
 import {
@@ -51,7 +70,7 @@ function enhanceTree(): string {
 }
 
 describe("analyze config schema", () => {
-  test("accepts known weights and thresholds, and rejects unknown keys", () => {
+  test("accepts known weights and thresholds, and rejects unknown keys", async () => {
     const parsed = parseAnalyzeConfig({
       weights: { link: { steam_chase: 0 }, predict: { activity_gaps: 0.1 } },
       thresholds: { minEdgeScore: 0.4, ringMinEdgeScore: 0.5 },
@@ -68,7 +87,130 @@ describe("analyze config schema", () => {
     ).toThrow(F402AnalyzeError);
     const path = join(tempRoot(), "cfg.json");
     writeFileSync(path, JSON.stringify({ weights: { link: { clv_beat: 1 } } }));
-    expect(loadAnalyzeConfig(path).weights.link.clv_beat).toBe(1);
+    expect((await loadAnalyzeConfig(path)).weights.link.clv_beat).toBe(1);
+  });
+});
+
+describe("analyze config file", () => {
+  test("a missing or unreadable --config is a named config error", async () => {
+    for (const path of [join(tempRoot(), "absent.json"), "  "]) {
+      const error = await loadAnalyzeConfig(path).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(F402AnalyzeError);
+      expect((error as F402AnalyzeError).code).toBe("config");
+    }
+    const bad = join(tempRoot(), "bad.json");
+    writeFileSync(bad, "{");
+    const error = await loadAnalyzeConfig(bad).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(F402AnalyzeError);
+    expect((error as F402AnalyzeError).message).toContain("not valid JSON");
+  });
+});
+
+describe("analyze output files", () => {
+  test("summaries and the review are 0600 even when an older file was wider", () => {
+    const root = tempRoot();
+    writeSyntheticPull(root, plantedClusterPull());
+    const outDir = join(root, "analysis");
+    mkdirSync(outDir, { recursive: true });
+    const names = [
+      "link-summary.json",
+      "rings-summary.json",
+      "review-summary.json",
+      "review.md",
+    ];
+    for (const name of names) {
+      writeFileSync(join(outDir, name), "old\n", { mode: 0o644 });
+      chmodSync(join(outDir, name), 0o644);
+    }
+    runLinkAnalysis(root, { outDir });
+    runReviewAnalysis(root, { outDir });
+    for (const name of names) {
+      expect(statSync(join(outDir, name)).mode & 0o777).toBe(0o600);
+    }
+  });
+});
+
+describe("analyze config lists", () => {
+  test("defaults keep the previous operator and carrier lists", () => {
+    expect([...GENERIC_ENTERED_BY]).toEqual([
+      "",
+      "system",
+      "internet",
+      "ggl-livedealer",
+    ]);
+    expect([...SHARED_INFRA_CLASSES]).toEqual([
+      "CGNAT",
+      "T_MOBILE",
+      "VERIZON_192",
+      "VERIZON_208",
+      "ICLOUD_RELAY",
+      "BOT_RING_140_248",
+      "IPV6_CARRIER:T_MOBILE",
+      "IPV6_CARRIER:VERIZON",
+      "IPV6_CARRIER:ATT",
+      "IPV6_CARRIER:ICLOUD",
+    ]);
+    const resolved = resolvedLinkLists(undefined);
+    expect([...resolved.genericEnteredBy]).toEqual([
+      ...DEFAULT_LINK_LISTS.genericEnteredBy,
+    ]);
+    expect([...resolved.sharedInfraClasses]).toEqual([
+      ...DEFAULT_LINK_LISTS.sharedInfraClasses,
+    ]);
+    expect(parseAnalyzeConfig({}).lists).toEqual({});
+  });
+
+  test("a configured list replaces the default and is normalized", () => {
+    const parsed = parseAnalyzeConfig({
+      lists: {
+        genericEnteredBy: [" System ", "Kiosk"],
+        sharedInfraClasses: [" CGNAT "],
+      },
+    });
+    expect(parsed.lists?.genericEnteredBy).toEqual(["system", "kiosk"]);
+    expect(parsed.lists?.sharedInfraClasses).toEqual(["CGNAT"]);
+    const resolved = resolvedLinkLists(parsed);
+    expect(resolved.genericEnteredBy.has("internet")).toBe(false);
+    expect(resolved.sharedInfraClasses.has("T_MOBILE")).toBe(false);
+    expect(isSharedInfraIp("2607:fb90::1")).toBe(true);
+    expect(isSharedInfraIp("2607:fb90::1", resolved.sharedInfraClasses)).toBe(
+      false,
+    );
+  });
+
+  test("bad lists fail loudly", () => {
+    for (const raw of [
+      { lists: { operators: [] } },
+      { lists: [] },
+      { lists: { genericEnteredBy: "system" } },
+      { lists: { genericEnteredBy: [1] } },
+      { lists: { sharedInfraClasses: [" "] } },
+    ]) {
+      let caught: unknown;
+      try {
+        parseAnalyzeConfig(raw);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(F402AnalyzeError);
+      expect((caught as F402AnalyzeError).code).toBe("config");
+    }
+  });
+
+  test("genericEnteredBy decides which clerks count as link evidence", () => {
+    const root = tempRoot();
+    writeSyntheticPull(root, plantedClusterPull());
+    const projection = ingestPullDirectory(root);
+    const hasEnteredBy = (report: ReturnType<typeof linkAccounts>) =>
+      report.edges.some((edge) =>
+        edge.evidence.some((item) => item.type === "same_entered_by"),
+      );
+    expect(hasEnteredBy(linkAccounts(projection, { hashIp }))).toBe(false);
+    const withoutSystem = linkAccounts(projection, {
+      hashIp,
+      config: parseAnalyzeConfig({ lists: { genericEnteredBy: [""] } }),
+    });
+    expect(hasEnteredBy(withoutSystem)).toBe(true);
   });
 });
 

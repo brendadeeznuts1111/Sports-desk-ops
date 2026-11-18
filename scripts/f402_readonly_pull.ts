@@ -2,11 +2,11 @@
 /**
  * Read-only Fantasy402 puller.
  *
- *   bun run f402:pull census --agent-id BILLY666
- *   bun run f402:pull contract --agent-id BILLY666 --customer <id>
- *   bun run f402:pull transactions --agent-id BILLY666
- *   bun run f402:pull weblog --agent-id BILLY666 --from 2026-11-01 --to 2026-11-14
- *   bun run f402:pull wagers --agent-id BILLY666 --from 2026-11-01 --to 2026-11-14
+ *   bun run f402:pull census --agent-id <agent-id>
+ *   bun run f402:pull contract --agent-id <agent-id> --customer <id>
+ *   bun run f402:pull transactions --agent-id <agent-id>
+ *   bun run f402:pull weblog --agent-id <agent-id> --from 2026-11-01 --to 2026-11-14
+ *   bun run f402:pull wagers --agent-id <agent-id> --from 2026-11-01 --to 2026-11-14
  *
  * This CLI never places a wager, writes a log, or opens a page module.
  * Sessions are minted only through the existing `session:login` / WebView path.
@@ -20,6 +20,7 @@
 import { parseArgs } from "node:util";
 
 import {
+  F402_PULL_BASE_URL_ENV,
   F402_PULL_DEFAULT_BASE_URL,
   F402_PULL_DEFAULT_INTERVAL_MS,
   F402_PULL_DEFAULT_OUT_DIR,
@@ -28,6 +29,7 @@ import {
   createPaceClock,
   defaultTransactionStartDate,
   redactSecretsAndIps,
+  resolvePullBaseUrl,
   resolvePullSession,
   runCensus,
   runContract,
@@ -72,7 +74,7 @@ Options:
   --since <YYYY-MM-DD>     Incremental start; later of --since and --from wins
   --mode <A|B|C|I>         getWebLog type (default: I)
   --skip-figure-date       Wagers: skip per-customer getWagersByFigureDate
-  --base-url <url>         Portal origin (default: ${F402_PULL_DEFAULT_BASE_URL})
+  --base-url <url>         https portal origin (default: ${F402_PULL_BASE_URL_ENV} or ${F402_PULL_DEFAULT_BASE_URL})
   --interval-ms <n>        Minimum delay between requests (default: ${F402_PULL_DEFAULT_INTERVAL_MS})
   --rate <n>               Requests per second (default 1); do not also pass a conflicting --interval-ms
   --concurrency <n>        Max in-flight per-customer jobs (default 1, checkpoint-safe)
@@ -196,6 +198,7 @@ async function main(argv: string[]): Promise<number> {
     accounts,
     recurseDownline: values["recurse-downline"] === true,
   };
+  const baseUrl = resolvePullBaseUrl(flagString(values, "base-url"));
 
   if (pullOptions.dryRun) {
     const from = flagString(values, "from");
@@ -224,7 +227,7 @@ async function main(argv: string[]): Promise<number> {
   const session = await resolvePullSession({});
   const client = new F402PullClient({
     session,
-    baseUrl: flagString(values, "base-url") ?? F402_PULL_DEFAULT_BASE_URL,
+    baseUrl,
     intervalMs,
     clock: createPaceClock(),
   });
