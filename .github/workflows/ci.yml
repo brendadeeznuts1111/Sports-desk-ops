@@ -85,7 +85,7 @@ jobs:
           restore-keys: bun-install-${{ runner.os }}-
       - name: Install dependencies
         timeout-minutes: 5
-        run: bun install --frozen-lockfile --no-env-file
+        run: bun ci --no-env-file
       - name: Lockfile dedupe check
         run: bun dedupe --check
       - name: Verify CI gates (lockfile, credentials, gitattributes)
@@ -147,7 +147,7 @@ jobs:
           key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-install-${{ runner.os }}-
       - name: Install dependencies
-        run: bun install --frozen-lockfile --no-env-file
+        run: bun ci --no-env-file
       - name: Lockfile dedupe check
         run: bun dedupe --check
       # SECURITY-ADJACENT SEAL (merge gate): profile insecure-host import allowlist — do not move to a
@@ -251,7 +251,7 @@ jobs:
           restore-keys: bun-install-${{ runner.os }}-
       - name: Install dependencies
         timeout-minutes: 5
-        run: bun install --frozen-lockfile --no-env-file
+        run: bun ci --no-env-file
       - name: Lockfile dedupe check
         run: bun dedupe --check
       - name: Native lint (oxlint config parity)
@@ -296,7 +296,7 @@ jobs:
           restore-keys: bun-install-${{ runner.os }}-
       - name: Install dependencies
         if: steps.scope.outputs.run == 'true'
-        run: bun install --frozen-lockfile --no-env-file
+        run: bun ci --no-env-file
       - name: Lockfile dedupe check
         if: steps.scope.outputs.run == 'true'
         run: bun dedupe --check
@@ -361,7 +361,7 @@ jobs:
           restore-keys: bun-install-${{ runner.os }}-
       - name: Install dependencies
         timeout-minutes: 5
-        run: bun install --frozen-lockfile --no-env-file
+        run: bun ci --no-env-file
       - name: Lockfile dedupe check
         run: bun dedupe --check
       - name: Build workspace contracts dist

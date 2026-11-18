@@ -38,6 +38,7 @@ describe("GitHub workflow hardening", () => {
       expect(document.permissions).toBeDefined();
       expect(document.permissions).toMatchObject({ contents: "read" });
       expect(text).not.toContain("pull_request_target");
+      expect(text).not.toContain("bun install --frozen-lockfile");
       const jobs = Object.entries(document.jobs ?? {});
       expect(jobs.length).toBeGreaterThan(0);
 
