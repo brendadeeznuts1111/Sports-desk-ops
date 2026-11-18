@@ -186,7 +186,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/resolveSync)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `packages/sportsdesk-ops/src/lib/bun_surface_dts_inventory.ts`, `lib/f402_agent_graph_layouts.ts`
-- **Evidence:** `test:tests/bun_shapes_coverage.test.ts`, `probe:proc.paths`
+- **Evidence:** `test:tests/bun_shapes_coverage.test.ts`, `test:tests/react_element_version.test.ts`, `probe:proc.paths`
 
 #### Bun.sleep
 

@@ -9,11 +9,13 @@
  * text) goes through React's text escaping, raw HTML in the markdown is dropped, images are
  * dropped and only https links keep their href.
  *
- * `reactVersion: 18` selects the `react.element` symbol, which is what the pinned `react@18` and
- * `react-dom@18` render. Passing the default (19) elements to React 18 would not render.
+ * `installedReactVersion()` selects the `react.element` symbol the installed renderer accepts:
+ * React 18's symbols for `react-dom@18`, `react.transitional.element` for 19. Passing the default
+ * (19) elements to a React 18 renderer would not render.
  */
 import { createElement as h, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { installedReactVersion } from "./react_element_version.ts";
 
 export const TASK_STATUSES = [
   "todo",
@@ -225,7 +227,7 @@ export function trackerBody(markdown: string): ReactNode {
         );
       },
     },
-    { reactVersion: 18 },
+    { reactVersion: installedReactVersion() },
   );
 }
 

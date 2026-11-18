@@ -232,7 +232,11 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "process",
     heading: "Bun.resolveSync",
-    evidence: ["test:tests/bun_shapes_coverage.test.ts", "probe:proc.paths"],
+    evidence: [
+      "test:tests/bun_shapes_coverage.test.ts",
+      "test:tests/react_element_version.test.ts",
+      "probe:proc.paths",
+    ],
   },
   {
     name: "sleep",
