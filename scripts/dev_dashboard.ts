@@ -39,10 +39,7 @@ import {
   retryAlert,
 } from "../lib/alerts.ts";
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
-import {
-  createBunImageAssetSnapshotSource,
-  type BunImageAssetSnapshotSource,
-} from "../lib/bun_image_asset_snapshot.ts";
+import { bunImageAssetSnapshot } from "../lib/bun_image_asset_snapshot.ts";
 import { buildAutomationsSnapshot } from "../lib/automations_status.ts";
 import {
   benchmarkResolverLatency,
@@ -851,12 +848,6 @@ export function startDashboardServer(
     );
   }
 
-  /** One snapshot cache per requested limit, so repeated tab opens do not rescan the directory. */
-  const imageAssetSnapshotSources = new Map<
-    number,
-    BunImageAssetSnapshotSource
-  >();
-
   const companionApiRoutes = {
     "/api/live-bets": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url), () =>
@@ -905,19 +896,12 @@ export function startDashboardServer(
       const limit = Number.isInteger(requested)
         ? Math.min(Math.max(requested, 1), 100)
         : 24;
-      let source = imageAssetSnapshotSources.get(limit);
-      if (source === undefined) {
-        source = createBunImageAssetSnapshotSource(
-          resolve(cwd, "docs/assets"),
-          {
-            limit,
-            visibility: "RISK_MANAGER",
-            displayRoot: "docs/assets",
-            ttlMs: 5_000,
-          },
-        );
-        imageAssetSnapshotSources.set(limit, source);
-      }
+      const source = bunImageAssetSnapshot(resolve(cwd, "docs/assets"), {
+        limit,
+        visibility: "RISK_MANAGER",
+        displayRoot: "docs/assets",
+        ttlMs: 5_000,
+      });
       const snapshot = await source.snapshot();
       const headers = {
         ETag: snapshot.etag,

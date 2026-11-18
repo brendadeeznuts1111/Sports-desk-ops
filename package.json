@@ -25,7 +25,8 @@
     "xml-parse": "bin/xml-parse.ts",
     "bun-surface": "bin/bun_surface.ts",
     "sql-query": "bin/sql-query.ts",
-    "desk-provenance": "bin/desk-provenance.ts"
+    "desk-provenance": "bin/desk-provenance.ts",
+    "sportsdesk-assets": "scripts/image_asset_diagnostics.ts"
   },
   "trustedDependencies": [],
   "description": "SportsDesk & Fantasy402 Downline Risk Surveillance, Bettor Churn Simulation, and Cloudflare R2 Sync Suite",

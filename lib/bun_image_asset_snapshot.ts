@@ -96,3 +96,36 @@ export function createBunImageAssetSnapshotSource(
     },
   };
 }
+
+const sharedSources = new Map<string, BunImageAssetSnapshotSource>();
+
+/**
+ * One source per `(dir, limit, visibility, ttlMs)`, so every caller shares the TTL cache.
+ *
+ * Both servers that expose the route need this: the dev dashboard (`scripts/dev_dashboard.ts`) and
+ * the daemon (`services/sportsdesk_webview_server.ts`). Two independent caches would double the
+ * directory scans for the same request and let the two endpoints disagree about `generatedAt` for
+ * the same second. Keying on the scan options rather than the caller keeps them identical.
+ */
+export function bunImageAssetSnapshot(
+  dir: string,
+  options: BunImageAssetSnapshotOptions = {},
+): BunImageAssetSnapshotSource {
+  const key = [
+    dir,
+    options.limit ?? 24,
+    options.visibility ?? "RISK_MANAGER",
+    options.ttlMs ?? 5_000,
+    options.displayRoot ?? "docs/assets",
+  ].join("|");
+  const existing = sharedSources.get(key);
+  if (existing !== undefined) return existing;
+  const created = createBunImageAssetSnapshotSource(dir, options);
+  sharedSources.set(key, created);
+  return created;
+}
+
+/** Drop every shared source. Tests call this so one case cannot see another's TTL cache. */
+export function resetBunImageAssetSnapshots(): void {
+  sharedSources.clear();
+}
