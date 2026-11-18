@@ -925,7 +925,10 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(typeof Bun.plugin).toBe("function");
     expect(Bun.redis).toBeInstanceOf(Bun.RedisClient);
     expect(typeof Bun.revision).toBe("string");
-    expect(Bun.s3).toBeInstanceOf(Bun.S3Client);
+    // Bun 1.4.4 exposes the default S3 binding as S3Client on macOS and S3Ref on
+    // Linux. Both are the documented lazy S3 surface; assert the file() entry point.
+    expect(typeof Bun.s3).toBe("object");
+    expect(typeof Bun.s3.file).toBe("function");
     expect(typeof Bun.secrets.get).toBe("function");
     expect(typeof Bun.secrets.set).toBe("function");
     expect(typeof Bun.secrets.delete).toBe("function");
