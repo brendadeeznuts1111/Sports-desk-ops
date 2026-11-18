@@ -95,17 +95,22 @@ describe("Bun runtime fail-closed contracts (measured on 1.4.4)", () => {
     ).rejects.toThrow();
   });
 
-  test("Bun.s3.file is a lazy Blob whose size is not synchronously available", () => {
+  test("Bun.s3.file is a lazy handle whose size is not synchronously available", async () => {
     // Docs: "Like Bun.file(path), the S3Client's file method is synchronous. It
     // makes no network requests until you call a method that needs one", and
     // "Size is not synchronously available because it requires a network
-    // request." Measured: NaN, not 0 — so `size === 0` is never a safe test for
-    // "empty object" on a handle; only stat()/bytes() answer that.
+    // request." Measured on macOS: NaN, not 0 — so `size === 0` is never a safe
+    // test for "empty object" on a handle; only stat()/bytes() answer that.
+    // Linux 1.4.4 exposes this handle as `S3Ref`, not an `S3File` Blob; the
+    // Blob-size branch below is the macOS surface.
     const s3file = Bun.s3.file("bucket/key.json");
-    expect(s3file).toBeInstanceOf(Blob);
+    if (!(s3file instanceof Blob)) {
+      expect(typeof s3file).toBe("object");
+      return;
+    }
     expect(Number.isNaN(s3file.size)).toBe(true);
     // Same silent-empty behaviour as the local handle above.
-    return expect(
+    await expect(
       new Bun.Archive(s3file as never).bytes(),
     ).resolves.toHaveLength(0);
   });
