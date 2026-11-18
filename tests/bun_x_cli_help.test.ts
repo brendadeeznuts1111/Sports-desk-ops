@@ -48,6 +48,18 @@ describe("bun x CLI help surface", () => {
         failures.push(`${bin}: package.json bin is null`);
         continue;
       }
+      // A bin target has to be executable: `bun install` links `node_modules/.bin/<bin>` straight
+      // at it, so a target tracked 100644 dies with EACCES when the shell honours the mode. The
+      // `bun <target>` fallback above hides that in a fresh worktree and CI's link exposes it, so
+      // assert the contract here where the message can say what is wrong. `scripts/image_asset_diagnostics.ts`
+      // shipped 644 in #416 and `main` failed this suite with a bare posix_spawn EACCES.
+      const mode = (await Bun.file(join(ROOT, target)).stat()).mode;
+      if ((mode & 0o111) === 0) {
+        failures.push(
+          `${bin}: ${target} is not executable (mode ${mode.toString(8)})`,
+        );
+        continue;
+      }
       const proc = Bun.spawnSync(argv, {
         cwd: ROOT,
         stdout: "pipe",
