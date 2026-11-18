@@ -46,6 +46,14 @@ const ROOT = resolve(import.meta.dir, "..");
 const OUTPUT = "lib/bun_shapes.generated.ts";
 /** Evidence refs are a proof sample, not a coverage report; keep the row readable. */
 const EVIDENCE_CAP = 4;
+/**
+ * Bundler-transformed intrinsics: they can only appear directly inside a
+ * `feature(...)` condition, so they are not runtime values. One line of hand
+ * data, versus a per-row `kind` field for every submodule symbol.
+ */
+const MACRO_SUBMODULE_SYMBOLS: ReadonlySet<string> = new Set([
+  "bun:bundle/feature",
+]);
 
 function subsystemRank(subsystem: ShapeSubsystem): number {
   const index = SHAPE_SUBSYSTEMS.indexOf(subsystem);
@@ -166,6 +174,49 @@ export async function renderBunShapeCatalog(
       a.name.localeCompare(b.name),
   );
 
+  // Submodule symbols come from the same scan: `usage.submodules` is keyed
+  // `module/symbol` and carries the files that import it, so the only
+  // hand-written part left is which of them is a bundler macro, not a value.
+  const submoduleShapes = [
+    ...(usage.submodules ?? new Map<string, Set<string>>()),
+  ]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key]) => {
+      const slash = key.indexOf("/");
+      const module = key.slice(0, slash);
+      const name = key.slice(slash + 1);
+      const surfaceRef = surfaceNames.has(`${module}.${name}`)
+        ? [`surface:${module}.${name}`]
+        : [];
+      // Test evidence has to come from the test sources, not the production scan:
+      // the usage map covers shipped code only, so a symbol used solely to prove a
+      // bundler macro would otherwise look unevidenced.
+      const importPattern = new RegExp(
+        `import\\s*\\{[^}]*\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b[^}]*\\}\\s*from\\s*["']${module.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`,
+      );
+      const testRefs = [...testSources]
+        .filter(([, text]) => importPattern.test(text))
+        .map(([file]) => `test:${file}`)
+        .sort();
+      const evidence = [...new Set([...surfaceRef, ...testRefs])].slice(
+        0,
+        EVIDENCE_CAP,
+      );
+      if (evidence.length === 0) {
+        throw new Error(
+          `ERR_SUBMODULE_NO_EVIDENCE: ${key} has no surface probe and no tracked test importing it`,
+        );
+      }
+      return {
+        module,
+        name,
+        kind: MACRO_SUBMODULE_SYMBOLS.has(key)
+          ? ("macro" as const)
+          : ("value" as const),
+        evidence,
+      };
+    });
+
   const lines: string[] = [
     "/**",
     " * @file bun_shapes.generated.ts",
@@ -177,7 +228,7 @@ export async function renderBunShapeCatalog(
     " * `lib/bun_shapes_overlay.ts`.",
     " */",
     "",
-    'import type { BunShape } from "./bun_shapes.ts";',
+    'import type { BunShape, BunSubmoduleSymbol } from "./bun_shapes.ts";',
     "",
     "export const BUN_SHAPES: readonly BunShape[] = [",
   ];
@@ -192,6 +243,22 @@ export async function renderBunShapeCatalog(
     }
     lines.push(
       `    evidence: [${shape.evidence.map((e) => JSON.stringify(e)).join(", ")}],`,
+    );
+    lines.push("  },");
+  }
+  lines.push("];", "");
+
+  lines.push(
+    "/** `bun:*` symbols this repo imports, with the surface probe or test that covers each. */",
+    "export const BUN_SUBMODULE_SHAPES: readonly BunSubmoduleSymbol[] = [",
+  );
+  for (const submodule of submoduleShapes) {
+    lines.push("  {");
+    lines.push(`    module: ${JSON.stringify(submodule.module)},`);
+    lines.push(`    name: ${JSON.stringify(submodule.name)},`);
+    lines.push(`    kind: ${JSON.stringify(submodule.kind)},`);
+    lines.push(
+      `    evidence: [${submodule.evidence.map((e) => JSON.stringify(e)).join(", ")}],`,
     );
     lines.push("  },");
   }

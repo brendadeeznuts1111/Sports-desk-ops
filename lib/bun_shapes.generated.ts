@@ -8,7 +8,7 @@
  * `lib/bun_shapes_overlay.ts`.
  */
 
-import type { BunShape } from "./bun_shapes.ts";
+import type { BunShape, BunSubmoduleSymbol } from "./bun_shapes.ts";
 
 export const BUN_SHAPES: readonly BunShape[] = [
   {
@@ -1384,5 +1384,52 @@ export const BUN_SHAPES: readonly BunShape[] = [
     subsystem: "meta",
     heading: "Bun.version_with_sha",
     evidence: ["test:tests/bun_capabilities.test.ts"],
+  },
+];
+
+/** `bun:*` symbols this repo imports, with the surface probe or test that covers each. */
+export const BUN_SUBMODULE_SHAPES: readonly BunSubmoduleSymbol[] = [
+  {
+    module: "bun:bundle",
+    name: "feature",
+    kind: "macro",
+    evidence: [
+      "test:tests/bun_shapes_manifest.test.ts",
+      "test:tests/bundle_runtime.test.ts",
+      "test:tests/bundle_types.test-d.ts",
+      "test:tests/pty_feature_flags.test.ts",
+    ],
+  },
+  {
+    module: "bun:jsc",
+    name: "estimateShallowMemoryUsageOf",
+    kind: "value",
+    evidence: ["surface:bun:jsc.estimateShallowMemoryUsageOf"],
+  },
+  {
+    module: "bun:jsc",
+    name: "heapStats",
+    kind: "value",
+    evidence: [
+      "surface:bun:jsc.heapStats",
+      "test:tests/f402_bet_ticker_delta.test.ts",
+    ],
+  },
+  {
+    module: "bun:sqlite",
+    name: "constants",
+    kind: "value",
+    evidence: ["surface:bun:sqlite.constants"],
+  },
+  {
+    module: "bun:sqlite",
+    name: "Database",
+    kind: "value",
+    evidence: [
+      "surface:bun:sqlite.Database",
+      "test:tests/bun_loaders_and_import_attributes.test.ts",
+      "test:tests/candidate_cli.test.ts",
+      "test:tests/code_mode/profile_query.differential.test.ts",
+    ],
   },
 ];

@@ -1041,8 +1041,8 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 Non-test production imports from `bun:sqlite`, `bun:jsc`, and `bun:bundle` are inventoried alongside `MODULE "bun"` / `globalThis.Bun` (`BUN_SUBMODULE_SHAPES` in `lib/bun_shapes.ts`).
 
-- **`bun:bundle` → `feature`** (bundler macro) — here: `packages/ui/src/runtime_flags.ts` · evidence: `test:tests/wager_tiers_toml.test.ts`
+- **`bun:bundle` → `feature`** (bundler macro) — here: `packages/ui/src/runtime_flags.ts` · evidence: `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bundle_runtime.test.ts`, `test:tests/bundle_types.test-d.ts`, `test:tests/pty_feature_flags.test.ts`
 - **`bun:jsc` → `estimateShallowMemoryUsageOf`** (runtime export) — here: `bin/bun_surface.ts`, `lib/f402_hierarchy_memory.ts` · evidence: `surface:bun:jsc.estimateShallowMemoryUsageOf`
-- **`bun:jsc` → `heapStats`** (runtime export) — here: `bin/bun_surface.ts`, `scripts/bench_bridge3a_workload.ts` · evidence: `surface:bun:jsc.heapStats`
-- **`bun:sqlite` → `Database`** (runtime export) — here: `bin/bun_surface.ts`, `cli/review.ts` · evidence: `surface:bun:sqlite.Database`
+- **`bun:jsc` → `heapStats`** (runtime export) — here: `bin/bun_surface.ts`, `scripts/bench_bridge3a_workload.ts` · evidence: `surface:bun:jsc.heapStats`, `test:tests/f402_bet_ticker_delta.test.ts`
 - **`bun:sqlite` → `constants`** (runtime export) — here: `bin/bun_surface.ts`, `lib/sportsdesk_sqlite.ts` · evidence: `surface:bun:sqlite.constants`
+- **`bun:sqlite` → `Database`** (runtime export) — here: `bin/bun_surface.ts`, `cli/review.ts` · evidence: `surface:bun:sqlite.Database`, `test:tests/bun_loaders_and_import_attributes.test.ts`, `test:tests/candidate_cli.test.ts`, `test:tests/code_mode/profile_query.differential.test.ts`

@@ -101,38 +101,13 @@ export interface BunSubmoduleSymbol {
  * Built-in `bun:*` submodule symbols imported by non-test source files (`bun:sqlite`,
  * `bun:jsc`, `bun:bundle`). Tracked alongside `BUN_SHAPES` so no `bun:*` surface goes dark.
  */
-export const BUN_SUBMODULE_SHAPES: readonly BunSubmoduleSymbol[] = [
-  {
-    module: "bun:bundle",
-    name: "feature",
-    kind: "macro",
-    evidence: ["test:tests/wager_tiers_toml.test.ts"],
-  },
-  {
-    module: "bun:jsc",
-    name: "estimateShallowMemoryUsageOf",
-    kind: "value",
-    evidence: ["surface:bun:jsc.estimateShallowMemoryUsageOf"],
-  },
-  {
-    module: "bun:jsc",
-    name: "heapStats",
-    kind: "value",
-    evidence: ["surface:bun:jsc.heapStats"],
-  },
-  {
-    module: "bun:sqlite",
-    name: "Database",
-    kind: "value",
-    evidence: ["surface:bun:sqlite.Database"],
-  },
-  {
-    module: "bun:sqlite",
-    name: "constants",
-    kind: "value",
-    evidence: ["surface:bun:sqlite.constants"],
-  },
-];
+/**
+ * Derived: every `bun:*` symbol the tracked sources import, with the surface
+ * probe or test that covers it. The only hand-written part is which symbols are
+ * bundler macros rather than runtime values (`MACRO_SUBMODULE_SYMBOLS` in the
+ * generator).
+ */
+export { BUN_SUBMODULE_SHAPES } from "./bun_shapes.generated.ts";
 
 /**
  * Shapes whose members depend on the caller, so they are not snapshotted: the
