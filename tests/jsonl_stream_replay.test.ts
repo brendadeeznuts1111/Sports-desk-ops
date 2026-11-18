@@ -124,11 +124,21 @@ describe("jsonl_stream_replay SSOT", () => {
   });
 
   test("Bun.JSONL.parse / parseChunk handle blank lines and stray delimiters", () => {
-    expect(Bun.JSONL.parse('\n\n{"wager":1},]')).toEqual([{ wager: 1 }]);
-    const chunk = Bun.JSONL.parseChunk('{"wager":1},}');
-    expect(chunk.values).toEqual([{ wager: 1 }]);
-    // `read` must cover the value it returned (never point before it).
-    expect(chunk.read).toBeGreaterThanOrEqual(enc.encode('{"wager":1}').length);
+    // Measured on 1.4.4. The v1.4.4 Bun APIs changelog has no JSONL hardening entry:
+    // this pins runtime behaviour, not a fix version.
+    const value = '{"wager":1}';
+    const valueLength = enc.encode(value).length;
+    for (const input of [
+      `\n\n${value},]`,
+      `\n\n${value},}`,
+      `\n\n${value},\n]`,
+    ]) {
+      expect(Bun.JSONL.parse(input)).toEqual([{ wager: 1 }]);
+      const chunk = Bun.JSONL.parseChunk(input);
+      expect(chunk.values).toEqual([{ wager: 1 }]);
+      // `read` must cover the value it returned (never point before it).
+      expect(chunk.read).toBeGreaterThanOrEqual(valueLength);
+    }
   });
 
   test("worked example: bet-ticker slab read → parseChunk → file offset", () => {

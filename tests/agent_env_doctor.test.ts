@@ -8,12 +8,20 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   binLinkState,
   exitCode,
+  findDependencyDrift,
+  lockedRegistryVersions,
   parseBlockedInstallScripts,
   renderReport,
   type Check,
@@ -112,6 +120,89 @@ describe("agent:doctor blocked install scripts", () => {
   });
 });
 
+describe("agent:doctor dependency drift", () => {
+  const lockLine = (name: string, version: string): string =>
+    '    "' + name + '": ["' + name + "@" + version + '", "", {}, "sha512-x"],';
+
+  function writeLock(root: string, lines: readonly string[]): void {
+    writeFileSync(
+      join(root, "bun.lock"),
+      [
+        "{",
+        '  "lockfileVersion": 2,',
+        '  "packages": {',
+        ...lines,
+        "  },",
+        '  "overrides": {}',
+        "}",
+      ].join("\n"),
+    );
+  }
+
+  function writeInstalled(root: string, name: string, version: string): void {
+    const dir = join(root, "node_modules", name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name, version }));
+  }
+
+  test("a stale top-level entry reports installed and locked versions", () => {
+    const root = mkdtempSync(join(tmpdir(), "doctor-drift-"));
+    try {
+      writeLock(root, [
+        lockLine("@types/node", "26.6.6"),
+        lockLine("zod", "4.1.0"),
+      ]);
+      writeInstalled(root, "@types/node", "22.15.3");
+      writeInstalled(root, "zod", "4.1.0");
+      expect(findDependencyDrift(root)).toEqual([
+        { packageName: "@types/node", installed: "22.15.3", locked: "26.6.6" },
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("workspace resolutions are not registry drift", () => {
+    const root = mkdtempSync(join(tmpdir(), "doctor-drift-ws-"));
+    try {
+      writeLock(root, [
+        '    "sportsdesk-ops": ["sportsdesk-ops@workspace:packages/sportsdesk-ops", ""],',
+        lockLine("zod", "4.1.0"),
+      ]);
+      writeInstalled(root, "sportsdesk-ops", "1.0.0");
+      writeInstalled(root, "zod", "4.1.0");
+      expect(findDependencyDrift(root)).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("missing lockfile or node_modules is not an error", () => {
+    const root = mkdtempSync(join(tmpdir(), "doctor-drift-missing-"));
+    try {
+      expect(findDependencyDrift(root)).toEqual([]);
+      mkdirSync(join(root, "node_modules"), { recursive: true });
+      expect(findDependencyDrift(root)).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("lockedRegistryVersions reads the packages map and skips workspace specs", () => {
+    const locked = lockedRegistryVersions(
+      [
+        "{",
+        '  "packages": {',
+        lockLine("@types/node", "26.6.6"),
+        '    "sportsdesk-ops": ["sportsdesk-ops@workspace:packages/sportsdesk-ops", ""],',
+        "  },",
+        "}",
+      ].join("\n"),
+    );
+    expect(locked.get("@types/node")).toBe("26.6.6");
+    expect(locked.has("sportsdesk-ops")).toBe(false);
+  });
+});
 describe("agent:doctor bin link state", () => {
   test("a dangling workspace link is not reported as an absent bin", () => {
     const dir = mkdtempSync(join(tmpdir(), "doctor-bins-"));

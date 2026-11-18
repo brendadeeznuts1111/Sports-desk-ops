@@ -42,11 +42,34 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
   });
 
   describe("Static directory routes", () => {
-    it("serves /static/* through Bun's native directory route", async () => {
+    it("serves /static/* through the range-aware handler, not the native dir mount", async () => {
       const res = await fetch(`${baseUrl}/static/live-bets.html`);
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
       expect(await res.text()).toContain("Live");
+      // A strong validator: the native `{ dir }` route answers `W/"1000-…"`, so this also proves
+      // the mount is the handler and not the directory route.
+      const etag = res.headers.get("etag") ?? "";
+      expect(etag).toMatch(/^"[0-9a-f]+-[0-9a-f]+"$/);
+      expect(res.headers.get("accept-ranges")).toBe("bytes");
+    });
+
+    it("answers a byte range on a static page", async () => {
+      const res = await fetch(`${baseUrl}/static/live-bets.html`, {
+        headers: { Range: "bytes=0-9" },
+      });
+      expect(res.status).toBe(206);
+      expect(res.headers.get("content-range")).toMatch(/^bytes 0-9\/\d+$/);
+      expect((await res.arrayBuffer()).byteLength).toBe(10);
+    });
+
+    it("revalidates a static page with its ETag", async () => {
+      const first = await fetch(`${baseUrl}/static/live-bets.html`);
+      const etag = first.headers.get("etag") ?? "";
+      const cached = await fetch(`${baseUrl}/static/live-bets.html`, {
+        headers: { "If-None-Match": etag },
+      });
+      expect(cached.status).toBe(304);
     });
 
     it("does not escape the static directory", async () => {
@@ -181,6 +204,67 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
       expect(Array.isArray(r2Json.sinks)).toBe(true);
       expect(r2Json.sinks.length).toBe(4);
       expect(daemonRes.status).toBe(200);
+    });
+
+    it("serves GET /api/r2/pipeline/history as a process-local series", async () => {
+      const res = await fetch(
+        `${baseUrl}/api/r2/pipeline/history?refresh=1&limit=5`,
+      );
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as {
+        schemaVersion: number;
+        source: string;
+        minSampleIntervalSeconds: number;
+        sampledSince: string | null;
+        sinks: Array<{
+          id: string;
+          sampleCount: number;
+          samples: Array<{ at: string; state: string }>;
+        }>;
+      };
+      expect(json.schemaVersion).toBe(1);
+      expect(json.source).toBe("process-memory");
+      expect(json.minSampleIntervalSeconds).toBe(60);
+      expect(json.sinks.map((sink) => sink.id)).toEqual([
+        "f402-bet-ticker",
+        "gslive-tally",
+        "f402-weblog",
+        "wagers-by-state",
+      ]);
+      for (const sink of json.sinks) {
+        expect(sink.sampleCount).toBeGreaterThanOrEqual(1);
+        expect(sink.samples.length).toBeGreaterThanOrEqual(1);
+        expect(sink.samples.at(-1)?.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      }
+      expect(json.sampledSince).not.toBeNull();
+    });
+
+    it("serves GET /api/r2/image-provenance for a public WebP over R2", async () => {
+      const res = await fetch(
+        `${baseUrl}/api/r2/image-provenance?key=assets/ARCH-Guide.webp`,
+      );
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as {
+        key: string;
+        publicUrl: string;
+        fetchedBytes: number;
+        report: {
+          available: boolean;
+          format: string;
+          fields: { streamId: string | null };
+          issues: readonly string[];
+        };
+      };
+      expect(json.key).toBe("assets/ARCH-Guide.webp");
+      expect(json.publicUrl).toBe(
+        "https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/assets/ARCH-Guide.webp",
+      );
+      expect(json.fetchedBytes).toBeGreaterThan(0);
+      expect(json.report.available).toBe(true);
+      expect(json.report.format).toBe("webp");
+      // The shipped WebP carries no XMP chunk: missing provenance is reported, never invented.
+      expect(json.report.fields.streamId).toBeNull();
+      expect(json.report.issues).toContain("no_sportsdesk_metadata");
     });
 
     it("serves GET /api/agent/:id JSON, GET /agent/:id HTML, and 302 redirect on GET /customer/:id", async () => {

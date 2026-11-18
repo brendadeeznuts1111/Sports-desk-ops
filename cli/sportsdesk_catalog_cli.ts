@@ -27,6 +27,8 @@ type GlobalOpts = {
 function printRootHelp(): void {
   console.log(`Fantasy402 sport catalog (subSport lanes + period menus)
 
+Usage: sportsdesk-catalog <validate|diff|refresh> [options]
+
 Commands:
   validate   Structural parse + period rules + collision registry SSOT
   diff       Fixture vs probe — markdown table (PR-ready) or --json

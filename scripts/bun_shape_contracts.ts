@@ -216,7 +216,7 @@ export async function renderBunShapeContractsCatalog(
   );
   out.push("");
   out.push(
-    `Adding a \`Bun.*\` call, \`import { ... } from "bun"\` binding, or \`bun:*\` submodule import without an entry in \`lib/bun_shapes.ts\` fails \`tests/bun_shapes_coverage.test.ts\`; the same test fails when an entry goes stale, loses its heading, cites evidence that no longer exists, or drifts from \`bun scripts/bun_shape_contracts.ts --check\`.`,
+    `Adding a \`Bun.*\` call, \`import { ... } from "bun"\` binding, or \`bun:*\` submodule import without a row in \`lib/bun_shapes.generated.ts\` fails \`tests/bun_shapes_coverage.test.ts\`. The table is derived by \`bun scripts/bun_shapes_catalog.ts --write\`: membership comes from the tracked-source usage scan, \`kind\`/\`heading\` from \`bun-types\`, and subsystem/evidence from \`lib/bun_shapes_overlay.ts\`, which the generator reports as \`ERR_SHAPE_OVERLAY_MISSING\` when a new call has no row. The same test fails when the generated file is stale, or when an entry loses its heading, cites evidence that no longer exists, or drifts from \`bun scripts/bun_shape_contracts.ts --check\`.`,
   );
   out.push("");
   out.push(`## Upgrading`);

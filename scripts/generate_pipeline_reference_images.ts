@@ -85,9 +85,11 @@ function buildPngTextChunk(keyword: string, value: string): Buffer {
 
 function buildPngItxtChunk(keyword: string, utf8Value: string): Buffer {
   // iTXt: keyword \0 compressionFlag(0) compressionMethod(0) languageTag \0 translatedKeyword \0 text(UTF-8)
-  // Empty languageTag + translatedKeyword is 4 bytes after the keyword NUL, so the text follows immediately.
+  // Five bytes after the keyword: its NUL, the two flag/method bytes, and the two
+  // empty-tag NULs. The earlier four-byte header shifted the text by one byte and
+  // every spec-conforming reader rejected the packet.
   const keyBuf = Buffer.from(keyword.slice(0, 79), "latin1");
-  const header = Buffer.from([0, 0, 0, 0]);
+  const header = Buffer.from([0, 0, 0, 0, 0]);
   const textBuf = Buffer.from(utf8Value, "utf8");
   return buildPngChunk("iTXt", Buffer.concat([keyBuf, header, textBuf]));
 }

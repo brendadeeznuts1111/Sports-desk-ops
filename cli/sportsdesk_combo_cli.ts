@@ -30,6 +30,8 @@ type GlobalOpts = { json: boolean };
 function printRootHelp(): void {
   console.log(`Canonical combo index + venue lead-lag
 
+Usage: sportsdesk-combo <derive|ingest|lead-lag> [options]
+
 Commands:
   derive     Print canonical_combo_id from fixture (debug)
   ingest     Append combo_legs rows for desk or polymarket side

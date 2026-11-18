@@ -105,6 +105,7 @@ import {
   type TerminalLadderViewMode,
 } from "./desk_model";
 import type { DataTableSort, DockAreaLayout } from "./ui";
+import type { XmlOddsFeed } from "./xml_odds_view";
 
 export type LeagueFilter = DeskLeagueFilter;
 
@@ -330,6 +331,13 @@ export function createDeskStore() {
     process.env["SPORTSDESK_ADMIN_TOKEN"] ?? ""
   ).trim();
   const adminToken = signal(initialAdminToken);
+
+  // Hot-path XML odds SoA columns. The store accepts an already-hydrated array
+  // set: `src/lib/xml_feed_spine_hydrator.ts` owns hydration and pulls the design
+  // brands in, which must not enter the NSH bundle. `revision` exists so the view
+  // recomputes when the same column objects are filled again in place.
+  const xmlOddsFeed = signal<XmlOddsFeed | null>(null);
+  const xmlOddsRevision = signal(0);
 
   // Core boot snapshots (kept to the 4 primary endpoints for instant boot & stub compatibility)
   const kpisSnap = signal<EndpointSnapshot<ParsedKpisPayload>>({
@@ -1635,6 +1643,17 @@ export function createDeskStore() {
       persistPrefs();
     },
     setUiKitOpen: (next: boolean) => uiKitOpen.set(next),
+
+    // XML odds SoA columns (hot path). Hydration lives outside this package; the
+    // store only publishes the arrays and a revision so the table re-reads them.
+    xmlOddsFeed: () => xmlOddsFeed(),
+    xmlOddsRevision: () => xmlOddsRevision(),
+    setXmlOddsFeed: (next: XmlOddsFeed | null) => {
+      batch(() => {
+        xmlOddsFeed.set(next);
+        xmlOddsRevision.update((v) => v + 1);
+      });
+    },
   };
 }
 

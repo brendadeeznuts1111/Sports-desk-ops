@@ -297,7 +297,11 @@ export function buildSnapshotStreaming(
   reports: SqliteSchemaReport[],
 ): Uint8Array {
   const sink = new Bun.ArrayBufferSink();
-  sink.start({ asUint8Array: true });
+  // `highWaterMark` preallocates the sink's internal buffer; it is not a backpressure
+  // or flush threshold. This builder emits many small writes (version byte, 2-byte
+  // lengths, manifest chunks). `stream: true` would only be needed for chunked
+  // `flush()` while writes continue.
+  sink.start({ asUint8Array: true, highWaterMark: 64 * 1024 });
   sink.write(new Uint8Array([MANIFEST_VERSION]));
   for (const report of reports) {
     const chunk = encodeManifest(report);

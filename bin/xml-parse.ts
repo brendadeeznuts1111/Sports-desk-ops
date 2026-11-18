@@ -17,6 +17,22 @@ import {
 } from "../src/lib/xml_ingest_preflight.ts";
 
 const args = process.argv.slice(2);
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(
+    [
+      "Usage: xml-parse <file|- for stdin> [--tree | --xml [--indent 0..10]]",
+      "",
+      "  <file>      XML file path; `-` reads stdin",
+      "  --tree      full Node/Document tree as JSON (default: compact Document)",
+      "  --xml       serialize the parsed tree back to XML",
+      "  --indent N  indent for --xml, 0..10",
+      "  -h, --help  this help",
+      "",
+      "Input is passed to Bun.XML as bytes; a BOM or <?xml encoding?> selects the encoding.",
+    ].join("\n"),
+  );
+  process.exit(0);
+}
 const file = args[0];
 const tree = args.includes("--tree");
 const xml = args.includes("--xml");
@@ -32,6 +48,7 @@ function usage(message?: string): never {
 }
 
 if (!file) usage();
+if (file.startsWith("-") && file !== "-") usage(`unknown argument: ${file}`);
 if (tree && xml) usage("--tree and --xml are mutually exclusive");
 let indent: number | undefined;
 if (indentAt >= 0) {

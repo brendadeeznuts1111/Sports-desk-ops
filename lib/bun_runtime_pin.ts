@@ -71,6 +71,39 @@ function readTextIfExists(path: string): string | undefined {
   return readFileSync(path, "utf8");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A dependency range as a pinned version, resolving the workspace catalog first.
+ *
+ * `devDependencies["@types/bun"]` may be `catalog:` (the value the root catalog holds) or
+ * `catalog:<name>` (a named catalog). Reading the literal and calling it absent would drop that
+ * source from the pin check entirely, so a catalog bump alone would move the type definitions away
+ * from the runtime with nothing failing — the state 2026-11-18 introduced. An unresolvable catalog
+ * reference stays `undefined`, which is what a missing entry already means here.
+ */
+function resolveCatalogPin(
+  packageName: string,
+  range: unknown,
+  manifest: Record<string, unknown>,
+): string | undefined {
+  if (typeof range !== "string") return undefined;
+  if (!range.startsWith("catalog:")) return normalizeBunVersion(range);
+  const catalogName = range.slice("catalog:".length) || "default";
+  const table =
+    catalogName === "default"
+      ? manifest.catalog
+      : isRecord(manifest.catalogs)
+        ? manifest.catalogs[catalogName]
+        : undefined;
+  if (!isRecord(table)) return undefined;
+  return normalizeBunVersion(
+    typeof table[packageName] === "string" ? table[packageName] : undefined,
+  );
+}
+
 export function readBunRuntimePinSources(root: string): BunRuntimePinSources {
   const bunVersionFile = normalizeBunVersion(
     readTextIfExists(join(root, ".bun-version"))?.split(/\r?\n/, 1)[0],
@@ -112,11 +145,8 @@ export function readBunRuntimePinSources(root: string): BunRuntimePinSources {
         : undefined,
     );
     const devDeps = record.devDependencies;
-    if (typeof devDeps === "object" && devDeps !== null) {
-      typesBun = normalizeBunVersion(
-        (devDeps as Record<string, unknown>)["@types/bun"] as
-          string | undefined,
-      );
+    if (isRecord(devDeps)) {
+      typesBun = resolveCatalogPin("@types/bun", devDeps["@types/bun"], record);
     }
   }
 

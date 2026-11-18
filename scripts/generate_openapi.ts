@@ -2056,7 +2056,7 @@ function blobLiveBetsSurfaceSpecs(): readonly SurfaceOperationSpec[] {
       tag: TAG_DAEMON,
       summary: "Presigned download URL for one blob",
       description:
-        "Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. With `?download=1` the handler returns the object body directly via `new Response(S3File)` (200). Surface: surface.blob-live-bets (tier B).",
+        "Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. With `?download=1` the handler returns the object body directly via `new Response(S3File)` (200). With `?attributes=1` it reads a bounded 64 KiB prefix (`headerBytes`) and returns the stored image's Bun.Image attributes as JSON (200), or 422 when the bytes are not decodable; a presigned URL is never emitted in that branch. Surface: surface.blob-live-bets (tier B).",
       requiredCapture:
         "HTTP capture of a presigned redirect (route is handler-verified only; no response was captured).",
       parameters: [
@@ -2068,14 +2068,42 @@ function blobLiveBetsSurfaceSpecs(): readonly SurfaceOperationSpec[] {
           schema: { type: "string", enum: ["1"] },
           description: "Stream the object body (200) instead of redirecting.",
         },
+        {
+          name: "attributes",
+          in: "query",
+          required: false,
+          schema: { type: "string", enum: ["1"] },
+          description:
+            "Return Bun.Image width, height, format, bytes and backend as JSON (200) instead of redirecting.",
+        },
       ],
       responses: {
         "200": {
-          description: "Object body streamed from S3File.",
+          description:
+            "Object body streamed from S3File, or the image attribute diagnostic when `attributes=1`.",
           headers: daemonHeaders(),
           content: {
             "application/octet-stream": {
               schema: { type: "string", format: "binary" },
+            },
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  type: { type: "string" },
+                  visibility: { type: "string" },
+                  source: { type: "string" },
+                  format: { type: "string" },
+                  width: { type: "integer" },
+                  height: { type: "integer" },
+                  aspectRatio: { type: "number" },
+                  bytes: { type: "integer" },
+                  backend: { type: "string" },
+                  placeholderBytes: { type: "integer" },
+                  headerBytes: { type: "integer" },
+                  probeBytes: { type: "integer" },
+                },
+              },
             },
           },
         },
@@ -2087,6 +2115,9 @@ function blobLiveBetsSurfaceSpecs(): readonly SurfaceOperationSpec[] {
           error: { type: "object" },
         }),
         ...authResponses,
+        "422": jsonSurfaceResponse("Stored blob is not a decodable image.", {
+          error: { type: "object" },
+        }),
         "502": jsonSurfaceResponse("Presign failed.", {
           error: { type: "object" },
         }),
@@ -2099,7 +2130,7 @@ function blobLiveBetsSurfaceSpecs(): readonly SurfaceOperationSpec[] {
       tag: TAG_DAEMON,
       summary: "Bounded image upload, transcoded to WebP",
       description:
-        'Bearer-auth PUT accepts image/jpeg|png|webp|avif|heic up to maxUploadBytes (default 5 MiB), rejects oversized bodies with 413 from both Content-Length and a streaming cap, decodes with Bun.Image under maxPixels (413), resizes inside 1280x1280 and encodes deterministic WebP (Bun.Image.backend = "bun"), then stores it. Response carries bytesWritten, bytes, width and height. Surface: surface.blob-live-bets (tier D).',
+        'Bearer-auth PUT accepts image/jpeg|png|webp|avif|heic up to maxUploadBytes (default 5 MiB), rejects oversized bodies with 413 from both Content-Length and a streaming cap, decodes with Bun.Image under maxPixels (413), resizes inside 1280x1280 and encodes deterministic WebP (Bun.Image.backend = "bun"), then stores it. Response carries bytesWritten, bytes, width, height, the ThumbHash placeholder and an `asset` block (format, width, height, bytes, aspectRatio, backend); headers `x-sd-image-width|height|format|bytes|backend` mirror it. Surface: surface.blob-live-bets (tier D).',
       requiredCapture:
         "HTTP capture of a successful upload (route is handler-verified only; no response was captured).",
       parameters: [keyParameter],
@@ -2116,6 +2147,18 @@ function blobLiveBetsSurfaceSpecs(): readonly SurfaceOperationSpec[] {
           bytes: { type: "integer" },
           width: { type: "integer" },
           height: { type: "integer" },
+          placeholder: { type: "string" },
+          asset: {
+            type: "object",
+            properties: {
+              format: { type: "string" },
+              width: { type: "integer" },
+              height: { type: "integer" },
+              bytes: { type: "integer" },
+              aspectRatio: { type: "number" },
+              backend: { type: "string" },
+            },
+          },
         }),
         "400": jsonSurfaceResponse("Invalid blob key.", {
           error: { type: "object" },

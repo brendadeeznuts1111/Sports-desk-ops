@@ -1122,19 +1122,25 @@ function parseJsonlDesk(input: string): CustomerDesk {
 }
 
 export function parseDesk(
-  input: string,
+  input: string | Uint8Array,
   format: DeskFormat,
   xmlOptions?: { readonly compact?: boolean | undefined },
 ): CustomerDesk {
+  // XML keeps its bytes: decoding first resolves the encoding by BOM/UTF-8
+  // default before the `<?xml encoding?>` prolog is read, which silently turns
+  // ISO-8859-1 high bytes into U+FFFD (measured on Bun 1.4.4). The text formats
+  // need a string either way.
+  const text =
+    typeof input === "string" ? input : new TextDecoder().decode(input);
   switch (format) {
     case "toml":
-      return normalizeDesk(Bun.TOML.parse(input));
+      return normalizeDesk(Bun.TOML.parse(text));
     case "yaml":
-      return normalizeDesk(Bun.YAML.parse(input));
+      return normalizeDesk(Bun.YAML.parse(text));
     case "json":
-      return normalizeDesk(JSON.parse(input));
+      return normalizeDesk(JSON.parse(text));
     case "jsonl":
-      return parseJsonlDesk(input);
+      return parseJsonlDesk(text);
     case "xml":
       return normalizeDesk(
         Bun.XML.parse(
@@ -1180,6 +1186,41 @@ function toByteStream(
     return new Blob([source]).stream();
   }
   return new Blob([toArrayBufferBackedUint8Array(source)]).stream();
+}
+
+/**
+ * Byte chunks, decompressed. `parseDeskStream` uses this for XML so the parser
+ * sees the original bytes and can honour the prolog's encoding declaration.
+ * String chunks (a caller that already decoded) are re-encoded as UTF-8 — the
+ * loss, if any, happened before this function and cannot be undone here.
+ */
+async function* iterateByteChunks(
+  source: DeskStreamSource,
+  compression?: DeskCompression,
+): AsyncGenerator<Uint8Array, void, undefined> {
+  const encoder = new TextEncoder();
+  const byteStream = (
+    source instanceof ReadableStream
+      ? (source as ReadableStream<unknown>).pipeThrough(
+          new TransformStream<unknown, Uint8Array<ArrayBuffer>>({
+            transform(chunk, controller) {
+              controller.enqueue(
+                typeof chunk === "string"
+                  ? encoder.encode(chunk)
+                  : (chunk as Uint8Array<ArrayBuffer>),
+              );
+            },
+          }),
+        )
+      : toByteStream(source)
+  ) as ReadableStream<Uint8Array<ArrayBuffer>>;
+
+  const stream =
+    compression === undefined
+      ? byteStream
+      : byteStream.pipeThrough(new DecompressionStream(compression));
+
+  for await (const chunk of stream) yield chunk;
 }
 
 async function* iterateDecodedTextChunks(
@@ -1336,6 +1377,23 @@ export async function parseDeskStream(
     }
 
     return acc.finalize();
+  }
+
+  if (format === "xml") {
+    // Collect bytes, not text: the prolog decides the encoding.
+    const parts: Uint8Array[] = [];
+    let total = 0;
+    for await (const chunk of iterateByteChunks(source, options?.compression)) {
+      parts.push(chunk);
+      total += chunk.length;
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const part of parts) {
+      bytes.set(part, offset);
+      offset += part.length;
+    }
+    return parseDesk(bytes, "xml", options?.xmlOptions);
   }
 
   const chunks: string[] = [];

@@ -461,7 +461,7 @@ the box). `--base` still works as an alias of `--base-url`.
   `OnCalendar` instead. The pure library (`lib/f402_session_refresh.ts`) is cross-platform;
   only the supervision wrapper is Mac-specific.
 - **Headless backend must be present.** `session:login --from-keychain` launches a WebView to
-  go through the portal; the Playwright headless shell satisfies this on `agent:doctor`. Stock
-  Chrome is blocked by the sandbox.
+  go through the portal; `Bun.WebView` supplies the engine on `agent:doctor`
+  (`OK Bun.WebView available`). Stock Chrome is blocked by the sandbox.
 - **Does not refresh the GSLive GSID.** That is a separate credential surface; it has its own
   minting path in `lib/gslive_auto_session.ts` and will get its own refresh in a follow-up.

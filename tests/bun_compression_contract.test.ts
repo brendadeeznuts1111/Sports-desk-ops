@@ -25,9 +25,9 @@ describe("Bun compression contract", () => {
   });
 
   test("out-of-range memLevel/strategy throw instead of being ignored", () => {
-    // Next-release contract: these options used to be accepted and silently replaced
-    // with defaults. Callers get a RangeError now, so a bad CLI/env-derived option
-    // cannot quietly change the compression profile.
+    // v1.4.4 contract (2026-10-22): these options used to be accepted and silently
+    // replaced with defaults. Callers get a RangeError now, so a bad CLI/env-derived
+    // option cannot quietly change the compression profile.
     expect(() => Bun.gzipSync(BYTES, { memLevel: 10 } as never)).toThrow(
       RangeError,
     );

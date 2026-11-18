@@ -47,6 +47,8 @@ function printDroppedSummary(
 function printHelp(): void {
   console.log(`SportsDesk ingestion JSONL replay (Plane 3)
 
+Usage: sportsdesk-replay [options]
+
 SQLite: bun:sqlite via lib/sportsdesk_sqlite.ts (strict + safeIntegers, WAL).
   VALID_TIME_OPEN_SENTINEL is 9223372036854775807n — SQL literal only in overlap trigger.
   EOD bundle: bun run eod:archive (WAL flush before tar.gz).

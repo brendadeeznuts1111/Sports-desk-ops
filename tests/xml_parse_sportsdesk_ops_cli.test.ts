@@ -188,6 +188,8 @@ async function runCli(
   return { exitCode, stdout, stderr };
 }
 
+// @bun-behavior: xml-parse
+
 describe("xml-parse · DenseSubSportLookupTable", () => {
   const entries: PortalTaxonomyEntry[] = [
     { sport: "FOOTBALL", subSport: "NFL", denseCode6: 1 },

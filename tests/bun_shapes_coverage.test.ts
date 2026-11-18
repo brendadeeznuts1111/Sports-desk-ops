@@ -15,6 +15,7 @@ import {
   SHAPE_CATALOG_PATH,
   renderBunShapeContractsCatalog,
 } from "../scripts/bun_shape_contracts.ts";
+import { formattedCatalogSource } from "../scripts/bun_shapes_catalog.ts";
 
 const root = resolve(import.meta.dir, "..");
 
@@ -64,6 +65,12 @@ describe("Bun shape coverage", () => {
     const catalog = await Bun.file(join(root, SHAPE_CATALOG_PATH)).text();
     const rendered = await renderBunShapeContractsCatalog(root);
     expect(catalog).toBe(rendered.markdown);
+    // The shape table is derived too: a new `Bun.*` call or a bun-types bump
+    // must show up as a regenerated file, not as a hand-typed row.
+    const derivedShapes = await formattedCatalogSource(root);
+    expect(
+      await Bun.file(join(root, "lib/bun_shapes.generated.ts")).text(),
+    ).toBe(derivedShapes);
     const headings = catalogHeadings(catalog);
 
     const baseline = (await Bun.file(

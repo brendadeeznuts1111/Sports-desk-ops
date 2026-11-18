@@ -96,6 +96,10 @@ function seedDependency(dir: string, name: string): Manifest {
   return manifest;
 }
 
+// @bun-behavior: install-flags
+// @bun-behavior: package-extensions
+// @bun-behavior: minimum-release-age
+
 describe("Bun 1.4.4 package-manager behaviors", () => {
   test("rejects unknown flags instead of running a mutable install", () => {
     const dir = fixture();
@@ -379,5 +383,20 @@ describe("Bun 1.4.4 package-manager behaviors", () => {
     };
     writeFileSync(join(dir, "package.json"), JSON.stringify(manifest, null, 2));
     expect(run(dir, ["install", "--linker=isolated"]).exitCode).toBe(0);
+  });
+
+  test("bunx rejects an unknown flag before resolving a package", () => {
+    const bunx = Bun.which("bunx");
+    expect(bunx).not.toBeNull();
+    const dir = fixture();
+    const result = Bun.spawnSync([bunx as string, "--frozen-lockfil"], {
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "bunx has no --frozen-lockfil flag",
+    );
   });
 });

@@ -66,7 +66,22 @@ for (const candidate of candidates) {
 if (baseRef === "" && resolve("HEAD^") !== "") baseRef = "HEAD^";
 
 const committed = baseRef !== "" ? [`${baseRef}...HEAD`] : ["HEAD"];
-const diff = git(["diff", "--name-only", ...committed]);
+let diff = git(["diff", "--name-only", ...committed]);
+let usedTwoDot = false;
+if (!diff.ok && baseRef !== "") {
+  // `scripts/ci/changed-code.sh` fetches the base with `--depth=1`, which grafts it:
+  // the ref resolves, but `A...B` cannot find a merge base and exits 128. Two-dot is
+  // a superset of the merge-base diff (it also lists files only changed on the base),
+  // so the gate stays strict instead of failing on a checkout artefact.
+  const twoDot = git(["diff", "--name-only", baseRef, "HEAD"]);
+  if (twoDot.ok) {
+    console.error(
+      `check:oracle-frozen: no merge base for ${baseRef}; comparing two-dot instead`,
+    );
+    diff = twoDot;
+    usedTwoDot = true;
+  }
+}
 if (!diff.ok) {
   console.error(
     `check:oracle-frozen: cannot diff against ${committed.join(" ")}`,
@@ -113,7 +128,11 @@ if (contractChanges.length > 0 && !oracleChanged) {
   process.exit(1);
 }
 
-const comparison = baseRef !== "" ? `${baseRef}...HEAD` : "HEAD (working tree)";
+const comparison = usedTwoDot
+  ? `${baseRef}..HEAD (two-dot, no merge base)`
+  : baseRef !== ""
+    ? `${baseRef}...HEAD`
+    : "HEAD (working tree)";
 console.log(
   `check:oracle-frozen: ok — ${contractChanges.length} contract change(s) against ${comparison}, oracle ${oracleChanged ? "updated" : "unchanged"}`,
 );

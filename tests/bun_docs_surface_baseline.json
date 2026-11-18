@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-16T16:41:32.221Z",
+  "generatedAt": "2026-11-18T04:42:30.255Z",
   "runtime": "Bun 1.4.4",
   "shapes": {
     "$": {
@@ -26,6 +26,10 @@
     "build": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/check#bun-build-1"
+    },
+    "BunFile": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/binary-data#bunfile"
     },
     "BunRequest": {
       "documented": true,
@@ -63,6 +67,10 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/hashing#hmac-in-bun-cryptohasher"
     },
+    "CryptoHashInterface": {
+      "documented": false,
+      "link": null
+    },
     "CSRF": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/csrf"
@@ -71,9 +79,21 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-deepequals"
     },
+    "deepMatch": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/bun-apis"
+    },
+    "deflateSync": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-deflatesync"
+    },
     "dns": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/networking/dns#choosing-a-resolver-backend"
+    },
+    "embeddedFiles": {
+      "documented": true,
+      "link": "https://bun.com/docs/compiler/executables#listing-embedded-files"
     },
     "enableANSIColors": {
       "documented": false,
@@ -90,6 +110,10 @@
     "escapeHTML": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-escapehtml"
+    },
+    "EventSource": {
+      "documented": true,
+      "link": "https://bun.com/guides/http/sse"
     },
     "fetch": {
       "documented": true,
@@ -115,6 +139,10 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/file-io#incremental-writing-with-filesink"
     },
+    "FileSystemRouter": {
+      "documented": true,
+      "link": "https://bun.com/blog/bun-v1.1.38#fixed-bun-filesystemrouter-reload-missing-new-directory-contents"
+    },
     "fileURLToPath": {
       "documented": true,
       "link": "https://bun.com/guides/util/file-url-to-path"
@@ -122,6 +150,10 @@
     "gc": {
       "documented": true,
       "link": "https://bun.com/blog/bun-v1.1.43#expose-gc-flag-adds-globalthis-gc"
+    },
+    "generateHeapSnapshot": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#estimateshallowmemoryusageof-in-bun-jsc"
     },
     "Glob": {
       "documented": true,
@@ -155,9 +187,17 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/bun-apis"
     },
+    "inflateSync": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-inflatesync"
+    },
     "inspect": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-inspect"
+    },
+    "isMainThread": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/workers#bun-ismainthread"
     },
     "isStandaloneExecutable": {
       "documented": true,
@@ -187,6 +227,26 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/markdown"
     },
+    "MatchedRoute": {
+      "documented": true,
+      "link": "https://bun.com/blog/bun-v0.5.5#changelog"
+    },
+    "MD4": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/hashing#hmac-in-bun-cryptohasher"
+    },
+    "MD5": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/sql#authentication"
+    },
+    "mmap": {
+      "documented": true,
+      "link": "https://bun.com/blog/bun-v1.4#bun-mmap-offset-now-starts-the-view-at-offset-since-1-4-0"
+    },
+    "ModuleGraph": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/module-graph"
+    },
     "nanoseconds": {
       "documented": true,
       "link": "https://bun.com/guides/process/nanoseconds"
@@ -207,17 +267,45 @@
       "documented": true,
       "link": "https://bun.com/guides/util/path-to-file-url"
     },
+    "peek": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-peek"
+    },
+    "plugin": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/nodejs-compat#node-module-https-nodejs-org-api-module-html"
+    },
+    "randomUUIDv5": {
+      "documented": false,
+      "link": null
+    },
     "randomUUIDv7": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-randomuuidv7"
+    },
+    "readableStreamToArray": {
+      "documented": true,
+      "link": "https://bun.com/guides/streams/to-array"
     },
     "readableStreamToArrayBuffer": {
       "documented": true,
       "link": "https://bun.com/guides/streams/to-arraybuffer"
     },
+    "readableStreamToFormData": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-readablestreamto"
+    },
+    "redis": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/redis"
+    },
     "RedisClient": {
       "documented": true,
       "link": "https://bun.com/blog/bun-v1.2.13#bun-redisclient-getbuffer-method"
+    },
+    "resolve": {
+      "documented": true,
+      "link": "https://bun.com/docs/compiler/compatibility#dynamic-imports"
     },
     "resolveSync": {
       "documented": true,
@@ -279,6 +367,34 @@
       "documented": true,
       "link": "https://bun.com/docs/test/writing-tests#fixtures"
     },
+    "sha": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/sql#authentication"
+    },
+    "SHA1": {
+      "documented": true,
+      "link": "https://bun.com/blog/bun-v1.0.19#fixed-stringifying-sha1-sha256-md5-hashes-sometimes-output-too-long-of-a-string"
+    },
+    "SHA224": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/hashing#hmac-in-bun-cryptohasher"
+    },
+    "SHA256": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/hashing#hmac-in-bun-cryptohasher"
+    },
+    "SHA384": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/csrf#typescript"
+    },
+    "SHA512": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/hashing#hmac-in-bun-cryptohasher"
+    },
+    "SHA512_256": {
+      "documented": true,
+      "link": "https://bun.com/docs/compiler/size#feature-names"
+    },
     "sleep": {
       "documented": true,
       "link": "https://bun.com/docs/lint/rules/bun/prefer-builtin-sleep"
@@ -306,6 +422,10 @@
     "SQL": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/sql#runtime-preconnection"
+    },
+    "stderr": {
+      "documented": true,
+      "link": "https://bun.com/blog/bun-v1.0.27#fixed-potential-crash-in-bun-stdin-bun-stdout-bun-stderr"
     },
     "stdin": {
       "documented": true,
@@ -339,6 +459,10 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/networking/udp#bind-a-udp-socket-bun-udpsocket"
     },
+    "unsafe": {
+      "documented": true,
+      "link": "https://bun.com/docs/compiler/executables#jit-policy"
+    },
     "version": {
       "documented": true,
       "link": "https://bun.com/guides/util/version"
@@ -347,6 +471,10 @@
       "documented": false,
       "link": null
     },
+    "WebSocket": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/http/websockets"
+    },
     "WebView": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/webview"
@@ -354,6 +482,10 @@
     "which": {
       "documented": true,
       "link": "https://bun.com/guides/util/which-path-to-executable-bin"
+    },
+    "Worker": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/workers"
     },
     "wrapAnsi": {
       "documented": true,
@@ -378,6 +510,10 @@
     "zstdCompressSync": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-zstdcompress-bun-zstdcompresssync"
+    },
+    "zstdDecompress": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-zstddecompress-bun-zstddecompresssync"
     },
     "zstdDecompressSync": {
       "documented": true,

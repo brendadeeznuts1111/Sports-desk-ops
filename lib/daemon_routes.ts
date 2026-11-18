@@ -153,6 +153,15 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     surface: "surface.daemon-graph-data-plane",
   }),
   defineRoute({
+    path: "/api/diagnostics/image-assets",
+    method: "GET",
+    guard: "none",
+    // Bun.Image attributes for docs/assets; every source is masked to a workspace-relative path
+    // under RISK_MANAGER, so the payload carries sizes and formats but no filesystem location.
+    dataClass: "static",
+    surface: "surface.daemon-dashboard",
+  }),
+  defineRoute({
     path: "/api/dns/telemetry",
     method: "GET",
     guard: "none",

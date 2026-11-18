@@ -543,6 +543,56 @@ describe("Bun capabilities used by the ops tooling", () => {
     }
   });
 
+  test("ArrayBufferSink highWaterMark preallocates without stream mode", () => {
+    const sink = new Bun.ArrayBufferSink();
+    sink.start({ asUint8Array: true, highWaterMark: 64 * 1024 });
+    sink.write("hello");
+    sink.write(new Uint8Array([0x20, 0x77]));
+    const out = sink.end() as Uint8Array;
+    expect(new TextDecoder().decode(out)).toBe("hello w");
+  });
+
+  test("ArrayBufferSink flush returns chunks only in stream mode", () => {
+    const sink = new Bun.ArrayBufferSink();
+    sink.start({ stream: true, highWaterMark: 1024 });
+    sink.write("hel");
+    const first = sink.flush();
+    expect(first).toBeInstanceOf(ArrayBuffer);
+    expect(new TextDecoder().decode(first as ArrayBuffer)).toBe("hel");
+    sink.write("lo");
+    const second = sink.flush();
+    expect(new TextDecoder().decode(second as ArrayBuffer)).toBe("lo");
+  });
+
+  test("ArrayBufferSink write accepts string, typed array, ArrayBuffer and SharedArrayBuffer", () => {
+    const sink = new Bun.ArrayBufferSink();
+    sink.start({ asUint8Array: true });
+    sink.write("hello ");
+    sink.write(new Uint8Array([0x77, 0x6f])); // wo
+    const arrayBuffer = new Uint8Array([0x72, 0x6c]).buffer as ArrayBuffer; // rl
+    sink.write(arrayBuffer);
+    const shared = new SharedArrayBuffer(2);
+    new Uint8Array(shared).set([0x64, 0x21]); // d!
+    sink.write(shared);
+    expect(new TextDecoder().decode(sink.end() as Uint8Array)).toBe(
+      "hello world!",
+    );
+  });
+
+  test("ArrayBufferSink stream flush honors asUint8Array and accepts more writes", () => {
+    const sink = new Bun.ArrayBufferSink();
+    sink.start({ stream: true, asUint8Array: true, highWaterMark: 1024 });
+    sink.write("hel");
+    const first = sink.flush();
+    expect(first).toBeInstanceOf(Uint8Array);
+    expect(new TextDecoder().decode(first as Uint8Array)).toBe("hel");
+    sink.write("lo");
+    const second = sink.flush();
+    expect(new TextDecoder().decode(second as Uint8Array)).toBe("lo");
+    sink.write("!");
+    expect(new TextDecoder().decode(sink.end() as Uint8Array)).toBe("!");
+  });
+
   test("BunFile.slice is lazy, does not open a missing file, and does not clamp size", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bunfile-slice-lazy-"));
     try {
@@ -875,7 +925,10 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(typeof Bun.plugin).toBe("function");
     expect(Bun.redis).toBeInstanceOf(Bun.RedisClient);
     expect(typeof Bun.revision).toBe("string");
-    expect(Bun.s3).toBeInstanceOf(Bun.S3Client);
+    // Bun 1.4.4 exposes the default S3 binding as S3Client on macOS and S3Ref on
+    // Linux. Both are the documented lazy S3 surface; assert the file() entry point.
+    expect(typeof Bun.s3).toBe("object");
+    expect(typeof Bun.s3.file).toBe("function");
     expect(typeof Bun.secrets.get).toBe("function");
     expect(typeof Bun.secrets.set).toBe("function");
     expect(typeof Bun.secrets.delete).toBe("function");
@@ -923,6 +976,8 @@ describe("Bun capabilities used by the ops tooling", () => {
     // Release fix: non-string arguments are stringified, never passed through.
     expect(Bun.$.escape(null as unknown as string)).toBe("null");
     expect(Bun.$.escape(true as unknown as string)).toBe("true");
+    expect(Bun.$.escape(new String("foo") as unknown as string)).toBe("foo");
+    expect(typeof Bun.$.escape(42 as unknown as string)).toBe("string");
 
     // `$.braces` is pure bash brace expansion — no I/O, safe to call unconditionally.
     expect(Bun.$.braces("index.{js,ts}").sort()).toEqual([
@@ -984,15 +1039,24 @@ describe("Bun capabilities used by the ops tooling", () => {
   });
 
   test("Bun.escapeHTML replaces the five HTML characters and stringifies values", () => {
+    // bun.com/reference/bun/escapeHTML: input is string | number | boolean | object;
+    // only the five characters are escaped, and every non-string is converted first.
     expect(Bun.escapeHTML("<script>alert('Hello World!')</script>")).toBe(
       "&lt;script&gt;alert(&#x27;Hello World!&#x27;)&lt;/script&gt;",
     );
     expect(Bun.escapeHTML("a & b < c > d \" e ' f")).toBe(
       "a &amp; b &lt; c &gt; d &quot; e &#x27; f",
     );
-    // Non-strings are converted before escaping.
+    // Non-strings are converted before escaping. The documented signature is
+    // string | number | boolean | object; null/undefined are outside that type
+    // but are measured here because the runtime still stringifies them.
     expect(Bun.escapeHTML(42)).toBe("42");
     expect(Bun.escapeHTML(true)).toBe("true");
+    expect(Bun.escapeHTML({ a: 1 })).toBe("[object Object]");
+    expect(Bun.escapeHTML([1, 2])).toBe("1,2");
+    expect(Bun.escapeHTML(new String("x"))).toBe("x");
+    expect(Bun.escapeHTML(null as never)).toBe("null");
+    expect(Bun.escapeHTML(undefined as never)).toBe("undefined");
   });
 
   test("Bun.allocUnsafe returns a Uint8Array of the requested length (unzeroed)", () => {

@@ -245,6 +245,23 @@ async function fileStatStamp(path: string): Promise<string> {
   return st === null ? "missing" : `${st.mtimeMs}:${st.size}`;
 }
 
+/**
+ * Advance a string JSONL window. `read` stops at the record terminator; on a
+ * parse error the poison line is dropped so the next chunk can make progress.
+ */
+export function advanceJsonlStringRemainder(
+  text: string,
+  result: { readonly read: number; readonly error: unknown },
+): string {
+  if (!result.error) return text.slice(result.read);
+  let at = result.read;
+  while (at < text.length && (text[at] === "\n" || text[at] === "\r")) {
+    at += 1;
+  }
+  const end = text.indexOf("\n", at);
+  return end < 0 ? text.slice(at) : text.slice(end + 1);
+}
+
 export async function runBatchedRanking(
   options: {
     corpusPath?: string;
@@ -535,7 +552,7 @@ async function computeUncachedBatchedRanking(
       for (const item of (result.values ?? []) as RawBetRow[]) {
         processRow(item);
       }
-      remainder = chunkText.slice(result.read);
+      remainder = advanceJsonlStringRemainder(chunkText, result);
     }
   } else {
     // Node.js fallback readline streaming

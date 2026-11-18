@@ -1914,6 +1914,163 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     );
   });
 
+  test("R2PipelineTabPanel renders SLA breach math and the process-local freshness trend", () => {
+    const noop = () => {};
+    const sink = {
+      id: "gslive-tally",
+      key: "gslive-tally/latest.json",
+      label: "gslive tally",
+      description: "Bridge 3c rollup",
+      publicUrl: "https://pub.example.r2.dev/gslive-tally/latest.json",
+      resolvedRollupKey: null,
+      resolvedRollupUrl: null,
+      slaSeconds: 3600,
+      state: "stale" as const,
+      stale: true,
+      lastModified: "2026-11-12T15:00:00.000Z",
+      ageSeconds: 10800,
+      dataAgeSeconds: 90000,
+      dataStale: true,
+      contentLength: 512,
+      sha256: "abc123",
+      reason: "Published 3h ago (SLA 60m)",
+      remediationCommand: "bun run tally:bridge3c",
+      sla: {
+        breachSeconds: 7200,
+        utilizationPct: 300,
+        breachStartedAt: "2026-11-12T15:00:00.000Z",
+        remainingSeconds: null,
+      },
+      metrics: [],
+    };
+    const freshSink = {
+      id: "f402-bet-ticker",
+      key: "f402-bet-ticker/latest.json",
+      label: "f402 bet ticker",
+      description: "Bridge 3a rollup",
+      publicUrl: "https://pub.example.r2.dev/f402-bet-ticker/latest.json",
+      resolvedRollupKey: null,
+      resolvedRollupUrl: null,
+      slaSeconds: 3600,
+      state: "fresh" as const,
+      stale: false,
+      lastModified: "2026-11-12T17:55:00.000Z",
+      ageSeconds: 300,
+      dataAgeSeconds: 320,
+      dataStale: false,
+      contentLength: 256,
+      sha256: "def456",
+      reason: "Within publish SLA",
+      remediationCommand: "bun run positions:cron --once",
+      sla: {
+        breachSeconds: 0,
+        utilizationPct: 8,
+        breachStartedAt: null,
+        remainingSeconds: 3300,
+      },
+      metrics: [],
+    };
+    const data = {
+      schemaVersion: 1 as const,
+      bucketPublicBase: "https://pub.example.r2.dev",
+      observedAt: "2026-11-12T18:00:00.000Z",
+      overallStatus: "stale" as const,
+      freshCount: 1,
+      totalCount: 2,
+      staleKeys: [sink.key],
+      dataStaleKeys: [sink.key],
+      sinks: [sink, freshSink],
+      daemon4020: {
+        online: true,
+        state: "degraded" as const,
+        operationalStatus: "degraded" as const,
+        url: "http://127.0.0.1:4020/health",
+        status: 200,
+        latencyMs: 2,
+        checkedAt: "2026-11-12T18:00:00.000Z",
+        auth: {
+          f402: { status: "ok", source: "session-file", remediation: null },
+          gslive: {
+            status: "expired",
+            source: "keychain",
+            remediation: "printf '%s' '<GSID>' | bun run secrets:gslive set",
+          },
+        },
+      },
+    };
+    const history = {
+      schemaVersion: 1 as const,
+      observedAt: "2026-11-12T18:00:00.000Z",
+      source: "process-memory" as const,
+      sampledSince: "2026-11-12T17:00:00.000Z",
+      minSampleIntervalSeconds: 60,
+      sinks: [
+        {
+          id: "gslive-tally",
+          label: "gslive tally",
+          slaSeconds: 3600,
+          sampleCount: 3,
+          samples: [
+            {
+              at: "2026-11-12T17:00:00.000Z",
+              ageSeconds: 7200,
+              state: "stale" as const,
+              dataAgeSeconds: 80000,
+            },
+            {
+              at: "2026-11-12T17:30:00.000Z",
+              ageSeconds: 9000,
+              state: "stale" as const,
+              dataAgeSeconds: 85000,
+            },
+            {
+              at: "2026-11-12T18:00:00.000Z",
+              ageSeconds: 10800,
+              state: "stale" as const,
+              dataAgeSeconds: 90000,
+            },
+          ],
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      React.createElement(R2PipelineTabPanel, {
+        data,
+        history,
+        historyError: null,
+        loading: false,
+        error: null,
+        onRefresh: noop,
+      }),
+    );
+    expect(html).toContain("OVERDUE 2.0h");
+    expect(html).toContain("overdue since 15:00Z · 300% of SLA");
+    expect(html).toContain("1 Overdue · Worst 2.0h (gslive tally)");
+    expect(html).toContain("renews in 55m · 8% of SLA");
+    expect(html).toContain("GSLive auth expired");
+    // Worst breach renders before the healthy sink.
+    expect(html.indexOf("overdue since 15:00Z")).toBeLessThan(
+      html.indexOf("renews in 55m"),
+    );
+    expect(html).toContain("Freshness Trend · process-local");
+    expect(html).toContain("rising · 3 samples");
+    expect(html).toContain("Publish age trend over 3 samples");
+    expect(html).not.toContain("history unavailable");
+
+    const erroredHtml = renderToStaticMarkup(
+      React.createElement(R2PipelineTabPanel, {
+        data,
+        history: null,
+        historyError: "HTTP 500",
+        loading: false,
+        error: null,
+        onRefresh: noop,
+      }),
+    );
+    expect(erroredHtml).toContain("Freshness history unavailable: HTTP 500");
+  });
+
   test("UI panels, ANSI renderer, and dashboard.md replace dead desk.bookdeskops.com/agent/ URLs with local links", () => {
     const noop = () => {};
     const custHtml = renderToStaticMarkup(

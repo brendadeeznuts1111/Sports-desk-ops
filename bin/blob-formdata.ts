@@ -8,12 +8,30 @@
  * same path: wrap the bytes in a Request and let the request body parser decode
  * them.
  */
-const file = process.argv[2];
-const contentType = process.argv[3] || "application/x-www-form-urlencoded";
-if (!file) {
+const args = process.argv.slice(2);
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(
+    [
+      "Usage: blob-formdata <file|- for stdin> [content-type]",
+      "",
+      "  <file>          body file; `-` reads stdin",
+      "  [content-type]  defaults to application/x-www-form-urlencoded",
+      "  -h, --help      this help",
+    ].join("\n"),
+  );
+  process.exit(0);
+}
+const file = args[0];
+if (file === undefined) {
   console.error("Usage: blob-formdata <file|- for stdin> [content-type]");
   process.exit(1);
 }
+if (file.startsWith("-") && file !== "-") {
+  console.error(`blob-formdata: unknown argument: ${file}`);
+  console.error("Usage: blob-formdata <file|- for stdin> [content-type]");
+  process.exit(1);
+}
+const contentType = args[1] || "application/x-www-form-urlencoded";
 
 const bytes =
   file === "-" ? await Bun.stdin.bytes() : await Bun.file(file).bytes();

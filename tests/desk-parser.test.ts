@@ -385,6 +385,33 @@ describe("Bun 1.4 streaming decompression and incremental JSONL parsing", () => 
     });
   }
 
+  test("xml keeps its bytes so the prolog's encoding is honoured", async () => {
+    // 0xE9 is 'é' in ISO-8859-1 and invalid standalone in UTF-8. Decoding to
+    // text first replaces it with U+FFFD before the prolog is read, and Bun's
+    // parser then accepts the mangled document silently.
+    const latin1 = new Uint8Array([
+      ...new TextEncoder().encode(
+        `<?xml version="1.0" encoding="ISO-8859-1"?><customer><name>Caf`,
+      ),
+      0xe9,
+      ...new TextEncoder().encode(`</name></customer>`),
+    ]);
+
+    const fromBytes = await parseDeskStream(latin1, "xml");
+    expect(fromBytes.customer.name).toBe("Café");
+
+    const fromBlob = await parseDeskStream(new Blob([latin1]), "xml");
+    expect(fromBlob.customer.name).toBe("Café");
+
+    // parseDesk accepts the same bytes directly.
+    expect(parseDesk(latin1, "xml").customer.name).toBe("Café");
+
+    // The decoded form is the corruption, kept here as the counter-example.
+    const decoded = new TextDecoder().decode(latin1);
+    expect(decoded.includes("\uFFFD")).toBe(true);
+    expect(parseDesk(decoded, "xml").customer.name).toBe("Caf\uFFFD");
+  });
+
   test("parses zstd and gzip chunked JSONL streams identically to parseDesk", async () => {
     const expected = parseDesk(sampleJsonl, "jsonl");
 

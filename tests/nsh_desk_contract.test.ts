@@ -800,7 +800,7 @@ describe("packages/nsh-desk model and capability contracts", () => {
   });
 
   test("DESK_ENDPOINT_CATALOG achieves 100% route parity with services/sportsdesk_webview_server.ts", async () => {
-    expect(DESK_ENDPOINT_CATALOG.length).toBe(50);
+    expect(DESK_ENDPOINT_CATALOG.length).toBe(51);
     expect(PARSER_WORKBENCH_PRESETS.length).toBe(9);
 
     const registeredPaths = new Set<string>();

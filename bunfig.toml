@@ -1,4 +1,7 @@
-# Preserve the repository's existing Prettier-compatible formatting.
+# Preserve the repository's existing Prettier-compatible formatting. Where Prettier would
+# change meaning (CSS escapes/selectors, Handlebars doctype/script comments), bun fmt keeps
+# the source; tests/bun_fmt_semantics.test.ts pins those cases, and CI runs
+# `bun fmt --debug-check` on changed files (PRs) and the whole tree (verify).
 # https://bun.com/docs/runtime/bunfig#style-options
 [fmt]
 printWidth = 80
@@ -34,8 +37,35 @@ ignorePatterns = [
   "verification/gen-tokens-zero-drift-gate/out/**",
 ]
 
-# Install keys (linker, globalStore, cache.dir, frozenLockfile, minimumReleaseAge) are owned by the
-# machine config at ~/.bunfig.toml. Setting them here would override that SSOT, so they stay out:
+# The image/asset diagnostics feature opts into import sorting; the rest of the repo keeps
+# Prettier-compatible defaults so adopting it stays a contained diff. `sortImports` groups
+# imports, sorts `{ }` names and merges duplicate specifiers from the same module.
+[[fmt.overrides]]
+files = [
+  "lib/asset_baseline.ts",
+  "lib/bun_image_*.ts",
+  "lib/bun_thumbnail*.ts",
+  "lib/format_bytes.ts",
+  "lib/image_header.ts",
+  "lib/image_limits.ts",
+  "lib/inspect_diagnostics.ts",
+  "lib/inspect_redactor.ts",
+  "packages/ui/src/format_bytes.ts",
+  "packages/ui/src/panels/BunAssetsTabPanel.tsx",
+  "scripts/bun_lint.ts",
+  "scripts/image_asset_*.ts",
+  "tests/bun_lint*.test.ts",
+  "tests/bun_thumbnail*.test.ts",
+  "tests/dashboard_bun_assets_panel.test.tsx",
+  "tests/dashboard_image_asset_diagnostics.test.ts",
+  "tests/image_*.test.ts",
+  "tests/inspect_ansi_diagnostics.test.ts",
+]
+options = { sortImports = true }
+
+# Install keys (linker, globalStore, cache.dir, frozenLockfile, minimumReleaseAge,
+# minimumReleaseAgeExcludes) are owned by the machine config at ~/.bunfig.toml. Setting one here
+# would override that SSOT, so they stay out:
 # `pm:doctor` fails the "project bunfig" check when one is present (`lib/pm_policy.ts`
 # MACHINE_OWNED_INSTALL_KEYS). Non-machine keys are safe and are pinned here.
 #

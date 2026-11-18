@@ -398,7 +398,24 @@ export async function declarationDrift(
     declared.length === modDeclared.length &&
     declared.every((name, idx) => name === modDeclared[idx]);
   const declaredSet = new Set(declared);
-  const declaredTypes =
+  // Abstract classes are declared surface with no runtime value. bun-types models them as
+  // class symbols, so without this they would be reported as a missing value (and the shape
+  // catalogue would call `CryptoHashInterface` a value). `declared`/`absent` stay unchanged:
+  // `dx bun --types` still notes the class has no runtime counterpart.
+  const abstractClassNames = checker
+    .getPropertiesOfType(bunType)
+    .filter((symbol) =>
+      (symbol.getDeclarations() ?? []).some(
+        (declaration) =>
+          ts.isClassDeclaration(declaration) &&
+          declaration.modifiers?.some(
+            (modifier) => modifier.kind === ts.SyntaxKind.AbstractKeyword,
+          ) === true,
+      ),
+    )
+    .map((symbol) => symbol.name)
+    .filter((name) => !name.startsWith("__"));
+  const typeExports =
     modNamespaceSymbol === undefined
       ? []
       : checker
@@ -411,8 +428,10 @@ export async function declarationDrift(
                 0 &&
               !symbol.name.startsWith("__"),
           )
-          .map((symbol) => symbol.name)
-          .sort();
+          .map((symbol) => symbol.name);
+  const declaredTypes = [
+    ...new Set([...typeExports, ...abstractClassNames]),
+  ].sort();
   const runtime = surfaceNames(Bun);
 
   const namespaceGaps: NamespaceGap[] = [];

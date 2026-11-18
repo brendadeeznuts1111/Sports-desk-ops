@@ -22,6 +22,8 @@
  * - `view.screenshot({ encoding: "shmem" })` writes the PNG to a POSIX shared-memory segment for Kitty (`t=s`).
  */
 
+import { DEFAULT_MAX_PIXELS } from "./image_limits.ts";
+
 export type ScreenshotFormat = "png" | "jpeg" | "webp" | "avif" | "heic";
 export type ScreenshotMimeType =
   "image/png" | "image/jpeg" | "image/webp" | "image/avif" | "image/heic";
@@ -59,8 +61,6 @@ export interface ShmemGraphicSegment {
   /** Kitty graphics protocol `t=s` escape sequence (`\x1b_Gf=100,t=s,a=T,S=<size>;<b64(name)>\x1b\\`). */
   readonly kittyEscape: string;
 }
-
-const DEFAULT_MAX_PIXELS = 16_384 * 16_384;
 
 const MAGIC: Record<"png" | "jpeg" | "webp", readonly number[]> = {
   png: [0x89, 0x50, 0x4e, 0x47],

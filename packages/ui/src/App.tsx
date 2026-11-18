@@ -29,6 +29,7 @@ import {
   AlertsTabPanel,
   BetTickerTabPanel,
   BuildMatrixDrawer,
+  BunAssetsTabPanel,
   CustomersTabPanel,
   LiveWagersTabPanel,
   R2PipelineTabPanel,
@@ -99,6 +100,7 @@ import {
   type HealthData,
   type LiveWager,
   type R2PipelineApiResponse,
+  type R2PipelineHistoryApiResponse,
   type RankingsFilter,
   type ShiftSummaryData,
   type ShowcaseCustomer,
@@ -273,6 +275,11 @@ export function App(): React.ReactElement {
     useState<R2PipelineApiResponse | null>(null);
   const [r2PipelineLoading, setR2PipelineLoading] = useState<boolean>(false);
   const [r2PipelineError, setR2PipelineError] = useState<string | null>(null);
+  const [r2PipelineHistory, setR2PipelineHistory] =
+    useState<R2PipelineHistoryApiResponse | null>(null);
+  const [r2PipelineHistoryError, setR2PipelineHistoryError] = useState<
+    string | null
+  >(null);
   const [verifyingTickets, setVerifyingTickets] = useState<boolean>(false);
   const [verifyTicketsError, setVerifyTicketsError] = useState<string | null>(
     null,
@@ -609,6 +616,26 @@ export function App(): React.ReactElement {
     }
   };
 
+  const fetchR2PipelineHistory = async (refresh = false) => {
+    try {
+      const res = await trackedFetch(
+        `/api/r2/pipeline/history?limit=60${refresh ? "&refresh=1" : ""}`,
+      );
+      if (!res.ok) {
+        setR2PipelineHistoryError(
+          `GET /api/r2/pipeline/history returned HTTP ${res.status}`,
+        );
+        return;
+      }
+      setR2PipelineHistory((await res.json()) as R2PipelineHistoryApiResponse);
+      setR2PipelineHistoryError(null);
+    } catch (err) {
+      setR2PipelineHistoryError(
+        `GET /api/r2/pipeline/history failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  };
+
   const runTicketVerification = async (dryRun = true) => {
     setVerifyingTickets(true);
     try {
@@ -676,7 +703,8 @@ export function App(): React.ReactElement {
     void fetchCustomersCohorts();
     void fetchRankings();
     void fetchBetTicker();
-    void fetchR2Pipeline();
+    // The pipeline probe records the first history sample, so read history after it.
+    void fetchR2Pipeline().then(() => fetchR2PipelineHistory());
   }, []);
 
   useEffect(() => {
@@ -849,6 +877,17 @@ export function App(): React.ReactElement {
     }
   }, [activeTab, alertFilter]);
 
+  // While the R2 pipeline tab is open, sample freshness each minute so the
+  // process-local history has a series to plot (the server throttles samples).
+  useEffect(() => {
+    if (activeTab !== "r2") return;
+    void fetchR2PipelineHistory();
+    const interval = setInterval(() => {
+      void fetchR2PipelineHistory(true);
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
   // Auto-dismiss toast after 4s
   useEffect(() => {
     if (!alertToast) return;
@@ -925,6 +964,9 @@ export function App(): React.ReactElement {
       } else if (e.ctrlKey && e.key === "9") {
         e.preventDefault();
         setActiveTab("r2");
+      } else if (e.ctrlKey && e.key === "0") {
+        e.preventDefault();
+        setActiveTab("assets");
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
@@ -1914,6 +1956,15 @@ export function App(): React.ReactElement {
             ) : null}
             <span style={styles.keyShortcutBadge}>Ctrl+9</span>
           </button>
+          <button
+            type="button"
+            style={styles.tabBtn(activeTab === "assets")}
+            onClick={() => setActiveTab("assets")}
+            title="Bun.Image width, height, format and backend for the served dashboard assets (Ctrl+0)"
+          >
+            🖼️ Assets
+            <span style={styles.keyShortcutBadge}>Ctrl+0</span>
+          </button>
         </div>
       </header>
 
@@ -2501,10 +2552,15 @@ export function App(): React.ReactElement {
         ) : activeTab === "r2" ? (
           <R2PipelineTabPanel
             data={r2PipelineData}
+            history={r2PipelineHistory}
+            historyError={r2PipelineHistoryError}
             loading={r2PipelineLoading}
             error={r2PipelineError}
             onRefresh={(force) => {
-              void fetchR2Pipeline(Boolean(force));
+              void (async () => {
+                await fetchR2Pipeline(Boolean(force));
+                await fetchR2PipelineHistory(false);
+              })();
             }}
             onVerifyTickets={(dryRun) => {
               void runTicketVerification(dryRun ?? true);
@@ -2512,6 +2568,8 @@ export function App(): React.ReactElement {
             verifyingTickets={verifyingTickets}
             verifyTicketsError={verifyTicketsError}
           />
+        ) : activeTab === "assets" ? (
+          <BunAssetsTabPanel />
         ) : (
           <LiveWagersTabPanel
             wagers={liveWagers}
