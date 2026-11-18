@@ -54,6 +54,7 @@ const RAW_HEADER_ALLOWLIST: ReadonlyArray<
   ["lib/r2_s3_client.ts", "if-match", 1],
   ["lib/r2_s3_client.ts", "if-none-match", 1],
   ["lib/r2_s3_client.ts", "x-amz-content-sha256", 1],
+  ["lib/serve_file.ts", "if-none-match", 1],
   ["lib/static_dir_probe.ts", "etag", 1],
   ["lib/static_dir_probe.ts", "if-none-match", 1],
   [
@@ -71,7 +72,7 @@ const RAW_HEADER_ALLOWLIST: ReadonlyArray<
   ["services/sportsdesk_ingestion_feed_provenance.ts", "etag", 1],
   ["services/sportsdesk_webview_server.ts", "accept-encoding", 3],
   ["services/sportsdesk_webview_server.ts", "etag", 1],
-  ["services/sportsdesk_webview_server.ts", "if-none-match", 5],
+  ["services/sportsdesk_webview_server.ts", "if-none-match", 6],
   ["src/lib/syndicate_adjacency_rollup.ts", "etag", 1],
   ["src/lib/syndicate_adjacency_rollup.ts", "if-match", 1],
   ["src/lib/syndicate_adjacency_rollup.ts", "if-none-match", 1],
