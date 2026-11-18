@@ -203,13 +203,50 @@ the keychain is stale).
   `F402_SESSION_STORE=keychain` stores it as the `f402-session` entry instead and writes no
   file. Any other value throws `F402SessionStoreConfigError` (CLI exit 2) instead of falling back
   to the file. Bun.secrets is async, so a process calls `await primeF402Session()` (or
-  `loadF402Session()`) before a sync `readF402Session()` sees it. Wired: `session:login`,
-  `session:status`, the refresher, `ensureF402Session`, the read-only puller, the replay
-  transport, bridge3a, the graph poller, the weblog bridge inputs, `live-stream --poll` and the
-  three capture scripts. Still synchronous (keep `file` for these until the follow-up in
-  `/workspace/sdo-f402-session-readers-ticket.md` lands): live ticker, live pending, incoming
-  bets, desk enhanced health, the bridge rollup cron gate, the pending-fetch bearer resolver
-  and the deprecated `cookieHeaderFromEnv`.
+  `loadF402Session()`) before a sync `readF402Session()` sees it. Every F402 session reader is
+  wired: `session:login`, `session:status`, the refresher, `ensureF402Session`, the read-only
+  puller, the replay transport, bridge3a, the graph poller, the weblog bridge inputs,
+  `live-stream --poll`, the three capture scripts, the live ticker, live pending, incoming bets,
+  desk enhanced health, the bridge rollup cron gate (3a/3b), the bearer resolver
+  (`resolveF402BearerTokenDetailedAsync`, used by bridge3b), the player-analysis headers and the
+  deprecated `cookieHeaderFromEnv` (now async). In file mode each of them reads the file exactly
+  as before and never asks the keychain.
+- **Keychain session failures.** With `F402_SESSION_STORE=keychain` a store failure is never
+  reported as "no session":
+  - live ticker / live pending / incoming bets return the diagnostic
+    `session_store_unavailable` (message names the error and code; hint: `secrets:f402 probe`,
+    `secrets:f402 status`, or `F402_SESSION_STORE=file`). Incoming bets reports it for `live` and
+    `auto` (no silent capture fallback); `source=file` does not need the session;
+  - `/health` reports `auth.f402.status: "unavailable"`, `source: "keychain"`, a `storeError`
+    string and an error-severity degraded reason; a loaded session reports `source: "keychain"`;
+  - the cron gate fails 3a/3b with `session store unavailable: <error> (<code>)`;
+  - the bearer resolver, player-analysis headers and `cookieHeaderFromEnv` throw the named error.
+- **Credential reads.** `readSecretOrNull` (lib/secrets.ts, behind `readSecretWithSource` /
+  `readSecretCanonicalThenLegacy`) and `loadF402CredentialsSecure` map errors explicitly: a
+  timeout and `F402KeychainUnavailable` (no usable store) still read as absent; every other
+  failure throws its named error. `F402_ALLOW_ENV_CREDENTIALS=1` with both env values still wins
+  over a refusing keychain (the refusal is logged by name). `session:login --from-keychain` exits
+  through the same 2/3/4 codes.
+
+### Before switching a host to `F402_SESSION_STORE=keychain`
+
+The default stays `file`. On a macOS desk host keychain mode works for every reader, but check:
+
+1. **Same value everywhere.** Only the session-refresh LaunchAgent template carries the key. Set
+   the same value for the daemon LaunchAgent (its env file), the desk server, and any shell that
+   runs `session:*`, bridge or capture commands; a mix means one side reads a stale file.
+2. **Long-lived processes keep their copy.** The replay transport, `live-stream --poll` and the
+   weblog bridge inputs load the keychain session once; in file mode the transport re-reads the
+   file on every request. A session rotated by the refresher is picked up by those processes only
+   on restart or after a 401 re-mint (which needs `F402_LIVE_LOGIN=1`). Per-request readers
+   (desk server reads, bridge3a, the graph poller, the cron gate) are not affected.
+3. **Keychain access is per binary.** Each new Bun binary path (a pinned upgrade) must be allowed
+   once in Keychain Access for the `f402-session` item, or background agents get
+   `F402SecretInteractionRequired` (exit 4).
+4. **Headless Linux / CI** usually has no Secret Service: every read is
+   `F402KeychainUnavailable`. Keep `file` there.
+5. Run `bun run secrets:f402 probe` and `bun run secrets:f402 status --json` under the same user
+   and launchd context first.
 
 ### Named errors
 
