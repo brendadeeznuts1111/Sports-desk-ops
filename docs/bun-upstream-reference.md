@@ -351,6 +351,27 @@ The live writing docs also describe `test.fails`, `test.for`, `test.extend`, `te
 the contract asserts their absence. The zombie-process killer and snapshot matchers are not
 re-measured here.
 
+<!-- bun-behavior: bun-test-config -->
+
+## Test configuration: `bunfig.toml [test]` (measured 2026-11-18)
+
+Measured with throwaway projects (`tests/bun_test_config.test.ts`):
+
+| Option                                | Measured                                                                                                     |
+| :------------------------------------ | :----------------------------------------------------------------------------------------------------------- |
+| `root = "src"`                        | only files under `src/` are discovered                                                                       |
+| `preload = ["./preload.ts"]`          | the preload runs before the test file and can set env                                                        |
+| `pathIgnorePatterns = ["ignored/**"]` | matching files are pruned; the CLI `--path-ignore-patterns` **replaces** the config list rather than merging |
+| `retry = 1`                           | retries a flaky test (`attempt 2`); `--retry=0` did **not** disable it on this pin                           |
+| `rerunEach = 2`                       | each file is evaluated twice                                                                                 |
+| `randomize = true` + `seed = 42`      | reruns produce the same file order                                                                           |
+| `[test.reporter] junit = "junit.xml"` | writes the JUnit XML (the parent directory must already exist)                                               |
+| `.env.test`                           | loaded automatically by `bun test`                                                                           |
+
+Not re-measured here: `environment` (jsdom/happy-dom), `globals = "vitest"`, `reactCompiler`,
+`concurrentTestGlob`, `smol`, the mock-cleanup options, coverage options, and `[install]`
+inheritance.
+
 ## Upstream doc commit pins
 
 | Pin                                                                                                                      | Tree                               | Use                                                                       |
