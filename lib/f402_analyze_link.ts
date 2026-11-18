@@ -12,10 +12,13 @@ import {
   type WeblogRow,
 } from "./f402_analyze_ingest.ts";
 import {
+  DEFAULT_LINK_LISTS,
+  resolvedLinkLists,
   resolvedLinkThresholds,
   type AnalyzeConfig,
   type LinkEvidenceTypeName,
   type LinkThresholdName,
+  type ResolvedLinkLists,
 } from "./f402_analyze_config.ts";
 
 export const LINK_DISCLAIMER =
@@ -30,34 +33,25 @@ export const PARLAY_WINDOW_MS = 60 * 60_000;
 export const STEAM_WINDOW_MS = 5 * 60_000;
 export const PARLAY_JACCARD_MIN = 0.8;
 
-export const GENERIC_ENTERED_BY = new Set([
-  "",
-  "system",
-  "internet",
-  "ggl-livedealer",
-]);
+export const GENERIC_ENTERED_BY: ReadonlySet<string> = new Set(
+  DEFAULT_LINK_LISTS.genericEnteredBy,
+);
 
-export const SHARED_INFRA_CLASSES = new Set([
-  "CGNAT",
-  "T_MOBILE",
-  "VERIZON_192",
-  "VERIZON_208",
-  "ICLOUD_RELAY",
-  "BOT_RING_140_248",
-  "IPV6_CARRIER:T_MOBILE",
-  "IPV6_CARRIER:VERIZON",
-  "IPV6_CARRIER:ATT",
-  "IPV6_CARRIER:ICLOUD",
-]);
+export const SHARED_INFRA_CLASSES: ReadonlySet<string> = new Set(
+  DEFAULT_LINK_LISTS.sharedInfraClasses,
+);
 
 /**
  * Uses #219's `classifyWeblogIpExtended`. It only refines IPs the base
  * classifier calls `OTHER` (datacenter VPN, AT&T mobility and broadband),
- * and none of those classes is in `SHARED_INFRA_CLASSES`, so the result is
- * identical to the base classifier; the set is not widened here.
+ * and none of those classes is in the default `SHARED_INFRA_CLASSES`, so with
+ * the default list the result is identical to the base classifier.
  */
-export function isSharedInfraIp(ip: string): boolean {
-  return SHARED_INFRA_CLASSES.has(classifyWeblogIpExtended(ip));
+export function isSharedInfraIp(
+  ip: string,
+  classes: ReadonlySet<string> = SHARED_INFRA_CLASSES,
+): boolean {
+  return classes.has(classifyWeblogIpExtended(ip));
 }
 
 export type EvidenceType =
@@ -266,6 +260,7 @@ function collectSharedIp(
   bag: Map<string, EvidenceItem[]>,
   hashIp: IpHasher,
   th: LinkThresholds,
+  lists: ResolvedLinkLists,
 ): void {
   const byIp = new Map<string, Map<string, number[]>>();
   for (const row of projection.weblog) {
@@ -286,7 +281,7 @@ function collectSharedIp(
     const ids = [...accounts.keys()];
     if (ids.length < 2) continue;
     const rarity = ipRarity(ids.length, total);
-    const infra = isSharedInfraIp(ip);
+    const infra = isSharedInfraIp(ip, lists.sharedInfraClasses);
     const infraPenalty = infra ? 0.25 : 1;
     for (let i = 0; i < ids.length; i += 1) {
       for (let j = i + 1; j < ids.length; j += 1) {
@@ -465,12 +460,13 @@ function collectCashMatches(
 function collectEnteredBy(
   projection: PullProjection,
   bag: Map<string, EvidenceItem[]>,
+  lists: ResolvedLinkLists,
 ): void {
   const byClerk = new Map<string, Map<string, number>>();
   for (const row of projection.ledger) {
     if (row.family !== "adjustment") continue;
     const clerk = row.enteredBy.trim().toLowerCase();
-    if (GENERIC_ENTERED_BY.has(clerk)) continue;
+    if (lists.genericEnteredBy.has(clerk)) continue;
     let accounts = byClerk.get(clerk);
     if (accounts === undefined) {
       accounts = new Map();
@@ -1130,11 +1126,12 @@ export function linkAccounts(
   }
   const bag = new Map<string, EvidenceItem[]>();
   const th = thresholdsFrom(options);
-  collectSharedIp(projection, bag, options.hashIp, th);
+  const lists = resolvedLinkLists(options.config);
+  collectSharedIp(projection, bag, options.hashIp, th, lists);
   collectDeviceTiming(projection, bag, th);
   collectTransfers(projection, bag, th);
   collectCashMatches(projection, bag, th);
-  collectEnteredBy(projection, bag);
+  collectEnteredBy(projection, bag, lists);
   collectSharedParlay(projection, bag, th);
   collectStakeFingerprint(projection, bag);
   collectSteam(projection, bag, th);

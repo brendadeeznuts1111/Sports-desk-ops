@@ -63,7 +63,7 @@ Options:
   --now <iso>            Prediction / backtest clock (ISO-8601); default is now
   --horizon-days <n>     Backtest horizon (default: 7)
   --format <json|csv|md> Stdout format (default json)
-  --config <file>        JSON weights/thresholds (unknown keys fail)
+  --config <file>        JSON weights/thresholds/lists (unknown keys fail)
   --help
 
 Links and predictions are evidence-scored guesses, not confirmed identities.

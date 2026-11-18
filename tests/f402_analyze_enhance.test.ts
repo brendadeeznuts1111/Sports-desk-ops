@@ -19,6 +19,15 @@ import {
   runExplainAnalysis,
 } from "../lib/f402_analyze.ts";
 import { F402AnalyzeError } from "../lib/f402_analyze_ingest.ts";
+import {
+  DEFAULT_LINK_LISTS,
+  resolvedLinkLists,
+} from "../lib/f402_analyze_config.ts";
+import {
+  GENERIC_ENTERED_BY,
+  SHARED_INFRA_CLASSES,
+  isSharedInfraIp,
+} from "../lib/f402_analyze_link.ts";
 import { buildRings } from "../lib/f402_analyze_rings.ts";
 import { buildAccountTimeline } from "../lib/f402_analyze_timeline.ts";
 import {
@@ -69,6 +78,90 @@ describe("analyze config schema", () => {
     const path = join(tempRoot(), "cfg.json");
     writeFileSync(path, JSON.stringify({ weights: { link: { clv_beat: 1 } } }));
     expect(loadAnalyzeConfig(path).weights.link.clv_beat).toBe(1);
+  });
+});
+
+describe("analyze config lists", () => {
+  test("defaults keep the previous operator and carrier lists", () => {
+    expect([...GENERIC_ENTERED_BY]).toEqual([
+      "",
+      "system",
+      "internet",
+      "ggl-livedealer",
+    ]);
+    expect([...SHARED_INFRA_CLASSES]).toEqual([
+      "CGNAT",
+      "T_MOBILE",
+      "VERIZON_192",
+      "VERIZON_208",
+      "ICLOUD_RELAY",
+      "BOT_RING_140_248",
+      "IPV6_CARRIER:T_MOBILE",
+      "IPV6_CARRIER:VERIZON",
+      "IPV6_CARRIER:ATT",
+      "IPV6_CARRIER:ICLOUD",
+    ]);
+    const resolved = resolvedLinkLists(undefined);
+    expect([...resolved.genericEnteredBy]).toEqual([
+      ...DEFAULT_LINK_LISTS.genericEnteredBy,
+    ]);
+    expect([...resolved.sharedInfraClasses]).toEqual([
+      ...DEFAULT_LINK_LISTS.sharedInfraClasses,
+    ]);
+    expect(parseAnalyzeConfig({}).lists).toEqual({});
+  });
+
+  test("a configured list replaces the default and is normalized", () => {
+    const parsed = parseAnalyzeConfig({
+      lists: {
+        genericEnteredBy: [" System ", "Kiosk"],
+        sharedInfraClasses: [" CGNAT "],
+      },
+    });
+    expect(parsed.lists?.genericEnteredBy).toEqual(["system", "kiosk"]);
+    expect(parsed.lists?.sharedInfraClasses).toEqual(["CGNAT"]);
+    const resolved = resolvedLinkLists(parsed);
+    expect(resolved.genericEnteredBy.has("internet")).toBe(false);
+    expect(resolved.sharedInfraClasses.has("T_MOBILE")).toBe(false);
+    expect(isSharedInfraIp("2607:fb90::1")).toBe(true);
+    expect(isSharedInfraIp("2607:fb90::1", resolved.sharedInfraClasses)).toBe(
+      false,
+    );
+  });
+
+  test("bad lists fail loudly", () => {
+    for (const raw of [
+      { lists: { operators: [] } },
+      { lists: [] },
+      { lists: { genericEnteredBy: "system" } },
+      { lists: { genericEnteredBy: [1] } },
+      { lists: { sharedInfraClasses: [" "] } },
+    ]) {
+      let caught: unknown;
+      try {
+        parseAnalyzeConfig(raw);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(F402AnalyzeError);
+      expect((caught as F402AnalyzeError).code).toBe("config");
+    }
+  });
+
+  test("genericEnteredBy decides which clerks count as link evidence", () => {
+    const root = tempRoot();
+    writeSyntheticPull(root, plantedClusterPull());
+    const projection = ingestPullDirectory(root);
+    const hasEnteredBy = (report: ReturnType<typeof linkAccounts>) =>
+      report.edges.some((edge) =>
+        edge.evidence.some((item) => item.type === "same_entered_by"),
+      );
+    expect(hasEnteredBy(linkAccounts(projection, { hashIp }))).toBe(false);
+    const withoutSystem = linkAccounts(projection, {
+      hashIp,
+      config: parseAnalyzeConfig({ lists: { genericEnteredBy: [""] } }),
+    });
+    expect(hasEnteredBy(withoutSystem)).toBe(true);
   });
 });
 
