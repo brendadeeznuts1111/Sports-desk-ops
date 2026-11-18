@@ -142,11 +142,19 @@ export async function renderBunShapeCatalog(
       );
     }
     const used = usage.used.has(name);
+    // A type we track but do not call is titled `(type, declared-only)` so the
+    // runbook says out loud that the row is a declaration, not a call site.
+    const heading =
+      kind === "type"
+        ? used
+          ? `Bun.${name} (type)`
+          : `Bun.${name} (type, declared-only)`
+        : `Bun.${name}`;
     return {
       name,
       kind,
       subsystem,
-      heading: kind === "type" ? `Bun.${name} (type)` : `Bun.${name}`,
+      heading,
       ...(used ? {} : { status: "declared-only" as const }),
       evidence,
     };

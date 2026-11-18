@@ -30,6 +30,8 @@ type GlobalOpts = { json: boolean };
 function printRootHelp(): void {
   console.log(`Candidate overlay match evaluation
 
+Usage: sportsdesk-candidate <pin|verify|replay> [options]
+
 Commands:
   pin       Verify golden evaluation fixtures (byte pin vs evaluation_result_sha256)
   verify    Append-only store invariants (serializer drift)

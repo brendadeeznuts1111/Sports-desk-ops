@@ -2,14 +2,15 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   createBlobLiveBetsServer,
+  HEADER_PROBE_BYTES,
   MemoryBlobStore,
+  readResponsePrefix,
   type BlobLiveBetsOptions,
 } from "../services/blob_and_live_bets_server.ts";
+import { png1x1 } from "./support/image_fixtures.ts";
 
 const API_TOKEN = "test-api-token";
 const TICKET_SECRET = "test-ticket-secret";
-const PNG_1X1_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
 interface Harness {
   readonly url: string;
@@ -47,7 +48,7 @@ function auth(token = API_TOKEN): Record<string, string> {
 }
 
 function pngBytes(): Uint8Array {
-  return Uint8Array.from(Buffer.from(PNG_1X1_BASE64, "base64"));
+  return png1x1();
 }
 
 async function ticket(h: Harness): Promise<string> {
@@ -173,16 +174,132 @@ describe("blob + live-bets gateway", () => {
       width: number;
       height: number;
       placeholder: string;
+      asset: {
+        format: string;
+        width: number;
+        height: number;
+        backend: string;
+      };
     };
     expect(body.key).toBe("blobs/photo-2.webp");
     expect(body.placeholder).toStartWith("data:image/png;base64,");
     expect(body.bytesWritten).toBe(body.bytes);
     expect(body.width).toBeGreaterThan(0);
     expect(body.height).toBeGreaterThan(0);
+    expect(response.headers.get("x-sd-image-format")).toBe("webp");
+    expect(response.headers.get("x-sd-image-width")).toBe(String(body.width));
+    expect(response.headers.get("x-sd-image-backend")).toBe("bun");
+    expect(body.asset).toMatchObject({
+      format: "webp",
+      width: body.width,
+      height: body.height,
+      backend: "bun",
+    });
     const stored = h.store.blobs.get("photo-2");
     expect(stored?.contentType).toBe("image/webp");
     expect(new TextDecoder().decode(stored?.bytes.slice(0, 4))).toBe("RIFF");
     expect(new TextDecoder().decode(stored?.bytes.slice(8, 12))).toBe("WEBP");
+  });
+
+  test("GET ?attributes=1 returns the Bun.Image asset diagnostic", async () => {
+    const h = start();
+    const put = await fetch(`${h.url}/api/v1/blobs/photo-3`, {
+      method: "PUT",
+      headers: { ...auth(), "content-type": "image/png" },
+      body: pngBytes(),
+    });
+    expect(put.status).toBe(200);
+
+    const response = await fetch(`${h.url}/api/v1/blobs/photo-3?attributes=1`, {
+      headers: auth(),
+    });
+    expect(response.status).toBe(200);
+    const asset = (await response.json()) as {
+      type: string;
+      visibility: string;
+      source: string;
+      format: string;
+      width: number;
+      height: number;
+      backend: string;
+      headerBytes: number;
+      probeBytes: number;
+    };
+    expect(asset).toMatchObject({
+      type: "BunImageAssetDiagnostic",
+      visibility: "RISK_MANAGER",
+      source: "blobs/photo-3.webp",
+      format: "webp",
+      backend: "bun",
+      probeBytes: HEADER_PROBE_BYTES,
+    });
+    expect(asset.headerBytes).toBeGreaterThan(0);
+    expect(asset.headerBytes).toBeLessThanOrEqual(HEADER_PROBE_BYTES);
+    expect(asset.width).toBeGreaterThan(0);
+    expect(asset.height).toBeGreaterThan(0);
+
+    const unauthenticated = await fetch(
+      `${h.url}/api/v1/blobs/photo-3?attributes=1`,
+    );
+    expect(unauthenticated.status).toBe(401);
+
+    const missing = await fetch(`${h.url}/api/v1/blobs/absent?attributes=1`, {
+      headers: auth(),
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  test("?attributes=1 reads a bounded prefix of a large stored webp", async () => {
+    const h = start();
+    const bytes = new Uint8Array(
+      await Bun.file("docs/assets/ARCH-Guide.webp").arrayBuffer(),
+    );
+    await h.store.put("large", bytes, "image/webp");
+
+    const response = await fetch(`${h.url}/api/v1/blobs/large?attributes=1`, {
+      headers: auth(),
+    });
+    expect(response.status).toBe(200);
+    const asset = (await response.json()) as {
+      width: number;
+      height: number;
+      format: string;
+      bytes: number;
+      headerBytes: number;
+      probeBytes: number;
+    };
+    expect(asset).toMatchObject({
+      width: 1200,
+      height: 896,
+      format: "webp",
+      bytes: bytes.byteLength,
+      probeBytes: HEADER_PROBE_BYTES,
+    });
+    expect(asset.headerBytes).toBeLessThan(asset.bytes);
+    expect(asset.headerBytes).toBeLessThanOrEqual(HEADER_PROBE_BYTES);
+  });
+
+  test("readResponsePrefix stops at the limit and cancels the body", async () => {
+    let pulls = 0;
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        controller.enqueue(new Uint8Array(100));
+        if (pulls >= 10) controller.close();
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+
+    const prefix = await readResponsePrefix(new Response(stream), 150);
+    expect(prefix.byteLength).toBe(150);
+    expect(pulls).toBe(2);
+    expect(cancelled).toBe(true);
+
+    const empty = await readResponsePrefix(new Response(null), 10);
+    expect(empty.byteLength).toBe(0);
   });
 
   test("upload caps reject declared and streamed oversize bodies", async () => {

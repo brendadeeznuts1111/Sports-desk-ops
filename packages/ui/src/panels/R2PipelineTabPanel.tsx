@@ -3,10 +3,23 @@ import { copyText } from "../clipboard.ts";
 import type React from "react";
 import { useState } from "react";
 import { styles } from "../dashboard_styles.ts";
-import type { R2PipelineApiResponse, R2SinkDetail } from "../types.ts";
+import type {
+  R2PipelineApiResponse,
+  R2PipelineHistoryApiResponse,
+  R2SinkDetail,
+  R2SinkHistory,
+  R2SinkHistorySample,
+} from "../types.ts";
+import { formatBytesDecimal } from "../format_bytes.ts";
 
 export interface R2PipelineTabPanelProps {
   readonly data: R2PipelineApiResponse | null;
+  /**
+   * Process-local freshness series from `/api/r2/pipeline/history`. Optional:
+   * without it the cards render their SLA math but no trend block.
+   */
+  readonly history?: R2PipelineHistoryApiResponse | null;
+  readonly historyError?: string | null;
   readonly loading: boolean;
   readonly error: string | null;
   readonly onRefresh: (force?: boolean) => void;
@@ -28,6 +41,26 @@ function formatSla(slaSeconds: number): string {
   return `${(slaSeconds / 3600).toFixed(0)}h`;
 }
 
+/**
+ * One line under the publish age: when the breach began, or how long the sink has
+ * left. Text only — no numbers are derived here that the payload does not carry.
+ */
+function slaTimingLine(sink: R2SinkDetail): string {
+  const sla = sink.sla;
+  if (!sla || typeof sla.utilizationPct !== "number") return "SLA n/a";
+  const pct = `${sla.utilizationPct.toLocaleString()}% of SLA`;
+  if ((sla.breachSeconds ?? 0) > 0) {
+    const since = sla.breachStartedAt
+      ? `${sla.breachStartedAt.slice(11, 16)}Z`
+      : "unknown";
+    return `overdue since ${since} · ${pct}`;
+  }
+  if (typeof sla.remainingSeconds === "number") {
+    return `renews in ${formatAge(sla.remainingSeconds)} · ${pct}`;
+  }
+  return pct;
+}
+
 function formatUsdCents(cents: number): string {
   const usd = cents / 100;
   return usd.toLocaleString("en-US", {
@@ -37,11 +70,76 @@ function formatUsdCents(cents: number): string {
   });
 }
 
-function formatBytes(bytes: number | null): string {
-  if (bytes === null || !Number.isFinite(bytes)) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+const SPARK_WIDTH = 150;
+const SPARK_HEIGHT = 30;
+
+/**
+ * Publish-age sparkline for one sink. The dashed rule is the SLA; the solid line
+ * is the recorded age on the same scale, so "above the line" is overdue. Fewer
+ * than two numeric samples render nothing (a single dot is not a trend).
+ */
+function SlaSparkline({
+  samples,
+  slaSeconds,
+}: {
+  readonly samples: readonly R2SinkHistorySample[];
+  readonly slaSeconds: number;
+}): React.ReactElement | null {
+  const points = samples.filter(
+    (sample): sample is R2SinkHistorySample & { ageSeconds: number } =>
+      sample.ageSeconds !== null && Number.isFinite(sample.ageSeconds),
+  );
+  if (points.length < 2) return null;
+  const maxAge = Math.max(1, slaSeconds, ...points.map((p) => p.ageSeconds));
+  const x = (index: number): number =>
+    (index / (points.length - 1)) * SPARK_WIDTH;
+  const y = (ageSeconds: number): number =>
+    SPARK_HEIGHT - Math.min(1, ageSeconds / maxAge) * SPARK_HEIGHT;
+  const last = points[points.length - 1]!;
+  const tone = last.ageSeconds > slaSeconds ? "#f87171" : "#4ade80";
+  const polyline = points
+    .map((p, i) => `${x(i).toFixed(1)},${y(p.ageSeconds).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg
+      width={SPARK_WIDTH}
+      height={SPARK_HEIGHT}
+      role="img"
+      aria-label={`Publish age trend over ${points.length} samples, SLA ${formatSla(slaSeconds)}`}
+      style={{ display: "block", overflow: "visible" }}
+    >
+      <line
+        x1={0}
+        y1={y(slaSeconds).toFixed(1)}
+        x2={SPARK_WIDTH}
+        y2={y(slaSeconds).toFixed(1)}
+        stroke="#f59e0b"
+        strokeDasharray="3 3"
+        strokeWidth={1}
+      />
+      <polyline points={polyline} fill="none" stroke={tone} strokeWidth={1.5} />
+      <circle
+        cx={x(points.length - 1)}
+        cy={y(last.ageSeconds)}
+        r={2.2}
+        fill={tone}
+      />
+    </svg>
+  );
+}
+
+/** Age direction between the first and last numeric sample. */
+function describeSlaTrend(
+  samples: readonly R2SinkHistorySample[],
+): "rising" | "falling" | "steady" | null {
+  const ages = samples
+    .map((sample) => sample.ageSeconds)
+    .filter((age): age is number => age !== null && Number.isFinite(age));
+  if (ages.length < 2) return null;
+  const delta = ages[ages.length - 1]! - ages[0]!;
+  if (delta > 60) return "rising";
+  if (delta < -60) return "falling";
+  return "steady";
 }
 
 interface BlockerGroup {
@@ -142,6 +240,8 @@ function stateBadgeColors(state: R2SinkDetail["state"]): {
 
 export function R2PipelineTabPanel({
   data,
+  history = null,
+  historyError = null,
   loading,
   error,
   onRefresh,
@@ -155,6 +255,25 @@ export function R2PipelineTabPanel({
 
   const daemon = data?.daemon4020;
   const blockerGroups = collectBlockerGroups(data?.sinks ?? []);
+  const historySeriesById = new Map<string, R2SinkHistory>();
+  for (const series of history?.sinks ?? []) {
+    historySeriesById.set(series.id, series);
+  }
+  // Worst breach first; the backend keeps target order for machine consumers.
+  const orderedSinks = [...(data?.sinks ?? [])].sort(
+    (a, b) => (b.sla?.breachSeconds ?? 0) - (a.sla?.breachSeconds ?? 0),
+  );
+  const breachedSinks = orderedSinks.filter(
+    (sink) => (sink.sla?.breachSeconds ?? 0) > 0,
+  );
+  const worstBreachSink = breachedSinks[0] ?? null;
+  const authWarnings: string[] = [];
+  if (daemon?.auth?.f402 && daemon.auth.f402.status !== "ok") {
+    authWarnings.push(`F402 auth ${daemon.auth.f402.status}`);
+  }
+  if (daemon?.auth?.gslive && daemon.auth.gslive.status !== "ok") {
+    authWarnings.push(`GSLive auth ${daemon.auth.gslive.status}`);
+  }
   const failedBridgeJobs = (automations?.bridgeJobs ?? []).filter((j) => !j.ok);
   const daemonState = resolveDaemon4020State(daemon);
   const daemonBannerColor =
@@ -227,6 +346,23 @@ export function R2PipelineTabPanel({
                 {data.overallStatus.toUpperCase()})
               </span>
             )}
+            {data && breachedSinks.length > 0 && (
+              <span
+                style={{
+                  padding: "2px 8px",
+                  borderRadius: "999px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "#fca5a5",
+                  backgroundColor: "rgba(239, 68, 68, 0.14)",
+                  border: "1px solid #ef4444",
+                }}
+              >
+                ⏱ {breachedSinks.length} Overdue · Worst{" "}
+                {formatAge(worstBreachSink?.sla?.breachSeconds ?? null)}
+                {worstBreachSink ? ` (${worstBreachSink.label})` : ""}
+              </span>
+            )}
             {data && data.dataStaleKeys.length > 0 && (
               <span
                 style={{
@@ -280,6 +416,22 @@ export function R2PipelineTabPanel({
         </div>
       )}
 
+      {historyError && (
+        <div
+          style={{
+            padding: "8px 12px",
+            borderRadius: "8px",
+            border: "1px solid #f59e0b",
+            backgroundColor: "rgba(245, 158, 11, 0.12)",
+            color: "#fcd34d",
+            fontSize: "11px",
+          }}
+        >
+          ⏱ Freshness history unavailable: {historyError} — SLA breach badges
+          below still come from the live probe.
+        </div>
+      )}
+
       {/* :4020 Companion Daemon Health & Quick Links */}
       <div
         style={{
@@ -314,6 +466,23 @@ export function R2PipelineTabPanel({
           {daemon?.reason && daemonState !== "online" && (
             <span style={{ color: "#94a3b8" }}>({daemon.reason})</span>
           )}
+          {authWarnings.map((warning) => (
+            <span
+              key={warning}
+              style={{
+                padding: "1px 7px",
+                borderRadius: "999px",
+                fontSize: "10px",
+                fontWeight: 700,
+                color: "#fca5a5",
+                backgroundColor: "rgba(239, 68, 68, 0.14)",
+                border: "1px solid #ef4444",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {warning}
+            </span>
+          ))}
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <a
@@ -462,8 +631,10 @@ export function R2PipelineTabPanel({
           gap: "16px",
         }}
       >
-        {(data?.sinks ?? []).map((sink) => {
+        {orderedSinks.map((sink) => {
           const badge = stateBadgeColors(sink.state);
+          const series = historySeriesById.get(sink.id);
+          const trend = series ? describeSlaTrend(series.samples) : null;
           return (
             <div
               key={sink.id}
@@ -527,6 +698,23 @@ export function R2PipelineTabPanel({
                       ⚠️ DATA &gt;24H
                     </span>
                   )}
+                  {(sink.sla?.breachSeconds ?? 0) > 0 && (
+                    <span
+                      style={{
+                        padding: "3px 7px",
+                        borderRadius: "999px",
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        color: "#fca5a5",
+                        backgroundColor: "rgba(239, 68, 68, 0.16)",
+                        border: "1px solid #ef4444",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={`Published ${formatAge(sink.sla?.breachSeconds ?? null)} past its ${formatSla(sink.slaSeconds)} SLA`}
+                    >
+                      ⏱ OVERDUE {formatAge(sink.sla?.breachSeconds ?? null)}
+                    </span>
+                  )}
                   <span
                     style={{
                       padding: "3px 8px",
@@ -568,6 +756,9 @@ export function R2PipelineTabPanel({
                   >
                     {formatAge(sink.ageSeconds)}
                   </div>
+                  <div style={{ fontSize: "10px", color: "#64748b" }}>
+                    {slaTimingLine(sink)}
+                  </div>
                 </div>
                 <div>
                   <div style={{ color: "#64748b" }}>Data Window Age (#78)</div>
@@ -592,6 +783,54 @@ export function R2PipelineTabPanel({
                 </div>
               </div>
 
+              {history && series && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                    padding: "8px 10px",
+                    borderRadius: "6px",
+                    backgroundColor: "rgba(15, 23, 42, 0.7)",
+                    border: "1px solid rgba(51, 65, 85, 0.7)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: "6px",
+                      fontSize: "11px",
+                    }}
+                  >
+                    <span style={{ color: "#94a3b8" }}>
+                      Freshness Trend · process-local
+                    </span>
+                    <span style={{ fontWeight: 600, color: "#cbd5e1" }}>
+                      {series.samples.length >= 2
+                        ? `${trend ?? "steady"} · ${series.samples.length} samples`
+                        : series.samples.length === 1
+                          ? "1 sample"
+                          : "no samples yet"}
+                    </span>
+                  </div>
+                  <SlaSparkline
+                    samples={series.samples}
+                    slaSeconds={sink.slaSeconds}
+                  />
+                  <div style={{ fontSize: "10px", color: "#64748b" }}>
+                    dashed line = {formatSla(sink.slaSeconds)} publish SLA
+                    (above it = overdue) · oldest sample{" "}
+                    {history.sampledSince
+                      ? `${history.sampledSince.slice(11, 16)}Z`
+                      : "—"}{" "}
+                    · resets when the dashboard server restarts
+                  </div>
+                </div>
+              )}
+
               {(sink.reason || sink.sha256 || sink.contentLength !== null) && (
                 <div
                   style={{
@@ -606,7 +845,7 @@ export function R2PipelineTabPanel({
                   <span>{sink.reason ?? ""}</span>
                   <span style={{ fontFamily: "monospace" }}>
                     {sink.contentLength !== null
-                      ? formatBytes(sink.contentLength)
+                      ? formatBytesDecimal(sink.contentLength)
                       : ""}
                     {sink.contentLength !== null && sink.sha256 ? " · " : ""}
                     {sink.sha256 ? `sha256:${sink.sha256.slice(0, 12)}` : ""}

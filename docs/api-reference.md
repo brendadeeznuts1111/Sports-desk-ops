@@ -1761,29 +1761,43 @@ Throws a string so the server's error boundary runs; `?trigger_error=non_error` 
 
 ### `GET /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:516-599` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:558-641` · response not captured
 
 **Presigned download URL for one blob**
 
-Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. With `?download=1` the handler returns the object body directly via `new Response(S3File)` (200). Surface: surface.blob-live-bets (tier B).
+Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. With `?download=1` the handler returns the object body directly via `new Response(S3File)` (200). With `?attributes=1` it reads a bounded 64 KiB prefix (`headerBytes`) and returns the stored image's Bun.Image attributes as JSON (200), or 422 when the bytes are not decodable; a presigned URL is never emitted in that branch. Surface: surface.blob-live-bets (tier B).
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getApiV1BlobsKey`
 - **Required capture:** No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.
 
 **Parameters**
 
-| Name       | In    | Required | Type               | Description                                            |
-| ---------- | ----- | -------- | ------------------ | ------------------------------------------------------ |
-| `key`      | path  | yes      | string             | Validated blob key; `..` and leading dots are refused. |
-| `download` | query | no       | string — one of: 1 | Stream the object body (200) instead of redirecting.   |
+| Name         | In    | Required | Type               | Description                                                                                     |
+| ------------ | ----- | -------- | ------------------ | ----------------------------------------------------------------------------------------------- |
+| `key`        | path  | yes      | string             | Validated blob key; `..` and leading dots are refused.                                          |
+| `download`   | query | no       | string — one of: 1 | Stream the object body (200) instead of redirecting.                                            |
+| `attributes` | query | no       | string — one of: 1 | Return Bun.Image width, height, format, bytes and backend as JSON (200) instead of redirecting. |
 
 **Responses**
 
-- **HTTP 200** — Object body streamed from S3File.
+- **HTTP 200** — Object body streamed from S3File, or the image attribute diagnostic when `attributes=1`.
   - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
   - response header `X-Content-Type-Options`: value `nosniff`
   - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
   - content `application/octet-stream`: **authored response schema — no response body was captured**
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `type` (string) — no description
+    - `visibility` (string) — no description
+    - `source` (string) — no description
+    - `format` (string) — no description
+    - `width` (integer) — no description
+    - `height` (integer) — no description
+    - `aspectRatio` (number) — no description
+    - `bytes` (integer) — no description
+    - `backend` (string) — no description
+    - `placeholderBytes` (integer) — no description
+    - `headerBytes` (integer) — no description
+    - `probeBytes` (integer) — no description
 - **HTTP 302** — Redirect to a short-lived presigned URL.
   - response header `location`: declared, no example
 - **HTTP 400** — Invalid blob key.
@@ -1798,6 +1812,12 @@ Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_
   - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
   - content `application/json`: **authored response schema — no response body was captured**
     - `error` (object) — no description
+- **HTTP 422** — Stored blob is not a decodable image.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
 - **HTTP 502** — Presign failed.
   - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
   - response header `X-Content-Type-Options`: value `nosniff`
@@ -1807,11 +1827,11 @@ Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_
 
 ### `PUT /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:516-599` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:558-641` · response not captured
 
 **Bounded image upload, transcoded to WebP**
 
-Bearer-auth PUT accepts image/jpeg|png|webp|avif|heic up to maxUploadBytes (default 5 MiB), rejects oversized bodies with 413 from both Content-Length and a streaming cap, decodes with Bun.Image under maxPixels (413), resizes inside 1280x1280 and encodes deterministic WebP (Bun.Image.backend = "bun"), then stores it. Response carries bytesWritten, bytes, width and height. Surface: surface.blob-live-bets (tier D).
+Bearer-auth PUT accepts image/jpeg|png|webp|avif|heic up to maxUploadBytes (default 5 MiB), rejects oversized bodies with 413 from both Content-Length and a streaming cap, decodes with Bun.Image under maxPixels (413), resizes inside 1280x1280 and encodes deterministic WebP (Bun.Image.backend = "bun"), then stores it. Response carries bytesWritten, bytes, width, height, the ThumbHash placeholder and an `asset` block (format, width, height, bytes, aspectRatio, backend); headers `x-sd-image-width|height|format|bytes|backend` mirror it. Surface: surface.blob-live-bets (tier D).
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `putApiV1BlobsKey`
 - **Required capture:** No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.
@@ -1838,6 +1858,8 @@ No declared fields.
     - `bytes` (integer) — no description
     - `width` (integer) — no description
     - `height` (integer) — no description
+    - `placeholder` (string) — no description
+    - `asset` (object) — no description
 - **HTTP 400** — Invalid blob key.
   - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
   - response header `X-Content-Type-Options`: value `nosniff`
@@ -1877,7 +1899,7 @@ No declared fields.
 
 ### `DELETE /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:600-618` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:730-748` · response not captured
 
 **Delete one stored blob**
 
@@ -1948,7 +1970,7 @@ Frozen v1 live-bets endpoint (sportsdesk_webview_server.ts#GET /api/v1/live-bets
 
 ### `POST /api/v1/live-bets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:456-502` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:498-544` · response not captured
 
 **Publish a live-bets event to subscribers**
 
@@ -2000,7 +2022,7 @@ Bearer-auth POST {channel, event} validates the channel, serializes the event an
 
 ### `POST /api/v1/ws-tickets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:431-455` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:473-497` · response not captured
 
 **Short-lived one-time WebSocket ticket**
 
@@ -2173,7 +2195,7 @@ Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview
 
 ### `GET /ws/live-bets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:619-648` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:749-778` · response not captured
 
 **Live-bets WebSocket upgrade**
 

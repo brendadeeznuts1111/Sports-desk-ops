@@ -1,4 +1,4 @@
-# Bun shape contracts — the 95 shapes this repository calls
+# Bun shape contracts — the 129 shapes this repository calls
 
 The single source of truth is layered, and nothing here restates upstream text: **declarations** come from `bun-types@1.4.4` (the surface the reference site renders), **behaviour** from probes against the local `Bun 1.4.4` binary (`tests/bun_baseline.json`), **property attributes** from the pinned Bun commit `38afee6c84`. When they disagree: declarations win on names and signatures, the Bun source wins on attributes, and the measured binary wins on behaviour.
 
@@ -23,7 +23,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.$
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/compiler/compatibility#unused-built-ins))
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/$)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (9):** `Shell`, `ShellError`, `ShellPromise`, `braces`, `cwd`, `env`, `escape`, `nothrow`, `throws`
 - **Here:** `dsh-plugin/verify-load.mjs`, `bin/bun_surface.ts`
@@ -38,10 +38,26 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.build
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/check#bun-build-1))
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/build)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `packages/contracts/scripts/build.ts`
 - **Evidence:** `test:tests/bun_assets_build_latency.test.ts`, `test:tests/bun_bundle_namespace.test.ts`, `test:tests/bun_bundler_plugin_contract.test.ts`, `test:tests/bun_capabilities.test.ts`
+
+#### Bun.BunFile (type, declared-only)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/BunFile)
+- **Shape:** type-only: declared, no runtime value
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_file_blob_contract.test.ts`, `test:tests/bun_shapes_manifest.test.ts`
+
+#### Bun.embeddedFiles
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/embeddedFiles)
+- **Shape:** value: `object` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_modules_surface.test.ts`
 
 #### Bun.file
 
@@ -71,9 +87,25 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `scripts/bench_bridge3a_workload.ts`, `scripts/bench_bridge3b_workload.ts`
 - **Evidence:** `test:tests/bun_test_patterns.test.ts`, `test:tests/f402_bet_ticker_delta.test.ts`, `test:tests/nsh_frame_evidence.test.ts`, `probe:proc.spawn`
 
+#### Bun.generateHeapSnapshot
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/generateHeapSnapshot)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
+#### Bun.isMainThread
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/isMainThread)
+- **Shape:** value: `boolean` · writable false · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_modules_surface.test.ts`
+
 #### Bun.isStandaloneExecutable
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/compiler/executables#detecting-standalone-mode-at-runtime))
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/isStandaloneExecutable)
 - **Shape:** value: `boolean` · writable false · enumerable true
 - **Here:** `bin/bun_surface.ts`, `scripts/code_mode_binary_reference.ts`
 - **Evidence:** `surface:isStandaloneExecutable`, `test:tests/bun_capabilities.test.ts`
@@ -84,6 +116,23 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `undefined` · writable undefined · enumerable true
 - **Here:** `scripts/graph_feed_poller_daemon.ts`, `services/sportsdesk_webview_server.ts`
 - **Evidence:** `test:tests/bun_capabilities.test.ts`, `probe:proc.shell`
+
+#### Bun.mmap
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/mmap)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_eval_patterns.test.ts`, `test:tests/bun_modules_surface.test.ts`, `test:tests/bun_shapes_manifest.test.ts`
+
+#### Bun.ModuleGraph
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/ModuleGraph)
+- **Shape:** value: `function` · writable false · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (1):** `current`
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
 
 #### Bun.nanoseconds
 
@@ -101,10 +150,36 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.pathToFileURL
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/guides/util/path-to-file-url))
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/pathToFileURL)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/schema_report.ts`, `scripts/capture/shot.ts`
 - **Evidence:** `test:tests/bun_file_response.test.ts`, `test:tests/config_file.test.ts`, `test:tests/sqlite_schema_snapshot.test.ts`, `test:tests/worker_options_contract.test.ts`
+
+#### Bun.peek
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/peek)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (1):** `status`
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
+#### Bun.plugin
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/plugin)
+- **Shape:** value: `function` · writable false · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (1):** `clearAll`
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_modules_surface.test.ts`
+
+#### Bun.resolve
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/resolve)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
 
 #### Bun.resolveSync
 
@@ -141,6 +216,15 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `scripts/gdocs_template_instantiate.ts`, `scripts/dx_workspaces.ts`
 - **Evidence:** `test:lib/wagers_capture_config.test.ts`, `test:tests/ansi_color.test.ts`, `test:tests/audit_bun_glob_scan.test.ts`, `test:tests/audit_fetch_options.test.ts`
 
+#### Bun.stderr
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/stderr)
+- **Shape:** value: `object` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (17):** snapshot in tests/bun_shape_members.json
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_modules_surface.test.ts`, `test:tests/subprocess_deadlock.test.ts`
+
 #### Bun.stdin
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/stdin)
@@ -162,12 +246,29 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `lib/bun_terminal.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:Terminal`, `test:tests/bun_urls.test.ts`, `test:tests/pty_feature_flags.test.ts`, `test:tests/pty_injection.test.ts`
 
+#### Bun.unsafe
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/unsafe)
+- **Shape:** value: `object` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (5):** `arrayBufferToString`, `gcAggressionLevel`, `memoryFootprint`, `mimallocDump`, `setJITPolicy`
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
 #### Bun.which
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/which)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`, `scripts/agent_env_doctor.ts`
 - **Evidence:** `surface:which`, `test:lib/bun_terminal.test.ts`, `test:lib/bun_terminal_blog_programs.test.ts`, `test:lib/f402_agent_graph_dot.test.ts`
+
+#### Bun.Worker (type, declared-only)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/Worker)
+- **Shape:** type-only: declared, no runtime value
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/agent_diagnostics.test.ts`, `test:tests/auth_and_rate_limit.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_manifest.test.ts`
 
 #### Bun.write
 
@@ -221,7 +322,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.sliceAnsi
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/blog/bun-v1.3.11#bun-sliceansi-ansi-grapheme-aware-string-slicing))
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/sliceAnsi)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`
 - **Evidence:** `surface:sliceAnsi`, `test:tests/bun_builtin_replacements.test.ts`
@@ -276,6 +377,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `dsh-plugin/verify-load.mjs`, `lib/alerts.ts`
 - **Evidence:** `test:lib/f402_hierarchy.test.ts`, `test:tests/agent_tree_matcher.test.ts`, `test:tests/alerts.test.ts`, `test:tests/bun_deep_equals.test.ts`
+
+#### Bun.deepMatch
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/deepMatch)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/agent_tree_matcher.test.ts`, `test:tests/bun_modules_surface.test.ts`
 
 #### Bun.Glob
 
@@ -335,7 +444,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable false · enumerable true
 - **Members (2):** `order`, `satisfies`
 - **Here:** `scripts/nsh_desk_cli.ts`, `bin/bun_surface.ts`
-- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_cli_flags.test.ts`, `test:tests/bun_config_policy.test.ts`, `test:tests/bun_test_patterns.test.ts`
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_cli_flags.test.ts`, `test:tests/bun_config_policy.test.ts`, `test:tests/bun_semver_wildcards.test.ts`
 
 #### Bun.TOML
 
@@ -358,7 +467,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `parse`, `stringify`
 - **Here:** `lib/customer_profile.ts`, `lib/bun_xml_golden_ast.ts`
-- **Evidence:** `surface:XML`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_loaders_and_import_attributes.test.ts`, `test:tests/bun_xml_contract.test.ts`
+- **Evidence:** `surface:XML`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_loaders_and_import_attributes.test.ts`, `test:tests/bun_upstream_reference.test.ts`
 
 #### Bun.YAML
 
@@ -397,6 +506,15 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `scripts/wagers_by_state_capture.ts`, `lib/bun_cron.ts`
 - **Evidence:** `test:lib/bun_cron.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_shapes_types.test-d.ts`
 
+#### Bun.redis
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/redis)
+- **Shape:** value: `object` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (212):** snapshot in tests/bun_shape_members.json
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_modules_surface.test.ts`
+
 #### Bun.RedisClient
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/RedisClient)
@@ -406,7 +524,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.s3
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/s3#bun-s3client-bun-s3))
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/s3)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (9):** `delete`, `exists`, `file`, `list`, `presign`, `size`, `stat`, `unlink`, `write`
 - **Here:** `scripts/verify-gslive-tickets.ts`, `src/telemetry/runtime-preflight.ts`
@@ -422,7 +540,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.S3File (type)
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/s3#s3file))
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/S3File)
 - **Shape:** type-only: declared, no runtime value
 - **Here:** `lib/r2_s3_client.ts`, `types/bun-api.d.ts`
 - **Evidence:** `test:tests/bun_runtime_contracts.test.ts`, `test:tests/bun_s3client_contract.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/f402_bet_ticker_sink.test.ts`
@@ -450,14 +568,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.S3Options (type)
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/s3#s3file))
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/S3Options)
 - **Shape:** type-only: declared, no runtime value
 - **Here:** `lib/r2_s3_client.ts`, `types/bun-api.d.ts`
 - **Evidence:** `test:tests/bun_shapes_manifest.test.ts`, `test:tests/r2_s3_client.test.ts`
 
 #### Bun.S3Stats (type)
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/S3Stats)
 - **Shape:** type-only: declared, no runtime value
 - **Here:** `lib/r2_s3_client.ts`, `types/bun-api.d.ts`
 - **Evidence:** `test:tests/bun_shapes_manifest.test.ts`, `test:tests/f402_bet_ticker_sink.test.ts`, `test:tests/gslive_event_log_sink.test.ts`, `test:tests/gslive_weblog_sink.test.ts`
@@ -493,7 +611,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.allocUnsafe
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/lint/rules/eslint/no-buffer-constructor))
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/allocUnsafe)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`, `lib/f402_bet_ticker_jsonl.ts`
 - **Evidence:** `surface:allocUnsafe`, `test:tests/bun_capabilities.test.ts`, `test:tests/jsonl_stream_replay.test.ts`
@@ -509,7 +627,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/concatArrayBuffers)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/jsonl_stream_replay.ts`, `lib/schema_binary.ts`
+- **Here:** `services/blob_and_live_bets_server.ts`, `lib/jsonl_stream_replay.ts`
 - **Evidence:** `test:tests/bun_urls.test.ts`, `probe:crypto.compress`
 
 #### Bun.CryptoHasher
@@ -520,13 +638,29 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `lib/gslive_users_report.ts`, `lib/r2_manifest_cas.ts`
 - **Evidence:** `test:lib/live_provenance.test.ts`, `test:scripts/r2_manifest_cas_promote.test.ts`, `test:tests/bun_runtime_contracts.test.ts`, `test:tests/bun_webview_screenshot.test.ts`
 
+#### Bun.CryptoHashInterface (type, declared-only)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/CryptoHashInterface)
+- **Shape:** type-only: declared, no runtime value
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_surface_cli.test.ts`
+
 #### Bun.CSRF
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/csrf))
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/CSRF)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `generate`, `verify`
 - **Here:** `bin/bun_surface.ts`, `lib/csrf.ts`
 - **Evidence:** `surface:CSRF`, `test:tests/bun_csrf_contract.test.ts`, `test:tests/bun_v144_hardened_surfaces.test.ts`
+
+#### Bun.deflateSync
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/deflateSync)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_compression_contract.test.ts`, `test:tests/bun_modules_surface.test.ts`, `test:tests/bun_v144_hardened_surfaces.test.ts`
 
 #### Bun.gunzipSync
 
@@ -550,6 +684,32 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `lib/manager_fetch.ts`, `lib/f402_figure_date_enricher.ts`
 - **Evidence:** `test:tests/audit_bun_glob_scan.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_runtime_contracts.test.ts`, `test:tests/bun_v144_hardened_surfaces.test.ts`
 
+#### Bun.inflateSync
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/inflateSync)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_compression_contract.test.ts`, `test:tests/bun_modules_surface.test.ts`
+
+#### Bun.MD4
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/MD4)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (2):** `byteLength`, `hash`
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
+#### Bun.MD5
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/MD5)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (2):** `byteLength`, `hash`
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
 #### Bun.password
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/password)
@@ -565,6 +725,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `lib/auth.ts`
 - **Evidence:** `test:lib/agent_account.test.ts`, `test:lib/f402_config_web_reports_customer_admin.test.ts`, `test:lib/f402_customer_admin_list.test.ts`, `test:lib/f402_deleted_wager_list.test.ts`
 
+#### Bun.randomUUIDv5
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/randomUUIDv5)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
 #### Bun.randomUUIDv7
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/randomUUIDv7)
@@ -572,12 +740,90 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `cli/flags.ts`, `lib/audit_run_id.ts`
 - **Evidence:** `test:tests/bun_eval_patterns.test.ts`, `test:tests/bun_surface_cli.test.ts`, `test:tests/bun_test_patterns.test.ts`, `probe:crypto.hash`
 
+#### Bun.readableStreamToArray
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/readableStreamToArray)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
 #### Bun.readableStreamToArrayBuffer
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/guides/streams/to-arraybuffer))
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/readableStreamToArrayBuffer)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`, `bin/image-meta.ts`
 - **Evidence:** `surface:readableStreamToArrayBuffer`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_urls.test.ts`, `test:tests/bun_v140_primitives.test.ts`
+
+#### Bun.readableStreamToFormData
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/readableStreamToFormData)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
+#### Bun.sha
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/sha)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
+#### Bun.SHA1
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/SHA1)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (2):** `byteLength`, `hash`
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
+#### Bun.SHA224
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/SHA224)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (2):** `byteLength`, `hash`
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
+#### Bun.SHA256
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/SHA256)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (2):** `byteLength`, `hash`
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`, `test:tests/bun_runtime_contracts.test.ts`
+
+#### Bun.SHA384
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/SHA384)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (2):** `byteLength`, `hash`
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
+#### Bun.SHA512
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/SHA512)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (2):** `byteLength`, `hash`
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+
+#### Bun.SHA512_256
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/SHA512_256)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Members (2):** `byteLength`, `hash`
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
 
 #### Bun.zstdCompress
 
@@ -591,7 +837,15 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/zstdCompressSync)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/schema_binary.ts`, `lib/docs_render_cache.ts`
-- **Evidence:** `test:tests/bun_compression_contract.test.ts`, `test:tests/gslive_tally_rollup.test.ts`, `probe:crypto.compress`
+- **Evidence:** `test:tests/bun_compression_contract.test.ts`, `test:tests/bun_modules_surface.test.ts`, `test:tests/gslive_tally_rollup.test.ts`, `probe:crypto.compress`
+
+#### Bun.zstdDecompress
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/zstdDecompress)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_modules_surface.test.ts`
 
 #### Bun.zstdDecompressSync
 
@@ -628,6 +882,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `lib/preflight.ts`, `scripts/verify-gslive-tickets.ts`
 - **Evidence:** `test:lib/preflight.test.ts`, `test:tests/audit_bun_glob_scan.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_runtime_contracts.test.ts`
 
+#### Bun.EventSource (type, declared-only)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/EventSource)
+- **Shape:** type-only: declared, no runtime value
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_manifest.test.ts`
+
 #### Bun.fetch
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/fetch)
@@ -645,17 +907,25 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.FetchSession
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/blog/bun-v1.4.3#bun-fetchsession))
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/FetchSession)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `services/sportsdesk_telegram_bot.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:FetchSession`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_types.test-d.ts`, `test:tests/fetch_session_contract.test.ts` · deep dive: [§7.3](./bun_server_runtime_shapes_runbook.md)
 
 #### Bun.FetchSessionInit (type)
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/FetchSessionInit)
 - **Shape:** type-only: declared, no runtime value
 - **Here:** `services/sportsdesk_telegram_bot.ts`
 - **Evidence:** `test:tests/bun_shape_contracts_links.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_shapes_types.test-d.ts`, `test:tests/fetch_session_contract.test.ts` · deep dive: [§7.3](./bun_server_runtime_shapes_runbook.md)
+
+#### Bun.FileSystemRouter
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/FileSystemRouter)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_modules_surface.test.ts`, `test:tests/inspect_ansi_diagnostics.test.ts`
 
 #### Bun.listen
 
@@ -663,6 +933,13 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`
 - **Evidence:** `surface:listen`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_socket_contract.test.ts`, `test:tests/bun_socket_contracts.test.ts` · deep dive: [§8.1](./bun_server_runtime_shapes_runbook.md)
+
+#### Bun.MatchedRoute (type)
+
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/blog/bun-v0.5.5#changelog))
+- **Shape:** type-only: declared, no runtime value
+- **Here:** `lib/inspect_diagnostics.ts`
+- **Evidence:** `test:tests/bun_shapes_manifest.test.ts`, `test:tests/inspect_ansi_diagnostics.test.ts`
 
 #### Bun.serve
 
@@ -692,6 +969,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `bin/bun_surface.ts`
 - **Evidence:** `surface:udpSocket`, `test:tests/bun_capabilities.test.ts` · deep dive: [§8.3](./bun_server_runtime_shapes_runbook.md)
 
+#### Bun.WebSocket (type, declared-only)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/WebSocket)
+- **Shape:** type-only: declared, no runtime value
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/blob_and_live_bets_server.test.ts`, `test:tests/blob_live_bets_trace.test.ts`, `test:tests/bun_141_runtime.test.ts`, `test:tests/bun_capabilities.test.ts`
+
 ## Image and WebView
 
 - `Bun.Image` and `Bun.WebView` are constructors; `metadata()` on a 1×1 PNG reads `{width:1, height:1, format:"png"}` — `image.metadata`. Both have deep contracts in the server shapes runbook.
@@ -701,7 +986,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/Image)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (4):** `backend`, `clipboardChangeCount`, `fromClipboard`, `hasClipboardImage`
-- **Here:** `lib/screenshot_encode.ts`, `lib/logo_image.ts`
+- **Here:** `services/blob_and_live_bets_server.ts`, `lib/screenshot_encode.ts`
 - **Evidence:** `surface:Image`, `test:lib/f402_agent_graph_webp.test.ts`, `test:lib/image_errors.test.ts`, `test:scripts/bun_docs_mcp.test.ts`
 
 #### Bun.WebView

@@ -403,6 +403,16 @@ export interface BetTickerApiResponse {
 
 export type Daemon4020State = "online" | "degraded" | "offline";
 
+/** One auth source as reported by the `:4020` `/health` payload. */
+export interface Daemon4020AuthState {
+  /** Daemon-reported status, e.g. `ok`, `expired`, `error`. */
+  readonly status: string;
+  /** Credential origin (`keychain`, `session-file`, …) when reported. */
+  readonly source: string | null;
+  /** Operator remediation when the source is not ok. */
+  readonly remediation: string | null;
+}
+
 export interface Daemon4020Status {
   /** True when :4020 answered /health (2xx or SportsDesk 503 auth-down). */
   readonly online: boolean;
@@ -414,6 +424,13 @@ export interface Daemon4020Status {
   readonly latencyMs: number | null;
   readonly checkedAt: string;
   readonly reason?: string | undefined;
+  /** Auth sources parsed from /health; absent when the probe could not read them. */
+  readonly auth?:
+    | {
+        readonly f402: Daemon4020AuthState | null;
+        readonly gslive: Daemon4020AuthState | null;
+      }
+    | undefined;
 }
 
 /** Resolve unified daemon reachability state from structured status fields or legacy flags. */
@@ -455,6 +472,24 @@ export interface R2SinkDiagnostic {
   readonly suggestedCommand: string;
 }
 
+/**
+ * Publish-SLA arithmetic for one sink, derived from `ageSeconds` (never invented).
+ * `breachSeconds` is 0 while the sink is inside its SLA; `utilizationPct` is
+ * `ageSeconds / slaSeconds * 100`, so 100% is exactly at the SLA and 21000% is a
+ * long-dead publish. Both are null when the publish age is unknown.
+ */
+export interface R2SinkSlaStatus {
+  readonly breachSeconds: number | null;
+  readonly utilizationPct: number | null;
+  /**
+   * The exact moment the publish age exceeded the SLA (`Last-Modified + SLA`).
+   * Null when the sink is fresh or the publish age is unknown.
+   */
+  readonly breachStartedAt: string | null;
+  /** Seconds until the SLA is exceeded while fresh; null when breached or unknown. */
+  readonly remainingSeconds: number | null;
+}
+
 export interface R2SinkDetail {
   readonly id: string;
   readonly key: string;
@@ -476,6 +511,8 @@ export interface R2SinkDetail {
   readonly remediationCommand: string;
   readonly bridgeJobIds?: readonly string[] | undefined;
   readonly diagnostic?: R2SinkDiagnostic | undefined;
+  /** Derived publish-SLA arithmetic. Absent only on payloads built before this field existed. */
+  readonly sla?: R2SinkSlaStatus | undefined;
   readonly metrics: readonly R2SinkRollupMetric[];
 }
 
@@ -545,6 +582,81 @@ export interface R2PipelineApiResponse {
   readonly sinks: readonly R2SinkDetail[];
   readonly daemon4020: Daemon4020Status;
   readonly automations?: AutomationsSnapshot | undefined;
+}
+
+/** One recorded freshness observation for a sink. */
+export interface R2SinkHistorySample {
+  /** When the probe that produced this sample ran (ISO). */
+  readonly at: string;
+  readonly ageSeconds: number | null;
+  readonly state: R2SinkState;
+  readonly dataAgeSeconds: number | null;
+}
+
+export interface R2SinkHistory {
+  readonly id: string;
+  readonly label: string;
+  readonly slaSeconds: number;
+  /** Samples retained for this sink; `samples` is the newest tail of them. */
+  readonly sampleCount: number;
+  /** Oldest → newest. */
+  readonly samples: readonly R2SinkHistorySample[];
+}
+
+/**
+ * Freshness history for the R2 publish sinks.
+ *
+ * The samples live in the serving process's memory, so the window starts when the
+ * dashboard server started and resets on restart. `source` states that provenance
+ * so an empty series reads as "not sampled yet", never as "the sink was fine".
+ */
+export interface R2PipelineHistoryApiResponse {
+  readonly schemaVersion: 1;
+  readonly observedAt: string;
+  readonly source: "process-memory";
+  readonly sampledSince: string | null;
+  /** Minimum seconds between two samples of the same sink (state changes bypass it). */
+  readonly minSampleIntervalSeconds: number;
+  readonly sinks: readonly R2SinkHistory[];
+}
+
+/** Container channel a provenance value was read from. */
+export type ImageProvenanceChannel = "png-text" | "png-xmp" | "webp-xmp";
+
+/** The three `sportsdesk:*` provenance keys, normalized. */
+export interface ImageProvenanceFields {
+  readonly streamId: string | null;
+  /** Parsed as a uint32; null when absent or out of range. */
+  readonly genU32: number | null;
+  /** Lowercase hex without a `0x` prefix; null when absent or malformed. */
+  readonly merkleRoot: string | null;
+}
+
+/**
+ * Header-only provenance of one WebP/PNG artifact. `available` reports whether
+ * `Bun.Image` could read the container header, not whether the metadata is complete.
+ */
+export interface ImageProvenanceReport {
+  readonly available: boolean;
+  readonly format: string | null;
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly byteLength: number;
+  /** Channels that actually contributed at least one `sportsdesk:*` value. */
+  readonly channels: readonly ImageProvenanceChannel[];
+  readonly fields: ImageProvenanceFields;
+  /** Raw values as carried, keyed by `sportsdesk:<name>`. */
+  readonly raw: Readonly<Record<string, string>>;
+  readonly issues: readonly string[];
+  readonly errorCode?: string | undefined;
+}
+
+export interface R2ImageProvenanceApiResponse {
+  readonly schemaVersion: 1;
+  readonly key: string;
+  readonly publicUrl: string;
+  readonly fetchedBytes: number;
+  readonly report: ImageProvenanceReport;
 }
 
 export interface AgentDetailApiResponse {

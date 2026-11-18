@@ -183,6 +183,67 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
       expect(daemonRes.status).toBe(200);
     });
 
+    it("serves GET /api/r2/pipeline/history as a process-local series", async () => {
+      const res = await fetch(
+        `${baseUrl}/api/r2/pipeline/history?refresh=1&limit=5`,
+      );
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as {
+        schemaVersion: number;
+        source: string;
+        minSampleIntervalSeconds: number;
+        sampledSince: string | null;
+        sinks: Array<{
+          id: string;
+          sampleCount: number;
+          samples: Array<{ at: string; state: string }>;
+        }>;
+      };
+      expect(json.schemaVersion).toBe(1);
+      expect(json.source).toBe("process-memory");
+      expect(json.minSampleIntervalSeconds).toBe(60);
+      expect(json.sinks.map((sink) => sink.id)).toEqual([
+        "f402-bet-ticker",
+        "gslive-tally",
+        "f402-weblog",
+        "wagers-by-state",
+      ]);
+      for (const sink of json.sinks) {
+        expect(sink.sampleCount).toBeGreaterThanOrEqual(1);
+        expect(sink.samples.length).toBeGreaterThanOrEqual(1);
+        expect(sink.samples.at(-1)?.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      }
+      expect(json.sampledSince).not.toBeNull();
+    });
+
+    it("serves GET /api/r2/image-provenance for a public WebP over R2", async () => {
+      const res = await fetch(
+        `${baseUrl}/api/r2/image-provenance?key=assets/ARCH-Guide.webp`,
+      );
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as {
+        key: string;
+        publicUrl: string;
+        fetchedBytes: number;
+        report: {
+          available: boolean;
+          format: string;
+          fields: { streamId: string | null };
+          issues: readonly string[];
+        };
+      };
+      expect(json.key).toBe("assets/ARCH-Guide.webp");
+      expect(json.publicUrl).toBe(
+        "https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/assets/ARCH-Guide.webp",
+      );
+      expect(json.fetchedBytes).toBeGreaterThan(0);
+      expect(json.report.available).toBe(true);
+      expect(json.report.format).toBe("webp");
+      // The shipped WebP carries no XMP chunk: missing provenance is reported, never invented.
+      expect(json.report.fields.streamId).toBeNull();
+      expect(json.report.issues).toContain("no_sportsdesk_metadata");
+    });
+
     it("serves GET /api/agent/:id JSON, GET /agent/:id HTML, and 302 redirect on GET /customer/:id", async () => {
       const [apiRes, htmlRes, custRes] = await Promise.all([
         fetch(`${baseUrl}/api/agent/FAKEMONEY`),

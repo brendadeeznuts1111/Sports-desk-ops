@@ -1843,7 +1843,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/blob_and_live_bets_server.ts:516-599",
+          "source": "services/blob_and_live_bets_server.ts:558-641",
           "kind": "implementation",
           "note": "Bearer-auth presigned redirect; key validated before presigning; 400/401/502 paths implemented."
         }
@@ -1860,7 +1860,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/blob_and_live_bets_server.ts:516-599",
+          "source": "services/blob_and_live_bets_server.ts:558-641",
           "kind": "implementation",
           "note": "Bearer-auth bounded upload: size caps, image allowlist, Bun.Image maxPixels, no upscaling, deterministic WebP, width/height metadata."
         }
@@ -1877,7 +1877,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/blob_and_live_bets_server.ts:600-618",
+          "source": "services/blob_and_live_bets_server.ts:730-748",
           "kind": "implementation",
           "note": "Bearer-auth DELETE checks existence (404 when absent), removes the stored object, and returns 204; delete failures are 502."
         }
@@ -1894,7 +1894,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/blob_and_live_bets_server.ts:431-455",
+          "source": "services/blob_and_live_bets_server.ts:473-497",
           "kind": "implementation",
           "note": "Bearer-auth ticket issuance: HMAC {exp, nonce}, pending allowlist cap 4096, 429 when full."
         }
@@ -1911,7 +1911,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/blob_and_live_bets_server.ts:456-502",
+          "source": "services/blob_and_live_bets_server.ts:498-544",
           "kind": "implementation",
           "note": "Bearer-auth publish: bounded body, channel regex, JSON serialization, Server.publish subscriber count."
         }
@@ -1928,7 +1928,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/blob_and_live_bets_server.ts:619-648",
+          "source": "services/blob_and_live_bets_server.ts:749-778",
           "kind": "implementation",
           "note": "Upgrade requires an issued unused ticket via query or Sec-WebSocket-Protocol, echoes live-bets.v1, bounded JSON messages and channel validation."
         }
@@ -2472,23 +2472,23 @@
     }
   ],
   "citationAnchors": {
-    "services/blob_and_live_bets_server.ts:431-455": "\"/api/v1/ws-tickets\": {",
-    "services/blob_and_live_bets_server.ts:456-502": "\"/api/v1/live-bets\": {",
-    "services/blob_and_live_bets_server.ts:516-599": "\"/api/v1/blobs/:key\": {",
-    "services/blob_and_live_bets_server.ts:600-618": "DELETE: async (request: BunRequest<\"/api/v1/blobs/:key\">) => {",
-    "services/blob_and_live_bets_server.ts:619-648": "\"/ws/live-bets\": (request: Request",
-    "services/blob_and_live_bets_server.ts:431-455": "\"/api/v1/ws-tickets\": {",
-    "services/blob_and_live_bets_server.ts:456-502": "\"/api/v1/live-bets\": {",
-    "services/blob_and_live_bets_server.ts:516-599": "\"/api/v1/blobs/:key\": {",
-    "services/blob_and_live_bets_server.ts:619-648": "\"/ws/live-bets\": (request: Request",
-    "services/blob_and_live_bets_server.ts:431-455": "\"/api/v1/ws-tickets\": {",
-    "services/blob_and_live_bets_server.ts:456-502": "\"/api/v1/live-bets\": {",
-    "services/blob_and_live_bets_server.ts:516-599": "\"/api/v1/blobs/:key\": {",
-    "services/blob_and_live_bets_server.ts:619-648": "\"/ws/live-bets\": (request: Request",
-    "services/blob_and_live_bets_server.ts:431-455": "\"/api/v1/ws-tickets\": {",
-    "services/blob_and_live_bets_server.ts:456-502": "\"/api/v1/live-bets\": {",
-    "services/blob_and_live_bets_server.ts:516-599": "\"/api/v1/blobs/:key\": {",
-    "services/blob_and_live_bets_server.ts:619-648": "\"/ws/live-bets\": (request: Request",
+    "services/blob_and_live_bets_server.ts:473-497": "\"/api/v1/ws-tickets\": {",
+    "services/blob_and_live_bets_server.ts:498-544": "\"/api/v1/live-bets\": {",
+    "services/blob_and_live_bets_server.ts:558-641": "\"/api/v1/blobs/:key\": {",
+    "services/blob_and_live_bets_server.ts:730-748": "DELETE: async (request: BunRequest<\"/api/v1/blobs/:key\">) => {",
+    "services/blob_and_live_bets_server.ts:749-778": "\"/ws/live-bets\": (request: Request",
+    "services/blob_and_live_bets_server.ts:473-497": "\"/api/v1/ws-tickets\": {",
+    "services/blob_and_live_bets_server.ts:498-544": "\"/api/v1/live-bets\": {",
+    "services/blob_and_live_bets_server.ts:558-641": "\"/api/v1/blobs/:key\": {",
+    "services/blob_and_live_bets_server.ts:749-778": "\"/ws/live-bets\": (request: Request",
+    "services/blob_and_live_bets_server.ts:473-497": "\"/api/v1/ws-tickets\": {",
+    "services/blob_and_live_bets_server.ts:498-544": "\"/api/v1/live-bets\": {",
+    "services/blob_and_live_bets_server.ts:558-641": "\"/api/v1/blobs/:key\": {",
+    "services/blob_and_live_bets_server.ts:749-778": "\"/ws/live-bets\": (request: Request",
+    "services/blob_and_live_bets_server.ts:473-497": "\"/api/v1/ws-tickets\": {",
+    "services/blob_and_live_bets_server.ts:498-544": "\"/api/v1/live-bets\": {",
+    "services/blob_and_live_bets_server.ts:558-641": "\"/api/v1/blobs/:key\": {",
+    "services/blob_and_live_bets_server.ts:749-778": "\"/ws/live-bets\": (request: Request",
     "services/sportsdesk_webview_server.ts:3239-3248": "if (pathname === \"/api/agents/search\") {",
     "services/sportsdesk_telegram_bot.ts:80-84": "export const REPORT_TYPES = [",
     "catalog/fantasy402_sport_catalog.ts:133-140": "export type CatalogDigestSet = {",

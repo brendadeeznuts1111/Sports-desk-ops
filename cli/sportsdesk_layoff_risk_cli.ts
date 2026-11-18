@@ -20,6 +20,8 @@ import { resolve } from "node:path";
 function printHelp(): void {
   console.log(`Cross-Market Parlay Matching & Layoff Risk Surveillance CLI (CFB • NFL • NBA)
 
+Usage: sportsdesk-layoff-risk <scan|seed|daemon> [options]
+
 Commands:
   scan       Run intersection query across CFB, NFL, and NBA and emit layoff risk alerts
   seed       Seed database with full CFB, NFL, and NBA multi-period scenario data

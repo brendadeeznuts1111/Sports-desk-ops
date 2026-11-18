@@ -17,6 +17,13 @@ import { z } from "zod";
 import type { BunRequest } from "bun";
 
 import { imageErrorCode } from "../lib/image_errors.ts";
+import { readImageHeaderMetadata } from "../lib/image_header.ts";
+import { MIME_TYPE_BY_FORMAT } from "../lib/screenshot_encode.ts";
+import {
+  BunImageAssetDiagnostic,
+  inspectBunImageAsset,
+} from "../lib/inspect_diagnostics.ts";
+import type { InspectVisibility } from "../lib/inspect_redactor.ts";
 import {
   isS3Error,
   R2S3Client,
@@ -127,6 +134,8 @@ export interface BlobLiveBetsOptions {
   readonly presignTtlSec?: number;
   /** Injectable clock (seconds) for ticket tests. */
   readonly nowSec?: () => number;
+  /** Visibility tier applied by `GET ?attributes=1` and the PUT attribute block. Default RISK_MANAGER. */
+  readonly diagnosticVisibility?: InspectVisibility;
 }
 
 export interface SocketData {
@@ -140,13 +149,7 @@ const MAX_WS_MESSAGE_BYTES = 16 * 1024;
 const TICKET_TTL_SEC = 60;
 const MAX_ACTIVE_TICKETS = 4096;
 const PRESIGN_TTL_SEC = 3600;
-const IMAGE_CONTENT_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/avif",
-  "image/heic",
-]);
+const IMAGE_CONTENT_TYPES = new Set<string>(Object.values(MIME_TYPE_BY_FORMAT));
 const KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const CHANNEL_PATTERN = /^[a-z0-9-]{1,32}$/;
 
@@ -169,6 +172,45 @@ class ImageRejectedError extends Error {
     super(code, options);
     this.name = "ImageRejectedError";
   }
+}
+
+/** Prefix budget for the attribute probe; WebP needs 32 bytes, so this is generous. */
+export const HEADER_PROBE_BYTES = 64 * 1024;
+
+/**
+ * Reads at most `limit` bytes from a response body and cancels the rest, so `?attributes=1` does
+ * not stream a whole object just to read its dimensions.
+ */
+export async function readResponsePrefix(
+  response: Response,
+  limit: number,
+): Promise<Uint8Array> {
+  const body = response.body;
+  if (body === null) return new Uint8Array(0);
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < limit) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value === undefined || value.byteLength === 0) continue;
+      const take =
+        value.byteLength > limit - total
+          ? value.subarray(0, limit - total)
+          : value;
+      chunks.push(take);
+      total += take.byteLength;
+    }
+  } finally {
+    try {
+      await reader.cancel();
+    } catch {
+      // The stream may already be closed; there is nothing left to release.
+    }
+    reader.releaseLock();
+  }
+  return Bun.concatArrayBuffers(chunks, total, true);
 }
 
 function jsonError(status: number, code: string, message: string): Response {
@@ -522,6 +564,70 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
           if (!validKey(key)) {
             return jsonError(400, "invalid_key", "Invalid blob key");
           }
+          if (new URL(request.url).searchParams.get("attributes") === "1") {
+            const visibility = options.diagnosticVisibility ?? "RISK_MANAGER";
+            try {
+              if (!(await options.blobs.exists(key))) {
+                return jsonError(404, "not_found", "Blob not found");
+              }
+              const stat = await options.blobs.stat(key);
+              if (stat.size > maxUploadBytes) {
+                return jsonError(
+                  413,
+                  "asset_too_large",
+                  `Stored asset exceeds ${maxUploadBytes} bytes`,
+                );
+              }
+              const stored = await options.blobs.getResponse(key);
+              const prefix = await readResponsePrefix(
+                stored,
+                HEADER_PROBE_BYTES,
+              );
+              const header = await readImageHeaderMetadata(prefix);
+              let asset: BunImageAssetDiagnostic;
+              if (header.ok) {
+                asset = new BunImageAssetDiagnostic({
+                  source: `blobs/${key}.webp`,
+                  width: header.attributes.width,
+                  height: header.attributes.height,
+                  format: header.attributes.format,
+                  bytes: stat.size,
+                  backend: Bun.Image.backend,
+                  visibility,
+                });
+              } else if (header.code === "ERR_IMAGE_HEADER_TRUNCATED") {
+                // Only formats that need pixels-adjacent headers (JPEG with deep EXIF) fall back.
+                const full = await options.blobs.getResponse(key);
+                const bytes = new Uint8Array(await full.arrayBuffer());
+                try {
+                  asset = await inspectBunImageAsset(bytes, {
+                    displaySource: `blobs/${key}.webp`,
+                    bytes: bytes.byteLength,
+                    visibility,
+                  });
+                } catch (error) {
+                  return jsonError(
+                    422,
+                    imageErrorCode(error) ?? "ERR_IMAGE_DECODE_FAILED",
+                    "Stored blob is not a decodable image",
+                  );
+                }
+              } else {
+                return jsonError(
+                  422,
+                  header.code,
+                  "Stored blob is not a decodable image",
+                );
+              }
+              return Response.json({
+                ...asset.toJSON(),
+                headerBytes: prefix.byteLength,
+                probeBytes: HEADER_PROBE_BYTES,
+              });
+            } catch (error) {
+              return storeFailure(error, "read_failed");
+            }
+          }
           if (new URL(request.url).searchParams.get("download") === "1") {
             try {
               if (!(await options.blobs.exists(key))) {
@@ -585,14 +691,38 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
               options.blobs.putImage === undefined
                 ? await options.blobs.put(key, transcoded.bytes, "image/webp")
                 : await options.blobs.putImage(key, transcoded.pipeline);
-            return Response.json({
-              key: `blobs/${key}.webp`,
-              bytesWritten,
-              bytes: transcoded.bytes.byteLength,
-              width: transcoded.width,
-              height: transcoded.height,
-              placeholder: transcoded.placeholder,
-            });
+            return Response.json(
+              {
+                key: `blobs/${key}.webp`,
+                bytesWritten,
+                bytes: transcoded.bytes.byteLength,
+                width: transcoded.width,
+                height: transcoded.height,
+                placeholder: transcoded.placeholder,
+                asset: {
+                  format: "webp",
+                  width: transcoded.width,
+                  height: transcoded.height,
+                  bytes: transcoded.bytes.byteLength,
+                  aspectRatio:
+                    transcoded.height === 0
+                      ? 0
+                      : Number(
+                          (transcoded.width / transcoded.height).toFixed(4),
+                        ),
+                  backend: Bun.Image.backend,
+                },
+              },
+              {
+                headers: {
+                  "x-sd-image-width": String(transcoded.width),
+                  "x-sd-image-height": String(transcoded.height),
+                  "x-sd-image-format": "webp",
+                  "x-sd-image-bytes": String(transcoded.bytes.byteLength),
+                  "x-sd-image-backend": Bun.Image.backend,
+                },
+              },
+            );
           } catch (error) {
             return storeFailure(error, "store_failed");
           }

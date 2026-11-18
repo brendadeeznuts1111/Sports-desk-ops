@@ -7,11 +7,16 @@ import type {
   AutomationsSnapshot,
   BetTickerBridge3aSnapshot,
   BridgeJobStatusSummary,
+  Daemon4020AuthState,
   Daemon4020Status,
   R2PipelineApiResponse,
+  R2PipelineHistoryApiResponse,
   R2SinkDetail,
   R2SinkDiagnostic,
+  R2SinkHistory,
+  R2SinkHistorySample,
   R2SinkRollupMetric,
+  R2SinkSlaStatus,
   R2SinkState,
 } from "@sportsdesk-ops/contracts";
 
@@ -19,6 +24,45 @@ export const DEFAULT_R2_PUBLIC_BASE =
   "https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev";
 export const DEFAULT_DAEMON_4020_ORIGIN = "http://127.0.0.1:4020";
 export const R2_DATA_STALE_SECONDS = 86_400;
+
+/** Default per-sink sample ring served by `/api/r2/pipeline/history`. */
+export const R2_HISTORY_DEFAULT_LIMIT = 60;
+/** Default minimum gap between two history samples of the same sink. */
+export const R2_HISTORY_DEFAULT_MIN_INTERVAL_SECONDS = 60;
+
+/**
+ * Publish-SLA arithmetic. `ageSeconds === null` means the probe could not read a
+ * `Last-Modified` header, so every field is null rather than a fabricated zero.
+ * `breachStartedAt` anchors on the publish timestamp, not on the rounded age.
+ */
+export function computeR2SinkSlaStatus(
+  ageSeconds: number | null,
+  slaSeconds: number,
+  lastModifiedMs: number | null = null,
+): R2SinkSlaStatus {
+  if (ageSeconds === null || !Number.isFinite(ageSeconds)) {
+    return {
+      breachSeconds: null,
+      utilizationPct: null,
+      breachStartedAt: null,
+      remainingSeconds: null,
+    };
+  }
+  const sla = slaSeconds > 0 ? slaSeconds : 1;
+  const breachSeconds = Math.max(0, Math.round(ageSeconds - sla));
+  const breached = breachSeconds > 0;
+  return {
+    breachSeconds,
+    utilizationPct: Math.round((ageSeconds / sla) * 100),
+    breachStartedAt:
+      breached && lastModifiedMs !== null && Number.isFinite(lastModifiedMs)
+        ? new Date(lastModifiedMs + sla * 1000).toISOString()
+        : null,
+    remainingSeconds: breached
+      ? null
+      : Math.max(0, Math.round(sla - ageSeconds)),
+  };
+}
 
 export interface R2TargetSpec {
   readonly id: string;
@@ -398,6 +442,21 @@ export function buildBridge3aSnapshotFromBody(
 interface Daemon4020HealthSummary {
   readonly operationalStatus?: "ok" | "degraded" | "down";
   readonly reasonSummary?: string;
+  readonly auth?: {
+    readonly f402: Daemon4020AuthState | null;
+    readonly gslive: Daemon4020AuthState | null;
+  };
+}
+
+/** Parse one `/health` auth source; unknown shapes degrade to null, never a fake "ok". */
+function parseDaemonAuthState(value: unknown): Daemon4020AuthState | null {
+  if (!isRecord(value)) return null;
+  return {
+    status: typeof value.status === "string" ? value.status : "unknown",
+    source: typeof value.source === "string" ? value.source : null,
+    remediation:
+      typeof value.remediation === "string" ? value.remediation : null,
+  };
 }
 
 async function readDaemon4020HealthSummary(
@@ -411,6 +470,8 @@ async function readDaemon4020HealthSummary(
     const body = (await res.json()) as {
       operationalStatus?: unknown;
       degradedReasons?: unknown;
+      checks?: unknown;
+      sources?: unknown;
     } | null;
     if (!body || typeof body !== "object") return {};
     const op =
@@ -430,9 +491,25 @@ async function readDaemon4020HealthSummary(
       : [];
     const reasonSummary =
       reasons.length > 0 ? reasons.slice(0, 2).join("; ") : undefined;
+    const checks = isRecord(body.checks) ? body.checks : null;
+    const sources = isRecord(body.sources) ? body.sources : null;
+    const authRaw =
+      checks !== null && isRecord(checks.auth)
+        ? checks.auth
+        : sources !== null && isRecord(sources.auth)
+          ? sources.auth
+          : null;
+    const auth =
+      authRaw === null
+        ? undefined
+        : {
+            f402: parseDaemonAuthState(authRaw.f402),
+            gslive: parseDaemonAuthState(authRaw.gslive),
+          };
     return {
       ...(op !== undefined ? { operationalStatus: op } : {}),
       ...(reasonSummary !== undefined ? { reasonSummary } : {}),
+      ...(auth !== undefined ? { auth } : {}),
     };
   } catch {
     return {};
@@ -472,6 +549,7 @@ export async function probeDaemon4020Status(
         ...(health.operationalStatus !== undefined
           ? { operationalStatus: health.operationalStatus }
           : {}),
+        ...(health.auth !== undefined ? { auth: health.auth } : {}),
         url,
         status: res.status,
         latencyMs,
@@ -490,6 +568,7 @@ export async function probeDaemon4020Status(
         online: true,
         state: "degraded",
         operationalStatus: health.operationalStatus ?? "down",
+        ...(health.auth !== undefined ? { auth: health.auth } : {}),
         url,
         status: res.status,
         latencyMs,
@@ -527,6 +606,10 @@ export interface R2PipelineServiceOptions {
   readonly cacheTtlMs?: number | undefined;
   readonly fetchImpl?: R2Fetcher | undefined;
   readonly now?: (() => Date) | undefined;
+  /** Samples retained per sink for the history endpoint. */
+  readonly historyLimit?: number | undefined;
+  /** Minimum seconds between two samples of the same sink (state changes bypass it). */
+  readonly historyMinIntervalSeconds?: number | undefined;
   readonly getAutomationsSnapshot?:
     (() => Promise<AutomationsSnapshot> | AutomationsSnapshot) | undefined;
 }
@@ -632,6 +715,18 @@ function diagnoseR2Sink(
       suggestedCommand: sink.remediationCommand,
     };
   }
+  if (sink.stale && sink.dataStale) {
+    // Republishing the cached rollup would move the publish timestamp without
+    // changing the data, so name the input as the blocker instead of "SLA lag".
+    return {
+      blockerClass: "upstream_capture_stale",
+      headline: "Upstream Capture Stale · Republish Would Replay Old Data",
+      detail:
+        "latest.json is past its publish SLA and the covered data window is >24h old. Refresh the capture corpus first; republishing the cached rollup would only move the publish timestamp.",
+      failedJobIds: [],
+      suggestedCommand: sink.remediationCommand,
+    };
+  }
   if (sink.stale) {
     return {
       blockerClass: "sla_lag",
@@ -654,10 +749,51 @@ export function createR2PipelineService(
   const getNow = options.now ?? (() => new Date());
   const fetcher: R2Fetcher =
     options.fetchImpl ?? ((u, init) => defaultFetchWithTimeout(u, init, 5000));
+  const historyLimit = Math.max(
+    2,
+    Math.floor(options.historyLimit ?? R2_HISTORY_DEFAULT_LIMIT),
+  );
+  const historyMinIntervalMs = Math.max(
+    0,
+    Math.floor(
+      (options.historyMinIntervalSeconds ??
+        R2_HISTORY_DEFAULT_MIN_INTERVAL_SECONDS) * 1000,
+    ),
+  );
+  const historyBySink = new Map<
+    string,
+    { samples: R2SinkHistorySample[]; lastSampleMs: number }
+  >();
 
   let cachedResponse: R2PipelineApiResponse | null = null;
   let cachedBridge3a: BetTickerBridge3aSnapshot | null = null;
   let cachedAtMs = 0;
+
+  /**
+   * Append one sample per probe, throttled to `historyMinIntervalMs` except when
+   * the sink changes state (a fresh→stale transition is the sample that matters).
+   */
+  function recordHistorySample(
+    sink: R2SinkDetail,
+    nowDate: Date,
+    nowMs: number,
+  ): void {
+    const entry = historyBySink.get(sink.id);
+    const last = entry?.samples.at(-1);
+    const stateChanged = last !== undefined && last.state !== sink.state;
+    const due =
+      entry === undefined || nowMs - entry.lastSampleMs >= historyMinIntervalMs;
+    if (!stateChanged && !due) return;
+    const samples = entry?.samples ?? [];
+    samples.push({
+      at: nowDate.toISOString(),
+      ageSeconds: sink.ageSeconds,
+      state: sink.state,
+      dataAgeSeconds: sink.dataAgeSeconds,
+    });
+    while (samples.length > historyLimit) samples.shift();
+    historyBySink.set(sink.id, { samples, lastSampleMs: nowMs });
+  }
 
   async function probeSingleSink(
     target: R2TargetSpec,
@@ -773,6 +909,11 @@ export function createR2PipelineService(
         reason,
         remediationCommand: target.remediationCommand,
         bridgeJobIds: target.bridgeJobIds,
+        sla: computeR2SinkSlaStatus(
+          ageSeconds,
+          target.slaSeconds,
+          validLm ? lastModifiedMs : null,
+        ),
         metrics,
       },
       rawLatestBody: latestBody,
@@ -815,6 +956,7 @@ export function createR2PipelineService(
       );
       return diagnostic === undefined ? r.sink : { ...r.sink, diagnostic };
     });
+    for (const sink of sinks) recordHistorySample(sink, nowDate, nowMs);
     const freshCount = sinks.filter((s) => s.state === "fresh").length;
     const staleKeys = sinks.filter((s) => s.stale).map((s) => s.key);
     const dataStaleKeys = sinks.filter((s) => s.dataStale).map((s) => s.key);
@@ -864,6 +1006,41 @@ export function createR2PipelineService(
     return response;
   }
 
+  async function getHistory(
+    opts: {
+      readonly refresh?: boolean | undefined;
+      readonly limit?: number | undefined;
+    } = {},
+  ): Promise<R2PipelineHistoryApiResponse> {
+    if (opts.refresh) await probeAll({ refresh: true });
+    const requested = Math.floor(opts.limit ?? historyLimit);
+    const limit = Number.isFinite(requested)
+      ? Math.min(Math.max(requested, 1), historyLimit)
+      : historyLimit;
+    const sinks: R2SinkHistory[] = R2_PIPELINE_TARGETS.map((target) => {
+      const samples = historyBySink.get(target.id)?.samples ?? [];
+      return {
+        id: target.id,
+        label: target.label,
+        slaSeconds: target.slaSeconds,
+        sampleCount: samples.length,
+        samples: samples.slice(-limit),
+      };
+    });
+    const firstAt = sinks
+      .map((sink) => sink.samples[0]?.at)
+      .filter((at): at is string => at !== undefined)
+      .sort()[0];
+    return {
+      schemaVersion: 1,
+      observedAt: getNow().toISOString(),
+      source: "process-memory",
+      sampledSince: firstAt ?? null,
+      minSampleIntervalSeconds: Math.round(historyMinIntervalMs / 1000),
+      sinks,
+    };
+  }
+
   async function getLatestBetTickerBridge3a(
     opts: { readonly refresh?: boolean | undefined } = {},
   ): Promise<BetTickerBridge3aSnapshot> {
@@ -895,6 +1072,7 @@ export function createR2PipelineService(
 
   return {
     probeAll,
+    getHistory,
     getLatestBetTickerBridge3a,
     probeDaemon: () =>
       probeDaemon4020Status({

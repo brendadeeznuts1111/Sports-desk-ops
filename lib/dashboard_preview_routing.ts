@@ -16,6 +16,8 @@ const FEED_PATHS: ReadonlySet<string> = new Set([
   "/api/build-matrix",
   "/api/dns",
   "/api/r2/pipeline",
+  "/api/r2/pipeline/history",
+  "/api/r2/image-provenance",
   "/api/shadow-pricing",
   "/api/shift/summary",
   "/api/terminal/exec",

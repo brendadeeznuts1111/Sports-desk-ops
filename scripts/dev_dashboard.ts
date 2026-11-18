@@ -20,6 +20,7 @@ import {
   createR2PipelineService,
   DashboardHealthTracker,
   DashboardMarkdownCache,
+  DEFAULT_R2_PUBLIC_BASE,
   isDashboardAuthRequired,
 } from "@sportsdesk-ops/backend";
 import {
@@ -38,6 +39,10 @@ import {
   retryAlert,
 } from "../lib/alerts.ts";
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
+import {
+  createBunImageAssetSnapshotSource,
+  type BunImageAssetSnapshotSource,
+} from "../lib/bun_image_asset_snapshot.ts";
 import { buildAutomationsSnapshot } from "../lib/automations_status.ts";
 import {
   benchmarkResolverLatency,
@@ -55,6 +60,7 @@ import {
   requireSession,
 } from "../lib/http_auth.ts";
 import { encodedResponse } from "../lib/http_compression.ts";
+import { readImageProvenance } from "../lib/image_provenance.ts";
 import { parseShortDesc } from "../lib/live_wagers.ts";
 import { isSentinelTickerWriter } from "@sportsdesk-ops/backend";
 import { SLAB_SERVER } from "../lib/slab_config.ts";
@@ -608,6 +614,34 @@ export function startDashboardServer(
       getWagersTabPolicy: () => loadWagersTabPolicyStamp(),
       getBetTickerPayload: (filters) => betTickerService.getPayload(filters),
       getR2PipelinePayload: (opts) => r2PipelineService.probeAll(opts),
+      getR2PipelineHistoryPayload: (opts) => r2PipelineService.getHistory(opts),
+      getR2ImageProvenancePayload: async ({ key }) => {
+        const publicUrl = `${DEFAULT_R2_PUBLIC_BASE}/${key}`;
+        const limit = 8 * 1024 * 1024;
+        const response = await fetch(publicUrl, {
+          signal: AbortSignal.timeout(8_000),
+        });
+        if (!response.ok) {
+          throw new Error(`R2 fetch HTTP ${response.status} for ${key}`);
+        }
+        const declared = Number(response.headers.get("content-length") ?? "0");
+        if (Number.isFinite(declared) && declared > limit) {
+          throw new Error(
+            `R2 object ${key} is ${declared} bytes (limit ${limit})`,
+          );
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (bytes.length > limit) {
+          throw new Error(`R2 object ${key} exceeded ${limit} bytes`);
+        }
+        return {
+          schemaVersion: 1 as const,
+          key,
+          publicUrl,
+          fetchedBytes: bytes.length,
+          report: await readImageProvenance(bytes),
+        };
+      },
       getDaemonStatusPayload: () => r2PipelineService.probeDaemon(),
       getAutomationsPayload: () => buildAutomationsSnapshot(),
       runGsliveTicketVerify: async (opts) => {
@@ -817,6 +851,12 @@ export function startDashboardServer(
     );
   }
 
+  /** One snapshot cache per requested limit, so repeated tab opens do not rescan the directory. */
+  const imageAssetSnapshotSources = new Map<
+    number,
+    BunImageAssetSnapshotSource
+  >();
+
   const companionApiRoutes = {
     "/api/live-bets": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url), () =>
@@ -859,6 +899,35 @@ export function startDashboardServer(
     "/api/signals/*": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url)),
     "/api/logo/*": (req: Request) => proxy4020OrFallback(req, new URL(req.url)),
+    "/api/diagnostics/image-assets": async (req: Request) => {
+      const url = new URL(req.url);
+      const requested = Number(url.searchParams.get("limit") ?? "24");
+      const limit = Number.isInteger(requested)
+        ? Math.min(Math.max(requested, 1), 100)
+        : 24;
+      let source = imageAssetSnapshotSources.get(limit);
+      if (source === undefined) {
+        source = createBunImageAssetSnapshotSource(
+          resolve(cwd, "docs/assets"),
+          {
+            limit,
+            visibility: "RISK_MANAGER",
+            displayRoot: "docs/assets",
+            ttlMs: 5_000,
+          },
+        );
+        imageAssetSnapshotSources.set(limit, source);
+      }
+      const snapshot = await source.snapshot();
+      const headers = {
+        ETag: snapshot.etag,
+        "Cache-Control": "no-cache",
+      };
+      if (req.headers.get("if-none-match") === snapshot.etag) {
+        return new Response(null, { status: 304, headers });
+      }
+      return Response.json(snapshot, { headers });
+    },
     "/combo-uniqueness.json": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url), () =>
         serveStaticFileResponse(

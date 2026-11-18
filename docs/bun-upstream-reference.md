@@ -39,6 +39,165 @@ Do not hardcode member counts; run `./bin/dx bun --types` (or `./bin/dx bun --js
 - **`dns-resolve`**: `bun-types` and [`dns` namespace](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types/bun.d.ts#L2503) declare only `lookup`, `prefetch`, and `getCacheStats`, while the 1.4.4 binary also exposes the 15 `node:dns/promises` resolver methods (`resolve`, `resolve4`, `resolve6`, `resolveSrv`, `resolveTxt`, `resolveSoa`, `resolveNaptr`, `resolveMx`, `resolveCaa`, `resolveNs`, `resolvePtr`, `resolveCname`, `resolveAny`, `getServers`, `setServers`, `reverse`, `lookupService`).
 - **`websocket-global`**: [`WebSocket`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types/bun.d.ts#L5178) and [`Worker`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types/bun.d.ts#L714) are filed under the `bun` module page, but `Bun.WebSocket` and `Bun.Worker` are `undefined` at runtime — the constructors live on `globalThis`.
 
+## `Bun.XML`, `bun x` and package catalogs (measured 2026-11-18)
+
+Three Bun 1.4.4 surfaces that a `Bun.*` shape row cannot express on its own. Local claims were
+read from the pinned tree; the release-note claims are external and dated, not re-measured here.
+Each subsection below carries a `<!-- bun-behavior: <id> -->` marker, its contract test carries a
+`// @bun-behavior: <id>` tag, and `lib/bun_release_behaviors.ts` derives the registry from both —
+so this list is not maintained by hand.
+
+<!-- bun-behavior: xml-parse -->
+
+### `Bun.XML` — parse only; validate the tree yourself
+
+| Surface               | Where                                          | What it does                                                                                                     |
+| :-------------------- | :--------------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
+| `Bun.XML.parse`       | `src/lib/xml_ingest_preflight.ts`              | HTML-on-200 rejection and entity-bomb classification, then the compact tree                                      |
+| `XML.stringify`       | `packages/sportsdesk-ops/src/bin/xml-parse.ts` | Serializes the hydrated SoA feed into the canonical `chunks/<sha256>.bin` XML                                    |
+| `POST /api/parse-xml` | `services/sportsdesk_webview_server.ts`        | Parses one body with `Bun.XML.parse`; the daemon's 1 MiB `maxRequestBodySize` bounds it, and OpenAPI declares it |
+
+- `Bun.XML` is a parser, not a schema validator. The XML feed is hydrated into typed SoA
+  columns (`eventId32` / `packedComboKey15` / `lineHundredthsI32`) and the written count is
+  asserted against the returned count (`ERR_DOD_CSR_CONSERVATION_BREACH`).
+- The HTML-login-page guard runs **before** parsing; parse failures are classified into
+  `ERR_XML_ENTITY_BOMB` rather than leaking a raw `SyntaxError`.
+- Docs coverage: `tests/bun_docs_surface_baseline.json` marks `XML` documented — the docs
+  page is `bun.com/docs/runtime/xml`, pinned upstream at
+  [`docs/runtime/xml.mdx`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/runtime/xml.mdx)
+  — and the generated row is `#### Bun.XML` in the
+  [shape catalog](./runbooks/bun_shape_contracts_runbook.md).
+- Evidence: `bun test tests/xml_feed_spine_hydrator.test.ts tests/xml_parse_sportsdesk_ops_cli.test.ts`.
+
+<!-- bun-behavior: bun-x-catalog -->
+
+### `bun x` — the bin catalogue
+
+`bun x <bin>` resolves workspace bins declared in `packages/sportsdesk-ops/package.json`;
+`./bin/dx scripts --bins` renders the full `bun x` ↔ `bun run` ↔ target catalog, and
+`cli/README.md` carries the operator-facing table.
+
+| `bun x`                    | `bun run`           | Target                                         |
+| :------------------------- | :------------------ | :--------------------------------------------- |
+| `bun x xml-parse`          | `bun run xml:parse` | `packages/sportsdesk-ops/src/bin/xml-parse.ts` |
+| `bun x sportsdesk-catalog` | `bun run catalog`   | `cli/sportsdesk_catalog_cli.ts`                |
+
+- `bun run cli:bins:verify` checks the declaration/target pairs; a declared bin without its
+  shim target fails the gate. It derives its bin list from the root `package.json` map — there is
+  no hand-kept list to update.
+- `cli/README.md`'s table is generated from the same map: `bun run cli:readme` writes the
+  marker-delimited block and `bun run cli:readme:check` (also
+  `tests/bun_x_catalog_docs.test.ts`) fails on drift. Descriptions come from each target's
+  header comment, so a new bin documents itself.
+- Every bin in the catalog answers `-h` / `--help` with exit 0. `tests/bun_x_cli_help.test.ts`
+  spawns all of them, so a bin that treats `--help` as an input filename fails the gate
+  (`xml-parse` and `blob-formdata` were fixed on 2026-11-18).
+- Bun 1.4.4 `bunx` additions (release-note, external): `--cwd`, `--env-file`,
+  `--minimum-release-age`, `--trust`. Do not assume them on an older pin.
+
+<!-- bun-behavior: package-catalogs -->
+
+### Package catalogs — `catalog:` ranges
+
+- Measured: the root `package.json` `catalog` map pins `@types/bun`, `@types/react`,
+  `@types/react-dom`, `react`, `react-dom` and `typescript`. `packages/api`,
+  `packages/backend`, `packages/contracts`, `packages/sportsdesk-ops` and `packages/ui`
+  reference them as `"catalog:"`. The tree contains no `.yarnrc.yml` and no `yarn.lock`.
+- The pinned [bun-v1.4.4 release](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) notes
+  (`bun.com/blog/bun-v1.4.4`, _bun install_ section) state that during Yarn Berry lockfile
+  migration, `catalog:` ranges are read from `.yarnrc.yml` and the catalogs are copied into
+  `package.json`. That migration path is inactive here — the root `catalog` map is the SSOT, and
+  a `catalog:` reference without an entry is an install failure.
+- Gates: `tests/pm_policy_workspaces.test.ts` (missing and named catalog entries),
+  `bun run test:pm-contracts`, `bun run pm:doctor`, `bun run check:pm-state`.
+
+<!-- bun-behavior: install-flags -->
+
+## `bun install` flag compatibility (measured 2026-11-18)
+
+The pinned [bun-v1.4.4 release](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) _bun install_
+notes describe three classes: Bun translates npm/Yarn/pnpm flags when it has an equivalent, ignores a
+foreign flag together with its value when it has none, and exits non-zero for a flag none of those
+tools supports. The last class is the CI hazard — before 1.4.4, `bun install --frozen-lockfil` ran a
+plain mutable install instead of failing.
+
+| Origin            | Flag                                                                                 | Bun behavior                                                |
+| :---------------- | :----------------------------------------------------------------------------------- | :---------------------------------------------------------- |
+| npm               | `--package-lock-only`                                                                | `--lockfile-only`                                           |
+| npm / Yarn / pnpm | `--immutable`                                                                        | `--frozen-lockfile`                                         |
+| npm               | `--save-dev` / `--save-exact` / `--save-optional` / `--save-peer` / `--save-catalog` | `--dev` / `--exact` / `--optional` / `--peer` / `--catalog` |
+| npm               | `--no-optional` / `--ignore-optional`                                                | `--omit=optional`                                           |
+| npm               | `--only=production`                                                                  | `--omit=dev`                                                |
+| npm               | `--location=global`                                                                  | `--global`                                                  |
+| pnpm              | `--shamefully-hoist` / `--node-linker=hoisted` / `--install-strategy=hoisted`        | `--linker=hoisted`                                          |
+| pnpm              | `--node-linker=isolated` / `--install-strategy=linked`                               | `--linker=isolated`                                         |
+| npm               | `--no-package-lock`, `--network-timeout <ms>`                                        | ignored together with the value                             |
+| none              | e.g. `--frozen-lockfil`                                                              | exit 1, `bun install has no --frozen-lockfil flag.`         |
+
+- Measured on the pinned runtime: an empty fixture exits 1 with
+  `bun install has no --frozen-lockfil flag.` and writes nothing.
+- This repo's CI invokes only native flags: `.github/workflows/*.yml` runs
+  `bun install --frozen-lockfile --no-env-file`, and `check:pm-state` runs
+  `bun install --frozen-lockfile` then `bun prune --check`. `tests/bun_upstream_reference.test.ts`
+  re-derives the native flag set from `bun install --help` and fails if a workflow adds a flag
+  outside it.
+- `scripts/bun-1.4.4-probe.sh` (P8) deliberately exercises the rejection and asserts the error
+  text; do not "fix" that invocation.
+- Evidence: `tests/bun_pm_behaviors.test.ts` covers unknown-flag rejection, `--immutable` against
+  a dirty lockfile, the ignored `--network-timeout` value, `--env-file`, and the `--save-dev`
+  dependency-group move.
+
+<!-- bun-behavior: semver-wildcards -->
+
+## `Bun.semver.satisfies` — wildcards and the 2^64 ceiling (measured 2026-11-18)
+
+Pinned docs: [`docs/runtime/semver.mdx`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/runtime/semver.mdx).
+The API exposes two functions — `satisfies(version, range)` and `order(a, b)` — and `satisfies`
+takes no options object: a third argument is ignored, so node-semver's
+`{ includePrerelease: true }` has no effect. Use the npm `semver` dependency where that option
+matters (`tests/market_index.test.ts` does).
+
+| Case                                                               | Result  | Rule                                                                                 |
+| :----------------------------------------------------------------- | :------ | :----------------------------------------------------------------------------------- |
+| `satisfies("1.0.0", "1.0.x")`, `"1.x.x"`, `"x.x.x"`, `"*"`         | `true`  | wildcards fill the missing parts                                                     |
+| `satisfies("1.0.0", "")`, `"not-a-range"`                          | `true`  | a range with no parseable part behaves like `*`                                      |
+| `satisfies("1.0.0", "1.x.18446744073709551616")`                   | `true`  | a numeric part after a wildcard is not compared                                      |
+| `satisfies("1.0.0", "18446744073709551616.x")`                     | `false` | a major/minor/patch above 2^64-1 **before** a wildcard makes the range unsatisfiable |
+| `satisfies("1.0.0", "18446744073709551616")`                       | `false` | the same ceiling applies to a bare number                                            |
+| `satisfies("1.0.0", "1.0.0-é")`                                    | `false` | non-ASCII input returns false                                                        |
+| `satisfies("1.0.0-beta.1", "^1.0.0")`                              | `false` | a prerelease needs a prerelease in the range                                         |
+| `satisfies("1.0.0-beta.1", "^1.0.0-beta.0")`                       | `true`  |                                                                                      |
+| `satisfies("1.0.0-beta.1", "^1.0.0", { includePrerelease: true })` | `false` | the options object is inert                                                          |
+
+- Repo use: `scripts/nsh_desk_cli.ts` gates the NSH runtime with
+  `Bun.semver.satisfies(version.semver, ">=0.5.0")`, and the pinned probe is `data.semver` in
+  `scripts/probe_bun.ts`.
+- `tests/bun_semver_wildcards.test.ts` re-measures this table on every run, so a Bun bump that
+  changes any row fails instead of drifting the prose.
+
+<!-- bun-behavior: bun-fmt -->
+
+## `bun fmt` — check/edit contract (measured 2026-11-18)
+
+The pinned [bun-v1.4.4 release](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) adds
+`bun fmt`, a Prettier/oxfmt-compatible formatter. Measured on the pinned runtime in an otherwise
+empty directory:
+
+| Command                               | Result                                       |
+| :------------------------------------ | :------------------------------------------- |
+| `bun fmt --check a.ts` on `const x=1` | exit 1; lists the file as needing formatting |
+| `bun fmt a.ts`                        | exit 0; rewrites it to `const x = 1;`        |
+| `bun fmt --check a.ts` afterwards     | exit 0                                       |
+
+- The repo drives this through `bun fmt` (write path), `bun fmt --check --changed` in
+  `verify:fast`, and the CI `format:check` step.
+- `bun fmt` is not `bun lint`: linting stays oxlint (`bun run lint:check`), because bare
+  `bun lint` still resolves to the package `lint` script that rewrites files.
+- Docs: the docs MCP search for `bun fmt check` returns `/guides/format/migrate-from-oxfmt`;
+  `docs/cli/fmt.mdx` does not exist at the audited commit (checked 2026-11-18), so there is no
+  pinned blob to cite for the command page yet.
+- `tests/bun_fmt_contract.test.ts` re-measures the three rows above.
+
 ## Upstream doc commit pins
 
 | Pin                                                                                                                      | Tree                               | Use                                                                       |

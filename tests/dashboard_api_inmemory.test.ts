@@ -172,6 +172,50 @@ function buildMockDeps(
         checkedAt: "2026-11-12T00:00:00.000Z",
       },
     }),
+    getR2PipelineHistoryPayload: async (opts) => ({
+      schemaVersion: 1,
+      observedAt: "2026-11-12T00:00:00.000Z",
+      source: "process-memory",
+      sampledSince: "2026-11-12T00:00:00.000Z",
+      minSampleIntervalSeconds: 60,
+      sinks: [
+        {
+          id: "gslive-tally",
+          label: "gslive tally",
+          slaSeconds: 3600,
+          sampleCount: opts?.limit === 1 ? 1 : 2,
+          samples: [
+            {
+              at: "2026-11-12T00:00:00.000Z",
+              ageSeconds: 7200,
+              state: "stale",
+              dataAgeSeconds: 90000,
+            },
+          ],
+        },
+      ],
+    }),
+    getR2ImageProvenancePayload: async ({ key }) => ({
+      schemaVersion: 1,
+      key,
+      publicUrl: `https://pub-mock.r2.dev/${key}`,
+      fetchedBytes: 12,
+      report: {
+        available: true,
+        format: "png",
+        width: 1,
+        height: 1,
+        byteLength: 12,
+        channels: ["png-text"],
+        fields: {
+          streamId: "gslive-tally",
+          genU32: 1042,
+          merkleRoot: "ab".repeat(32),
+        },
+        raw: { "sportsdesk:gen_u32": "1042" },
+        issues: [],
+      },
+    }),
     getDaemonStatusPayload: async () => ({
       online: true,
       url: "http://127.0.0.1:4020/health",
@@ -362,6 +406,57 @@ describe("@sportsdesk-ops/api in-memory router (zero port bind)", () => {
       ((await r2Res.json()) as { overallStatus: string }).overallStatus,
     ).toBe("fresh");
 
+    const historyRes = await call("/api/r2/pipeline/history?limit=1");
+    expect(historyRes.status).toBe(200);
+    const history = (await historyRes.json()) as {
+      source: string;
+      sampledSince: string | null;
+      sinks: Array<{ id: string; sampleCount: number }>;
+    };
+    expect(history.source).toBe("process-memory");
+    expect(history.sampledSince).toBe("2026-11-12T00:00:00.000Z");
+    expect(history.sinks[0]?.id).toBe("gslive-tally");
+    expect(history.sinks[0]?.sampleCount).toBe(1);
+
+    const defaultHistoryRes = await call("/api/r2/pipeline/history");
+    expect(
+      (
+        (await defaultHistoryRes.json()) as {
+          sinks: Array<{ sampleCount: number }>;
+        }
+      ).sinks[0]?.sampleCount,
+    ).toBe(2);
+
+    const provenanceRes = await call(
+      "/api/r2/image-provenance?key=assets/ARCH-Guide.webp",
+    );
+    expect(provenanceRes.status).toBe(200);
+    const provenance = (await provenanceRes.json()) as {
+      key: string;
+      publicUrl: string;
+      report: { fields: { streamId: string; genU32: number } };
+    };
+    expect(provenance.key).toBe("assets/ARCH-Guide.webp");
+    expect(provenance.publicUrl).toBe(
+      "https://pub-mock.r2.dev/assets/ARCH-Guide.webp",
+    );
+    expect(provenance.report.fields.streamId).toBe("gslive-tally");
+    expect(provenance.report.fields.genU32).toBe(1042);
+
+    // A key that could escape the bucket or name a non-image is refused.
+    for (const badKey of [
+      "",
+      "../secret.png",
+      "/assets/x.png",
+      "https://evil.example/x.png",
+      "assets/x.json",
+    ]) {
+      const res = await call(
+        `/api/r2/image-provenance?key=${encodeURIComponent(badKey)}`,
+      );
+      expect(res.status).toBe(400);
+    }
+
     const daemonRes = await call("/api/daemon/status");
     expect(daemonRes.status).toBe(200);
     expect(((await daemonRes.json()) as { online: boolean }).online).toBe(true);
@@ -372,6 +467,48 @@ describe("@sportsdesk-ops/api in-memory router (zero port bind)", () => {
 
     expect((await call("/api/not-a-route")).status).toBe(404);
     expect((await call("/unknown")).status).toBe(404);
+  });
+
+  test("reports an empty process-local history when the pipeline service is not wired", async () => {
+    const api = createDashboardApi(
+      buildMockDeps({
+        getR2PipelinePayload: undefined,
+        getR2PipelineHistoryPayload: undefined,
+      }),
+    );
+    const res = await api.fetch(
+      new Request("http://dashboard.local/api/r2/pipeline/history"),
+    );
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      schemaVersion: number;
+      source: string;
+      sampledSince: string | null;
+      sinks: readonly unknown[];
+    };
+    expect(payload.schemaVersion).toBe(1);
+    expect(payload.source).toBe("process-memory");
+    expect(payload.sampledSince).toBeNull();
+    expect(payload.sinks).toEqual([]);
+  });
+
+  test("reports provenance_probe_not_configured when no image fetcher is wired", async () => {
+    const api = createDashboardApi(
+      buildMockDeps({ getR2ImageProvenancePayload: undefined }),
+    );
+    const res = await api.fetch(
+      new Request(
+        "http://dashboard.local/api/r2/image-provenance?key=assets/x.webp",
+      ),
+    );
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      key: string;
+      report: { available: boolean; issues: readonly string[] };
+    };
+    expect(payload.key).toBe("assets/x.webp");
+    expect(payload.report.available).toBe(false);
+    expect(payload.report.issues).toContain("provenance_probe_not_configured");
   });
 
   test("forwards the build-matrix refresh flag so the Re-compile button actually reprobes", async () => {

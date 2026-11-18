@@ -83,6 +83,19 @@ async function withWagersTabPolicy(
   }
 }
 
+/** A public R2 key that may carry image provenance: relative, no traversal, PNG/WebP. */
+function isSafeImageProvenanceKey(key: string): boolean {
+  return (
+    key.length > 0 &&
+    key.length <= 512 &&
+    !key.startsWith("/") &&
+    !key.includes("\\") &&
+    !key.includes("..") &&
+    !key.includes("://") &&
+    /\.(png|webp)$/i.test(key)
+  );
+}
+
 /**
  * Create the SportsDesk dashboard HTTP + WebSocket API surface.
  *
@@ -718,6 +731,81 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
           });
         }
         return Response.json(await deps.getR2PipelinePayload({ refresh }));
+      },
+    },
+
+    "/api/r2/pipeline/history": {
+      GET: async (req: Request): Promise<Response> => {
+        const denied = await enforceAuth(req);
+        if (denied) return denied;
+        const url = new URL(req.url);
+        const refresh = url.searchParams.get("refresh") === "1";
+        const rawLimit = url.searchParams.get("limit");
+        const parsedLimit = rawLimit === null ? Number.NaN : Number(rawLimit);
+        const limit = Number.isFinite(parsedLimit)
+          ? Math.min(200, Math.max(1, Math.floor(parsedLimit)))
+          : undefined;
+        if (!deps.getR2PipelineHistoryPayload) {
+          return Response.json({
+            schemaVersion: 1,
+            observedAt: new Date().toISOString(),
+            source: "process-memory",
+            sampledSince: null,
+            minSampleIntervalSeconds: 0,
+            sinks: [],
+          });
+        }
+        return Response.json(
+          await deps.getR2PipelineHistoryPayload({
+            refresh,
+            ...(limit === undefined ? {} : { limit }),
+          }),
+        );
+      },
+    },
+
+    "/api/r2/image-provenance": {
+      GET: async (req: Request): Promise<Response> => {
+        const denied = await enforceAuth(req);
+        if (denied) return denied;
+        const url = new URL(req.url);
+        const key = (url.searchParams.get("key") ?? "").trim();
+        if (!isSafeImageProvenanceKey(key)) {
+          return Response.json(
+            {
+              error:
+                "key must be a relative R2 PNG/WebP key (no scheme, no '..', .png/.webp suffix)",
+            },
+            { status: 400 },
+          );
+        }
+        if (!deps.getR2ImageProvenancePayload) {
+          return Response.json({
+            schemaVersion: 1,
+            key,
+            publicUrl: "",
+            fetchedBytes: 0,
+            report: {
+              available: false,
+              format: null,
+              width: null,
+              height: null,
+              byteLength: 0,
+              channels: [],
+              fields: { streamId: null, genU32: null, merkleRoot: null },
+              raw: {},
+              issues: ["provenance_probe_not_configured"],
+            },
+          });
+        }
+        try {
+          return Response.json(await deps.getR2ImageProvenancePayload({ key }));
+        } catch (err) {
+          return Response.json(
+            { error: err instanceof Error ? err.message : String(err) },
+            { status: 502 },
+          );
+        }
       },
     },
 
