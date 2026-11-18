@@ -82,7 +82,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/main)
 - **Shape:** value: `undefined` · writable undefined · enumerable true
-- **Here:** `scripts/graph_feed_poller_daemon.ts`, `services/sportsdesk_webview_server.ts`
+- **Here:** `lib/f402_net_options.ts`, `scripts/graph_feed_poller_daemon.ts`
 - **Evidence:** `probe:proc.shell`
 
 #### Bun.nanoseconds
