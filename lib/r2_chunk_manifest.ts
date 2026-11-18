@@ -15,7 +15,11 @@ import {
   writeContentAddressedChunkWithRetry,
   type CasR2ClientLike,
 } from "./r2_manifest_cas.ts";
-import type { R2GetObjectResult } from "./r2_s3_client.ts";
+import {
+  R2EncodedResponseError,
+  R2PreconditionFailedError,
+  type R2GetObjectResult,
+} from "./r2_s3_client.ts";
 import { readStrictUtf8R2Object } from "./r2_text.ts";
 
 /** Stream ids already published to `sportsdesk-ops-reports` (docs/INTEGRATION-SOURCES.md). */
@@ -44,6 +48,22 @@ export class ManifestStoreError extends Error {
         : String(options?.cause);
     super(`manifest store ${operation} ${key} failed: ${reason}`, options);
     this.name = "ManifestStoreError";
+  }
+}
+
+/** A manifest key already exists; manifests are immutable, so the write was refused (412). */
+export class ManifestExistsError extends Error {
+  readonly code = "ERR_R2_MANIFEST_EXISTS" as const;
+  readonly exitCode = 74 as const;
+  constructor(
+    readonly key: string,
+    options?: ErrorOptions,
+  ) {
+    super(
+      `ERR_R2_MANIFEST_EXISTS: ${key} already exists (If-None-Match:* returned 412)`,
+      options,
+    );
+    this.name = "ManifestExistsError";
   }
 }
 
@@ -206,7 +226,8 @@ function parsePointer(
 
 /**
  * One GET for the latest pointer. A 404 (including a delete that lands before or during the
- * request) is `missing`; bad bytes, JSON or schema are `corrupt`; backend failures throw.
+ * request) is `missing`; bad bytes, JSON, schema or a content-encoded body are `corrupt`;
+ * backend failures throw.
  */
 export async function readLatestPointer(
   reader: ManifestR2Reader,
@@ -214,7 +235,21 @@ export async function readLatestPointer(
   options: ManifestReadOptions = {},
 ): Promise<PointerRead> {
   const key = latestPointerKey(streamId);
-  const read = await getOnce(reader, key, options);
+  let read: R2GetObjectResult;
+  try {
+    read = await getOnce(reader, key, options);
+  } catch (error) {
+    if (
+      error instanceof ManifestStoreError &&
+      error.cause instanceof R2EncodedResponseError
+    ) {
+      return {
+        state: "corrupt",
+        error: new ManifestInvalid(error.cause.message, { cause: error.cause }),
+      };
+    }
+    throw error;
+  }
   if (read.status === 404) return { state: "missing" };
   try {
     const text = await readStrictUtf8R2Object({
@@ -245,9 +280,10 @@ export interface WrittenManifest {
 }
 
 /**
- * Writes the chunk's YAML manifest, then promotes `manifests/<stream_id>/latest` with
- * If-Match (If-None-Match:* on first write). A 412 surfaces as `R2ManifestCasError`
- * (`ERR_R2_MANIFEST_CAS_REJECTED`); there is no silent rebase.
+ * Writes the chunk's YAML manifest with a signed PUT (sha256 payload hash, If-None-Match:*),
+ * so an existing manifest key is never overwritten (`ManifestExistsError`). Then promotes
+ * `manifests/<stream_id>/latest` with If-Match (If-None-Match:* on first write). A pointer 412
+ * surfaces as `R2ManifestCasError` (`ERR_R2_MANIFEST_CAS_REJECTED`); there is no silent rebase.
  */
 export async function writeChunkManifest(
   client: ManifestR2Client,
@@ -259,10 +295,17 @@ export async function writeChunkManifest(
   const key = manifestKey(streamId, manifest.slot, manifest.timestamp_ns);
   const latestKey = latestPointerKey(streamId);
   try {
-    await client.write(key, Bun.YAML.stringify(manifest, null, 2), {
+    await client.writeWithMetadata(key, Bun.YAML.stringify(manifest, null, 2), {
       type: YAML_CONTENT_TYPE,
+      ifNoneMatch: "*",
+      ...(options.fetchImpl === undefined
+        ? {}
+        : { fetchImpl: options.fetchImpl }),
     });
   } catch (cause) {
+    if (cause instanceof R2PreconditionFailedError) {
+      throw new ManifestExistsError(key, { cause });
+    }
     throw new ManifestStoreError("put", key, { cause });
   }
 

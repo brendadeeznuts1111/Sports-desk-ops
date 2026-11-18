@@ -499,6 +499,26 @@ async function putObjectWithMetadata(
   throw lastError ?? new Error(`R2 PUT ${key} failed`);
 }
 
+/** `getObject` asks for identity bytes; a coded body is not the object readers can parse. */
+export class R2EncodedResponseError extends Error {
+  readonly code = "ERR_R2_ENCODED_RESPONSE" as const;
+  readonly exitCode = 74 as const;
+  readonly key: string;
+  readonly contentEncoding: string;
+  constructor(key: string, contentEncoding: string) {
+    super(
+      `ERR_R2_ENCODED_RESPONSE: GET ${key} returned Content-Encoding ${contentEncoding} for an identity request`,
+    );
+    this.name = "R2EncodedResponseError";
+    this.key = key;
+    this.contentEncoding = contentEncoding;
+  }
+}
+
+export const R2_IDENTITY_GET_HEADERS = {
+  "accept-encoding": "identity",
+} as const satisfies Readonly<Record<string, string>>;
+
 export type R2GetObjectResult =
   | { readonly status: 404; readonly etag: null; readonly body: null }
   | {
@@ -688,7 +708,12 @@ export class R2S3Client {
     return etag === "" ? null : etag;
   }
 
-  /** One signed GET returning status, ETag and body together; 404 maps to `status: 404`. */
+  /**
+   * One signed GET returning status, ETag and body together; 404 maps to `status: 404`.
+   * `accept-encoding: identity` is signed and `decompress: false` keeps Bun from adding its own
+   * list, so the body and ETag are the stored bytes. A non-identity Content-Encoding on the
+   * response throws `R2EncodedResponseError` instead of handing back coded bytes.
+   */
   async getObject(
     key: string,
     options: { readonly fetchImpl?: typeof fetch } = {},
@@ -704,12 +729,13 @@ export class R2S3Client {
       path,
       host: endpoint.host,
       payloadHash: EMPTY_SHA256,
-      headers: {},
+      headers: R2_IDENTITY_GET_HEADERS,
     });
     const doFetch = options.fetchImpl ?? fetch;
     const response = await doFetch(`${endpoint.origin}${path}`, {
       method: "GET",
       headers: requestHeaders,
+      decompress: false,
     });
     if (response.status === 404) {
       await response.body?.cancel();
@@ -718,6 +744,12 @@ export class R2S3Client {
     if (response.status !== 200) {
       await response.body?.cancel();
       throw new Error(`R2 GET ${key} failed (${response.status})`);
+    }
+    const contentEncoding =
+      response.headers.get("content-encoding")?.trim().toLowerCase() ?? "";
+    if (contentEncoding !== "" && contentEncoding !== "identity") {
+      await response.body?.cancel();
+      throw new R2EncodedResponseError(key, contentEncoding);
     }
     const etag = response.headers.get("etag")?.trim() ?? "";
     return {

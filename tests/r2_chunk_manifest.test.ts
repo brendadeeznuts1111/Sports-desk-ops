@@ -13,6 +13,7 @@ import {
   LIVE_STREAM_IDS,
   LiveStreamConsumer,
   loadStreamTelemetry,
+  ManifestExistsError,
   ManifestInvalid,
   manifestKey,
   ManifestStoreError,
@@ -25,6 +26,7 @@ import {
 } from "../lib/r2_chunk_manifest.ts";
 import { R2ManifestCasError } from "../lib/r2_manifest_cas.ts";
 import {
+  R2EncodedResponseError,
   R2PreconditionFailedError,
   R2S3Client,
   type R2GetObjectResult,
@@ -163,6 +165,14 @@ class FakeR2 implements ManifestR2Client {
   }
 }
 
+function pointerWrites(r2: FakeR2) {
+  return r2.casWrites.filter((write) => write.key.endsWith("/latest"));
+}
+
+function manifestWrites(r2: FakeR2) {
+  return r2.casWrites.filter((write) => write.key.endsWith(".yaml"));
+}
+
 describe("chunk manifests with a CAS latest pointer", () => {
   test("writes YAML next to the chunk and a JSON pointer at manifests/<stream_id>/latest", async () => {
     const r2 = new FakeR2();
@@ -193,6 +203,7 @@ describe("chunk manifests with a CAS latest pointer", () => {
     });
     expect("bodyUsed" in pointer).toBe(false);
     expect(r2.casWrites).toEqual([
+      { key: written.manifestKey, ifNoneMatch: "*" },
       { key: written.latestKey, ifNoneMatch: "*" },
     ]);
     expect(
@@ -274,7 +285,8 @@ describe("chunk manifests with a CAS latest pointer", () => {
       chunk({ slot: "old", timestamp_ns: "100" }),
     );
     expect(late).toMatchObject({ latestAdvanced: false, generation_u32: 1 });
-    expect(r2.casWrites).toHaveLength(1);
+    expect(pointerWrites(r2)).toHaveLength(1);
+    expect(manifestWrites(r2)).toHaveLength(2);
     expect(r2.objects.has(late.manifestKey)).toBe(true);
     const read = await readLatestPointer(r2, TICKER);
     expect(read.state === "ok" && read.pointer.manifest.timestamp_ns).toBe(
@@ -311,7 +323,8 @@ describe("chunk manifests with a CAS latest pointer", () => {
     await expect(writeChunkManifest(r2, chunk())).rejects.toBeInstanceOf(
       ManifestInvalid,
     );
-    expect(r2.casWrites).toHaveLength(0);
+    expect(pointerWrites(r2)).toHaveLength(0);
+    expect(r2.text(latestPointerKey(TICKER))).toBe("{not json");
   });
 
   test("backend failures surface as ManifestStoreError", async () => {
@@ -438,10 +451,12 @@ describe("single-GET reads and per-consumer generations", () => {
       status: "active",
       generation_u32: 2,
     });
-    expect(r2.casWrites.every((write) => write.key.endsWith("/latest"))).toBe(
-      true,
-    );
-    expect(r2.casWrites).toHaveLength(2);
+    expect(pointerWrites(r2)).toHaveLength(2);
+    expect(manifestWrites(r2)).toEqual([
+      { key: manifestKey(TICKER, "slot-7", "100"), ifNoneMatch: "*" },
+      { key: manifestKey(TICKER, "slot-8", "200"), ifNoneMatch: "*" },
+    ]);
+    expect(r2.casWrites).toHaveLength(4);
   });
 
   test("telemetry reports ACTIVE with the generation and NO ACTIVE STREAM when missing", async () => {
@@ -496,6 +511,7 @@ class NoopBackend implements R2S3ClientBackend {
 function r2HttpStub() {
   const objects = new Map<string, { body: Uint8Array; etag: string }>();
   const requests: { method: string; path: string; signed: boolean }[] = [];
+  const inits: { method: string; path: string; init: RequestInit }[] = [];
   let version = 0;
   let onRequest: ((method: string, path: string) => Promise<void>) | undefined;
   const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
@@ -508,6 +524,7 @@ function r2HttpStub() {
       signed:
         headers.get("authorization")?.startsWith("AWS4-HMAC-SHA256") ?? false,
     });
+    inits.push({ method, path: url.pathname, init: init ?? {} });
     await onRequest?.(method, url.pathname);
     const current = objects.get(url.pathname);
     if (method === "PUT") {
@@ -540,6 +557,7 @@ function r2HttpStub() {
   return {
     objects,
     requests,
+    inits,
     fetchImpl,
     setOnRequest(hook: typeof onRequest) {
       onRequest = hook;
@@ -651,6 +669,240 @@ describe("R2S3Client.getObject and the CAS path over a local fetch stub", () => 
     });
     const consumer = new LiveStreamConsumer(client, options);
     expect(await consumer.poll(TICKER)).toEqual({ status: "missing" });
+  });
+});
+
+function signedHeaderNames(headers: Headers): string[] {
+  const match = /SignedHeaders=([^,]+)/.exec(
+    headers.get("authorization") ?? "",
+  );
+  return match?.[1]?.split(";") ?? [];
+}
+
+async function hmac(
+  key: Uint8Array | string,
+  data: string,
+): Promise<Uint8Array> {
+  return new Bun.CryptoHasher("sha256", key).update(data).digest();
+}
+
+/** Recomputes SigV4 from what arrived, so a header sent but not signed fails the check. */
+async function sigV4Matches(
+  method: string,
+  path: string,
+  host: string,
+  headers: Headers,
+  secret: string,
+): Promise<boolean> {
+  const authorization = headers.get("authorization") ?? "";
+  const scope = /Credential=[^/]+\/([^,]+)/.exec(authorization)?.[1] ?? "";
+  const [dateStamp = "", region = ""] = scope.split("/");
+  const names = signedHeaderNames(headers);
+  const canonical = [
+    method,
+    path,
+    "",
+    names
+      .map(
+        (name) =>
+          `${name}:${name === "host" ? host : (headers.get(name) ?? "")}\n`,
+      )
+      .join(""),
+    names.join(";"),
+    headers.get("x-amz-content-sha256") ?? "",
+  ].join("\n");
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    headers.get("x-amz-date") ?? "",
+    scope,
+    new Bun.CryptoHasher("sha256").update(canonical).digest("hex"),
+  ].join("\n");
+  let key = await hmac(`AWS4${secret}`, dateStamp);
+  for (const part of [region, "s3", "aws4_request"]) {
+    key = await hmac(key, part);
+  }
+  const expected = Buffer.from(await hmac(key, stringToSign)).toString("hex");
+  return authorization.endsWith(`Signature=${expected}`);
+}
+
+describe("identity GET and immutable signed manifest PUT", () => {
+  test("getObject signs accept-encoding: identity and sets decompress:false", async () => {
+    const stub = r2HttpStub();
+    const client = stubbedClient();
+    await client.getObject("manifests/f402-bet-ticker/latest", {
+      fetchImpl: stub.fetchImpl,
+    });
+    expect(stub.inits).toHaveLength(1);
+    const sent = stub.inits[0]!;
+    const headers = new Headers(sent.init.headers);
+    expect(signedHeaderNames(headers)).toEqual([
+      "accept-encoding",
+      "host",
+      "x-amz-content-sha256",
+      "x-amz-date",
+    ]);
+    expect(headers.get("accept-encoding")).toBe("identity");
+    expect((sent.init as { decompress?: boolean }).decompress).toBe(false);
+    expect(await sigV4Matches("GET", sent.path, "r2.test", headers, "s")).toBe(
+      true,
+    );
+  });
+
+  test("on the wire Bun sends only the signed identity Accept-Encoding", async () => {
+    const seen: Headers[] = [];
+    using server = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch(request) {
+        seen.push(request.headers);
+        return new Response("{}", { headers: { etag: '"w1"' } });
+      },
+    });
+    const client = R2S3Client.fromOptions(
+      {
+        bucket: "bucket",
+        endpoint: server.url.origin,
+        accessKeyId: "a",
+        secretAccessKey: "s",
+        publicBase: "https://pub.test",
+      },
+      new NoopBackend(),
+    );
+    const read = await client.getObject("manifests/gslive-tally/latest");
+    expect(read).toMatchObject({ status: 200, etag: '"w1"' });
+    const [headers] = seen;
+    expect(headers?.get("accept-encoding")).toBe("identity");
+    expect(signedHeaderNames(headers!)).toContain("accept-encoding");
+    expect(
+      await sigV4Matches(
+        "GET",
+        "/bucket/manifests/gslive-tally/latest",
+        server.url.host,
+        headers!,
+        "s",
+      ),
+    ).toBe(true);
+  });
+
+  test("a Content-Encoding response is refused; readers see corrupt and the writer stops", async () => {
+    const client = stubbedClient();
+    let cancelled = 0;
+    const encoded = (async () =>
+      new Response(
+        new ReadableStream({
+          cancel() {
+            cancelled += 1;
+          },
+        }),
+        { status: 200, headers: { etag: '"g1"', "content-encoding": "gzip" } },
+      )) as unknown as typeof fetch;
+    const error = await client
+      .getObject("manifests/f402-bet-ticker/latest", { fetchImpl: encoded })
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(R2EncodedResponseError);
+    expect(error).toMatchObject({
+      code: "ERR_R2_ENCODED_RESPONSE",
+      exitCode: 74,
+      contentEncoding: "gzip",
+    });
+    expect(cancelled).toBe(1);
+
+    const read = await readLatestPointer(client, TICKER, {
+      fetchImpl: encoded,
+    });
+    expect(read.state).toBe("corrupt");
+    const consumer = new LiveStreamConsumer(client, { fetchImpl: encoded });
+    expect((await consumer.poll(TICKER)).status).toBe("corrupt");
+
+    const identity = (async () =>
+      new Response("{}", {
+        status: 200,
+        headers: { etag: '"i1"', "content-encoding": "identity" },
+      })) as unknown as typeof fetch;
+    expect(await client.getObject("k", { fetchImpl: identity })).toMatchObject({
+      status: 200,
+      etag: '"i1"',
+    });
+  });
+
+  test("the YAML manifest is a signed PUT with its sha256 and If-None-Match:*, not Bun's UNSIGNED-PAYLOAD write", async () => {
+    const stub = r2HttpStub();
+    const backend = new NoopBackend();
+    const client = R2S3Client.fromOptions(
+      {
+        bucket: "bucket",
+        endpoint: "https://r2.test",
+        accessKeyId: "a",
+        secretAccessKey: "s",
+        publicBase: "https://pub.test",
+      },
+      backend,
+    );
+    const written = await writeChunkManifest(client, chunk(), {
+      fetchImpl: stub.fetchImpl,
+    });
+    const path = `/bucket/${written.manifestKey}`;
+    const put = stub.inits.find(
+      (sent) => sent.method === "PUT" && sent.path === path,
+    );
+    expect(put).toBeDefined();
+    const headers = new Headers(put!.init.headers);
+    const body = put!.init.body as Uint8Array;
+    expect(Bun.YAML.parse(new TextDecoder().decode(body))).toEqual(
+      written.manifest,
+    );
+    expect(headers.get("x-amz-content-sha256")).toBe(
+      new Bun.CryptoHasher("sha256").update(body).digest("hex"),
+    );
+    expect(headers.get("x-amz-content-sha256")).not.toBe("UNSIGNED-PAYLOAD");
+    expect(headers.get("if-none-match")).toBe("*");
+    expect(headers.get("content-type")).toBe("application/yaml");
+    expect(signedHeaderNames(headers)).toEqual(
+      expect.arrayContaining(["if-none-match", "content-type"]),
+    );
+    expect(await sigV4Matches("PUT", path, "r2.test", headers, "s")).toBe(true);
+    expect(backend.writes.has(written.manifestKey)).toBe(false);
+  });
+
+  test("a manifest key that already exists gets 412 and ManifestExistsError; nothing is overwritten", async () => {
+    const stub = r2HttpStub();
+    const client = stubbedClient();
+    const options = { fetchImpl: stub.fetchImpl };
+    const first = await writeChunkManifest(client, chunk(), options);
+    const path = `/bucket/${first.manifestKey}`;
+    const original = stub.objects.get(path);
+    const pointerBefore = stub.objects.get(`/bucket/${first.latestKey}`);
+
+    const error = await writeChunkManifest(
+      client,
+      chunk({ wager_count: 99 }),
+      options,
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ManifestExistsError);
+    expect(error).toMatchObject({
+      code: "ERR_R2_MANIFEST_EXISTS",
+      exitCode: 74,
+      key: first.manifestKey,
+    });
+    expect((error as ManifestExistsError).cause).toBeInstanceOf(
+      R2PreconditionFailedError,
+    );
+    expect(stub.objects.get(path)).toBe(original);
+    expect(stub.objects.get(`/bucket/${first.latestKey}`)).toBe(pointerBefore);
+    expect(
+      stub.inits.filter((sent) => sent.method === "PUT" && sent.path === path),
+    ).toHaveLength(2);
+  });
+
+  test("FakeR2 maps the manifest 412 to ManifestExistsError before any pointer read", async () => {
+    const r2 = new FakeR2();
+    await writeChunkManifest(r2, chunk());
+    r2.gets.length = 0;
+    await expect(writeChunkManifest(r2, chunk())).rejects.toBeInstanceOf(
+      ManifestExistsError,
+    );
+    expect(r2.gets).toHaveLength(0);
+    expect(pointerWrites(r2)).toHaveLength(1);
   });
 });
 
