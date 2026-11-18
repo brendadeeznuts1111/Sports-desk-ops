@@ -215,6 +215,12 @@ export function formatCliReportOutput(
   return inspectReport(inspectable, cliInspectOptions());
 }
 
+/**
+ * Stable-only on purpose: no `-0` suffix, so `0.5.0-rc.1` counts as *below* the
+ * baseline. The toolchain is pinned to a stable release, unlike the Bun runtime
+ * floor in `lib/manager_fetch.ts`, where canaries are expected and admitted by
+ * comparing with `Bun.semver.order` instead of a range.
+ */
 const MINIMUM_NSH_RUNTIME_RANGE = ">=0.5.0";
 
 /**

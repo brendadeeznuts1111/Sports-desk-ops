@@ -3,6 +3,7 @@ import {
   assertBunFloor,
   assertJsonResponse,
   BUN_FLOOR,
+  BUN_FLOOR_BOUNDARY,
   fetchManagerJson,
   fetchWithRetry,
   requireGsid,
@@ -178,11 +179,33 @@ describe("assertBunFloor (repo floor gate)", () => {
   test("passes on the running Bun", () => {
     expect(() => assertBunFloor("tool-x")).not.toThrow();
     expect(Bun.semver.satisfies(Bun.version, BUN_FLOOR)).toBe(true);
+    expect(
+      Bun.semver.order(Bun.version, BUN_FLOOR_BOUNDARY),
+    ).toBeGreaterThanOrEqual(0);
   });
 
   test("the floor predicate rejects stale runtimes", () => {
     expect(Bun.semver.satisfies("1.4.4", BUN_FLOOR)).toBe(true);
     expect(Bun.semver.satisfies("1.3.99", BUN_FLOOR)).toBe(false);
+    expect(Bun.semver.order("1.3.99", BUN_FLOOR_BOUNDARY)).toBe(-1);
+  });
+
+  test("the ordering boundary admits prereleases the range gate drops", () => {
+    // `satisfies` with `-0` is tuple-bound: it admits 1.4.4-canary.* but not a
+    // 1.4.5-canary.*, which is what the floor actually has to mean (measured on
+    // Bun 1.4.4). The boundary compares numerically, so both pass.
+    for (const version of [
+      "1.4.4",
+      "1.4.4-canary.1",
+      "1.4.5-canary.1",
+      "1.5.0",
+    ]) {
+      expect(
+        Bun.semver.order(version, BUN_FLOOR_BOUNDARY),
+      ).toBeGreaterThanOrEqual(0);
+    }
+    expect(Bun.semver.satisfies("1.4.5-canary.1", BUN_FLOOR)).toBe(false);
+    expect(Bun.semver.order("1.4.3", BUN_FLOOR_BOUNDARY)).toBe(-1);
   });
 });
 

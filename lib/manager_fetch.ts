@@ -19,9 +19,20 @@ export const MANAGER_REFERER = "https://plive.sportswidgets.pro/manager-tools/";
 /** Minimum runtime our scripts rely on (`wrapAnsi`, `stripANSI`, `inspect.table`, …). */
 export const BUN_FLOOR = ">=1.4.4-0";
 
+/**
+ * Lowest acceptable version, as an ordering boundary rather than a range.
+ *
+ * `satisfies(Bun.version, BUN_FLOOR)` is tuple-bound: `-0` only admits
+ * prereleases whose `major.minor.patch` matches the comparator, so a
+ * `1.4.4-canary.1` passes while a `1.4.5-canary.1` fails (measured on 1.4.4).
+ * `order` compares numerically, so this boundary admits every prerelease at or
+ * above `1.4.4-0`, which is what the floor is supposed to mean.
+ */
+export const BUN_FLOOR_BOUNDARY = "1.4.4-0";
+
 /** Fail fast on a stale runtime instead of hitting cryptic API errors later. */
 export function assertBunFloor(tool: string): void {
-  if (!Bun.semver.satisfies(Bun.version, BUN_FLOOR)) {
+  if (Bun.semver.order(Bun.version, BUN_FLOOR_BOUNDARY) < 0) {
     throw new Error(
       `${tool}: requires Bun ${BUN_FLOOR} (have ${Bun.version}) — see AGENTS.md floor`,
     );
