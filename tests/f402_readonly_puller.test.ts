@@ -984,7 +984,11 @@ describe("base URL", () => {
     ).toContain("https:");
     configError(() => normalizePullBaseUrl("www.fantasy402.com"));
     configError(() => normalizePullBaseUrl(""));
-    configError(() => normalizePullBaseUrl("https://u:p@www.fantasy402.com"));
+    const withUser = new URL(F402_PULL_DEFAULT_BASE_URL);
+    withUser.username = "user";
+    configError(() => normalizePullBaseUrl(withUser.href));
+    withUser.password = "pw";
+    configError(() => normalizePullBaseUrl(withUser.href));
     configError(() => normalizePullBaseUrl("https://www.fantasy402.com/cloud"));
     configError(() => normalizePullBaseUrl("https://www.fantasy402.com/?a=1"));
     configError(() => normalizePullBaseUrl("https://www.fantasy402.com/#x"));
