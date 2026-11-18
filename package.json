@@ -398,8 +398,8 @@
     "audit:deps:json": "bun audit --json",
     "validate:field-contract": "bun scripts/validate_wagers_field_contract.ts",
     "profiles:harvest": "bun run scripts/harvest_live_profiles.ts",
-    "check:pm-state": "bun ci && bun prune --check",
-    "predev": "bun run check:pm-state && bun test tests/pm_state.test.ts",
+    "check:pm-state": "bun run scripts/check_pm_state.ts",
+    "predev": "bun run check:pm-state && bun ci && bun test tests/pm_state.test.ts",
     "test:pm-contracts": "bun test tests/bun_pm_behaviors.test.ts tests/bun_pm_cache.test.ts",
     "hooks:install": "sh scripts/install-git-hooks.sh"
   },
