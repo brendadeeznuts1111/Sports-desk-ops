@@ -112,6 +112,20 @@ Two pre-1.4.4 shapes can poison evidence recorded through the old behaviour:
   the pinned build, but no fix version is recorded. The API surface is documented; the hardening is not.
 - CSRF default `expiresIn` (86,400,000 ms) and `$.escape` prose are doc-cited, not re-measured here.
 
+## Reference symbol baseline (2026-11-18)
+
+[`tests/fixtures/bun-reference-symbols.json`](../tests/fixtures/bun-reference-symbols.json) records the
+`data-symbol` inventory from the bun.com reference page data for `bun`, `bun.$` and `node:crypto`
+(observed 2026-11-18; runtime pin `Bun 1.4.4`). [`tests/bun_reference_symbols.test.ts`](../tests/bun_reference_symbols.test.ts)
+checks every named `node:crypto` import and every `Bun.$` member access in the repo against it.
+
+This is a deliberate one-time pin, not an MCP transport. `.props.json` is Next.js page data, not the
+docs MCP protocol; the payloads (264 KB / 178 KB / 161 KB) are not committed and are not fetched in
+CI. Refresh the fixture only when the docs surface changes.
+
+The `bun.$` page documents `escape(input: string): string`; non-string coercion is measured runtime
+behaviour, not a docs guarantee. Do not use it as an input validator.
+
 ## When NOT to migrate to `Bun.JSONL` (2026-11-04 audit)
 
 The repo uses `Bun.JSONL.parse()` / `Bun.JSONL.parseChunk()` by default on JSONL inputs. The six sites below intentionally keep hand-rolled per-line `JSON.parse` loops because they require semantics `Bun.JSONL` does not provide. The v1.4.4 Bun APIs section has no JSONL hardening entry; do not attribute the blank-line/stray-delimiter behaviour to a fix version.
