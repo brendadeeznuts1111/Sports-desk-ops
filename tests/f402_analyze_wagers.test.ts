@@ -14,7 +14,17 @@ import {
   runReviewAnalysis,
   hashIp,
 } from "../lib/f402_analyze.ts";
-import { amountsMatch } from "../lib/f402_analyze_join.ts";
+import {
+  WAGER_AMOUNT_UNIT_BY_SOURCE,
+  amountsMatch,
+  joinWagersToLedger,
+  wagerAmountCentsCandidates,
+} from "../lib/f402_analyze_join.ts";
+import {
+  normalizeWagerRow,
+  type LedgerRow,
+  type WagerSource,
+} from "../lib/f402_analyze_ingest.ts";
 import {
   plantedBehaviourPull,
   writeSyntheticPull,
@@ -55,10 +65,77 @@ describe("wager ingest and join", () => {
     expect(coverage.assumptions).toEqual([...JOIN_ASSUMPTIONS]);
   });
 
+  test("amount units are explicit: cents, dollars, or either when unknown", () => {
+    expect(amountsMatch(5000, 5000, "cents")).toBe(true);
+    expect(amountsMatch(50, 5000, "cents")).toBe(false);
+    expect(amountsMatch(50, 5000, "dollars")).toBe(true);
+    expect(amountsMatch(5000, 5000, "dollars")).toBe(false);
+    expect(amountsMatch(12.34, 1234, "dollars")).toBe(true);
+    expect(amountsMatch(5000, 50, "unknown")).toBe(false);
+    expect(amountsMatch(Number.NaN, 0, "unknown")).toBe(false);
+    expect(amountsMatch(50, Number.NaN, "unknown")).toBe(false);
+    expect(wagerAmountCentsCandidates(50, "unknown")).toEqual([50, 5000]);
+    expect(wagerAmountCentsCandidates(0, "unknown")).toEqual([0]);
+    expect(
+      wagerAmountCentsCandidates(Number.POSITIVE_INFINITY, "cents"),
+    ).toEqual([]);
+  });
+
+  test("wager sources carry their measured unit", () => {
+    expect(WAGER_AMOUNT_UNIT_BY_SOURCE).toEqual({
+      pending: "cents",
+      graded: "cents",
+      "figure-date": "cents",
+      ticker: "unknown",
+    });
+  });
+
+  test("the time-amount ledger join reads each wager in its source unit", () => {
+    const placed = "2026-11-10T12:00:00Z";
+    const ledgerRow: LedgerRow = {
+      accountId: "CUST1",
+      documentNumber: 9001,
+      tranCode: "D",
+      tranType: "A",
+      kindLabel: "Placed",
+      family: "wager",
+      amountCents: 5000,
+      signedAmountCents: -5000,
+      balanceCents: null,
+      enteredBy: "",
+      description: "",
+      tranDateTime: placed,
+      tranMs: Date.parse(placed),
+      ticket: null,
+      gradeNum: null,
+      deleted: false,
+    };
+    const wager = (source: WagerSource, amount: number) =>
+      normalizeWagerRow(
+        {
+          CustomerID: "CUST1",
+          TicketNumber: `T-${source}-${amount}`,
+          AcceptedDateTime: placed,
+          AmountWagered: amount,
+        },
+        source,
+      );
+    const joined = (source: WagerSource, amount: number) =>
+      joinWagersToLedger([wager(source, amount)], [ledgerRow]).map(
+        (row) => row.confidence,
+      );
+    expect(joined("graded", 5000)).toEqual(["time_amount"]);
+    expect(joined("graded", 50)).toEqual([]);
+    expect(joined("pending", 50)).toEqual([]);
+    expect(joined("figure-date", 50)).toEqual([]);
+    expect(joined("ticker", 50)).toEqual(["time_amount"]);
+    expect(joined("ticker", 5000)).toEqual(["time_amount"]);
+  });
+
   test("amount matching accepts cents or dollars", () => {
     expect(amountsMatch(5000, 5000)).toBe(true);
     expect(amountsMatch(50, 5000)).toBe(true);
-    expect(amountsMatch(5000, 50)).toBe(true);
+    expect(amountsMatch(5000, 50)).toBe(false);
     expect(amountsMatch(12, 99)).toBe(false);
   });
 });
