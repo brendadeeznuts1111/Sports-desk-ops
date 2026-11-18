@@ -8,9 +8,10 @@
  * Bridge 3a projection (not this probe) owns the cents conversion and its documented assumption.
  */
 
+import { f402Fetch } from "./f402_fetch_sessions.ts";
 import type { F402Session } from "./f402_session.ts";
 
-/** Minimal fetch face the probe needs; the global fetch and the replay transport both satisfy it. */
+/** Minimal fetch face the probe needs; the per-origin session fetch and the replay transport both satisfy it. */
 export type F402ProbeFetch = (
   input: string,
   init: RequestInit,
@@ -179,8 +180,7 @@ export async function probeF402BetTicker(
     "",
   );
   const endpoint = `${baseUrl}/cloud/api/Manager/getBetTicker`;
-  const fetchImpl: F402ProbeFetch =
-    options.fetchImpl ?? ((input, init) => fetch(input, init));
+  const fetchImpl: F402ProbeFetch = options.fetchImpl ?? f402Fetch;
   const agentId = options.agentId.trim();
 
   const body = new URLSearchParams({

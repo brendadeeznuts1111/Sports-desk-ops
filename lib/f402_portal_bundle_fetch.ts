@@ -2,6 +2,8 @@
  * Fetch pinned portal artifacts under Bun; classify TLS-trust vs bundle-byte drift.
  */
 
+import { F402TlsVerificationError, f402Fetch } from "./f402_fetch_sessions.ts";
+
 export type PortalFetchOutcome =
   | {
       readonly kind: "ok";
@@ -17,7 +19,7 @@ export async function fetchPortalArtifactBytes(
   url: string,
 ): Promise<PortalFetchOutcome> {
   try {
-    const res = await fetch(url, { redirect: "follow" });
+    const res = await f402Fetch(url, { redirect: "follow" });
     if (!res.ok) {
       return { kind: "http_error", status: res.status };
     }
@@ -27,6 +29,9 @@ export async function fetchPortalArtifactBytes(
     return { kind: "ok", sha256, bytes: bytes.length, body: bytes };
   } catch (e) {
     const msg = String(e);
+    if (e instanceof F402TlsVerificationError) {
+      return { kind: "tls_trust", error: msg };
+    }
     const tlsLike =
       /certificate|cert|TLS|SSL|UNABLE_TO_VERIFY|unknown ca|self signed/i.test(
         msg,

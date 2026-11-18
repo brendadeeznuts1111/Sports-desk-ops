@@ -22,6 +22,7 @@ import {
   type AssetRole,
 } from "./f402_cdn_assets.ts";
 import { missingExternalViewGuardAnchors } from "./f402_client_seams.ts";
+import { F402TlsVerificationError, f402Fetch } from "./f402_fetch_sessions.ts";
 import { PROBE_HOST } from "./f402_hierarchy_config.ts";
 
 export const CDN_MANIFEST_PATH = join(
@@ -343,7 +344,7 @@ export type CdnDriftKind =
 
 export async function fetchAssetOutcome(url: string): Promise<FetchOutcome> {
   try {
-    const res = await fetch(url, {
+    const res = await f402Fetch(url, {
       redirect: "follow",
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
@@ -356,6 +357,9 @@ export async function fetchAssetOutcome(url: string): Promise<FetchOutcome> {
     };
   } catch (error) {
     const message = String(error);
+    if (error instanceof F402TlsVerificationError) {
+      return { kind: "tls_trust", error: message };
+    }
     const tlsLike =
       /certificate|cert|TLS|SSL|UNABLE_TO_VERIFY|unknown ca|self signed/i.test(
         message,
