@@ -8,6 +8,10 @@
 import { join } from "node:path";
 
 import {
+  type F402FetchSessionPool,
+  f402FetchSessions,
+} from "./f402_fetch_sessions.ts";
+import {
   loadF402Session,
   primeF402Session,
   readF402Session,
@@ -47,6 +51,8 @@ export interface F402ReplayTransportOptions {
   readonly env?: NodeJS.ProcessEnv;
   /** Test seam: replace the Bun FetchSession wire call. */
   readonly fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
+  /** Per-origin FetchSession pool (default: the process-wide {@link f402FetchSessions}). */
+  readonly sessions?: F402FetchSessionPool;
   /** Test seam: replace 401 re-mint (default: `refreshF402Session` + `saveF402Session`). */
   readonly refreshSession?: () => Promise<void>;
   readonly readSession?: () => ReturnType<typeof readF402Session>;
@@ -81,9 +87,7 @@ export async function createF402ReplayTransport(
     };
   }
 
-  const bunSession = new Bun.FetchSession({
-    tls: { rejectUnauthorized: true },
-  });
+  const sessions = options?.sessions ?? f402FetchSessions;
 
   if (options?.readSession === undefined) await primeF402Session();
   const readSession = options?.readSession ?? (() => readF402Session());
@@ -92,7 +96,7 @@ export async function createF402ReplayTransport(
 
   const wireFetch =
     options?.fetchImpl ??
-    ((url: string, init: RequestInit) => bunSession.fetch(url, init));
+    ((url: string, init: RequestInit) => sessions.fetch(url, init));
 
   async function fetchOnce(url: string, init: RequestInit): Promise<Response> {
     const headers = new Headers(init.headers);
@@ -139,7 +143,7 @@ export async function createF402ReplayTransport(
       return response;
     },
     async close(): Promise<void> {
-      await bunSession.close();
+      sessions.closeIdle();
     },
   };
 }
