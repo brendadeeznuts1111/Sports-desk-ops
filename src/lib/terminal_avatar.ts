@@ -80,18 +80,75 @@ function pixelDimensions(opts: AvatarFrameOptions): {
   return { cols, rows, width, height };
 }
 
+/**
+ * `Bun.Image` failures that mean "this file is not a usable avatar": an unsniffable or
+ * unsupported format, a decode/encode error, or a header that exceeds `maxPixels`.
+ * `ERR_INVALID_STATE` is deliberately absent — that one is a programming error (a transferred
+ * buffer), not bad input, so it must keep propagating.
+ * @see https://bun.com/reference/bun/Image#errorcode
+ */
+export const AVATAR_IMAGE_FAILURE_CODES = [
+  "ERR_IMAGE_FORMAT_UNSUPPORTED",
+  "ERR_IMAGE_TOO_MANY_PIXELS",
+  "ERR_IMAGE_DECODE_FAILED",
+  "ERR_IMAGE_ENCODE_FAILED",
+  "ERR_IMAGE_UNKNOWN_FORMAT",
+] as const;
+
+export type AvatarImageFailureCode =
+  (typeof AVATAR_IMAGE_FAILURE_CODES)[number];
+
+/** A rejected avatar, classified by the `Bun.Image` code that produced it. */
+export class AvatarImageError extends Error {
+  readonly code: AvatarImageFailureCode;
+
+  constructor(code: AvatarImageFailureCode, cause: unknown) {
+    super(`avatar image rejected: ${code}`, { cause });
+    this.name = "AvatarImageError";
+    this.code = code;
+  }
+}
+
+function isAvatarImageFailureCode(
+  code: unknown,
+): code is AvatarImageFailureCode {
+  return (AVATAR_IMAGE_FAILURE_CODES as readonly unknown[]).includes(code);
+}
+
+/**
+ * Decode, fit and encode one avatar, mapping `Bun.Image` rejections to {@link AvatarImageError}.
+ *
+ * `Bun.file(...).image()` is lazy: nothing is decoded until the terminal call, so the failure
+ * lands on `toBase64()` — and a caller that only catches decode errors sees a raw rejection whose
+ * `code` is `ERR_IMAGE_UNKNOWN_FORMAT` for an HTML/error-page body saved as `.png`. One typed
+ * error lets the banner skip a bad file without swallowing a real bug.
+ */
+async function encodeAvatarPng(
+  source: AvatarSource,
+  opts: AvatarFrameOptions,
+): Promise<{ readonly b64: string; readonly image: Bun.Image }> {
+  const { width, height } = pixelDimensions(opts);
+  try {
+    const image = openImage(source, {
+      maxPixels: opts.maxPixels ?? 8_000_000,
+    })
+      .resize(width, height, { fit: "inside", withoutEnlargement: true })
+      .png();
+    return { b64: await image.toBase64(), image };
+  } catch (error) {
+    const code = (error as { readonly code?: unknown } | null)?.code;
+    if (isAvatarImageFailureCode(code)) throw new AvatarImageError(code, error);
+    throw error;
+  }
+}
+
 /** Build a Kitty Graphics Protocol frame with 4096-byte payload chunks. */
 export async function renderKittyImageFrameAsync(
   source: AvatarSource,
   opts: AvatarFrameOptions = {},
 ): Promise<string> {
-  const { cols, rows, width, height } = pixelDimensions(opts);
-  const b64 = await openImage(source, {
-    maxPixels: opts.maxPixels ?? 8_000_000,
-  })
-    .resize(width, height, { fit: "inside", withoutEnlargement: true })
-    .png()
-    .toBase64();
+  const { cols, rows } = pixelDimensions(opts);
+  const { b64 } = await encodeAvatarPng(source, opts);
 
   const chunks: string[] = [];
   for (let index = 0; index < b64.length; index += KITTY_CHUNK_BYTES) {
@@ -120,13 +177,8 @@ export async function renderIterm2ImageFrameAsync(
   source: AvatarSource,
   opts: AvatarFrameOptions = {},
 ): Promise<string> {
-  const { cols, rows, width, height } = pixelDimensions(opts);
-  const image = openImage(source, {
-    maxPixels: opts.maxPixels ?? 8_000_000,
-  })
-    .resize(width, height, { fit: "inside", withoutEnlargement: true })
-    .png();
-  const b64 = await image.toBase64();
+  const { cols, rows } = pixelDimensions(opts);
+  const { b64, image } = await encodeAvatarPng(source, opts);
   const bytes = await image.bytes();
   const params = [
     "inline=1",

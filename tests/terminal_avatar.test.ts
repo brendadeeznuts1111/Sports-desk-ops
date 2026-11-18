@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
+  AvatarImageError,
   buildAnsiTheme,
   detectImageProtocol,
   renderIterm2ImageFrameAsync,
@@ -57,5 +61,44 @@ describe("terminal avatar pipeline", () => {
     });
     expect(markdown).toContain("Synced");
     expect(markdown).toContain("avatar");
+  });
+});
+
+/**
+ * `Bun.Image` is lazy, so a mislabelled file (an HTML error page saved as `.png`) only fails at
+ * the terminal call — and with `ERR_IMAGE_UNKNOWN_FORMAT`, which a decode-only catch list misses.
+ * The pipeline classifies those as `AvatarImageError` so a banner can skip the file, while a
+ * programming error (a transferred buffer, `ERR_INVALID_STATE`) still propagates untouched.
+ */
+describe("avatar image failure classification", () => {
+  test("a non-image body raises AvatarImageError with the Bun.Image code", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "avatar-bad-"));
+    try {
+      const path = join(dir, "error-page.png");
+      writeFileSync(path, "<!doctype html><title>session expired</title>");
+      for (const render of [
+        renderKittyImageFrameAsync,
+        renderIterm2ImageFrameAsync,
+      ]) {
+        const error = await render(path).then(
+          () => null,
+          (err: unknown) => err,
+        );
+        expect(error).toBeInstanceOf(AvatarImageError);
+        expect((error as AvatarImageError).code).toBe(
+          "ERR_IMAGE_UNKNOWN_FORMAT",
+        );
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a valid image still renders", async () => {
+    const frame = await renderIterm2ImageFrameAsync(onePixelPng, {
+      cols: 1,
+      rows: 1,
+    });
+    expect(frame.startsWith("\u001b]1337;File=")).toBe(true);
   });
 });
