@@ -18,6 +18,7 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
+import { F402TlsVerificationError, f402Fetch } from "./f402_fetch_sessions.ts";
 import { replaceIpsInText, textContainsIp } from "./f402_ip_text.ts";
 
 import {
@@ -84,6 +85,7 @@ export type F402PullerErrorCode =
   | "response"
   | "checkpoint"
   | "rate-limited"
+  | "tls"
   | "unsafe-path";
 
 export class F402PullerError extends Error {
@@ -96,8 +98,12 @@ export class F402PullerError extends Error {
     operation: string,
     message: string,
     status: number | null = null,
+    cause?: unknown,
   ) {
-    super(`f402-pull ${operation}: ${message}`);
+    super(
+      `f402-pull ${operation}: ${message}`,
+      cause === undefined ? undefined : { cause },
+    );
     this.name = "F402PullerError";
     this.code = code;
     this.operation = operation;
@@ -486,7 +492,7 @@ export class F402PullClient {
       /\/+$/,
       "",
     );
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? f402Fetch;
     this.clock = options.clock ?? createPaceClock();
     this.pacer =
       options.pacer ??
@@ -544,6 +550,9 @@ export class F402PullClient {
           redirect: "manual",
         });
       } catch (error) {
+        if (error instanceof F402TlsVerificationError) {
+          throw new F402PullerError("tls", op, error.message, null, error);
+        }
         throw new F402PullerError(
           "http",
           op,
