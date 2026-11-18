@@ -46,7 +46,7 @@ import { SPORT_FIELD_WIDTH } from "./f402_field_widths.ts";
 import { MANAGER_RRO, PROBE_HOST } from "./f402_hierarchy_config.ts";
 import { resolveF402BearerTokenDetailed } from "./f402_pending_fetch.ts";
 import type { F402ReplayTransport } from "./f402_replay_transport.ts";
-import { readF402Session } from "./f402_session.ts";
+import { primeF402Session, readF402Session } from "./f402_session.ts";
 import {
   classifySuspectedBot,
   type SuspectedBotLabel,
@@ -2039,6 +2039,9 @@ async function buildManagerFormHeaders(
     return headers;
   }
   if (!forceMint) {
+    // Keychain store: load the session first so the sync reads below (and the bearer resolver's
+    // session fallback) see it; a store failure throws by name.
+    if (options?.readSession === undefined) await primeF402Session();
     const session = (options?.readSession ?? readF402Session)();
     const sessionAuth = session?.authorizationHeader?.trim() ?? "";
     if (sessionAuth !== "") {

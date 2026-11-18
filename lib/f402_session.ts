@@ -115,7 +115,8 @@ function storeFor(options?: F402SessionFileOptions): F402SessionStoreKind {
 }
 
 /** In-process copy of the keychain session (`undefined` = not loaded in this process yet). */
-let keychainSessionCache: { readonly raw: unknown } | undefined;
+let keychainSessionCache:
+  { readonly raw: unknown; readonly present: boolean } | undefined;
 let pendingKeychainWrites: Promise<void>[] = [];
 let warnedUnloaded = false;
 
@@ -269,7 +270,10 @@ export function writeF402Session(
   options?: F402SessionFileOptions,
 ): string {
   if (storeFor(options) === "keychain") {
-    keychainSessionCache = { raw: JSON.parse(JSON.stringify(session)) };
+    keychainSessionCache = {
+      raw: JSON.parse(JSON.stringify(session)),
+      present: true,
+    };
     const write = writeF402Secret(
       F402_SESSION_SECRET_NAME,
       JSON.stringify(session),
@@ -338,7 +342,7 @@ export async function loadF402Session(
       raw = null;
     }
   }
-  keychainSessionCache = { raw };
+  keychainSessionCache = { raw, present: found !== null };
   return parseF402SessionValue(raw, options?.now ?? Date.now());
 }
 
@@ -353,6 +357,52 @@ export async function primeF402Session(
   if (storeFor(options) === "keychain") await loadF402Session(options);
 }
 
+/** An async session read that reports a store failure instead of throwing it. */
+export type F402SessionRead =
+  | { readonly ok: true; readonly session: F402Session | null }
+  | { readonly ok: false; readonly error: F402SecretError };
+
+/**
+ * Session read for callers whose contract is "never throw; report a diagnostic". File store: the
+ * same synchronous file read as {@link readF402Session}. Keychain store: {@link loadF402Session},
+ * with a named store error (F402KeychainUnavailable, F402SecretBackendError, ...) returned as
+ * `{ ok: false }` so it is reported as a store failure, never as "no session".
+ * An invalid `F402_SESSION_STORE` and any non-store error still throw.
+ */
+export async function readF402SessionForReader(
+  options?: F402SessionFileOptions & { readonly adapter?: SecretsAdapter },
+): Promise<F402SessionRead> {
+  if (storeFor(options) !== "keychain") {
+    return { ok: true, session: readF402Session(options) };
+  }
+  try {
+    return { ok: true, session: await loadF402Session(options) };
+  } catch (error) {
+    if (error instanceof F402SecretError) return { ok: false, error };
+    throw error;
+  }
+}
+
+/** Keychain store only: whether the last load found an entry (even an expired or invalid one). */
+export function loadedF402KeychainEntryPresent(): boolean | undefined {
+  if (keychainSessionCache === undefined) return undefined;
+  return keychainSessionCache.present;
+}
+
+/** One-line, value-free description of a session-store failure for diagnostics. */
+export function describeF402SessionStoreFailure(
+  error: F402SecretError,
+): string {
+  return `The F402 session could not be read from the keychain (F402_SESSION_STORE=keychain): ${error.name} (${error.bunCode ?? error.kind}).`;
+}
+
+/** Operator steps for a session-store failure; shared by the live-read diagnostics. */
+export const F402_SESSION_STORE_HINT = [
+  "bun run secrets:f402 probe                  (is the OS keychain reachable?)",
+  "bun run secrets:f402 status                 (which entries exist)",
+  "F402_SESSION_STORE=file                     (use the 0600 session file instead)",
+].join("\n");
+
 /** Async save that resolves only once the session is stored. Returns the location label. */
 export async function saveF402Session(
   session: F402Session,
@@ -365,7 +415,10 @@ export async function saveF402Session(
     ...(options?.adapter === undefined ? {} : { adapter: options.adapter }),
     redact: sessionSecrets(session),
   });
-  keychainSessionCache = { raw: JSON.parse(JSON.stringify(session)) };
+  keychainSessionCache = {
+    raw: JSON.parse(JSON.stringify(session)),
+    present: true,
+  };
   return keychainSessionLocation();
 }
 
@@ -373,7 +426,7 @@ export async function saveF402Session(
 export async function clearF402KeychainSession(
   options: { readonly adapter?: SecretsAdapter } = {},
 ): Promise<boolean> {
-  keychainSessionCache = { raw: null };
+  keychainSessionCache = { raw: null, present: false };
   return deleteF402Secret(
     CANONICAL_SECRETS_SERVICE,
     F402_SESSION_SECRET_NAME,

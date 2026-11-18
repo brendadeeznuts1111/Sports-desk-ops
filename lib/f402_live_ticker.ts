@@ -26,7 +26,12 @@ import {
   createF402ReplayTransport,
   type F402ReplayTransport,
 } from "./f402_replay_transport.ts";
-import { readF402Session, type F402Session } from "./f402_session.ts";
+import {
+  describeF402SessionStoreFailure,
+  F402_SESSION_STORE_HINT,
+  readF402SessionForReader,
+  type F402Session,
+} from "./f402_session.ts";
 import {
   F402_KEYCHAIN_NAMES,
   readSecretCanonicalThenLegacy,
@@ -97,7 +102,11 @@ export interface LiveTickerFetchOptions {
   readonly now?: Date;
   /** Fetch seam for tests; when set, no replay transport is created. */
   readonly fetchImpl?: F402ProbeFetch;
-  /** Session seam for tests; `undefined` reads the cache, `null` forces "no session". */
+  /**
+   * Session seam for tests; `undefined` reads the configured store (in keychain mode an async
+   * Bun.secrets read; a store failure is the `session_store_unavailable` diagnostic), `null`
+   * forces "no session".
+   */
   readonly session?: F402Session | null;
   /** Environment seam; defaults to `Bun.env` (read for the agent id and the proxy URL). */
   readonly env?: Readonly<Record<string, string | undefined>>;
@@ -111,6 +120,8 @@ export interface LiveTickerFetchOptions {
 export type LiveTickerDiagnostic =
   | { code: "ok"; transport: string; httpStatus: number }
   | { code: "transport_unavailable"; message: string; hint: string }
+  /** F402_SESSION_STORE=keychain and the keychain could not be read (named error in message). */
+  | { code: "session_store_unavailable"; message: string; hint: string }
   | { code: "agent_required"; message: string }
   | { code: "unauthorized"; message: string; httpStatus: number }
   | { code: "http_error"; message: string; httpStatus: number }
@@ -218,8 +229,9 @@ function tickerBody(agentId: string): string {
 }
 
 /**
- * Reads the live bet ticker. Never throws for an unconfigured session/agent: every refusal is a
- * structured diagnostic, and nothing is fetched until both a transport and an agent are resolved.
+ * Reads the live bet ticker. Never throws for an unconfigured session/agent or an unreadable session
+ * store: every refusal is a structured diagnostic, and nothing is fetched until both a transport
+ * and an agent are resolved.
  */
 export async function fetchLiveBetTicker(
   options: LiveTickerFetchOptions = {},
@@ -227,13 +239,6 @@ export async function fetchLiveBetTicker(
   const env = options.env ?? Bun.env;
   const observedAt = (options.now ?? new Date()).toISOString();
   const timeoutMs = resolveTimeoutMs(options.timeoutMs);
-  const session: F402Session | null =
-    options.session !== undefined ? options.session : readF402Session();
-  const proxyConfigured = (env[PROXY_ENV] ?? "").trim() !== "";
-  // An injected fetch is a transport seam; otherwise a session or the proxy must exist.
-  const transportAvailable =
-    options.fetchImpl !== undefined || session !== null || proxyConfigured;
-
   // Starts as the agent the caller already named so a transport refusal can report it without
   // touching the keychain; the full resolution (which may read it) happens only once a transport
   // exists.
@@ -250,6 +255,25 @@ export async function fetchLiveBetTicker(
     transport: null,
     diagnostic,
   });
+
+  let session: F402Session | null;
+  if (options.session !== undefined) {
+    session = options.session;
+  } else {
+    const read = await readF402SessionForReader();
+    if (!read.ok) {
+      return fail({
+        code: "session_store_unavailable",
+        message: describeF402SessionStoreFailure(read.error),
+        hint: F402_SESSION_STORE_HINT,
+      });
+    }
+    session = read.session;
+  }
+  const proxyConfigured = (env[PROXY_ENV] ?? "").trim() !== "";
+  // An injected fetch is a transport seam; otherwise a session or the proxy must exist.
+  const transportAvailable =
+    options.fetchImpl !== undefined || session !== null || proxyConfigured;
 
   if (!transportAvailable) {
     return fail({

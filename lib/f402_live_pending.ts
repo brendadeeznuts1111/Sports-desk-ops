@@ -28,7 +28,12 @@ import {
   createF402ReplayTransport,
   type F402ReplayTransport,
 } from "./f402_replay_transport.ts";
-import { readF402Session, type F402Session } from "./f402_session.ts";
+import {
+  describeF402SessionStoreFailure,
+  F402_SESSION_STORE_HINT,
+  readF402SessionForReader,
+  type F402Session,
+} from "./f402_session.ts";
 import { readPendingRows, type PendingRow } from "./live_bets.ts";
 
 /** `/cloud/api/Report/Pending`: the operation path the live-bets artifact records. */
@@ -83,13 +88,18 @@ export interface LivePendingFetchOptions {
   readonly env?: Readonly<Record<string, string | undefined>>;
   /** Fetch seam for tests; when set, no replay transport is created. */
   readonly fetchImpl?: F402ProbeFetch;
-  /** Session seam for tests; `undefined` reads the cache, `null` forces "no session". */
+  /**
+   * Session seam for tests; `undefined` reads the configured store (keychain mode: async, a store
+   * failure is `session_store_unavailable`), `null` forces "no session".
+   */
   readonly session?: F402Session | null;
 }
 
 export type LivePendingDiagnostic =
   | { code: "ok"; transport: string; httpStatus: number }
   | { code: "transport_unavailable"; message: string; hint: string }
+  /** F402_SESSION_STORE=keychain and the keychain could not be read (named error in message). */
+  | { code: "session_store_unavailable"; message: string; hint: string }
   | { code: "no_customer_scope"; message: string; hint: string }
   | {
       code: "unauthorized";
@@ -352,10 +362,10 @@ function failureDiagnostic(
 /**
  * Reads the live Pending report for every customer in scope.
  *
- * Never throws for an unconfigured transport or an empty scope: every refusal is a structured
- * diagnostic, and nothing is fetched until both a scope and a transport exist. A 401/403 on the
- * first observed response stops the fan-out; every other per-customer failure is collected and
- * reported as `partial` when at least one customer still answered.
+ * Never throws for an unconfigured transport, an unreadable session store or an empty scope: every
+ * refusal is a structured diagnostic, and nothing is fetched until both a scope and a transport
+ * exist. A 401/403 on the first observed response stops the fan-out; every other per-customer
+ * failure is collected and reported as `partial` when at least one customer still answered.
  */
 export async function fetchLivePending(
   options: LivePendingFetchOptions,
@@ -400,17 +410,10 @@ export async function fetchLivePending(
     };
   }
 
-  const session: F402Session | null =
-    options.session !== undefined ? options.session : readF402Session();
-  const proxyConfigured = (env[PROXY_ENV] ?? "").trim() !== "";
-  // An injected fetch is a transport seam; otherwise a session or the proxy must exist.
-  const transportAvailable =
-    options.fetchImpl !== undefined || session !== null || proxyConfigured;
-
   const fail = (
     diagnostic: Extract<
       LivePendingDiagnostic,
-      { code: "transport_unavailable" }
+      { code: "transport_unavailable" | "session_store_unavailable" }
     >,
   ): LivePendingFetchResult => ({
     ok: false,
@@ -422,6 +425,25 @@ export async function fetchLivePending(
     transport: null,
     diagnostic,
   });
+
+  let session: F402Session | null;
+  if (options.session !== undefined) {
+    session = options.session;
+  } else {
+    const read = await readF402SessionForReader();
+    if (!read.ok) {
+      return fail({
+        code: "session_store_unavailable",
+        message: describeF402SessionStoreFailure(read.error),
+        hint: F402_SESSION_STORE_HINT,
+      });
+    }
+    session = read.session;
+  }
+  const proxyConfigured = (env[PROXY_ENV] ?? "").trim() !== "";
+  // An injected fetch is a transport seam; otherwise a session or the proxy must exist.
+  const transportAvailable =
+    options.fetchImpl !== undefined || session !== null || proxyConfigured;
 
   if (!transportAvailable) {
     return fail({

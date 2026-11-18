@@ -8,6 +8,7 @@
 import { join } from "node:path";
 
 import {
+  loadF402Session,
   primeF402Session,
   readF402Session,
   refreshF402Session,
@@ -143,10 +144,15 @@ export async function createF402ReplayTransport(
   };
 }
 
-/** @deprecated Prefer {@link createF402ReplayTransport}. */
-export function cookieHeaderFromEnv(env: NodeJS.ProcessEnv = Bun.env): string {
+/**
+ * @deprecated Prefer {@link createF402ReplayTransport}. Async so the keychain session store is
+ * loaded before the read (a store failure throws by name); no callers remain in this repo.
+ */
+export async function cookieHeaderFromEnv(
+  env: NodeJS.ProcessEnv = Bun.env,
+): Promise<string> {
   warnIfDeprecatedCookieEnv(env);
-  const session = readF402Session();
+  const session = await loadF402Session();
   if (session !== null) return session.cookieHeader;
   return env[DEPRECATED_F402_COOKIE_ENV]?.trim() ?? "";
 }
