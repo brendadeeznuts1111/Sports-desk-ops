@@ -22,12 +22,11 @@ import { parseArgs } from "node:util";
 import { f402FetchSessions } from "../lib/f402_fetch_sessions.ts";
 import {
   applyF402NetOptions,
-  applyHostOverride,
+  assertBunNetworkEnv,
   F402_NET_ARG_OPTIONS,
   F402_NET_USAGE,
   F402NetOptionsError,
   f402NetReport,
-  relaunchForBunNetworkEnv,
   resolveF402NetOptions,
 } from "../lib/f402_net_options.ts";
 
@@ -41,6 +40,7 @@ import {
   createPaceClock,
   defaultTransactionStartDate,
   redactSecretsAndIps,
+  resolveF402PortalOrigin,
   resolvePullBaseUrl,
   resolvePullSession,
   runCensus,
@@ -86,7 +86,8 @@ Options:
   --since <YYYY-MM-DD>     Incremental start; later of --since and --from wins
   --mode <A|B|C|I>         getWebLog type (default: I)
   --skip-figure-date       Wagers: skip per-customer getWagersByFigureDate
-  --base-url <url>         https portal origin (default: ${F402_PULL_BASE_URL_ENV} or ${F402_PULL_DEFAULT_BASE_URL})
+  --base-url <url>         https portal origin, http only for loopback (default: ${F402_PULL_BASE_URL_ENV} or ${F402_PULL_DEFAULT_BASE_URL});
+                           the host must be allowlisted (see --host)
   --interval-ms <n>        Minimum delay between requests (default: ${F402_PULL_DEFAULT_INTERVAL_MS})
   --rate <n>               Requests per second (default 1); do not also pass a conflicting --interval-ms
   --concurrency <n>        Max in-flight per-customer jobs (default 1, checkpoint-safe)
@@ -218,7 +219,7 @@ async function main(argv: string[]): Promise<number> {
     recurseDownline: values["recurse-downline"] === true,
   };
   const net = resolveF402NetOptions(values);
-  const baseUrl = applyHostOverride(
+  const baseUrl = resolveF402PortalOrigin(
     resolvePullBaseUrl(flagString(values, "base-url")),
     net.host,
   );
@@ -247,8 +248,7 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
-  const relaunched = await relaunchForBunNetworkEnv(net);
-  if (relaunched !== null) return relaunched;
+  assertBunNetworkEnv(net);
   applyF402NetOptions(net, f402FetchSessions);
   if (net.verbose) process.once("exit", () => printNetReport(net));
 

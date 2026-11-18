@@ -6,8 +6,8 @@
  * `BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS` and `BUN_FEATURE_FLAG_DISABLE_IPV4/6` once, at the first
  * DNS use (src/runtime/dns_jsc/dns.rs `get_max_dns_time_to_live_seconds`, `get_hints`), and a later
  * `process.env` write is ignored. When the requested values differ from the launch environment the
- * CLI runs itself again once with them set ({@link relaunchForBunNetworkEnv}). See
- * docs/runbooks/f402_session_refresh.md "Transport and protocols".
+ * CLI fails with {@link F402BunLaunchEnvError}, which prints the env assignment to relaunch with
+ * ({@link assertBunNetworkEnv}). See docs/runbooks/f402_session_refresh.md "Transport and protocols".
  */
 
 import {
@@ -23,13 +23,34 @@ export const F402_HOST_ENV = "F402_HOST";
 export const F402_DNS_PREFETCH_ENV = "F402_DNS_PREFETCH";
 export const F402_DNS_CACHE_TTL_ENV = "F402_DNS_CACHE_TTL_SECONDS";
 export const F402_IP_FAMILY_ENV = "F402_IP_FAMILY";
-export const F402_NET_RELAUNCHED_ENV = "F402_NET_RELAUNCHED";
 
 export const BUN_DNS_TTL_ENV = "BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS";
 export const BUN_DISABLE_IPV4_ENV = "BUN_FEATURE_FLAG_DISABLE_IPV4";
 export const BUN_DISABLE_IPV6_ENV = "BUN_FEATURE_FLAG_DISABLE_IPV6";
 export const BUN_DEFAULT_DNS_TTL_SECONDS = 30;
 const MAX_DNS_TTL_SECONDS = 0xffff_ffff;
+
+/** Hosts `--host` / `F402_HOST` and the CLI base URL may name: the portal, its apex and its CDN. */
+export const F402_ALLOWED_HOSTS: readonly string[] = Object.freeze([
+  "fantasy402.com",
+  "www.fantasy402.com",
+  "cdn.fastassets.io",
+]);
+
+/** `localhost`, `127.0.0.0/8` or `[::1]`, as `URL.hostname` spells them. */
+export function isF402LoopbackHost(hostname: string): boolean {
+  if (hostname === "localhost" || hostname === "[::1]") return true;
+  const octets = hostname.split(".");
+  return (
+    octets.length === 4 &&
+    octets[0] === "127" &&
+    octets.every((o) => /^\d{1,3}$/.test(o) && Number(o) <= 255)
+  );
+}
+
+export function isF402AllowedHost(hostname: string): boolean {
+  return F402_ALLOWED_HOSTS.includes(hostname) || isF402LoopbackHost(hostname);
+}
 
 export const F402_IP_FAMILIES = ["auto", "4", "6"] as const;
 export type F402IpFamily = (typeof F402_IP_FAMILIES)[number];
@@ -55,11 +76,14 @@ export const F402_NET_ARG_OPTIONS = {
 } as const;
 
 export const F402_NET_USAGE = `Network (flag > env > default):
-  --host <hostname>        Replace the host of the base URL; scheme and port are kept (${F402_HOST_ENV})
+  --host <hostname>        Replace the host of the base URL; scheme and port are kept (${F402_HOST_ENV});
+                           one of ${F402_ALLOWED_HOSTS.join(", ")} or a loopback host
   --dns-prefetch           Prefetch each origin's host once before its first request (default; ${F402_DNS_PREFETCH_ENV}=1)
   --no-dns-prefetch        Skip the prefetch (${F402_DNS_PREFETCH_ENV}=0)
-  --dns-cache-ttl <s>      Bun DNS cache lifetime in whole seconds, Bun default ${BUN_DEFAULT_DNS_TTL_SECONDS} (${F402_DNS_CACHE_TTL_ENV}); set at launch, so the CLI reruns itself once
-  --family <auto|4|6>      IP family for fetch connections, prefetch and lookups (${F402_IP_FAMILY_ENV}); set at launch, like the TTL
+  --dns-cache-ttl <s>      Bun DNS cache lifetime in whole seconds, Bun default ${BUN_DEFAULT_DNS_TTL_SECONDS} (${F402_DNS_CACHE_TTL_ENV}); Bun reads it at launch,
+                           so it must match ${BUN_DNS_TTL_ENV} or the CLI exits 2 with the assignment to relaunch with
+  --family <auto|4|6>      IP family for fetch connections, prefetch and lookups (${F402_IP_FAMILY_ENV}); launch setting
+                           like the TTL (${BUN_DISABLE_IPV6_ENV}=1 for 4, ${BUN_DISABLE_IPV4_ENV}=1 for 6)
   --http-version <auto|1.1|2>  HTTP version for F402 fetch sessions (${F402_HTTP_VERSION_ENV}); 2 needs https
   --verbose                Print the network options and Bun.dns.getCacheStats() as JSON on stderr`;
 
@@ -112,6 +136,12 @@ export function parseF402Host(value: string, option = "--host"): string {
     throw new F402NetOptionsError(
       option,
       `is not a canonical ASCII hostname (got ${JSON.stringify(trimmed)}, URL reads ${JSON.stringify(parsed.hostname)})`,
+    );
+  }
+  if (!isF402AllowedHost(parsed.hostname)) {
+    throw new F402NetOptionsError(
+      option,
+      `must be one of ${F402_ALLOWED_HOSTS.join(", ")} or a loopback host (localhost, 127.0.0.0/8, [::1]), got ${JSON.stringify(parsed.hostname)}`,
     );
   }
   return parsed.hostname;
@@ -298,51 +328,57 @@ export function bunNetworkEnvChanges(
   return Object.keys(changes).length === 0 ? null : changes;
 }
 
-export interface RelaunchDeps {
-  readonly env?: Env;
-  readonly argv?: readonly string[];
-  readonly spawn?: (cmd: string[], env: Env) => Promise<number>;
+export class F402BunLaunchEnvError extends F402NetOptionsError {
+  readonly assignments: Readonly<Record<string, string | undefined>>;
+  readonly relaunchCommand: string;
+
+  constructor(
+    assignments: Readonly<Record<string, string | undefined>>,
+    command: readonly string[],
+  ) {
+    const unset = Object.entries(assignments)
+      .filter(([, v]) => v === undefined)
+      .map(([k]) => `-u ${k}`);
+    const set = Object.entries(assignments)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => `${k}=${v}`);
+    const prefix = unset.length > 0 ? ["env", ...unset, ...set] : set;
+    const relaunchCommand = [...prefix, ...command.map(shellQuote)].join(" ");
+    super(
+      "--dns-cache-ttl/--family",
+      `Bun reads its DNS cache TTL and IP family only at launch, and the launch env does not match the request (${Object.keys(assignments).join(", ")}); relaunch with:\n  ${relaunchCommand}`,
+    );
+    this.name = "F402BunLaunchEnvError";
+    this.assignments = assignments;
+    this.relaunchCommand = relaunchCommand;
+  }
 }
 
-async function spawnInherit(cmd: string[], env: Env): Promise<number> {
-  const proc = Bun.spawn(cmd, {
-    env,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  return await proc.exited;
+function shellQuote(arg: string): string {
+  return /^[\w@%+=:,./-]+$/.test(arg)
+    ? arg
+    : `'${arg.replaceAll("'", `'\\''`)}'`;
+}
+
+function defaultRelaunchCommand(): string[] {
+  const cwd = process.cwd();
+  const main = Bun.main.startsWith(`${cwd}/`)
+    ? Bun.main.slice(cwd.length + 1)
+    : Bun.main;
+  return ["bun", main, ...process.argv.slice(2)];
 }
 
 /**
- * Runs this CLI once more with Bun's DNS TTL / family launch env set, and returns its exit code;
- * returns null when the current process already has them. Call before any DNS use.
+ * Throws {@link F402BunLaunchEnvError} when `--dns-cache-ttl` / `--family` ask for something the
+ * launch env did not give Bun; returns when it already matches. Call before any DNS use.
  */
-export async function relaunchForBunNetworkEnv(
+export function assertBunNetworkEnv(
   options: F402NetOptions,
-  deps: RelaunchDeps = {},
-): Promise<number | null> {
-  const env = deps.env ?? Bun.env;
+  env: Env = Bun.env,
+  command: readonly string[] = defaultRelaunchCommand(),
+): void {
   const changes = bunNetworkEnvChanges(options, env);
-  if (changes === null) return null;
-  if (env[F402_NET_RELAUNCHED_ENV] === "1") {
-    throw new F402NetOptionsError(
-      "--dns-cache-ttl/--family",
-      `the relaunched process still lacks ${Object.keys(changes).join(", ")}`,
-    );
-  }
-  const childEnv: Env = { ...env, [F402_NET_RELAUNCHED_ENV]: "1" };
-  for (const [key, value] of Object.entries(changes)) {
-    if (value === undefined) delete childEnv[key];
-    else childEnv[key] = value;
-  }
-  const argv = deps.argv ?? [
-    process.execPath,
-    ...process.execArgv,
-    Bun.main,
-    ...process.argv.slice(2),
-  ];
-  return await (deps.spawn ?? spawnInherit)([...argv], childEnv);
+  if (changes !== null) throw new F402BunLaunchEnvError(changes, command);
 }
 
 export function applyF402NetOptions(

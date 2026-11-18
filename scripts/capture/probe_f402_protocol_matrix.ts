@@ -26,16 +26,16 @@ import {
   reportCustomerContextUrl,
 } from "../../lib/f402_report_context.ts";
 import {
-  applyHostOverride,
+  assertBunNetworkEnv,
   F402_NET_ARG_OPTIONS,
   F402_NET_USAGE,
   F402NetOptionsError,
   f402NetReport,
-  relaunchForBunNetworkEnv,
   resolveF402NetOptions,
 } from "../../lib/f402_net_options.ts";
 import {
   F402PullerError,
+  resolveF402PortalOrigin,
   resolvePullBaseUrl,
 } from "../../lib/f402_readonly_puller.ts";
 import { preflight, prefetchDns } from "../../lib/preflight.ts";
@@ -48,7 +48,8 @@ const root = join(import.meta.dir, "../..");
 
 export const PROBE_USAGE = `Usage: bun run capture:probe-protocol-matrix [options]
 
-  --base-url <url>         https portal origin (default: F402_BASE_URL or https://www.fantasy402.com); --base is an alias
+  --base-url <url>         https portal origin, http only for loopback (default: F402_BASE_URL or https://www.fantasy402.com);
+                           --base is an alias; the host must be allowlisted (see --host)
   --customer <id>          Customer for the report context (default: TACO217)
   --backend <webkit|chrome>
   --profile <dir>          WebView profile (default: scratch/webview-profile)
@@ -100,7 +101,7 @@ export function parseProbeArgs(
     );
   }
   const net = resolveF402NetOptions(values, env);
-  const base = applyHostOverride(
+  const base = resolveF402PortalOrigin(
     resolvePullBaseUrl(
       typeof baseFlag === "string" ? baseFlag : undefined,
       env,
@@ -131,13 +132,17 @@ export async function main(argv: readonly string[]): Promise<number> {
     console.log(PROBE_USAGE);
     return 0;
   }
-  const relaunched = await relaunchForBunNetworkEnv(net);
-  if (relaunched !== null) return relaunched;
+  assertBunNetworkEnv(net);
 
   const baseParsed = new URL(base);
   const warmed = {
     host: baseParsed.hostname,
-    port: baseParsed.port === "" ? 443 : Number(baseParsed.port),
+    port:
+      baseParsed.port !== ""
+        ? Number(baseParsed.port)
+        : baseParsed.protocol === "http:"
+          ? 80
+          : 443,
   };
   if (net.dnsPrefetch) prefetchDns(warmed.host, warmed.port);
   const pf = await preflight(warmed.host, {

@@ -8,25 +8,30 @@ import { F402FetchSessionPool } from "../lib/f402_fetch_sessions.ts";
 import {
   applyF402NetOptions,
   applyHostOverride,
+  assertBunNetworkEnv,
   BUN_DISABLE_IPV4_ENV,
   BUN_DISABLE_IPV6_ENV,
   BUN_DNS_TTL_ENV,
   bunNetworkEnvChanges,
   effectiveBunDnsTtlSeconds,
   effectiveBunFamily,
+  F402_ALLOWED_HOSTS,
+  F402BunLaunchEnvError,
   F402_DNS_CACHE_TTL_ENV,
   F402_DNS_PREFETCH_ENV,
   F402_HOST_ENV,
   F402_IP_FAMILY_ENV,
-  F402_NET_RELAUNCHED_ENV,
   type F402NetOptions,
   F402NetOptionsError,
   f402NetReport,
+  isF402LoopbackHost,
   parseF402Host,
-  relaunchForBunNetworkEnv,
   resolveF402NetOptions,
 } from "../lib/f402_net_options.ts";
-import { F402PullerError } from "../lib/f402_readonly_puller.ts";
+import {
+  F402PullerError,
+  resolveF402PortalOrigin,
+} from "../lib/f402_readonly_puller.ts";
 import {
   alpnWireFormat,
   probeTls,
@@ -52,11 +57,53 @@ function opts(partial: Partial<F402NetOptions> = {}): F402NetOptions {
 }
 
 describe("parseF402Host", () => {
-  test("accepts bare hostnames and IP literals, lowercased", () => {
+  test("accepts allowlisted hostnames and loopback literals, lowercased", () => {
     expect(parseF402Host("WWW.Fantasy402.com")).toBe("www.fantasy402.com");
-    expect(parseF402Host(" cdn.example ")).toBe("cdn.example");
+    expect(parseF402Host(" cdn.fastassets.io ")).toBe("cdn.fastassets.io");
+    expect(parseF402Host("fantasy402.com")).toBe("fantasy402.com");
     expect(parseF402Host("127.0.0.1")).toBe("127.0.0.1");
+    expect(parseF402Host("127.9.8.7")).toBe("127.9.8.7");
+    expect(parseF402Host("localhost")).toBe("localhost");
     expect(parseF402Host("[::1]")).toBe("[::1]");
+  });
+
+  test("the allowlist is the portal, its apex and its CDN", () => {
+    expect([...F402_ALLOWED_HOSTS]).toEqual([
+      "fantasy402.com",
+      "www.fantasy402.com",
+      "cdn.fastassets.io",
+    ]);
+  });
+
+  test("refuses hosts off the allowlist by name, including look-alikes", () => {
+    for (const bad of [
+      "cdn.example",
+      "evil.example",
+      "fantasy402.com.evil.example",
+      "evilfantasy402.com",
+      "api.fantasy402.com",
+      "localhost.example",
+      "128.0.0.1",
+      "10.0.0.1",
+      "[::2]",
+      "[::ffff:127.0.0.1]",
+    ]) {
+      expect(() => parseF402Host(bad)).toThrow(F402NetOptionsError);
+      expect(() => parseF402Host(bad, "F402_HOST")).toThrow(/^F402_HOST: /);
+    }
+  });
+
+  test("isF402LoopbackHost covers localhost, 127.0.0.0/8 and [::1] only", () => {
+    for (const ok of ["localhost", "127.0.0.1", "127.255.255.255", "[::1]"])
+      expect(isF402LoopbackHost(ok)).toBe(true);
+    for (const no of [
+      "127.0.0",
+      "127.0.0.256",
+      "::1",
+      "0.0.0.0",
+      "www.fantasy402.com",
+    ])
+      expect(isF402LoopbackHost(no)).toBe(false);
   });
 
   test("refuses schemes, ports, paths, credentials and junk by name", () => {
@@ -102,7 +149,7 @@ describe("resolveF402NetOptions", () => {
 
   test("flag beats env beats default, for every option", () => {
     const env = {
-      [F402_HOST_ENV]: "env.example",
+      [F402_HOST_ENV]: "fantasy402.com",
       [F402_DNS_PREFETCH_ENV]: "0",
       [F402_DNS_CACHE_TTL_ENV]: "7",
       [F402_IP_FAMILY_ENV]: "6",
@@ -110,7 +157,7 @@ describe("resolveF402NetOptions", () => {
     };
     expect(resolveF402NetOptions({}, env)).toEqual(
       opts({
-        host: "env.example",
+        host: "fantasy402.com",
         dnsPrefetch: false,
         dnsCacheTtlSeconds: 7,
         family: "6",
@@ -120,7 +167,7 @@ describe("resolveF402NetOptions", () => {
     expect(
       resolveF402NetOptions(
         {
-          host: "flag.example",
+          host: "www.fantasy402.com",
           "dns-prefetch": true,
           "dns-cache-ttl": "0",
           family: "4",
@@ -131,7 +178,7 @@ describe("resolveF402NetOptions", () => {
       ),
     ).toEqual(
       opts({
-        host: "flag.example",
+        host: "www.fantasy402.com",
         dnsPrefetch: true,
         dnsCacheTtlSeconds: 0,
         family: "4",
@@ -221,45 +268,41 @@ describe("Bun launch env for DNS TTL and family", () => {
     ).toBeNull();
   });
 
-  test("relaunches once with the env set, and refuses to loop", async () => {
-    const calls: { cmd: string[]; env: Record<string, string | undefined> }[] =
-      [];
-    const spawn = async (
-      cmd: string[],
-      env: Record<string, string | undefined>,
-    ) => {
-      calls.push({ cmd, env });
-      return 7;
-    };
-    expect(
-      await relaunchForBunNetworkEnv(opts(), { env: {}, argv: ["x"], spawn }),
-    ).toBeNull();
-    expect(
-      await relaunchForBunNetworkEnv(
-        opts({ family: "4", dnsCacheTtlSeconds: 3 }),
-        {
-          env: { [BUN_DISABLE_IPV4_ENV]: "1", KEEP: "k" },
-          argv: ["bun", "script.ts", "--family", "4"],
-          spawn,
-        },
+  test("passes when the launch env matches, else fails with the exact relaunch assignment", () => {
+    expect(() => assertBunNetworkEnv(opts(), {}, ["x"])).not.toThrow();
+    expect(() =>
+      assertBunNetworkEnv(
+        opts({ dnsCacheTtlSeconds: 5, family: "4" }),
+        { [BUN_DNS_TTL_ENV]: "5", [BUN_DISABLE_IPV6_ENV]: "1" },
+        ["x"],
       ),
-    ).toBe(7);
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.cmd).toEqual(["bun", "script.ts", "--family", "4"]);
-    expect(calls[0]?.env).toEqual({
-      KEEP: "k",
+    ).not.toThrow();
+    let error: unknown;
+    try {
+      assertBunNetworkEnv(
+        opts({ family: "4", dnsCacheTtlSeconds: 3 }),
+        { [BUN_DISABLE_IPV4_ENV]: "1", KEEP: "k" },
+        ["bun", "scripts/f402_readonly_pull.ts", "census", "--note", "a b"],
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(F402BunLaunchEnvError);
+    expect(error).toBeInstanceOf(F402NetOptionsError);
+    const launch = error as F402BunLaunchEnvError;
+    expect(launch.name).toBe("F402BunLaunchEnvError");
+    expect(launch.assignments).toEqual({
       [BUN_DNS_TTL_ENV]: "3",
       [BUN_DISABLE_IPV6_ENV]: "1",
-      [F402_NET_RELAUNCHED_ENV]: "1",
+      [BUN_DISABLE_IPV4_ENV]: undefined,
     });
-    await expect(
-      relaunchForBunNetworkEnv(opts({ dnsCacheTtlSeconds: 3 }), {
-        env: { [F402_NET_RELAUNCHED_ENV]: "1" },
-        argv: ["x"],
-        spawn,
-      }),
-    ).rejects.toThrow(F402NetOptionsError);
-    expect(calls).toHaveLength(1);
+    expect(launch.relaunchCommand).toBe(
+      `env -u ${BUN_DISABLE_IPV4_ENV} ${BUN_DNS_TTL_ENV}=3 ${BUN_DISABLE_IPV6_ENV}=1 bun scripts/f402_readonly_pull.ts census --note 'a b'`,
+    );
+    expect(launch.message).toContain(launch.relaunchCommand);
+    expect(() =>
+      assertBunNetworkEnv(opts({ dnsCacheTtlSeconds: 5 }), {}, ["bun", "s.ts"]),
+    ).toThrow(`${BUN_DNS_TTL_ENV}=5 bun s.ts`);
   });
 
   test("applies http version and prefetch to the pool, and reports effective values", async () => {
@@ -298,7 +341,7 @@ describe("Bun launch env for DNS TTL and family", () => {
   });
 });
 
-describe("relaunch takes effect in Bun (local only)", () => {
+describe("launch env takes effect in Bun (local only)", () => {
   let dir = "";
   beforeAll(() => {
     dir = mkdtempSync(join(tmpdir(), "f402-net-"));
@@ -313,13 +356,12 @@ describe("relaunch takes effect in Bun (local only)", () => {
     const script = join(dir, `s-${Bun.hash(body + args.join(" "))}.ts`);
     await Bun.write(
       script,
-      `import { relaunchForBunNetworkEnv, resolveF402NetOptions } from ${JSON.stringify(join(root, "lib/f402_net_options.ts"))};
+      `import { assertBunNetworkEnv, resolveF402NetOptions } from ${JSON.stringify(join(root, "lib/f402_net_options.ts"))};
 import { parseArgs } from "node:util";
 import { F402_NET_ARG_OPTIONS } from ${JSON.stringify(join(root, "lib/f402_net_options.ts"))};
 const { values } = parseArgs({ args: process.argv.slice(2), options: F402_NET_ARG_OPTIONS, strict: true });
 const net = resolveF402NetOptions(values);
-const code = await relaunchForBunNetworkEnv(net);
-if (code !== null) process.exit(code);
+try { assertBunNetworkEnv(net); } catch (e) { console.error(e.message); process.exit(2); }
 ${body}
 `,
     );
@@ -328,7 +370,6 @@ ${body}
       BUN_DNS_TTL_ENV,
       BUN_DISABLE_IPV4_ENV,
       BUN_DISABLE_IPV6_ENV,
-      F402_NET_RELAUNCHED_ENV,
       F402_IP_FAMILY_ENV,
       F402_DNS_CACHE_TTL_ENV,
     ])
@@ -356,14 +397,14 @@ console.log(process.env.BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS ?? "unset", s.cacheM
 
   test("--dns-cache-ttl 0 makes a 2.5 s old entry miss; the default keeps it", async () => {
     const [withTtl, without] = await Promise.all([
-      runScript(ttlBody, ["--dns-cache-ttl", "0"]),
+      runScript(ttlBody, ["--dns-cache-ttl", "0"], { [BUN_DNS_TTL_ENV]: "0" }),
       runScript(ttlBody, []),
     ]);
     expect(withTtl).toBe("0 2");
     expect(without).toBe("unset 1");
   });
 
-  test("writing process.env at runtime does not change Bun's TTL (why the CLI relaunches)", async () => {
+  test("writing process.env at runtime does not change Bun's TTL (why the CLI needs it at launch)", async () => {
     const out = await runScript(
       `process.env.BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS = "0";\n${ttlBody}`,
       [],
@@ -381,8 +422,8 @@ v4.stop(true); v6.stop(true);
 `;
     const [auto, four, six] = await Promise.all([
       runScript(body, []),
-      runScript(body, ["--family", "4"]),
-      runScript(body, ["--family", "6"]),
+      runScript(body, ["--family", "4"], { [BUN_DISABLE_IPV6_ENV]: "1" }),
+      runScript(body, ["--family", "6"], { [BUN_DISABLE_IPV4_ENV]: "1" }),
     ]);
     expect(auto).toBe("v4 v6");
     expect(four).toBe("v4 ECONNREFUSED");
@@ -393,7 +434,15 @@ v4.stop(true); v6.stop(true);
 describe("CLI usage errors exit 2", () => {
   function run(args: string[]): { code: number; stderr: string } {
     const env: Record<string, string | undefined> = { ...Bun.env };
-    for (const k of [F402_HOST_ENV, F402_IP_FAMILY_ENV, F402_DNS_CACHE_TTL_ENV])
+    for (const k of [
+      F402_HOST_ENV,
+      F402_IP_FAMILY_ENV,
+      F402_DNS_CACHE_TTL_ENV,
+      "F402_BASE_URL",
+      BUN_DNS_TTL_ENV,
+      BUN_DISABLE_IPV4_ENV,
+      BUN_DISABLE_IPV6_ENV,
+    ])
       delete env[k];
     const proc = Bun.spawnSync([process.execPath, ...args], {
       cwd: root,
@@ -409,6 +458,7 @@ describe("CLI usage errors exit 2", () => {
       ["--dns-cache-ttl", "off"],
       ["--http-version", "3"],
       ["--dns-prefetch", "--no-dns-prefetch"],
+      ["--host", "evil.example"],
     ]) {
       const r = run([
         "scripts/f402_readonly_pull.ts",
@@ -427,6 +477,8 @@ describe("CLI usage errors exit 2", () => {
       ["--family", "6x"],
       ["--host", "https://x"],
       ["--base-url", "http://www.fantasy402.com"],
+      ["--base-url", "https://evil.example"],
+      ["--host", "evil.example"],
       ["--bogus"],
     ]) {
       const r = run(["scripts/capture/probe_f402_protocol_matrix.ts", ...bad]);
@@ -436,19 +488,126 @@ describe("CLI usage errors exit 2", () => {
   });
 });
 
+describe("CLI base URL and launch env refusals exit 2 before any request", () => {
+  function run(args: string[]): { code: number; stderr: string } {
+    const env: Record<string, string | undefined> = { ...Bun.env };
+    for (const k of [
+      F402_HOST_ENV,
+      F402_IP_FAMILY_ENV,
+      F402_DNS_CACHE_TTL_ENV,
+      "F402_BASE_URL",
+      BUN_DNS_TTL_ENV,
+      BUN_DISABLE_IPV4_ENV,
+      BUN_DISABLE_IPV6_ENV,
+    ])
+      delete env[k];
+    const proc = Bun.spawnSync([process.execPath, ...args], {
+      cwd: root,
+      env,
+    });
+    return { code: proc.exitCode, stderr: proc.stderr.toString() };
+  }
+  const puller = [
+    "scripts/f402_readonly_pull.ts",
+    "census",
+    "--agent-id",
+    "TEST",
+  ];
+
+  test("puller refuses non-loopback http and off-allowlist bases", () => {
+    for (const bad of [
+      ["--base-url", "http://www.fantasy402.com"],
+      ["--base-url", "http://192.0.2.1:8080"],
+      ["--base-url", "https://evil.example"],
+      ["--base-url", "http://127.0.0.1:8080", "--host", "www.fantasy402.com"],
+    ]) {
+      const r = run([...puller, ...bad]);
+      expect(r.code).toBe(2);
+      expect(r.stderr).toContain("f402-pull base-url:");
+    }
+  });
+
+  test("puller and probe print the exact relaunch assignment for a TTL/family the launch env lacks", () => {
+    const p = run([...puller, "--dns-cache-ttl", "5", "--family", "4"]);
+    expect(p.code).toBe(2);
+    expect(p.stderr).toContain(
+      `${BUN_DNS_TTL_ENV}=5 ${BUN_DISABLE_IPV6_ENV}=1 bun scripts/f402_readonly_pull.ts census --agent-id TEST --dns-cache-ttl 5 --family 4`,
+    );
+    const q = run([
+      "scripts/capture/probe_f402_protocol_matrix.ts",
+      "--family",
+      "6",
+    ]);
+    expect(q.code).toBe(2);
+    expect(q.stderr).toContain(
+      `${BUN_DISABLE_IPV4_ENV}=1 bun scripts/capture/probe_f402_protocol_matrix.ts --family 6`,
+    );
+    expect(q.stderr).toContain("capture:protocol-matrix:");
+  });
+});
+
+describe("resolveF402PortalOrigin", () => {
+  test("allows the allowlist over https and loopback over http or https", () => {
+    expect(resolveF402PortalOrigin("https://www.fantasy402.com", null)).toBe(
+      "https://www.fantasy402.com",
+    );
+    expect(
+      resolveF402PortalOrigin(
+        "https://www.fantasy402.com:8443",
+        "fantasy402.com",
+      ),
+    ).toBe("https://fantasy402.com:8443");
+    expect(resolveF402PortalOrigin("https://cdn.fastassets.io", null)).toBe(
+      "https://cdn.fastassets.io",
+    );
+    expect(resolveF402PortalOrigin("http://127.0.0.1:9", null)).toBe(
+      "http://127.0.0.1:9",
+    );
+    expect(resolveF402PortalOrigin("http://localhost:9", null)).toBe(
+      "http://localhost:9",
+    );
+    expect(resolveF402PortalOrigin("http://[::1]:9", null)).toBe(
+      "http://[::1]:9",
+    );
+    expect(
+      resolveF402PortalOrigin("https://www.fantasy402.com:8443", "127.0.0.1"),
+    ).toBe("https://127.0.0.1:8443");
+  });
+
+  test("refuses off-allowlist hosts and http to a non-loopback host as config errors", () => {
+    for (const [base, host] of [
+      ["https://evil.example", null],
+      ["https://www.fantasy402.com.evil.example", null],
+      ["http://www.fantasy402.com", null],
+      ["http://192.0.2.1:80", null],
+      ["http://127.0.0.1:9", "www.fantasy402.com"],
+      ["http://localhost:9", "cdn.fastassets.io"],
+    ] as const) {
+      let error: unknown;
+      try {
+        resolveF402PortalOrigin(base, host);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(F402PullerError);
+      expect((error as F402PullerError).code).toBe("config");
+    }
+  });
+});
+
 describe("probe base URL resolution matches the puller", () => {
   test("flag > F402_BASE_URL > https://www.fantasy402.com, then --host", () => {
     expect(parseProbeArgs([], {}).base).toBe("https://www.fantasy402.com");
     expect(
-      parseProbeArgs([], { F402_BASE_URL: "https://env.example" }).base,
-    ).toBe("https://env.example");
+      parseProbeArgs([], { F402_BASE_URL: "https://fantasy402.com" }).base,
+    ).toBe("https://fantasy402.com");
     expect(
-      parseProbeArgs(["--base-url", "https://flag.example"], {
-        F402_BASE_URL: "https://env.example",
+      parseProbeArgs(["--base-url", "https://www.fantasy402.com:8443"], {
+        F402_BASE_URL: "https://fantasy402.com",
       }).base,
-    ).toBe("https://flag.example");
-    expect(parseProbeArgs(["--base", "https://alias.example"], {}).base).toBe(
-      "https://alias.example",
+    ).toBe("https://www.fantasy402.com:8443");
+    expect(parseProbeArgs(["--base", "http://127.0.0.1:8080"], {}).base).toBe(
+      "http://127.0.0.1:8080",
     );
     expect(
       parseProbeArgs(["--host", "fantasy402.com"], {
@@ -464,6 +623,21 @@ describe("probe base URL resolution matches the puller", () => {
     expect(() =>
       parseProbeArgs(["--base-url", "http://www.fantasy402.com"], {}),
     ).toThrow(F402PullerError);
+    expect(() =>
+      parseProbeArgs(["--base-url", "https://evil.example"], {}),
+    ).toThrow(F402PullerError);
+    expect(() =>
+      parseProbeArgs([], { F402_BASE_URL: "https://evil.example" }),
+    ).toThrow(F402PullerError);
+    expect(() =>
+      parseProbeArgs(
+        ["--base-url", "http://127.0.0.1:8080", "--host", "fantasy402.com"],
+        {},
+      ),
+    ).toThrow(F402PullerError);
+    expect(() => parseProbeArgs(["--host", "evil.example"], {})).toThrow(
+      F402NetOptionsError,
+    );
     expect(() => parseProbeArgs(["--nope"], {})).toThrow(ProbeUsageError);
     expect(() => parseProbeArgs(["--backend", "lynx"], {})).toThrow(
       ProbeUsageError,
