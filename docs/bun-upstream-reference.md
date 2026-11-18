@@ -198,6 +198,30 @@ empty directory:
   pinned blob to cite for the command page yet.
 - `tests/bun_fmt_contract.test.ts` re-measures the three rows above.
 
+<!-- bun-behavior: publish-recursive -->
+
+## `bun publish --recursive` (measured 2026-11-18)
+
+The pinned [bun-v1.4.4 release](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) adds
+workspace publishing. Measured against a local mock registry (`tests/bun_publish_recursive.test.ts`,
+no network, fake bearer token):
+
+| Claim                                           | Measured                                                    |
+| :---------------------------------------------- | :---------------------------------------------------------- |
+| `--recursive` publishes workspace packages      | public packages uploaded; `private: true` skipped           |
+| `--filter <pattern>` narrows the set            | only matching package names uploaded                        |
+| Versions already on the registry are skipped    | a second run exits 0 and uploads nothing                    |
+| Every package is packed before the first upload | both `prepack` markers existed when the first `PUT` arrived |
+
+- Re-running after a failure is safe for the same reason: already-published versions are skipped,
+  while the remaining ones are retried.
+- In this repo the only publishable workspace is `@sportsdesk-ops/contracts` (`private` unset,
+  `publishConfig.access=public`); the other seven manifests are private and are skipped by
+  `--recursive`. Publishing needs registry auth — without an `.npmrc`/`NPM_TOKEN` the command exits
+  1 with `missing authentication`.
+- The mock registry test is the evidence: it starts `Bun.serve`, spawns the real CLI asynchronously,
+  and records the `PUT` order, so the pack-before-publish claim is checked rather than assumed.
+
 ## Upstream doc commit pins
 
 | Pin                                                                                                                      | Tree                               | Use                                                                       |

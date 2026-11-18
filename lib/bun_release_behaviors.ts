@@ -67,6 +67,11 @@ const BEHAVIOR_METADATA: Readonly<Record<string, BehaviorMetadata>> = {
     docsPage: "/guides/format/migrate-from-oxfmt",
     shapes: [],
   },
+  "publish-recursive": {
+    title: "bun publish --recursive workspace publishing",
+    docsPage: "/docs/cli/publish",
+    shapes: [],
+  },
 };
 
 const DOC_PATH = "docs/bun-upstream-reference.md";
