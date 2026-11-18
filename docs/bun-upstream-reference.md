@@ -126,6 +126,15 @@ CI. Refresh the fixture only when the docs surface changes.
 The `bun.$` page documents `escape(input: string): string`; non-string coercion is measured runtime
 behaviour, not a docs guarantee. Do not use it as an input validator.
 
+## Fetch options that are not W3C
+
+- `fetch(url, { timeout: ms })` is Bun's **idle** timeout, not a whole-request deadline. Use
+  `AbortSignal.timeout(ms)` when the deadline must cover connection, headers and body.
+- `fetch("s3://…", { s3: { accessKeyId, secretAccessKey } })` places credentials in source. Use
+  the environment/secret manager or the repo S3 client; inline `s3` credentials are forbidden by
+  the `BUN-FETCH-S3-INLINE-CREDENTIALS` audit rule, while `BUN-FETCH-TIMEOUT-IDLE` flags the
+  idle-only timeout.
+
 ## When NOT to migrate to `Bun.JSONL` (2026-11-04 audit)
 
 The repo uses `Bun.JSONL.parse()` / `Bun.JSONL.parseChunk()` by default on JSONL inputs. The six sites below intentionally keep hand-rolled per-line `JSON.parse` loops because they require semantics `Bun.JSONL` does not provide. The v1.4.4 Bun APIs section has no JSONL hardening entry; do not attribute the blank-line/stray-delimiter behaviour to a fix version.

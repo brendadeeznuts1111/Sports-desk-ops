@@ -247,6 +247,46 @@ function auditSourceFile(
     });
   };
 
+  const auditFetchInit = (init: ts.Expression | undefined): void => {
+    if (!init || !ts.isObjectLiteralExpression(init)) return;
+    for (const prop of init.properties) {
+      if (!ts.isPropertyAssignment(prop)) continue;
+      const key =
+        ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name)
+          ? prop.name.text
+          : prop.name.getText(sf);
+      if (key === "timeout") {
+        record(
+          prop,
+          "BUN-FETCH-TIMEOUT-IDLE",
+          Severity.WARN,
+          "`fetch({ timeout })` is Bun's idle timeout, not a whole-request deadline and not part of the Fetch API. Pair it with AbortSignal.timeout(ms) for a request deadline.",
+        );
+      }
+      if (key === "s3" && ts.isObjectLiteralExpression(prop.initializer)) {
+        for (const s3Prop of prop.initializer.properties) {
+          if (!ts.isPropertyAssignment(s3Prop)) continue;
+          const s3Key =
+            ts.isIdentifier(s3Prop.name) || ts.isStringLiteral(s3Prop.name)
+              ? s3Prop.name.text
+              : s3Prop.name.getText(sf);
+          if (
+            s3Key === "accessKeyId" ||
+            s3Key === "secretAccessKey" ||
+            s3Key === "sessionToken"
+          ) {
+            record(
+              s3Prop,
+              "BUN-FETCH-S3-INLINE-CREDENTIALS",
+              Severity.ERROR,
+              "Inline `fetch({ s3 })` credentials are source secrets; use the environment/secret manager or the repo S3 client.",
+            );
+          }
+        }
+      }
+    }
+  };
+
   const visit = (node: ts.Node): void => {
     // 1. new Bun.Glob("...") brace-recursion audit
     if (
@@ -268,9 +308,27 @@ function auditSourceFile(
       }
     }
 
+    if (
+      ts.isNewExpression(node) &&
+      node.expression.getText(sf) === "Request" &&
+      node.arguments !== undefined
+    ) {
+      auditFetchInit(node.arguments[1]);
+    }
+
     if (ts.isCallExpression(node)) {
       const expr = node.expression;
       const exprText = expr.getText(sf);
+
+      if (
+        exprText === "fetch" ||
+        exprText === "Bun.fetch" ||
+        (ts.isPropertyAccessExpression(expr) &&
+          expr.name.text === "fetch" &&
+          expr.expression.getText(sf) === "Bun")
+      ) {
+        auditFetchInit(node.arguments[1]);
+      }
 
       // 2. Bun.dns.prefetch(hostname, port?) -> NaN / out-of-range port throws RangeError
       if (exprText === "Bun.dns.prefetch") {
