@@ -29,6 +29,15 @@ import {
   type SynthLedgerRow,
 } from "./fixtures/f402-analyze/synthetic_pull.ts";
 import { main as analyzeMain } from "../scripts/f402_analyze.ts";
+import {
+  isSharedInfraIp,
+  SHARED_INFRA_CLASSES,
+} from "../lib/f402_analyze_link.ts";
+import { classifyIp } from "../lib/f402_weblog.ts";
+import {
+  classifyWeblogIpExtended,
+  parseWeblogBetLeg,
+} from "../lib/f402_weblog_pattern_tracker.ts";
 
 const temps: string[] = [];
 
@@ -84,6 +93,100 @@ describe("ticket parsers", () => {
         "API LOG | Ticket: 99 Risk:1 Win:2",
       ),
     ).toBe("99");
+  });
+});
+
+describe("reuse of #219 weblog helpers", () => {
+  test("bet rows take sport, rotation and period from parseWeblogBetLeg", () => {
+    const legs = [
+      "Hockey #88 Senators/Ducks U 6&#189; +120 - For Game",
+      "Hockey #83 Utah Mammoth -1&#189; +145 - For Game",
+      "Football #240 Lions -3 -110 - For 2nd Half",
+      "Basketball #501 Celtics/Knicks O 220 -110 - For 1st Half",
+    ];
+    for (const text of legs) {
+      const leg = parseWeblogBetLeg(text);
+      const action = parseWeblogAction(`API LOG | Bet : ${text}`);
+      expect(action.kind).toBe("bet");
+      expect(action.sport).toBe(leg.sport);
+      expect(action.eventId).toBe(String(leg.rotationNumber));
+      expect(action.period).toBe(leg.periodLabel);
+    }
+  });
+
+  test("outputs that were already right are unchanged", () => {
+    const expected: Record<
+      string,
+      [string | null, string | null, string | null]
+    > = {
+      "API LOG | Bet : Hockey #83 Utah Mammoth -170 - For Game": [
+        "Hockey",
+        "83",
+        "Game",
+      ],
+      "API LOG | Bet : Football #240 Lions -3 -110 - For 2nd Half": [
+        "Football",
+        "240",
+        "2nd Half",
+      ],
+      "API LOG | Bet :\nFootball #243 Cardinals/Cowboys O 26&#189; -115 - For 2nd Half":
+        ["Football", "243", "2nd Half"],
+      "API LOG | Bet : #123 something": [null, "123", null],
+      "CHANGE LINE #455 Lakers -4 - For Game": [null, "455", "Game"],
+      "API LOG | Ticket: 1061060064 Risk:300 Win:345": [null, null, null],
+      "Login successful": [null, null, null],
+    };
+    for (const [op, [sport, eventId, period]] of Object.entries(expected)) {
+      const action = parseWeblogAction(op);
+      expect([action.sport, action.eventId, action.period]).toEqual([
+        sport,
+        eventId,
+        period,
+      ]);
+    }
+  });
+
+  test("intended changes: bought points keep the period, free text is not a sport", () => {
+    const bought = parseWeblogAction(
+      "API LOG | Bet : Football #263 Eagles 6 -120 - buying &#189; For Game",
+    );
+    expect(bought.period).toBe("Game");
+    expect(bought.eventId).toBe("263");
+    const parlay = parseWeblogAction("API LOG | Bet : Parlay 3 legs");
+    expect(parlay.kind).toBe("bet");
+    expect(parlay.sport).toBeNull();
+    expect(parlay.period).toBeNull();
+  });
+
+  test("shared-infrastructure check matches the base classifier on every class", () => {
+    const ips = [
+      "100.64.1.2",
+      "172.56.1.2",
+      "174.192.1.2",
+      "174.208.1.2",
+      "146.75.1.2",
+      "140.248.1.2",
+      "156.146.132.48",
+      "107.115.171.78",
+      "70.134.7.166",
+      "203.0.113.10",
+      "2607:fb90::1",
+      "2600:1000::1",
+      "2600:380::1",
+      "2606:54c0::1",
+      "2001:db8::1",
+      "",
+    ];
+    for (const ip of ips) {
+      expect(isSharedInfraIp(ip)).toBe(
+        SHARED_INFRA_CLASSES.has(classifyIp(ip)),
+      );
+    }
+    for (const ip of ["156.146.132.48", "107.115.171.78", "70.134.7.166"]) {
+      const extended = classifyWeblogIpExtended(ip);
+      expect(extended).not.toBe(classifyIp(ip));
+      expect(SHARED_INFRA_CLASSES.has(extended)).toBe(false);
+    }
   });
 });
 

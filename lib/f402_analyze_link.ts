@@ -2,7 +2,7 @@
  * Evidence-scored account linker. Every edge is a guess, never a confirmed identity.
  */
 
-import { classifyIp } from "./f402_weblog.ts";
+import { classifyWeblogIpExtended } from "./f402_weblog_pattern_tracker.ts";
 import {
   F402AnalyzeError,
   groupWagersByTicket,
@@ -49,6 +49,16 @@ export const SHARED_INFRA_CLASSES = new Set([
   "IPV6_CARRIER:ATT",
   "IPV6_CARRIER:ICLOUD",
 ]);
+
+/**
+ * Uses #219's `classifyWeblogIpExtended`. It only refines IPs the base
+ * classifier calls `OTHER` (datacenter VPN, AT&T mobility and broadband),
+ * and none of those classes is in `SHARED_INFRA_CLASSES`, so the result is
+ * identical to the base classifier; the set is not widened here.
+ */
+export function isSharedInfraIp(ip: string): boolean {
+  return SHARED_INFRA_CLASSES.has(classifyWeblogIpExtended(ip));
+}
 
 export type EvidenceType =
   | "shared_ip"
@@ -276,7 +286,7 @@ function collectSharedIp(
     const ids = [...accounts.keys()];
     if (ids.length < 2) continue;
     const rarity = ipRarity(ids.length, total);
-    const infra = SHARED_INFRA_CLASSES.has(classifyIp(ip));
+    const infra = isSharedInfraIp(ip);
     const infraPenalty = infra ? 0.25 : 1;
     for (let i = 0; i < ids.length; i += 1) {
       for (let j = i + 1; j < ids.length; j += 1) {

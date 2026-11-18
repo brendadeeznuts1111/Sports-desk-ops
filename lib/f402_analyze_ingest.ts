@@ -31,6 +31,7 @@ import {
   type TransactionListRowRaw,
 } from "./f402_transaction_list.ts";
 import { parseOperation, parseAccessMs } from "./f402_weblog.ts";
+import { parseWeblogBetLeg } from "./f402_weblog_pattern_tracker.ts";
 import { parseWebLogListPayload } from "./f402_weblog_fetch.ts";
 
 export type F402AnalyzeErrorCode = "config" | "ingest" | "io" | "empty";
@@ -196,9 +197,7 @@ export function parseWeblogAction(action: string): ParsedWeblogAction {
   const ticket = s.match(/Ticket:\s*(\d+)/i)?.[1] ?? null;
   const riskRaw = s.match(/Risk:\s*([\d.]+)/i)?.[1];
   const winRaw = s.match(/Win:\s*([\d.]+)/i)?.[1];
-  const eventId = s.match(/#(\d+)/)?.[1] ?? null;
-  const sport = s.match(/Bet :\s*([A-Za-z]+)/)?.[1] ?? null;
-  const period = s.match(/-\s*For ([^-]+)$/i)?.[1]?.trim() ?? null;
+  const leg = kind === "bet" ? betLegFields(s) : nonBetLegFields(s);
   const clientMatch = s.match(/v(\d+\.\d+\.\d+)/);
   return {
     kind,
@@ -206,10 +205,47 @@ export function parseWeblogAction(action: string): ParsedWeblogAction {
     ticket,
     risk: riskRaw === undefined ? null : Number(riskRaw),
     win: winRaw === undefined ? null : Number(winRaw),
-    eventId,
-    sport,
-    period,
+    ...leg,
     client: clientMatch ? `v${clientMatch[1]}` : null,
+  };
+}
+
+type LegFields = Pick<ParsedWeblogAction, "eventId" | "sport" | "period">;
+
+const BET_TEXT = /API LOG\s*\|\s*Bet\s*:\s*(.*)$/is;
+
+/**
+ * Bet rows go through #219's `parseWeblogBetLeg`. Adapter differences, both
+ * intended: `sport` needs the `<Sport> #<rot>` shape (free text such as
+ * `Bet : Parlay` no longer becomes a sport), and a `- buying ½ For Game`
+ * suffix now yields `period` "Game" instead of null. `period` stays null when
+ * the text has no `For <period>` suffix, where `parseWeblogBetLeg` would
+ * default to "Game", and `eventId` falls back to the generic `#<digits>`
+ * when the leg has no sport.
+ */
+function betLegFields(s: string): LegFields {
+  const parsed = parseWeblogBetLeg(BET_TEXT.exec(s)?.[1] ?? "");
+  const shaped = parsed.rotationNumber !== null;
+  return {
+    eventId: shaped
+      ? String(parsed.rotationNumber)
+      : nonBetLegFields(s).eventId,
+    sport: shaped ? parsed.sport : null,
+    period: /\sFor\s+\S/i.test(parsed.normalizedText)
+      ? parsed.periodLabel
+      : null,
+  };
+}
+
+/**
+ * Non-bet rows (for example `CHANGE LINE #455 ... - For Game`) are not bet
+ * legs, so `parseWeblogBetLeg` does not apply; keep the generic extraction.
+ */
+function nonBetLegFields(s: string): LegFields {
+  return {
+    eventId: s.match(/#(\d+)/)?.[1] ?? null,
+    sport: null,
+    period: s.match(/-\s*For ([^-]+)$/i)?.[1]?.trim() ?? null,
   };
 }
 
