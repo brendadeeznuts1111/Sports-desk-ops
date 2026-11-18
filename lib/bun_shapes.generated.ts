@@ -234,6 +234,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
     heading: "Bun.resolveSync",
     evidence: [
       "test:tests/bun_shapes_coverage.test.ts",
+      "test:tests/peer_satisfaction.test.ts",
       "test:tests/react_element_version.test.ts",
       "probe:proc.paths",
     ],
