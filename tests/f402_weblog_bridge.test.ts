@@ -216,11 +216,21 @@ describe("f402_weblog_bridge Pass 1 guards & CAS", () => {
     const rollup = sampleRollup();
     const clean = assertSanitizedF402Weblog({
       ...rollup,
+      operations: {
+        ...rollup.operations,
+        actions: { LOGIN: 42, ...rollup.operations.actions },
+      },
       data_window_max_epoch_ms: rollup.window.toMs,
       r2_published_at_epoch_ms: rollup.window.toMs + 5_000,
     });
     expect(clean.byteLength).toBeGreaterThan(0);
 
+    expect(() =>
+      assertSanitizedF402Weblog({ operations: { actions: { LOGIN: "U1" } } }),
+    ).toThrow(/forbidden key/);
+    expect(() => assertSanitizedF402Weblog({ login: 42 })).toThrow(
+      /forbidden key/,
+    );
     expect(() => assertSanitizedF402Weblog({ customerId: "C100" })).toThrow(
       /forbidden key/,
     );

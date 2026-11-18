@@ -11,7 +11,7 @@ describe("Bun.TOML Parser", () => {
       resolve(root, "config/wagers-capture.toml"),
       "utf8",
     );
-    expect(parseToml(text)).toEqual(Bun.TOML.parse(text));
+    expect(parseToml(text)).toStrictEqual(Bun.TOML.parse(text));
     const parsed = Bun.TOML.parse(text) as {
       capture?: { retries?: number };
       publish?: { channel?: string };
@@ -53,7 +53,7 @@ describe("Bun.TOML Parser", () => {
     const round = Bun.TOML.parse(
       Bun.TOML.stringify({ name: "app", deps: { bun: "1.4.4" } }),
     ) as { name?: string; deps?: { bun?: string } };
-    expect(round).toEqual({ name: "app", deps: { bun: "1.4.4" } });
+    expect(round).toStrictEqual({ name: "app", deps: { bun: "1.4.4" } });
   });
 
   it("surfaces exceptions thrown by value getters or Symbol.toPrimitive during stringify()", () => {

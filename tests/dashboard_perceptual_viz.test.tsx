@@ -515,6 +515,9 @@ describe("panels fail closed", () => {
         onChangeRouterAuditMode={() => {}}
       />,
     );
+    expect(html).toContain('data-floor-ssot="wager-tiers"');
+    expect(html).toContain("wager-tiers/v3");
+    expect(html).toContain('data-slice-flag-breakdown="true"');
     expect(html).toContain('data-viz="slice-small-multiples"');
     expect(html).toContain("Handle by slice");
     expect(html).toContain("Hold % by slice");

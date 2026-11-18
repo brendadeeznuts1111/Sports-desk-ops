@@ -166,6 +166,17 @@ describe("buildCustomerProfiles", () => {
       churn_hazard: 0.3,
       churn_mode: "ACTIVE",
       recent_tickets: [ticket("LOSS", 1000, -1000)],
+      open_positions: [
+        {
+          wager_number: "9001",
+          sport: "Basketball",
+          selection: "LAL -4.5",
+          risk_usd: 500,
+          to_win_usd: 450,
+          status: "open",
+          source: "live-bets",
+        },
+      ],
     },
     {
       customer_id: "C2",
@@ -182,6 +193,8 @@ describe("buildCustomerProfiles", () => {
     expect(first?.book.sharpScore).toBe(71);
     expect(first?.placement.chain).toEqual(["MASTER"]);
     expect(first?.tickets.netUsd).toBe(-1000);
+    expect(first?.positions).toHaveLength(1);
+    expect(first?.positions[0]?.wager_number).toBe("9001");
     expect(summary.customers).toBe(2);
     expect(summary.tickets).toBe(2);
     expect(summary.notInTree).toEqual(["GHOST"]);

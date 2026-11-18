@@ -125,6 +125,46 @@ subnet-fixture construction rather than observed multi-accounting. The point is 
 whale ranking computed over a synthetic fixture must not read as an observation of real
 customers.
 
+`wagers` is the one report that does not require the customer to be in the book. It shells
+`bun scripts/customer_wager_review.ts <login> --json --root <repoPath>` and joins the
+pending capture, the ticker, both graded-wager exports (de-duplicated by ticket+wager,
+because the windows overlap), the newest users-report export that actually carries the
+login, the agent roster and the suspected-bot ledger. The answer carries open exposure
+with its single-market scenarios, the settled record split by structure and by cash vs
+free play, and findings that are measurements: a combination card is a ticket with ≥10
+wagers inside 5 s, a reprice is one selection at two prices ≥100 American points apart,
+and a burst names the minimum number of legs that won rather than claiming a leg-level
+reconstruction. Every source is reported independently — a missing graded export is
+`exists: false`, not zero rows — and the answer lists its own limits (capture age,
+accept-time-only timestamps, the graded window's end, absent wager numbers, no closing
+line for CLV, and a book that does not carry the login). A login in no wager source exits
+3 and comes back as `available: false` with reason `unknown_customer`.
+
+The answer also reconstructs a generated combination card. The book numbers the wagers of one
+round-robin ticket as lexicographic combination ranks, so the leg order can be recovered by trying
+every permutation; a unique fit names the whole slot space, not just the booked rows. The card
+block reports the legs with inferred outcomes (a k-leg win proves k legs won), each layer's booked
+net, the booking rate of all-winner vs has-loser slots (which separates a partial record from a
+filter), and a full-card counterfactual that prices the omitted slots at the median stake for their
+size. `expectation` compares the settled win count with the sum of the book's implied probabilities;
+`peers` places the account in the bundle's 6,998-account ledger-tenure population; `platform`
+measures the customer's own activity days; `cardNorms` reports the booking-rate distribution over
+the corpus's other card tickets. The norms block exists because a single card's booking rate means
+nothing alone: it carries `n`, the full rate list, min/median/max, and `refusalReasons` — the
+solver refuses 7 of the 23 candidate tickets, and that subsample is biased toward cards whose leg
+text parses cleanly, so the block says it describes the reconstructable subsample. (Measured 2026-11-16: 16 solved; pooled rates 50–100%, median 92.12%; the size-matched ≥10-wager
+band is 57.69–100%, median 93.33%, n=7, and TTN97's 66.67% is second-lowest of those seven — the
+pooled median is not the benchmark for a 38-wager card, and the block says so.) `--deep` adds the last three to the text view.
+
+The first measured run (2026-11-16, TTN97) is why the report exists: six artifacts, four
+shapes and an 84 MB older export, where the newest users-report export did not carry the
+login at all. The report reproduced the hand-built review exactly — $60 open risk for $2,900 to win,
+44 settled wagers on $513.75, net −$64.90 — once the unit boundary was fixed: the wire
+exports quote cents as strings (`"5000.0"` is $50.00), and reading them as dollars had
+overstated every figure by 100x. The conversion now happens once, at the parse boundary,
+and a test pins `"8625000.0"` to $86,250. It also caught the 38-wager ticket accepted in
+510 ms that the hand pass had to infer with a one-off `jq` script.
+
 `sportsdesk_links` is the one surface that returns URLs instead of numbers: it builds the
 GSLive Manager (Partner 118) deep links for one customer — the 7-day, 14-day and churn
 `#/reports/users` windows plus the `#/events/bet-history` calcTime/betTime sidecars — and the

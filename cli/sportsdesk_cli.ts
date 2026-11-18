@@ -24,11 +24,7 @@ import {
   startBotDaemon,
 } from "../services/reporting_scheduler_service.ts";
 import { runFullBettorSimulationPipeline } from "../services/simulate_bettor_churn_suite.ts";
-import {
-  syncReportsDirectory,
-  verifyR2Connection,
-  getR2ConfigInfo,
-} from "../services/sportsdesk_r2_sync.ts";
+import { getR2ConfigInfo } from "../services/sportsdesk_r2_sync.ts";
 import {
   describeAnsiTheme,
   parseAnsiMarkdownCliOptions,
@@ -1719,7 +1715,6 @@ export async function handleWireCommand(args: string[]): Promise<void> {
     const custId = getArgValue(args, ["-c", "--customer"], "CB112_1");
     const asJson = args.includes("--json");
     const asRaw = args.includes("--raw");
-    const asRedact = args.includes("--redact");
     console.log(`[Wire Read-Back] Fetching getInfoPlayer for ${custId}...`);
     try {
       const res = await fetchPlayerInfo({ customerIdentifier: custId });
@@ -1738,10 +1733,12 @@ export async function handleWireCommand(args: string[]): Promise<void> {
         return;
       }
       if (asRaw) {
-        const payload = asRedact
-          ? redactGetInfoPlayer(probe.envelope)
-          : probe.envelope;
-        console.log(JSON.stringify(payload, null, 2));
+        // A live payload is the one place a plaintext `Password`/`Passwordt` can reach stdout,
+        // so raw output is always redacted. There is deliberately no unredacted flag: adding one
+        // is a separate decision with its own review.
+        console.log(
+          JSON.stringify(redactGetInfoPlayer(probe.envelope), null, 2),
+        );
       } else if (asJson) {
         const audit = auditPlayerRiskPosture(probe.envelope);
         console.log(JSON.stringify({ summary: probe.summary, audit }, null, 2));
@@ -1785,7 +1782,8 @@ Subcommands:
   mutate   Execute updateByColumn mutation (-c <CUST_ID> -a <AGENT_ID> --col <COL> --val <VAL>)
   vig      Execute vigSetupInsert (+15c/+20c) (-c <CUST_ID> -s <SPORT> --spread 15 --derivative 20)
   weblog   Query getWebLog IP Tracker (-m A|B|C|I -c <CUST_ID> --ip <IP>)
-  info     Fetch getInfoPlayer read-back (-c <CUST_ID>)
+  info     Fetch getInfoPlayer read-back (-c <CUST_ID> [--raw] [--json])
+           --raw prints the redacted envelope; --json prints the summary + risk audit
   gslive   Emit GSLive 7-param deep-link & live sidecar JSON (-c <CUST_ID> --date YYYY-MM-DD [--state canceled] [--window 1-31])
 `);
 }
@@ -2595,42 +2593,36 @@ export async function main(): Promise<void> {
   }
 
   if (cmd === "trunks" || cmd === "trunk" || cmd === "trees") {
-    console.log(`\n🌲 NOLAWOLF MASTER FOREST: TWO-TRUNK TOPOLOGY COMPARISON`);
-    console.log(
-      `   30-Day Window: Oct 10, 2026 – Nov 09, 2026 | Total Forest: $240,101,982.77 USD\n`,
-    );
-    console.log(
-      "Trunk Branch".padEnd(16) +
-        "30d Handle (USD)".padStart(18) +
-        "Wagers".padStart(10) +
-        "Bettors".padStart(10) +
-        "Avg Stake".padStart(14) +
-        "Alert Rate".padStart(14) +
-        "  Operating Role",
-    );
-    console.log("-".repeat(95));
-    console.log(
-      "TRACKTHIS".padEnd(16) +
-        "$202,991,868.27".padStart(18) +
-        "258,927".padStart(10) +
-        "3,243".padStart(10) +
-        "$783.97".padStart(14) +
-        "33.35%".padStart(14) +
-        "  VIP / Syndicate Engine (1 in 3 Alerts)",
-    );
-    console.log(
-      "NOLAPPH".padEnd(16) +
-        "$37,450,599.89".padStart(18) +
-        "247,056".padStart(10) +
-        "4,198".padStart(10) +
-        "$151.59".padStart(14) +
-        "3.26%".padStart(14) +
-        "  Retail PPH Downline (Recreational)",
-    );
-    console.log("-".repeat(95));
-    console.log(
-      `\nObservation: TRACKTHIS drives 75.5% of total desk turnover with 10x higher alert frequency.\n`,
-    );
+    const { runBatchedRanking } = await import("../lib/customer_rankings.ts");
+    const {
+      buildDownlineTrunkReport,
+      formatDownlineTrunksAnsi,
+      parseTrunksCliArgs,
+      staticNolawolfTrunkFixture,
+    } = await import("../lib/downline_trunks.ts");
+    const trunkOpts = parseTrunksCliArgs(rawArgs.slice(1));
+    try {
+      const data = await runBatchedRanking({ limitPlayers: 100 });
+      const report = buildDownlineTrunkReport(data);
+      if (trunkOpts.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(
+          formatDownlineTrunksAnsi(report, {
+            branchFilter: trunkOpts.branchFilter,
+          }),
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `[trunks] corpus unavailable: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      console.log(
+        formatDownlineTrunksAnsi(staticNolawolfTrunkFixture(), {
+          branchFilter: trunkOpts.branchFilter,
+        }),
+      );
+    }
     return;
   }
 
@@ -2649,17 +2641,79 @@ export async function main(): Promise<void> {
 
   if (cmd === "r2") {
     const sub = rawArgs[1] || "--info";
+    const jsonFlag = rawArgs.includes("--json");
+    const includeBridges = rawArgs.includes("--include-bridges");
     if (sub === "--info" || sub === "info") {
       getR2ConfigInfo();
     } else if (sub === "--verify" || sub === "verify") {
-      await verifyR2Connection();
+      const { verifyCanonicalR2Surface } =
+        await import("../services/sportsdesk_r2_sync.ts");
+      const { mapR2ErrorExitCode } = await import("../lib/r2_manifest_cas.ts");
+      try {
+        const ok = await verifyCanonicalR2Surface({
+          json: jsonFlag,
+          includeBridges,
+        });
+        if (!ok) process.exitCode = 65;
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+        process.exitCode = mapR2ErrorExitCode(err);
+      }
     } else if (sub === "--sync" || sub === "sync") {
-      const targetDir = rawArgs[2] || "reports";
-      await syncReportsDirectory(targetDir);
+      const { syncCanonicalR2Surface } =
+        await import("../services/sportsdesk_r2_sync.ts");
+      const { mapR2ErrorExitCode } = await import("../lib/r2_manifest_cas.ts");
+      const targetDir =
+        rawArgs.slice(2).find((arg) => !arg.startsWith("-")) || "reports";
+      try {
+        await syncCanonicalR2Surface({ targetDir, json: jsonFlag });
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+        process.exitCode = mapR2ErrorExitCode(err);
+      }
     } else {
       console.log(
-        "Usage: bun sportsdesk_cli.ts r2 [--info|--verify|--sync <dir>]",
+        "Usage: bun sportsdesk_cli.ts r2 [--info|--verify [--json] [--include-bridges]|--sync [dir] [--json]]",
       );
+    }
+    return;
+  }
+
+  if (cmd === "stale") {
+    if (rawArgs.includes("-i") || rawArgs.includes("--input")) {
+      const proc = Bun.spawn(
+        ["bun", "run", "scripts/stale_line_cohort_cli.ts", ...rawArgs.slice(1)],
+        {
+          cwd: repoRoot,
+          stdout: "inherit",
+          stderr: "inherit",
+          stdin: "inherit",
+        },
+      );
+      process.exitCode = await proc.exited;
+      return;
+    }
+    const { runCanonicalStaleSurface } =
+      await import("../services/sportsdesk_r2_sync.ts");
+    const { mapR2ErrorExitCode } = await import("../lib/r2_manifest_cas.ts");
+    const jsonFlag = rawArgs.includes("--json");
+    const includeBridges = rawArgs.includes("--include-bridges");
+    const windowMinArg = getArgValue(rawArgs, ["--window-min"], "");
+    const parsedWindowMin = windowMinArg ? Number(windowMinArg) : Number.NaN;
+    const slaMs =
+      Number.isFinite(parsedWindowMin) && parsedWindowMin > 0
+        ? parsedWindowMin * 60_000
+        : undefined;
+    try {
+      const ok = await runCanonicalStaleSurface({
+        json: jsonFlag,
+        includeBridges,
+        ...(slaMs === undefined ? {} : { slaMs }),
+      });
+      if (!ok) process.exitCode = 1;
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exitCode = mapR2ErrorExitCode(err);
     }
     return;
   }

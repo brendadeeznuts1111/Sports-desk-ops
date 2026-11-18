@@ -8,6 +8,7 @@
  * or table widths.
  */
 
+import { useColor } from "./ansi_color.ts";
 import { loadConfig, type WagersConfig } from "./wagers_config.ts";
 import { InspectableWagerColumns } from "./bitwise_pattern_inspect.ts";
 import type {
@@ -693,8 +694,8 @@ export function renderGrid(
   return Bun.inspect.table(
     rows,
     labels,
-    // Native gate: colors only when Bun has ANSI enabled for this output.
-    { colors: Bun.enableANSIColors },
+    // Native gate: colors only when stdout is a TTY (or FORCE_COLOR=1) and NO_COLOR is unset.
+    { colors: useColor() },
   );
 }
 

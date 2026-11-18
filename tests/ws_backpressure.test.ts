@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 
 import {
   sendFrameOrClose,
@@ -194,5 +194,23 @@ describe("stalled subscriber on a real Bun.serve", () => {
         3000,
       ),
     ).toBe(true);
+  });
+});
+
+describe("bridgeWebsocket.error", () => {
+  test("closes the socket with 1011", () => {
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    const closes: Closed[] = [];
+    bridgeWebsocket.error(new Error("boom"), {
+      subscriptions: [],
+      subscribe: () => {},
+      unsubscribe: () => {},
+      send: () => 0,
+      close: (code, reason) => {
+        closes.push({ code, reason });
+      },
+    });
+    expect(closes).toEqual([{ code: 1011, reason: undefined }]);
+    errorSpy.mockRestore();
   });
 });

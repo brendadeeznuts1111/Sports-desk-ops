@@ -14,6 +14,7 @@ export const GSLIVE_LIVE_DATA_URL =
 export const GSLIVE_REPORTS_BASE =
   "https://plive.sportswidgets.pro/manager-tools/reports/";
 
+import { useColor } from "./ansi_color.ts";
 import { GSLIVE_PARTNER_ID } from "./gslive_manager_watchlist.ts";
 
 /** Single ordered endpoint list; probes and tests derive from this, not a copied literal. */
@@ -255,7 +256,7 @@ function withCustomInspect(probe: GsliveManagerProbe): GsliveManagerProbe {
 /** Bun.inspect.table rendering of a probe list; callers own the surrounding prose. */
 export function formatManagerProbeTable(
   probes: readonly GsliveManagerProbe[],
-  colors = Bun.enableANSIColors,
+  colors = useColor(),
 ): string {
   const rows = probes.map((probe) => ({
     kind: probe.kind,

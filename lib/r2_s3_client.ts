@@ -582,6 +582,14 @@ export class R2S3Client {
   }
 
   /**
+   * Columnar snapshot ingest: stream the object body into one `ArrayBuffer` without a string hop.
+   * Uses `S3File.stream()` (`docs/runtime/s3.mdx#reading-files-from-s3`).
+   */
+  async readArrayBufferFromStream(key: string): Promise<ArrayBuffer> {
+    return Bun.readableStreamToArrayBuffer(this.client.file(key).stream());
+  }
+
+  /**
    * Upload with `x-amz-meta-*` headers. Bun's writer has no metadata option and its
    * presigner cannot sign custom headers, so this signs the exact metadata PUT with
    * Web Crypto (SigV4); plain writes still go through `Bun.S3Client.write`.

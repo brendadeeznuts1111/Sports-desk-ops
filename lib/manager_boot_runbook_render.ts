@@ -13,6 +13,8 @@
 import { join } from "node:path";
 
 import { DOCS_RENDER_OPTIONS } from "./docs_render_cache.ts";
+import { createSourceLocationUrl } from "../src/lib/source_location_url.ts";
+import { osc8Link } from "../src/lib/terminal_links.ts";
 
 const REPO_ROOT = join(import.meta.dir, "..");
 
@@ -62,10 +64,6 @@ function ansiEnabled(explicit?: boolean): boolean {
   return Bun.env.NO_COLOR === undefined && Bun.env.TERM !== "dumb";
 }
 
-function osc8Link(text: string, url: string): string {
-  return `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
-}
-
 /** Custom \`Bun.markdown.render\` hooks tuned for evidence runbooks (headings, gates, commands). */
 export function renderManagerBootRunbookTerminal(
   markdown: string,
@@ -111,15 +109,20 @@ export function renderManagerBootRunbookTerminal(
       blockquote: (children) => `${dim}│ ${children}${reset}\n`,
       link: (children, meta) => {
         const { href } = meta;
-        if (href.startsWith("http://") || href.startsWith("https://")) {
-          return colors ? osc8Link(String(children), href) : String(children);
+        const parsed = URL.parse(href);
+        if (
+          parsed !== null &&
+          (parsed.protocol === "http:" || parsed.protocol === "https:")
+        ) {
+          return colors ? osc8Link(parsed, String(children)) : String(children);
         }
         if (href.endsWith(".md")) {
           const abs = href.startsWith("/")
             ? href
             : join(REPO_ROOT, "docs/evidence", href.replace(/^\.\//, ""));
+          const fileUrl = createSourceLocationUrl(abs);
           return colors
-            ? osc8Link(String(children), `file://${abs}`)
+            ? osc8Link(fileUrl, String(children))
             : String(children);
         }
         return String(children);

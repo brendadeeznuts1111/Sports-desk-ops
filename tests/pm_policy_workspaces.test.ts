@@ -386,3 +386,40 @@ describe("link: specifiers", () => {
     expect(issues).toEqual([]);
   });
 });
+
+describe("workspace extglob patterns", () => {
+  test("packages/!(internal) excludes internal from the unregistered scan", async () => {
+    const root = path.join(scratch, "extglob-workspaces");
+    for (const dir of [
+      "packages/kept",
+      "packages/internal",
+      "packages/missing",
+    ]) {
+      mkdirSync(path.join(root, dir), { recursive: true });
+    }
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        name: "extglob-root",
+        private: true,
+        workspaces: ["packages/!(internal)"],
+      }),
+    );
+    writeFileSync(
+      path.join(root, "packages/kept/package.json"),
+      JSON.stringify({ name: "kept" }),
+    );
+    writeFileSync(path.join(root, "packages/kept/index.ts"), "export {};\n");
+    writeFileSync(
+      path.join(root, "packages/internal/index.ts"),
+      "export {};\n",
+    );
+    writeFileSync(path.join(root, "packages/missing/index.ts"), "export {};\n");
+
+    const inspection = await inspectWorkspaces(root);
+    expect(inspection.unregisteredDirs).toEqual(["packages/missing"]);
+    expect(
+      Object.keys((await resolveWorkspaces(root)).workspaces).sort(),
+    ).toEqual(["", "packages/kept"]);
+  });
+});

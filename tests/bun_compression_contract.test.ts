@@ -4,7 +4,11 @@
  * `scripts/generate_pipeline_reference_images.ts` keeps `node:zlib.inflateSync`.
  */
 import { describe, expect, test } from "bun:test";
-import { deflateSync, inflateSync } from "node:zlib";
+import {
+  deflateSync,
+  gunzipSync as nodeGunzipSync,
+  inflateSync,
+} from "node:zlib";
 
 const TEXT = "sportsdesk compression contract ".repeat(40);
 const BYTES = new TextEncoder().encode(TEXT);
@@ -18,6 +22,45 @@ describe("Bun compression contract", () => {
     expect(wrapped[0]).toBe(0x78);
     expect(() => Bun.inflateSync(wrapped)).toThrow();
     expect(new Uint8Array(inflateSync(wrapped))).toEqual(BYTES);
+  });
+
+  test("out-of-range memLevel/strategy throw instead of being ignored", () => {
+    // Next-release contract: these options used to be accepted and silently replaced
+    // with defaults. Callers get a RangeError now, so a bad CLI/env-derived option
+    // cannot quietly change the compression profile.
+    expect(() => Bun.gzipSync(BYTES, { memLevel: 10 } as never)).toThrow(
+      RangeError,
+    );
+    expect(() => Bun.gzipSync(BYTES, { memLevel: 0 } as never)).toThrow(
+      RangeError,
+    );
+    expect(() => Bun.deflateSync(BYTES, { strategy: 5 } as never)).toThrow(
+      RangeError,
+    );
+    expect(() => Bun.deflateSync(BYTES, { strategy: -1 } as never)).toThrow(
+      RangeError,
+    );
+    // In-range options still round-trip.
+    const gz = Bun.gzipSync(BYTES, { memLevel: 1, strategy: 0 });
+    expect(new Uint8Array(Bun.gunzipSync(gz))).toEqual(BYTES);
+  });
+
+  test("gzipSync returns Uint8Array and round-trips a Buffer (docs example)", () => {
+    const data = Buffer.from("Hello, world!");
+    const compressed = Bun.gzipSync(data);
+    expect(compressed).toBeInstanceOf(Uint8Array);
+    expect(compressed.constructor).toBe(Uint8Array);
+
+    const decompressed = Bun.gunzipSync(compressed);
+    expect(decompressed).toBeInstanceOf(Uint8Array);
+    expect(decompressed.constructor).toBe(Uint8Array);
+    expect(Buffer.from(decompressed).toString()).toBe("Hello, world!");
+
+    // The output is standard gzip, not a Bun-private container.
+    expect(nodeGunzipSync(Buffer.from(compressed)).toString()).toBe(
+      "Hello, world!",
+    );
+    expect(() => Bun.gunzipSync(new Uint8Array([0x1f, 0x8b, 0x00]))).toThrow();
   });
 
   test("gzip and zstd round-trip through the native APIs", () => {

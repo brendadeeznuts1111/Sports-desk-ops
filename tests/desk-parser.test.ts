@@ -400,6 +400,43 @@ describe("Bun 1.4 streaming decompression and incremental JSONL parsing", () => 
     }
   });
 
+  test("streams mixed text/byte chunks without splitting multi-byte UTF-8", async () => {
+    const jsonl =
+      [
+        JSON.stringify({
+          customer: { id: "C-1", name: "München 🔥", tier: "A" },
+          limits: { max_stake: "100.00", currency: "USD" },
+        }),
+        JSON.stringify({
+          position: {
+            id: "W-1",
+            market: "München 🔥",
+            side: "Home",
+            stake: "100.00",
+            price: "-110",
+            status: "pending",
+            day: "2026-11-14",
+          },
+        }),
+      ].join("\n") + "\n";
+    const marker = "München";
+    const prefix = jsonl.slice(0, jsonl.indexOf(marker));
+    const bytes = new TextEncoder().encode(jsonl);
+    const prefixBytes = new TextEncoder().encode(prefix).byteLength;
+    const rest = bytes.subarray(prefixBytes);
+    const stream = new ReadableStream<string | Uint8Array>({
+      start(controller) {
+        controller.enqueue(prefix);
+        controller.enqueue(rest.subarray(0, 2)); // "M" + first byte of ü
+        controller.enqueue(rest.subarray(2));
+        controller.close();
+      },
+    });
+
+    const desk = await parseDeskStream(stream, "jsonl");
+    expect(desk.positions[0]?.market).toBe("München 🔥");
+  });
+
   test("rejects truncated trailing JSONL and reports EMPTY_JSONL_STREAM on empty compressed payloads", async () => {
     const truncated = `${sampleJsonl}\n{"position":{"id":"W-9502"`;
     const truncatedStream = chunkBytes(new TextEncoder().encode(truncated), 7);

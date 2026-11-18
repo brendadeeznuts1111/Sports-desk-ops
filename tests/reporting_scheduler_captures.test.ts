@@ -65,6 +65,9 @@ describe("SHELL_CAPTURE schedule definitions", () => {
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_10m_positions_pulse");
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_agent_tree_hourly");
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_customer_profiles_6h");
+    expect(BRIDGE_SCHEDULE_IDS).toContain(
+      "sched_customer_decision_rankings_daily",
+    );
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_f402_session_refresh");
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_weblog_sentinel_daily");
   });
@@ -140,6 +143,29 @@ describe("SHELL_CAPTURE schedule definitions", () => {
     expect(def?.shellJob?.requires).toEqual([
       "file:enriched_customers_full.json",
     ]);
+  });
+
+  test("customer-decision-rankings runs daily at 03:15 America/Chicago and gates on scratch corpora", () => {
+    const scheduler = new ReportingSchedulerService(fakeTelegram());
+    const def = scheduler
+      .getSchedules()
+      .find((s) => s.id === "sched_customer_decision_rankings_daily");
+    expect(def?.reportType).toBe("SHELL_CAPTURE");
+    expect(def?.scheduleTime).toBe("15 3 * * *");
+    expect(def?.tz).toBe("America/Chicago");
+    expect(def?.shellJob?.args).toEqual([
+      "--no-orphans",
+      "--no-env-file",
+      "run",
+      "workers/customer_rankings_daily.ts",
+      "--once",
+    ]);
+    expect(def?.shellJob?.requires).toEqual([
+      "file:scratch/f402-player-analysis-all.json",
+      "file:scratch/graded/graded-oct-window.json",
+      "file:scratch/graded/graded-today.json",
+    ]);
+    expect(def?.enabled).toBe(true);
   });
 
   test("the bot daemon's exclude list covers every daemon-owned id so there is no double-fire", () => {

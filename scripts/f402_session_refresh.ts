@@ -3,7 +3,8 @@
  * @file f402_session_refresh.ts
  * @description Thin runner for `lib/f402_session_refresh.ts`: read the current F402 session file,
  * ask the library whether a refresh is needed, and spawn `bun run session:login --from-keychain
- * --ttl-min 1440` when it is. Designed to be driven on a short interval by launchd (a user
+ * --ttl-min 1440` when it is. The TTL is an upper cap: a bearer session's file expiry is the JWT
+ * `exp` minus 2 minutes, so `decideRefresh()` tracks the real 21-minute window. Designed to be driven on a short interval by launchd (a user
  * `LaunchAgent` with `StartInterval` is the lightest supervision surface on macOS and does not
  * require a running webview daemon) or by the reporting scheduler as a future shellJob entry.
  *
@@ -30,11 +31,14 @@ import { readF402Session } from "../lib/f402_session.ts";
 import {
   DEFAULT_REFRESH_GRACE_MS,
   DEFAULT_REFRESH_TTL_MINUTES,
+  EXPECTED_TOKEN_WINDOW_MINUTES,
   REFRESH_EXIT,
+  TOKEN_WINDOW_TOLERANCE_MINUTES,
   buildMintCommand,
   decideRefresh,
   hasEnvLoginCredentials,
   journalLine,
+  tokenWindowFromSession,
   type RefreshErrorKind,
   type RefreshExit,
   type RefreshOutcome,
@@ -169,6 +173,7 @@ async function main(): Promise<RefreshExit> {
   const mint = await spawnMint(options.ttlMinutes);
   const postRead = readF402Session();
   const postDecision = decideRefresh(postRead, Date.now(), options.graceMs);
+  const postWindow = tokenWindowFromSession(postRead);
 
   let outcome: RefreshOutcome;
   let exit: RefreshExit;
@@ -180,6 +185,7 @@ async function main(): Promise<RefreshExit> {
       attempted: true,
       ok: true,
       mintDurationMs: mint.durationMs,
+      ...(postWindow === null ? {} : { tokenWindow: postWindow }),
     };
     exit = REFRESH_EXIT.ok;
   } else {
@@ -197,6 +203,27 @@ async function main(): Promise<RefreshExit> {
       error,
     };
     exit = REFRESH_EXIT.refreshFailed;
+  }
+
+  if (
+    postWindow !== null &&
+    Math.abs(postWindow.windowMinutes - EXPECTED_TOKEN_WINDOW_MINUTES) >
+      TOKEN_WINDOW_TOLERANCE_MINUTES
+  ) {
+    await appendJournal(
+      options.journalPath,
+      `${JSON.stringify({
+        kind: "f402-token-window-alert",
+        observedAtMs: nowMs,
+        expectedMin: EXPECTED_TOKEN_WINDOW_MINUTES,
+        observedMin: postWindow.windowMinutes,
+        nbfIso: postWindow.nbfIso,
+        expIso: postWindow.expIso,
+      })}\n`,
+    );
+    console.error(
+      `[f402-session-refresh] bearer window ${postWindow.windowMinutes} min deviates from expected ${EXPECTED_TOKEN_WINDOW_MINUTES} min (exp ${postWindow.expIso})`,
+    );
   }
 
   await appendJournal(options.journalPath, journalLine(outcome));

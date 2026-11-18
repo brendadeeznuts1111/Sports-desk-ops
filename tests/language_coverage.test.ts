@@ -46,6 +46,7 @@ const COVERAGE: Readonly<Record<string, string>> = {
   npmrc: "config",
   gitignore: "config",
   gitattributes: "git attributes (bun.lock text/binary order)",
+  mailmap: "display-only author mapping",
   "git-blame-ignore-revs": "config",
   "bun-version": "runtime pin",
   gitkeep: "placeholder",
@@ -65,6 +66,7 @@ const EXACT_FILES: Readonly<Record<string, string>> = {
   "bin/wrangler": "bash -n",
   "packages/sportsdesk-ops/bin/dx": "bash -n",
   "packages/sportsdesk-ops/bin/wrangler": "bash -n",
+  ".githooks/pre-commit": "bash -n",
 };
 
 function trackedFiles(): string[] {

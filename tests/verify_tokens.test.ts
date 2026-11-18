@@ -1,6 +1,6 @@
 /**
  * @file tests/verify_tokens.test.ts
- * @description Formal Specification & Invariant Verification Suite for Qwen3.5-4B Tokens (v1.3.0).
+ * @description Formal Specification & Invariant Verification Suite for Qwen3.5-4B Tokens (v1.4.0).
  */
 
 import { describe, it, expect } from "bun:test";
@@ -114,7 +114,7 @@ describe("1. Single Source of Truth & Zero-Drift Regeneration", () => {
       await import("../lib/gen_tokens/tokens_ssot.ts");
     const ssot = parseTokensToml(tomlText);
 
-    expect(ssot.meta.version).toBe("1.3.0");
+    expect(ssot.meta.version).toBe("1.5.0");
     expect(ssot.meta.schema).toBe("sportsdesk-tokens/v1");
 
     const surfaces = ssot.surfaces;
@@ -474,6 +474,46 @@ describe("3. WCAG 2.1 Contrast & Cross-State Perceptual Gates Against All Surfac
       }
     }
   });
+
+  it("test_adjacent_ingestion_channel_delta_e00_floor", () => {
+    // gates.min_adjacent_channel_delta_e00_milli exists so two sibling channel
+    // badges cannot drift into the same spectral band. The tightest pair is the
+    // documented in-play cyan continuum (CSLEVEL2 -> LIVEBETTINGCWS), which is
+    // why the floor is 10.00 and not 12.00 — see design/tokens.toml.
+    const floor = TOKEN_GATES.minAdjacentChannelDeltaE00Milli / 1000;
+    expect(floor).toBeGreaterThan(0);
+
+    const channels = [...INGESTION_CHANNELS].sort(
+      (a, b) => a.channelId - b.channelId,
+    );
+    expect(channels.length).toBeGreaterThan(1);
+
+    let tightest = Number.POSITIVE_INFINITY;
+    let tightestPair = "";
+    for (let i = 0; i + 1 < channels.length; i++) {
+      const a = channels[i]!;
+      const b = channels[i + 1]!;
+      const deltaE = calculateDeltaE00(
+        rgbToLab(hexToRgb(a.hex)),
+        rgbToLab(hexToRgb(b.hex)),
+      );
+      if (deltaE < tightest) {
+        tightest = deltaE;
+        tightestPair = `${a.channelId} ${a.hex} -> ${b.channelId} ${b.hex}`;
+      }
+      if (deltaE < floor) {
+        throw new Error(
+          `ERR_A11Y_ADJACENT_CHANNEL_DELTA_E00: ${a.channelId} ${a.hex} -> ${b.channelId} ${b.hex} = ${deltaE.toFixed(2)} < ${floor.toFixed(2)}`,
+        );
+      }
+    }
+
+    // Recorded so a palette edit that closes the cyan band names the pair.
+    expect({ tightest: Number(tightest.toFixed(2)), tightestPair }).toEqual({
+      tightest: 10.72,
+      tightestPair: "7 #7dd3fc -> 8 #67e8f9",
+    });
+  });
 });
 
 describe("4. Discriminated Union Type Guardrails & Router Packing Alignment", () => {
@@ -684,14 +724,40 @@ describe("5. Dead-Token & Bi-Directional Reference Consistency", () => {
   });
 
   it("test_assert_non_token_root_properties_are_aliases_of_tokens", async () => {
+    const { parseTokensToml } =
+      await import("../lib/gen_tokens/tokens_ssot.ts");
+    const {
+      LAYOUT_CSS_NAMES,
+      MOTION_CSS_NAMES,
+      casPropertyNames,
+      casRootNames,
+    } = await import("../lib/gen_tokens/css_option_sections.ts");
+    const ssot = parseTokensToml(
+      await Bun.file(resolve(rootDir, "design/tokens.toml")).text(),
+    );
+
     const tokenNames = new Set(DASHBOARD_TOKENS.map((t) => t.tokenName));
+    // `[layout]`, `[motion]` and `[cas_states]` are SSOT values emitted as raw
+    // declarations, not aliases. They are named from the parsed TOML, so a new
+    // TOML key widens this set instead of failing as an "unknown property".
+    // `[cas_states]` colours are emitted as typed `@property`; `[layout]` and
+    // `[motion]` are untyped, so they only appear in `:root`.
+    const ssotPropertyNames = new Set(casPropertyNames(ssot.cas_states));
+    const ssotRootNames = new Set([
+      ...LAYOUT_CSS_NAMES,
+      ...MOTION_CSS_NAMES,
+      ...casRootNames(ssot.cas_states),
+    ]);
+
     for (const file of DASHBOARD_FILES) {
       const { initialValues, rootValues } =
         await readDashboardCustomProperties(file);
-      expect([...initialValues.keys()].sort()).toEqual([...tokenNames].sort());
+      expect([...initialValues.keys()].sort()).toEqual(
+        [...tokenNames, ...ssotPropertyNames].sort(),
+      );
 
       const nonAliases = [...rootValues]
-        .filter(([name]) => !tokenNames.has(name))
+        .filter(([name]) => !tokenNames.has(name) && !ssotRootNames.has(name))
         .filter(([, value]) => {
           const ref = value.match(/^var\((--sd-[\w-]+)\)$/)?.[1];
           return ref === undefined || !tokenNames.has(ref);
@@ -699,6 +765,30 @@ describe("5. Dead-Token & Bi-Directional Reference Consistency", () => {
         .map(([name, value]) => `${file}: ${name}: ${value}`);
       expect(nonAliases).toEqual([]);
     }
+  });
+
+  it("test_assert_generated_root_aliases_match_tokens_toml_aliases", async () => {
+    const { parseTokensToml } =
+      await import("../lib/gen_tokens/tokens_ssot.ts");
+    const ssot = parseTokensToml(
+      await Bun.file(resolve(rootDir, "design/tokens.toml")).text(),
+    );
+    const css = await Bun.file(
+      resolve(rootDir, "src/dashboard/tokens.generated.css"),
+    ).text();
+
+    const emitted = [
+      ...css.matchAll(
+        /^\s*(--[a-z0-9][a-z0-9-]*):\s*var\((--[a-z0-9][a-z0-9-]*)\);/gm,
+      ),
+    ].map((match) => `${match[1]} -> ${match[2]}`);
+    const expected = [
+      ...ssot.aliases.legacy,
+      ...ssot.aliases.dashboard,
+      ...(ssot.aliases.accessibility ?? []),
+    ].map((alias) => `${alias.alias} -> ${alias.target}`);
+
+    expect(emitted).toEqual(expected);
   });
 
   it("test_assert_every_referenced_sd_property_is_defined", async () => {

@@ -245,6 +245,9 @@ describe("Bun reference symbol matching", () => {
     expect(resolveBunSymbolReferenceUrl("Bun.inspect.custom")).toBe(
       "https://bun.com/reference/bun/inspect",
     );
+    expect(resolveBunSymbolReferenceUrl("Bun.inspect.table")).toBe(
+      "https://bun.com/reference/bun/inspect",
+    );
     expect(resolveBunSymbolReferenceUrl("Bun.TOML")).toBe(
       "https://bun.com/reference/bun/TOML",
     );
@@ -254,6 +257,15 @@ describe("Bun reference symbol matching", () => {
     expect(resolveBunSymbolReferenceUrl("Bun.Terminal")).toBe(
       "https://bun.com/reference/bun/Terminal",
     );
+    expect(resolveBunSymbolReferenceUrl("Bun.connect")).toBe(
+      "https://bun.com/reference/bun/connect",
+    );
+    expect(resolveBunSymbolReferenceUrl("Bun.concatArrayBuffers")).toBe(
+      "https://bun.com/reference/bun/concatArrayBuffers",
+    );
+    expect(
+      resolveBunSymbolReferenceUrl("Bun.readableStreamToArrayBuffer"),
+    ).toBe("https://bun.com/reference/bun/readableStreamToArrayBuffer");
     expect(
       resolveBunSymbolReferenceUrl("unknown_nonexistent_symbol"),
     ).toBeNull();

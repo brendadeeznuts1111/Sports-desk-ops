@@ -379,6 +379,7 @@ describe("the enabled refresh loop", () => {
       fetchedAt: FIXED_AT,
       servedFromCache: false,
       transport: "injected-fetch",
+      scopeSource: "env",
       customersAttempted: PENDING_CUSTOMERS.length,
       customersFailed: 0,
       ttlMs: LIVE_PENDING_TTL_MS,

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
@@ -216,12 +222,21 @@ describe("Bun capabilities used by the ops tooling", () => {
           fileExtensions: [".tsx"],
         });
         const about = router.match("/about");
+        const noOrigin = new Bun.FileSystemRouter({
+          style: "nextjs",
+          dir,
+          fileExtensions: [".tsx"],
+        });
         console.log(JSON.stringify({
           dir: realpathSync(dir),
           missing: router.match("/missing"),
           filePath: about === null ? null : about.filePath,
           kind: about === null ? null : about.kind,
           scriptSrc: about === null ? null : about.scriptSrc,
+          assetPrefix: router.assetPrefix,
+          queryZero: router.match("/?0=a")?.query ?? null,
+          origin: router.origin,
+          noOrigin: noOrigin.origin,
         }));
       } finally {
         rmSync(dir, { recursive: true, force: true });
@@ -241,11 +256,22 @@ describe("Bun capabilities used by the ops tooling", () => {
       filePath: string;
       kind: string;
       scriptSrc: string;
+      assetPrefix: string | null;
+      queryZero: Record<string, string> | null;
+      origin: string | null;
+      noOrigin: string | null;
     };
     expect(result.missing).toBeNull();
     expect(result.filePath).toBe(join(result.dir, "about.tsx"));
     expect(result.kind).toBe("exact");
     expect(result.scriptSrc).toBe("https://example.test/static/about.tsx");
+    // Next-release fixes: assetPrefix is exposed (was always undefined), and a
+    // numeric-only query key is not listed twice.
+    expect(result.assetPrefix).toBe("/static/");
+    expect(result.queryZero).toEqual({ "0": "a" });
+    // Next-release types fix: origin is `string | null`, not always a string.
+    expect(result.origin).toBe("https://example.test");
+    expect(result.noOrigin).toBeNull();
   });
 
   test("StructuredSerializeOptions transfer detaches the source buffer", async () => {
@@ -444,6 +470,30 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(matches("!(a|b).ts", "c.ts")).toBe(true);
     expect(matches("!(a|b).ts", "a.ts")).toBe(false);
 
+    // 1.4.4 documented examples: nested negative group and path-segment alternation.
+    expect(matches("**/!(*.test).ts", "src/cart.ts")).toBe(true);
+    expect(matches("**/!(*.test).ts", "src/cart.test.ts")).toBe(false);
+    expect(matches("src/@(app|lib)/**/*.ts", "src/app/a/b.ts")).toBe(true);
+    expect(matches("shard-{1..3}.json", "shard-2.json")).toBe(true);
+
+    // Literal-looking groups now parse as extglob: copy(1).txt no longer matches.
+    expect(matches("*(1).txt", "1.txt")).toBe(true);
+    expect(matches("*(1).txt", "copy(1).txt")).toBe(false);
+
+    // A leading negative extglob is a pattern; it is not a package-negation string.
+    expect(matches("!(g)/a.ts", "x/a.ts")).toBe(true);
+    expect(matches("!(g)/a.ts", "g/a.ts")).toBe(false);
+
+    // v1.4.3 → v1.4.4 migration: bracket-class the paren to retain the old literal match.
+    expect(matches("*[(]1).txt", "copy(1).txt")).toBe(true);
+    expect(matches("*[(]1).txt", "1.txt")).toBe(false);
+    expect(matches("*\\{1..3\\}.txt", "x{1..3}.txt")).toBe(true);
+
+    // Patterns changed; paths are still literal, so ordinary globs match these names.
+    expect(matches("**/*.ts", "src/copy(1).ts")).toBe(true);
+    expect(matches("**/*.ts", "src/{1..3}.ts")).toBe(true);
+    expect(matches("**/*.ts", "src/!(g).ts")).toBe(true);
+
     // A leading `!` negates the whole pattern: it matches what the inner pattern does not.
     // Both inputs must be tested, or a `.ts`-vs-`.ts` pair looks like "matches nothing".
     expect(matches("!*.ts", "a.ts")).toBe(false);
@@ -584,12 +634,180 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(typeof first?.[1]).toBe("string");
   });
 
-  test("Bun.which resolves against PATH and honours the override", () => {
+  test("which: resolves against PATH and honours the override", () => {
     expect(Bun.which("bun")).not.toBeNull();
     expect(Bun.which("bun-not-a-real-binary-xyz")).toBeNull();
     expect(
       Bun.which("bun-not-a-real-binary-xyz", { PATH: "/usr/bin:/bin" }),
     ).toBeNull();
+  });
+
+  test("which: PATH override returns the first executable, not the host path", () => {
+    if (process.platform === "win32") return;
+    const dir = mkdtempSync(join(tmpdir(), "bun-which-"));
+    try {
+      const executable = join(dir, "sd-which-probe");
+      writeFileSync(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      expect(Bun.which("sd-which-probe", { PATH: dir })).toBe(executable);
+      // The host PATH does not contain the temporary directory.
+      expect(Bun.which("sd-which-probe")).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("which: launch PATH snapshot; explicit PATH is live", () => {
+    if (process.platform === "win32") return;
+    const dir = mkdtempSync(join(tmpdir(), "bun-which-snapshot-"));
+    const previous = Bun.env.PATH;
+    try {
+      const executable = join(dir, "sd-which-late-path");
+      writeFileSync(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      Bun.env.PATH = dir;
+      // Measured Bun 1.4.4: mutating Bun.env.PATH does not re-resolve the
+      // default lookup; it uses the process launch PATH. Explicit PATH does.
+      expect(Bun.which("sd-which-late-path")).toBeNull();
+      expect(Bun.which("sd-which-late-path", { PATH: dir })).toBe(executable);
+    } finally {
+      Bun.env.PATH = previous;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("which: cwd is the base for a relative PATH entry", () => {
+    if (process.platform === "win32") return;
+    const dir = mkdtempSync(join(tmpdir(), "bun-which-cwd-"));
+    try {
+      const executable = join(dir, "sd-which-cwd-probe");
+      writeFileSync(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      expect(Bun.which("sd-which-cwd-probe", { PATH: "" })).toBeNull();
+      expect(Bun.which("sd-which-cwd-probe", { PATH: "." })).toBeNull();
+      const withCwd = Bun.which("sd-which-cwd-probe", {
+        cwd: dir,
+        PATH: ".",
+      });
+      expect(withCwd).not.toBeNull();
+      expect(withCwd?.endsWith("sd-which-cwd-probe")).toBe(true);
+      expect(
+        Bun.which("ls", {
+          cwd: join(dir, "missing"),
+          PATH: "/bin:/usr/bin",
+        }),
+      ).not.toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("which: skips empty PATH segments instead of treating them as cwd", () => {
+    if (process.platform === "win32") return;
+    const dir = mkdtempSync(join(tmpdir(), "bun-which-empty-"));
+    try {
+      writeFileSync(join(dir, "sd-which-empty-probe"), "#!/bin/sh\nexit 0\n", {
+        mode: 0o755,
+      });
+      // POSIX says an empty segment means the current directory. Bun 1.4.4
+      // skips it; record the divergence explicitly.
+      for (const PATH of [":", "/bin::", "/bin:", "::/bin", "/bin::/usr/bin"]) {
+        expect(
+          Bun.which("sd-which-empty-probe", { cwd: dir, PATH }),
+        ).toBeNull();
+      }
+      expect(
+        Bun.which("sd-which-empty-probe", { cwd: dir, PATH: "." }),
+      ).not.toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("which: requires an executable regular file and keeps symlink spelling", () => {
+    if (process.platform === "win32") return;
+    const dir = mkdtempSync(join(tmpdir(), "bun-which-pred-"));
+    try {
+      writeFileSync(join(dir, "sd-not-exec"), "#!/bin/sh\n", { mode: 0o644 });
+      expect(Bun.which("sd-not-exec", { PATH: dir })).toBeNull();
+
+      mkdirSync(join(dir, "sd-dir"));
+      expect(Bun.which("sd-dir", { PATH: dir })).toBeNull();
+
+      const target = join(dir, "sd-target");
+      writeFileSync(target, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      const link = join(dir, "sd-link");
+      symlinkSync(target, link);
+      expect(Bun.which("sd-link", { PATH: dir })).toBe(link);
+
+      symlinkSync(join(dir, "missing"), join(dir, "sd-broken"));
+      expect(Bun.which("sd-broken", { PATH: dir })).toBeNull();
+
+      // cwd is joined literally, not realpath'd.
+      const real = join(dir, "real-bin");
+      mkdirSync(real);
+      writeFileSync(join(real, "sd-cwd-link"), "#!/bin/sh\nexit 0\n", {
+        mode: 0o755,
+      });
+      const cwdLink = join(dir, "cwd-link");
+      symlinkSync(real, cwdLink);
+      const viaLink = Bun.which("sd-cwd-link", { cwd: cwdLink, PATH: "." });
+      expect(viaLink).not.toBeNull();
+      expect(viaLink?.startsWith(cwdLink)).toBe(true);
+      expect(viaLink).not.toBe(join(real, "sd-cwd-link"));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("which: default lookup and Bun.spawn share launch PATH", () => {
+    if (process.platform === "win32") return;
+    const proc = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        "-e",
+        `const before = Bun.which("ls"); Bun.env.PATH = "/nonexistent"; const after = Bun.which("ls"); const spawned = Bun.spawn(["ls"], { stdout: "pipe", stderr: "pipe" }); console.log(JSON.stringify({ before, after, exit: await spawned.exited }));`,
+      ],
+      cwd: import.meta.dir,
+      env: { ...process.env },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(proc.exitCode).toBe(0);
+    const observed = JSON.parse(new TextDecoder().decode(proc.stdout)) as {
+      before: string | null;
+      after: string | null;
+      exit: number;
+    };
+    expect(observed.after).toBe(observed.before);
+    expect(observed.exit).toBe(0);
+  });
+
+  test("which: spawn env replace and empty segments", async () => {
+    if (process.platform === "win32") return;
+    const dir = mkdtempSync(join(tmpdir(), "bun-spawn-path-"));
+    try {
+      const executable = join(dir, "sd-spawn-path-probe");
+      writeFileSync(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      // spawn skips empty segments like Bun.which, so a local binary is not
+      // found through PATH ":" even with cwd set.
+      expect(() =>
+        Bun.spawn(["sd-spawn-path-probe"], {
+          cwd: dir,
+          env: { ...Bun.env, PATH: ":" },
+          stdout: "pipe",
+          stderr: "pipe",
+        }),
+      ).toThrow();
+
+      // Explicit env REPLACES rather than merges: HOME is not inherited.
+      const probe = Bun.spawn(["sh", "-c", 'printf %s "$HOME"'], {
+        env: { PATH: "/bin" },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(await new Response(probe.stdout).text()).toBe("");
+      expect(await probe.exited).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("type-only Bun members have no runtime value", () => {
@@ -702,6 +920,9 @@ describe("Bun capabilities used by the ops tooling", () => {
     const escaped = Bun.$.escape("foo bar; rm -rf /");
     expect(escaped).not.toBe("foo bar; rm -rf /");
     expect(escaped.length).toBeGreaterThan("foo bar; rm -rf /".length);
+    // Release fix: non-string arguments are stringified, never passed through.
+    expect(Bun.$.escape(null as unknown as string)).toBe("null");
+    expect(Bun.$.escape(true as unknown as string)).toBe("true");
 
     // `$.braces` is pure bash brace expansion — no I/O, safe to call unconditionally.
     expect(Bun.$.braces("index.{js,ts}").sort()).toEqual([
@@ -722,6 +943,58 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(failed.exitCode).toBe(7);
   });
 
+  test("subprocess resourceUsage exposes bigint cpuTime fields", async () => {
+    const proc = Bun.spawn([process.execPath, "--version"], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    await proc.exited;
+    const usage = await proc.resourceUsage();
+    if (usage === undefined) {
+      throw new Error("resourceUsage() returned undefined after exit");
+    }
+    // The installed bun-types already declare cpuTime.user/system/total as bigint;
+    // this pins the declaration to the values the subprocess actually reports.
+    expect(typeof usage.cpuTime.user).toBe("bigint");
+    expect(typeof usage.cpuTime.system).toBe("bigint");
+    expect(typeof usage.cpuTime.total).toBe("bigint");
+    expect(usage.cpuTime.total).toBe(usage.cpuTime.user + usage.cpuTime.system);
+    expect(usage.cpuTime.user >= 0n).toBe(true);
+  });
+
+  test("standard Web APIs are global and interoperate", async () => {
+    expect(typeof Blob).toBe("function");
+    expect(typeof URL).toBe("function");
+    expect(typeof Request).toBe("function");
+    expect(typeof Response).toBe("function");
+    expect(typeof Headers).toBe("function");
+
+    const request = new Request("https://example.test/x?q=1", {
+      method: "POST",
+      body: new Blob(["hi"], { type: "text/plain" }),
+    });
+    expect(await request.text()).toBe("hi");
+    expect(new URL(request.url).searchParams.get("q")).toBe("1");
+
+    const response = new Response(new Blob(["ok"]));
+    expect(await response.text()).toBe("ok");
+    expect(new URL("/a", "https://example.test").href).toBe(
+      "https://example.test/a",
+    );
+  });
+
+  test("Bun.escapeHTML replaces the five HTML characters and stringifies values", () => {
+    expect(Bun.escapeHTML("<script>alert('Hello World!')</script>")).toBe(
+      "&lt;script&gt;alert(&#x27;Hello World!&#x27;)&lt;/script&gt;",
+    );
+    expect(Bun.escapeHTML("a & b < c > d \" e ' f")).toBe(
+      "a &amp; b &lt; c &gt; d &quot; e &#x27; f",
+    );
+    // Non-strings are converted before escaping.
+    expect(Bun.escapeHTML(42)).toBe("42");
+    expect(Bun.escapeHTML(true)).toBe("true");
+  });
+
   test("Bun.allocUnsafe returns a Uint8Array of the requested length (unzeroed)", () => {
     // bun.com/reference/bun#bun.allocUnsafe: up to 3.5x faster than `new Uint8Array(n)`
     // because the bytes are not zeroed. The two production call sites
@@ -737,6 +1010,20 @@ describe("Bun capabilities used by the ops tooling", () => {
     buf.fill(0x61);
     expect(buf[0]).toBe(0x61);
     expect(buf[1023]).toBe(0x61);
+  });
+
+  test("Bun.env aliases process.env in both directions", () => {
+    expect(Bun.env).toBe(process.env);
+    const key = "SPORTSDESK_BUN_ENV_ALIAS_PROBE";
+    try {
+      Bun.env[key] = "from-bun";
+      expect(process.env[key]).toBe("from-bun");
+      process.env[key] = "from-process";
+      expect(Bun.env[key]).toBe("from-process");
+    } finally {
+      delete Bun.env[key];
+    }
+    expect(process.env[key]).toBeUndefined();
   });
 
   test("module 'bun' named exports share 1:1 reference identity with globalThis.Bun", async () => {

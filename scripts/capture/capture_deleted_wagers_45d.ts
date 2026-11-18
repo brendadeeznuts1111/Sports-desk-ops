@@ -110,7 +110,7 @@ function buildWaitForCredentialsExpression(): string {
           };
         }
       } catch {}
-      await new Promise(r => setTimeout(r, 250));
+      await Bun.sleep(250);
     }
     return {
       ok: false,

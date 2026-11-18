@@ -1,7 +1,27 @@
 import type React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { renderAnsiReact } from "../ansi.tsx";
 import { styles } from "../dashboard_styles.ts";
+import { suggestTerminalCommands } from "../terminal_catalog.ts";
+import {
+  formatTerminalTranscript,
+  matchTerminalHistory,
+  summarizeTerminalHistory,
+  terminalTranscriptFilename,
+} from "../terminal_transcript.ts";
 import type { TerminalCategory, TerminalHistoryEntry } from "../types.ts";
+
+/** Output longer than this collapses to a preview so one verbose command cannot bury the log. */
+const TERMINAL_OUTPUT_PREVIEW_LINES = 40;
+
+const ENTRY_ACTION_STYLE: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "#64748b",
+  cursor: "pointer",
+  fontSize: "11px",
+  padding: "0 4px",
+};
 
 export interface TerminalTabPanelProps {
   readonly terminalCategory: TerminalCategory;
@@ -10,6 +30,8 @@ export interface TerminalTabPanelProps {
   readonly onClearHistory: () => void;
   readonly copiedTerminalIdx: number | null;
   readonly onCopyOutput: (idx: number, stdout: string) => void;
+  readonly copiedCommandIdx: number | null;
+  readonly onCopyCommand: (idx: number, command: string) => void;
   readonly terminalLoading: boolean;
   readonly terminalBottomRef: React.RefObject<HTMLDivElement>;
   readonly terminalCommand: string;
@@ -72,6 +94,8 @@ export function TerminalTabPanel({
   onClearHistory,
   copiedTerminalIdx,
   onCopyOutput,
+  copiedCommandIdx,
+  onCopyCommand,
   terminalLoading,
   terminalBottomRef,
   terminalCommand,
@@ -82,6 +106,164 @@ export function TerminalTabPanel({
   onAutocomplete,
   onRunCommand,
 }: TerminalTabPanelProps): React.ReactElement {
+  const [pinnedToLatest, setPinnedToLatest] = useState<boolean>(true);
+  const [expandedEntries, setExpandedEntries] = useState<readonly number[]>([]);
+  const [filter, setFilter] = useState<string>("");
+  const [suggestionIndex, setSuggestionIndex] = useState<number>(0);
+  const [paletteDismissed, setPaletteDismissed] = useState<boolean>(false);
+  const [inputFocused, setInputFocused] = useState<boolean>(true);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+
+  const filterResult = useMemo(
+    () => matchTerminalHistory(terminalHistory, filter),
+    [terminalHistory, filter],
+  );
+  const stats = useMemo(
+    () => summarizeTerminalHistory(terminalHistory),
+    [terminalHistory],
+  );
+  const suggestions = useMemo(
+    () => (paletteDismissed ? [] : suggestTerminalCommands(terminalCommand)),
+    [terminalCommand, paletteDismissed],
+  );
+  const paletteOpen = inputFocused && suggestions.length > 0;
+  const activeSuggestionIndex = Math.min(
+    suggestionIndex,
+    Math.max(0, suggestions.length - 1),
+  );
+
+  useEffect(() => {
+    setSuggestionIndex(0);
+  }, [terminalCommand]);
+
+  useEffect(() => {
+    if (!pinnedToLatest) return;
+    terminalBottomRef.current?.scrollIntoView({ block: "end" });
+  }, [
+    pinnedToLatest,
+    terminalHistory.length,
+    terminalLoading,
+    terminalBottomRef,
+  ]);
+
+  const handleBodyScroll = () => {
+    const el = bodyRef.current;
+    if (el === null) return;
+    setPinnedToLatest(el.scrollHeight - el.scrollTop - el.clientHeight <= 24);
+  };
+
+  const toggleEntry = (idx: number) => {
+    setExpandedEntries((prev) =>
+      prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx],
+    );
+  };
+
+  const visibleOutput = (idx: number, stdout: string): string => {
+    // A filter hit must be visible: expanding keeps it from living past the
+    // 40-line preview collapse that hides it behind "… more lines".
+    if (filterResult.active || expandedEntries.includes(idx)) return stdout;
+    const lines = stdout.split("\n");
+    if (lines.length <= TERMINAL_OUTPUT_PREVIEW_LINES) return stdout;
+    const hidden = lines.length - TERMINAL_OUTPUT_PREVIEW_LINES;
+    return `${lines.slice(0, TERMINAL_OUTPUT_PREVIEW_LINES).join("\n")}\n\x1b[90m… ${hidden} more lines (Show all)\x1b[0m`;
+  };
+
+  const jumpToLatest = () => {
+    setPinnedToLatest(true);
+    terminalBottomRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  };
+
+  const handleCommandChange = (next: string) => {
+    setPaletteDismissed(false);
+    onTerminalCommandChange(next);
+  };
+
+  const acceptSuggestion = (command: string) => {
+    setPaletteDismissed(false);
+    onTerminalCommandChange(`${command} `);
+  };
+
+  const handleExportTranscript = () => {
+    if (typeof document === "undefined") return;
+    if (typeof URL.createObjectURL !== "function") return;
+    const text = formatTerminalTranscript(terminalHistory);
+    const url = URL.createObjectURL(
+      new Blob([text], { type: "text/plain;charset=utf-8" }),
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = terminalTranscriptFilename();
+    anchor.rel = "noopener";
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
+  const handleCommandKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (paletteOpen) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSuggestionIndex((prev) => (prev + 1) % suggestions.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSuggestionIndex(
+          (prev) => (prev - 1 + suggestions.length) % suggestions.length,
+        );
+        return;
+      }
+      if (e.key === "Tab" || (e.key === "Enter" && e.ctrlKey)) {
+        e.preventDefault();
+        const pick = suggestions[activeSuggestionIndex];
+        if (pick !== undefined) acceptSuggestion(pick.command);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setPaletteDismissed(true);
+        return;
+      }
+    }
+
+    if (e.key === "Tab") {
+      e.preventDefault();
+      onAutocomplete();
+    } else if (e.ctrlKey && e.key.toLowerCase() === "l") {
+      e.preventDefault();
+      onClearHistory();
+    } else if (e.ctrlKey && e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      onTerminalCommandChange("");
+    } else if (e.key === "Escape") {
+      e.currentTarget.blur();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (commandHistory.length > 0) {
+        const nextIdx =
+          historyIndex === -1
+            ? commandHistory.length - 1
+            : Math.max(0, historyIndex - 1);
+        onHistoryIndexChange(nextIdx);
+        onTerminalCommandChange(commandHistory[nextIdx] ?? "");
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (historyIndex !== -1) {
+        const nextIdx = historyIndex + 1;
+        if (nextIdx >= commandHistory.length) {
+          onHistoryIndexChange(-1);
+          onTerminalCommandChange("");
+        } else {
+          onHistoryIndexChange(nextIdx);
+          onTerminalCommandChange(commandHistory[nextIdx] ?? "");
+        }
+      }
+    }
+  };
+
   return (
     <div style={styles.terminalContainer}>
       {/* Window title bar */}
@@ -94,7 +276,20 @@ export function TerminalTabPanel({
             SportsDesk Operator Terminal · Bun.Terminal (PTY) + Bun.spawn
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div style={styles.terminalHeaderRight}>
+          <span style={styles.terminalStat} data-terminal-stats="true">
+            {stats.executed === 0
+              ? "no runs yet"
+              : `⏱ ${stats.executed} run${stats.executed === 1 ? "" : "s"}`}
+            {stats.p50Ms !== null &&
+              ` · p50 ${stats.p50Ms}ms · p95 ${stats.p95Ms ?? "—"}ms`}
+            {stats.failed > 0 && (
+              <span style={styles.terminalStatAlert}>
+                {" "}
+                · {stats.failed} failed
+              </span>
+            )}
+          </span>
           <span
             style={{
               fontSize: "11px",
@@ -105,6 +300,18 @@ export function TerminalTabPanel({
           >
             ● PTY Engine Ready (Bun v1.4.4)
           </span>
+          <button
+            type="button"
+            style={{
+              ...styles.actionBtn,
+              padding: "3px 8px",
+              fontSize: "11px",
+            }}
+            onClick={handleExportTranscript}
+            title="Download the ANSI-stripped session transcript (.txt)"
+          >
+            ⤓ Export
+          </button>
           <button
             type="button"
             style={{
@@ -187,9 +394,55 @@ export function TerminalTabPanel({
         </div>
       </div>
 
+      {/* ANSI-aware history filter */}
+      <div style={styles.terminalFilterBar}>
+        <span style={{ fontSize: "11px", color: "#64748b" }}>Filter</span>
+        <input
+          data-terminal-filter="true"
+          type="text"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              setFilter("");
+              e.currentTarget.blur();
+            }
+          }}
+          placeholder="Filter commands & output (case-insensitive, ANSI-aware)…"
+          aria-label="Filter terminal history"
+          style={styles.terminalFilterInput}
+        />
+        {filterResult.active && (
+          <>
+            <span
+              style={styles.terminalFilterCount}
+              data-terminal-filter-count="true"
+            >
+              {filterResult.matches.length}/{filterResult.totalEntries} commands
+              · {filterResult.totalHits} hits
+            </span>
+            <button
+              type="button"
+              data-terminal-filter-clear="true"
+              style={ENTRY_ACTION_STYLE}
+              onClick={() => setFilter("")}
+              title="Clear the history filter"
+            >
+              ✕ clear
+            </button>
+          </>
+        )}
+      </div>
+
       {/* Scrollable Terminal Screen */}
-      <div style={styles.terminalBody}>
-        {terminalHistory.map((item, idx) => (
+      <div
+        ref={bodyRef}
+        data-terminal-body="true"
+        onScroll={handleBodyScroll}
+        style={styles.terminalBody}
+      >
+        {filterResult.matches.map(({ entry: item, historyIndex: idx }) => (
           <div key={idx} style={styles.terminalEntry}>
             <div style={styles.terminalPromptLine}>
               <span>
@@ -201,34 +454,86 @@ export function TerminalTabPanel({
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
+                  flexWrap: "wrap",
                 }}
               >
+                <span style={styles.terminalMeta}>
+                  {new Date(item.timestamp).toLocaleTimeString("en-US", {
+                    hour12: false,
+                  })}
+                  {item.durationMs > 0 ? ` · ${item.durationMs}ms` : ""}
+                </span>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    color: item.exitCode === 0 ? "#4ade80" : "#f87171",
+                  }}
+                >
+                  exit {item.exitCode}
+                </span>
                 <button
                   type="button"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#64748b",
-                    cursor: "pointer",
-                    fontSize: "11px",
-                    padding: "0 4px",
-                  }}
+                  style={ENTRY_ACTION_STYLE}
+                  title="Copy the command text"
+                  onClick={() => onCopyCommand(idx, item.command)}
+                >
+                  {copiedCommandIdx === idx ? "✓ cmd" : "⧉ cmd"}
+                </button>
+                <button
+                  type="button"
+                  style={ENTRY_ACTION_STYLE}
+                  title={`Run "${item.command}" again`}
+                  onClick={() => onRunCommand(item.command)}
+                >
+                  ↻ Rerun
+                </button>
+                <button
+                  type="button"
+                  style={ENTRY_ACTION_STYLE}
                   title="Copy raw terminal output"
                   onClick={() => onCopyOutput(idx, item.stdout)}
                 >
                   {copiedTerminalIdx === idx ? "✓ Copied" : "📋 Copy"}
                 </button>
-                <span style={styles.terminalMeta}>
-                  {item.durationMs > 0 && `[${item.durationMs}ms] `}
-                  exit: {item.exitCode}
-                </span>
               </div>
             </div>
             <div style={styles.terminalOutput}>
-              {renderAnsiReact(item.stdout)}
+              {renderAnsiReact(visibleOutput(idx, item.stdout))}
+              {!filterResult.active &&
+                item.stdout.split("\n").length >
+                  TERMINAL_OUTPUT_PREVIEW_LINES && (
+                  <button
+                    type="button"
+                    style={{ ...ENTRY_ACTION_STYLE, marginTop: "6px" }}
+                    onClick={() => toggleEntry(idx)}
+                  >
+                    {expandedEntries.includes(idx)
+                      ? "Collapse output"
+                      : `Show all ${item.stdout.split("\n").length} lines`}
+                  </button>
+                )}
             </div>
           </div>
         ))}
+
+        {filterResult.active && filterResult.matches.length === 0 && (
+          <div style={styles.terminalEmpty} data-terminal-empty="true">
+            <span>No history matches “{filterResult.query}”.</span>
+            <span style={{ color: "#64748b" }}>
+              {filterResult.totalEntries} command
+              {filterResult.totalEntries === 1 ? "" : "s"} searched.
+            </span>
+            <button
+              type="button"
+              data-terminal-filter-clear="true"
+              style={ENTRY_ACTION_STYLE}
+              onClick={() => setFilter("")}
+            >
+              Clear filter
+            </button>
+          </div>
+        )}
 
         {terminalLoading && (
           <div style={{ color: "#38bdf8", padding: "8px 0" }}>
@@ -240,12 +545,34 @@ export function TerminalTabPanel({
           </div>
         )}
         <div ref={terminalBottomRef} />
+        {!pinnedToLatest && (
+          <button
+            type="button"
+            onClick={jumpToLatest}
+            style={{
+              position: "sticky",
+              bottom: "0",
+              marginLeft: "auto",
+              display: "block",
+              padding: "4px 10px",
+              borderRadius: "6px",
+              border: "1px solid rgba(56, 189, 248, 0.4)",
+              backgroundColor: "rgba(56, 189, 248, 0.16)",
+              color: "#7dd3fc",
+              fontSize: "11px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            ↓ Jump to latest
+          </button>
+        )}
       </div>
 
       {/* Keyboard Shortcuts Legend Bar */}
       <div style={styles.terminalKeyLegend}>
         <span>
-          <kbd style={styles.kbd}>Tab</kbd> Autocomplete
+          <kbd style={styles.kbd}>Tab</kbd> Complete / accept suggestion
         </span>
         <span>
           <kbd style={styles.kbd}>Ctrl + `</kbd> /{" "}
@@ -261,80 +588,88 @@ export function TerminalTabPanel({
           <kbd style={styles.kbd}>Ctrl + C</kbd> Cancel
         </span>
         <span>
-          <kbd style={styles.kbd}>↑ / ↓</kbd> History
+          <kbd style={styles.kbd}>↑ / ↓</kbd> History / suggestions
+        </span>
+        <span>
+          <kbd style={styles.kbd}>Enter</kbd> Run
         </span>
         <span>
           <kbd style={styles.kbd}>Esc</kbd> Blur
         </span>
       </div>
 
-      {/* Bottom Input Line */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          onRunCommand(terminalCommand);
-        }}
-        style={styles.terminalInputBar}
-      >
-        <span style={styles.terminalPromptSymbol}>sportsdesk$</span>
-        <input
-          data-terminal-input="true"
-          type="text"
-          value={terminalCommand}
-          onChange={(e) => onTerminalCommandChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Tab") {
-              e.preventDefault();
-              onAutocomplete();
-            } else if (e.ctrlKey && e.key.toLowerCase() === "l") {
-              e.preventDefault();
-              onClearHistory();
-            } else if (e.ctrlKey && e.key.toLowerCase() === "c") {
-              e.preventDefault();
-              onTerminalCommandChange("");
-            } else if (e.key === "Escape") {
-              e.currentTarget.blur();
-            } else if (e.key === "ArrowUp") {
-              e.preventDefault();
-              if (commandHistory.length > 0) {
-                const nextIdx =
-                  historyIndex === -1
-                    ? commandHistory.length - 1
-                    : Math.max(0, historyIndex - 1);
-                onHistoryIndexChange(nextIdx);
-                onTerminalCommandChange(commandHistory[nextIdx] ?? "");
-              }
-            } else if (e.key === "ArrowDown") {
-              e.preventDefault();
-              if (historyIndex !== -1) {
-                const nextIdx = historyIndex + 1;
-                if (nextIdx >= commandHistory.length) {
-                  onHistoryIndexChange(-1);
-                  onTerminalCommandChange("");
-                } else {
-                  onHistoryIndexChange(nextIdx);
-                  onTerminalCommandChange(commandHistory[nextIdx] ?? "");
-                }
-              }
-            }
+      {/* Bottom Input Line (suggestion palette floats above it) */}
+      <div style={styles.terminalInputWrapper}>
+        {paletteOpen && (
+          <div
+            style={styles.terminalPalette}
+            role="listbox"
+            aria-label="Command suggestions"
+            data-terminal-palette="true"
+          >
+            {suggestions.map((suggestion, idx) => (
+              <button
+                key={suggestion.command}
+                type="button"
+                role="option"
+                aria-selected={idx === activeSuggestionIndex}
+                data-terminal-suggestion={suggestion.command}
+                title={`${suggestion.usage} — ${suggestion.description}`}
+                style={styles.terminalPaletteRow(idx === activeSuggestionIndex)}
+                onMouseDown={(e) => e.preventDefault()}
+                onMouseEnter={() => setSuggestionIndex(idx)}
+                onClick={() => acceptSuggestion(suggestion.command)}
+              >
+                <span style={styles.terminalPaletteUsage}>
+                  {suggestion.usage}
+                </span>
+                <span style={styles.terminalPaletteDesc}>
+                  {suggestion.description}
+                </span>
+                <span style={styles.terminalPaletteGroup}>
+                  {suggestion.viaAlias === null
+                    ? suggestion.group
+                    : `alias ${suggestion.viaAlias}`}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onRunCommand(terminalCommand);
           }}
-          placeholder="Type command or shortcode (e.g. 'p <customer id>', 'f syndicate', 'k', 'g', 'dir', 'var', 'stat', 'w', 'kb')..."
-          style={styles.terminalInput}
-          autoFocus
-        />
-        <button
-          type="submit"
-          disabled={terminalLoading}
-          style={{
-            ...styles.actionBtn,
-            backgroundColor: "#0284c7",
-            borderColor: "#38bdf8",
-            cursor: "pointer",
-          }}
+          style={styles.terminalInputBar}
         >
-          {terminalLoading ? "Running..." : "Run (PTY)"}
-        </button>
-      </form>
+          <span style={styles.terminalPromptSymbol}>sportsdesk$</span>
+          <input
+            data-terminal-input="true"
+            type="text"
+            value={terminalCommand}
+            onChange={(e) => handleCommandChange(e.target.value)}
+            onKeyDown={handleCommandKeyDown}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
+            placeholder="Type command or shortcode (e.g. 'p <customer id>', 'f syndicate', 'k', 'g', 'dir', 'var', 'stat', 'w', 'kb')..."
+            style={styles.terminalInput}
+            autoFocus
+          />
+          <button
+            type="submit"
+            data-terminal-run="true"
+            disabled={terminalLoading}
+            style={{
+              ...styles.actionBtn,
+              backgroundColor: "#0284c7",
+              borderColor: "#38bdf8",
+              cursor: "pointer",
+            }}
+          >
+            {terminalLoading ? "Running..." : "Run (PTY)"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

@@ -5,16 +5,45 @@
 
 [meta]
 schema = "sportsdesk-tokens/v1"
-version = "1.3.0"
+version = "1.5.0"
 author = "bw496915-cmyk"
-updated_at = "2026-11-14T20:15:00Z" # quoted ISO-8601 — avoids Temporal.* in browser bundles
+updated_at = "2026-11-18T00:00:00Z" # quoted ISO-8601 — avoids Temporal.* in browser bundles
 
 [gates]
-min_body_contrast_ratio_milli = 4500 # 4.50:1 WCAG AA body copy on all surfaces
-min_aaa_slate_contrast_milli = 7000 # 7.00:1 WCAG AAA (#94a3b8 on #0b1120)
+min_body_contrast_ratio_milli = 4500 # 4.50:1 WCAG 2.1 AA body copy on all surfaces
+min_aaa_slate_contrast_milli = 7000 # 7.00:1 WCAG 2.1 AAA (#94a3b8 on #0b1120)
 min_ui_component_contrast_milli = 3000 # 3.00:1 WCAG 1.4.11 focus rings, active borders, badges
 min_cross_state_delta_e00_milli = 7000 # 7.00 CIEDE2000 across card -> hover -> selected
 min_fresh_vs_stale_delta_e00_milli = 40000 # 40.00 CIEDE2000 between SLA_FRESH and SLA_STALE
+min_adjacent_channel_delta_e00_milli = 10000 # 10.00 CIEDE2000 between adjacent channel_id badges.
+# Measured tightest pair (2026-11-17): channel_id 7 #7dd3fc (CSLEVEL2) -> 8 #67e8f9
+# (LIVEBETTINGCWS) = 10.72. Those two are a documented deliberate in-play cyan
+# continuum (lib/validation/token_validator.ts --sd-route-devig:--sd-tier-live-cws),
+# so a 12.00 floor would fail the palette. Enforced by tests/verify_tokens.test.ts.
+# NOTE: a badge BORDER contrast gate (WCAG 1.4.11) is not declared here because
+# [ingestion.*] carries no border_hex token; add the field before adding the gate.
+
+# ------------------------------------------------------------------------------
+# Zero-Float Layout, Focus Geometry & Coalesce Timing Constants (Integer px / ms)
+# ------------------------------------------------------------------------------
+[layout]
+grid_unit_px = 4
+card_padding_px = 12
+row_height_compact_px = 28
+row_height_comfortable_px = 36
+border_hairline_px = 1
+border_interactive_px = 1
+focus_ring_width_px = 2
+focus_ring_offset_px = 2
+radius_badge_px = 4
+radius_card_px = 6
+radius_modal_px = 8
+
+[motion]
+aria_live_coalesce_ms = 500 # <= 2 Hz polite throttle latch (ARIA_LIVE_COALESCE_BIT)
+tooltip_delay_ms = 250
+drawer_transition_ms = 140
+pulse_critical_period_ms = 1600
 
 # ------------------------------------------------------------------------------
 # Surfaces & Base Design Canvas
@@ -38,6 +67,50 @@ role = "CLI Terminal Telemetry Surface Background"
 viewport = "DirectColor VT (Ghostty / xterm-direct)"
 protocol = "ANSI 24-bit TrueColor (\\x1b[38;2;R;G;Bm)"
 color_depth = "24-bit TrueColor RGB"
+
+# ------------------------------------------------------------------------------
+# Deterministic Bun.markdown.AnsiTheme Profiles ([cli.markdown_ansi.<profile>])
+# Maps 1:1 to Bun.markdown.AnsiTheme { colors, columns, hyperlinks, kittyGraphics, light }
+# Explicit `light = false` blocks ambient COLORFGBG env drift on #04070e
+# ------------------------------------------------------------------------------
+[cli.markdown_ansi.ghostty_interactive]
+profile_id = "ANSI_GHOSTTY_INTERACTIVE"
+colors = true
+columns = 120
+hyperlinks = true
+kitty_graphics = false # zero local-disk image side-reads; remote R2 URLs emit alt text
+light = false # locked to surfaces.cli (#04070e); ignores COLORFGBG
+
+[cli.markdown_ansi.tty_narrow]
+profile_id = "ANSI_TTY_NARROW"
+colors = true
+columns = 88
+hyperlinks = true
+kitty_graphics = false
+light = false
+
+[cli.markdown_ansi.r2_telemetry_stream]
+profile_id = "ANSI_R2_TELEMETRY_STREAM"
+colors = true
+columns = 0 # 0 disables wrapping so byte offsets & line hashes never drift
+hyperlinks = false # omits OSC 8 escapes in persisted R2 ANSI stream chunks
+kitty_graphics = false
+light = false
+
+[cli.markdown_ansi.pipe_ascii]
+profile_id = "ANSI_PIPE_ASCII"
+colors = false # plain ASCII chrome: zero escape codes, zero box-drawing, zero emoji
+columns = 0 # zero wrapping for diff -u, CI logs, and piped stdout
+hyperlinks = false
+kitty_graphics = false
+light = false
+
+[contracts.ansi_theme]
+surface_token = "--sd-surface-cli"
+max_dark_surface_l_star_milli = 20000 # L* <= 20.0 mandates light = false across all CLI profiles
+forbid_ambient_colorfgbg = true # every [cli.markdown_ansi.*] must set boolean `light` explicitly
+forbid_kitty_disk_io_in_ci = true # enforces kitty_graphics = false on non-ephemeral profiles
+ascii_fallback_profile = "pipe_ascii" # required profile when colors = false (NO_COLOR / !isTTY)
 
 # ------------------------------------------------------------------------------
 # Dashboard UI Chrome & Interactive State Slots
@@ -123,6 +196,7 @@ description = "Secondary copy, labels, disabled hints, and table headers"
 
 # ------------------------------------------------------------------------------
 # Dual-Clock R2 Freshness & Poison SLA States (dE00(fresh, stale) = 55.4 >= 40.0)
+# Includes WCAG 1.4.1 non-color glyph & border_style cues for CVD safety
 # ------------------------------------------------------------------------------
 [sla.fresh]
 state_id = "SLA_FRESH"
@@ -130,6 +204,8 @@ token_name = "--sd-sla-fresh"
 fg_hex = "#34d399"
 bg_hex = "#0a2922"
 border_hex = "#10b981"
+border_style = "solid"
+glyph = "●"
 description = "Publish age and upstream data_window_max_epoch_ms within SLA"
 
 [sla.warn]
@@ -138,6 +214,8 @@ token_name = "--sd-sla-warn"
 fg_hex = "#38bdf8"
 bg_hex = "#0c2438"
 border_hex = "#29b6f6"
+border_style = "solid"
+glyph = "◐"
 description = "Half-window aging advisory; polling active"
 
 [sla.stale]
@@ -146,6 +224,8 @@ token_name = "--sd-sla-stale"
 fg_hex = "#fbbf24"
 bg_hex = "#2b200c"
 border_hex = "#f59e0b"
+border_style = "dashed"
+glyph = "▲"
 description = "BLK_R2_PUBLISH_STALE or BLK_R2_WINDOW_LAG_STALE breached"
 
 [sla.poison]
@@ -154,7 +234,48 @@ token_name = "--sd-sla-poison"
 fg_hex = "#fca5a5"
 bg_hex = "#2d161d"
 border_hex = "#ff7878"
+border_style = "double"
+glyph = "✖"
 description = "STALE_SNAPSHOT_POISON_BIT set or Class A HTML-on-200 quarantine"
+
+# ------------------------------------------------------------------------------
+# R2 CAS Manifest Commit Lifecycle States (lib/r2_manifest_cas.ts)
+# ------------------------------------------------------------------------------
+[cas_states.committed]
+state_id = "CAS_COMMITTED"
+token_name = "--sd-cas-committed"
+fg_hex = "#34d399"
+bg_hex = "#0a2922"
+border_hex = "#10b981"
+glyph = "✓"
+description = "Atomic If-Match ETag manifest pointer committed to R2"
+
+[cas_states.retry_backoff]
+state_id = "CAS_RETRY_BACKOFF"
+token_name = "--sd-cas-retry"
+fg_hex = "#38bdf8"
+bg_hex = "#0c2438"
+border_hex = "#29b6f6"
+glyph = "↻"
+description = "Bounded CAS jitter retry in progress"
+
+[cas_states.conflict_412]
+state_id = "CAS_CONFLICT_412"
+token_name = "--sd-cas-conflict"
+fg_hex = "#fbbf24"
+bg_hex = "#2b200c"
+border_hex = "#f59e0b"
+glyph = "⚡"
+description = "HTTP 412 Precondition Failed ETag race; re-reading latest manifest"
+
+[cas_states.quarantined]
+state_id = "CAS_QUARANTINED"
+token_name = "--sd-cas-quarantined"
+fg_hex = "#fca5a5"
+bg_hex = "#2d161d"
+border_hex = "#ff7878"
+glyph = "⛔"
+description = "CAS retry budget exhausted or poison bit latched; write halted"
 
 # ------------------------------------------------------------------------------
 # Source-Bridge Provenance Discriminants (2-bit SourceBridgeId2)
@@ -176,6 +297,7 @@ canonical_provenance = "INGEST_NON_SPORTS_DROP"
 layer_id = "L17.N0000"
 token_name = "--sd-tier-drop"
 hex = "#94a3b8"
+glyph = "·"
 channel_code = "NON_SPORTS"
 wire_aliases = ["CASINO", "VIRTUAL", "WAGER_TYPE_C", "WAGER_TYPE_A"]
 signal_tier = "SIGNAL_STAGE1_DROP"
@@ -194,6 +316,7 @@ layer_id = "L18.N0204"
 token_name = "--sd-tier-retail"
 hex = "#29b6f6" # upgraded from #1d84b5 (3.72:1 -> 5.16:1 on raised)
 legacy_wire_hex = "#1d84b5"
+glyph = "○"
 channel_code = "Internet"
 wire_aliases = ["Internet", "INTERNET", "MOBILE", "WAP"]
 signal_tier = "SIGNAL_INTERNET"
@@ -213,6 +336,7 @@ layer_id = "L19.N0518"
 token_name = "--sd-tier-blocked"
 hex = "#8fa3bf" # upgraded from #64748b (3.27:1 -> 5.18:1 on raised)
 legacy_wire_hex = "#64748b"
+glyph = "⊘"
 channel_code = "BLOCKED"
 wire_aliases = ["BLOCKED"]
 signal_tier = "SIGNAL_SENTINEL_DROP"
@@ -232,6 +356,7 @@ token_name = "--sd-tier-gateway"
 legacy_token_name = "--sd-theme-emerald"
 hex = "#22d39a" # calibrated from #10b981 for selected-row AA safety (6.88:1 on raised)
 legacy_wire_hex = "#10b981"
+glyph = "◆"
 channel_code = "GATEWAY"
 wire_aliases = ["GATEWAY"]
 signal_tier = "SIGNAL_EQUILIBRIUM_GATE"
@@ -251,6 +376,7 @@ layer_id = "L21.N0884"
 token_name = "--sd-tier-alert"
 hex = "#ff7878" # upgraded from #ef4444 (4.14:1 -> 5.21:1 on raised, 4.60:1 on selected)
 legacy_wire_hex = "#ef4444"
+glyph = "▲"
 channel_code = "ALERT"
 wire_aliases = ["ALERT"]
 signal_tier = "SIGNAL_ALERT_TWIN"
@@ -269,6 +395,7 @@ canonical_provenance = "PARTNER_118_GSBUILDER_L22"
 layer_id = "L22.N1402"
 token_name = "--sd-tier-steam"
 hex = "#f59e0b"
+glyph = "⚡"
 channel_code = "GSBUILDER"
 wire_aliases = ["GSBUILDER"]
 signal_tier = "SIGNAL_SGP_BUILDER"
@@ -288,6 +415,7 @@ layer_id = "L23.N0412"
 token_name = "--sd-tier-whale"
 hex = "#4ade80" # upgraded from #28a745 (4.97:1 -> 7.62:1 on raised; distinct from L20)
 legacy_wire_hex = "#28a745"
+glyph = "★"
 channel_code = "GSLIVE"
 wire_aliases = ["GSLIVE"]
 signal_tier = "SIGNAL_GS_INPLAY"
@@ -307,6 +435,7 @@ layer_id = "L24.N2019"
 token_name = "--sd-tier-rec-bias"
 hex = "#7dd3fc" # separated in L* from L18 #29b6f6; 7.59:1 on raised
 legacy_wire_hex = "#38bdf8"
+glyph = "◇"
 channel_code = "CSLEVEL2"
 wire_aliases = ["CSLEVEL2"]
 signal_tier = "SIGNAL_SYNDICATE_L2"
@@ -325,6 +454,7 @@ canonical_provenance = "FANTASY_402_LIVE_CWS"
 layer_id = "L24B.N2110"
 token_name = "--sd-tier-live-cws"
 hex = "#67e8f9"
+glyph = "◉"
 channel_code = "LIVEBETTINGCWS"
 wire_aliases = ["LIVEBETTINGCWS", "EZLIVE"]
 signal_tier = "SIGNAL_F402_INPLAY"
@@ -343,6 +473,7 @@ canonical_provenance = "FANTASY_402_PHONE"
 layer_id = "L24C.N2204"
 token_name = "--sd-tier-phone"
 hex = "#a5b4fc"
+glyph = "☎"
 channel_code = "PHONE"
 wire_aliases = ["PHONE", "CLERK"]
 signal_tier = "SIGNAL_CLERK_ASSISTED"
@@ -361,6 +492,7 @@ canonical_provenance = "FANTASY_402_HOUSE_BOOK"
 layer_id = "L24D.N2308"
 token_name = "--sd-tier-house"
 hex = "#e2e8f0"
+glyph = "▣"
 channel_code = "HOUSE"
 wire_aliases = ["AGENT", "ADMIN", "HOUSE"]
 signal_tier = "SIGNAL_HOUSE_LEDGER"
@@ -432,6 +564,48 @@ mitigation_kind = "MANAGER_LIMIT_CLAMP"
 operational_role = "Terminal Risk Containment & Manager Write-Gate"
 
 # ------------------------------------------------------------------------------
+# Semantic :root Alias Layer
+# Emitted as `<alias>: var(<target>);` only — an alias is never an @property and
+# never a new color. Every target is validated against the canonical token names
+# above, so an alias cannot point at a token that does not exist, cannot shadow
+# one, and cannot chain through another alias.
+# ------------------------------------------------------------------------------
+[aliases.legacy]
+"--sd-theme-emerald" = "--sd-tier-gateway" # L20 legacy token alias (wager_tiers.toml)
+
+[aliases.dashboard]
+"--bg" = "--sd-surface-bg"
+"--bg-cli" = "--sd-surface-cli"
+"--card" = "--sd-surface-card"
+"--card-elevated" = "--sd-surface-elevated"
+"--card-hover" = "--sd-surface-hover"
+"--card-raised" = "--sd-surface-raised"
+"--card-selected" = "--sd-surface-selected"
+"--border" = "--sd-surface-border"
+"--border-strong" = "--sd-border-strong"
+"--focus-ring" = "--sd-focus-ring"
+"--text" = "--sd-text-primary"
+"--text-secondary" = "--sd-text-secondary"
+"--muted" = "--sd-text-muted"
+"--accent" = "--sd-tier-rec-bias"
+"--emerald" = "--sd-tier-gateway"
+"--amber" = "--sd-tier-steam"
+"--danger" = "--sd-tier-alert"
+"--purple" = "--sd-route-sharp"
+"--cyan" = "--sd-route-devig"
+# Component state slots — UI code should reference these instead of literal hexes.
+"--sd-state-ok" = "--sd-tier-whale"
+"--sd-state-warn" = "--sd-tier-steam"
+"--sd-state-danger" = "--sd-tier-alert"
+"--sd-state-info" = "--sd-tier-phone"
+"--sd-state-accent" = "--sd-focus-ring"
+
+[aliases.accessibility]
+# Optional @media (prefers-contrast: more) alias mappings
+"--border" = "--sd-border-strong"
+"--muted" = "--sd-text-secondary"
+
+# ------------------------------------------------------------------------------
 # Axis 3: Deterministic BitSet32 Masks (Unsigned >>> 0 Shift Contract; Bit <= 30)
 # Bits capped at 30 (0x40000000) so signed 32-bit JS SMI shifts never go negative.
 # ------------------------------------------------------------------------------
@@ -442,6 +616,7 @@ IS_SPLIT_MARKET_EXEMPT = 2 # (1 << 2) >>> 0 = 0x00000004 (ANOM-01 ML vs Total)
 IS_SIGNAL_DONOR_EXEMPT = 3 # (1 << 3) >>> 0 = 0x00000008
 IS_PARTNER_118_SKIN = 4 # (1 << 4) >>> 0 = 0x00000010 (G<id> / M.G<id>)
 IS_SAME_GAME_CORRELATED = 5 # (1 << 5) >>> 0 = 0x00000020
+IS_CROSS_REF_ATTRIBUTED = 6 # (1 << 6) >>> 0 = 0x00000040 (Customer wager cross-ref match)
 
 [bitmasks.ui_state]
 MODAL_OPEN_BIT = 0 # 0x00000001 — cleared on Escape; restores trigger focus
@@ -449,6 +624,7 @@ INSPECTOR_DRAWER_BIT = 1 # 0x00000002 — detail drawer open
 FILTER_LOCK_BIT = 2 # 0x00000004 — channel filter pinned
 ARIA_LIVE_COALESCE_BIT = 3 # 0x00000008 — <= 2 Hz polite throttle latch
 FOCUS_RING_VISIBLE_BIT = 4 # 0x00000010 — keyboard modality active
+CAS_CONFLICT_RETRY_BIT = 5 # 0x00000020 — R2 manifest CAS retry active
 STALE_SNAPSHOT_POISON_BIT = 30 # 0x40000000 — halts A11y green-pass & write promotion
 
 # ------------------------------------------------------------------------------
@@ -537,7 +713,7 @@ label = "Reconciliation & Ledger"
 
 # ==============================================================================
 # Token Map for Wager Tiers and Surveillance (@token:<name> references)
-# Must stay byte-identical to canonical [surfaces.*], [ui.*], and [sla.*] hexes.
+# Must stay byte-identical to canonical [surfaces.*], [ui.*], [sla.*], and [cas_states.*] hexes.
 # ==============================================================================
 [tokens]
 
@@ -585,6 +761,23 @@ label = "Reconciliation & Ledger"
 "sd-provenance-fixture-fg" = "#d8b4fe"
 "sd-provenance-fixture-bg" = "#221636"
 "sd-provenance-fixture-border" = "#c084fc"
+
+# --- R2 CAS Manifest States (locked to [cas_states.*]) ---------------------
+"sd-cas-committed-fg" = "#34d399"
+"sd-cas-committed-bg" = "#0a2922"
+"sd-cas-committed-border" = "#10b981"
+
+"sd-cas-retry-fg" = "#38bdf8"
+"sd-cas-retry-bg" = "#0c2438"
+"sd-cas-retry-border" = "#29b6f6"
+
+"sd-cas-conflict-fg" = "#fbbf24"
+"sd-cas-conflict-bg" = "#2b200c"
+"sd-cas-conflict-border" = "#f59e0b"
+
+"sd-cas-quarantined-fg" = "#fca5a5"
+"sd-cas-quarantined-bg" = "#2d161d"
+"sd-cas-quarantined-border" = "#ff7878"
 
 # --- Tier colors (bound to tier keys in wager_tiers.toml) ------------------
 "sd-tier-originator-fg" = "#fca5a5"

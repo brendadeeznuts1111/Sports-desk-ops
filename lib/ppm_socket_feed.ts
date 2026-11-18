@@ -34,14 +34,20 @@ export interface PpmFrame {
 }
 
 export class PpmFeedError extends Error {
-  constructor(message: string) {
+  /** Node-style WebSocket error code, when the event carried one. */
+  readonly code: string | undefined;
+
+  constructor(message: string, code?: string) {
     super(message);
     this.name = "PpmFeedError";
+    this.code = code;
   }
 }
 
 const GZIP_MAGIC_0 = 0x1f;
 const GZIP_MAGIC_1 = 0x8b;
+/** Frames are complete gzip payloads; a cached strict decoder rejects bad UTF-8 instead of U+FFFD. */
+const PPM_UTF8 = new TextDecoder("utf-8", { fatal: true });
 
 /** Decodes one binary attachment from the feed. */
 export function decodePpmFrame(bytes: Uint8Array<ArrayBuffer>): PpmFrame {
@@ -56,11 +62,17 @@ export function decodePpmFrame(bytes: Uint8Array<ArrayBuffer>): PpmFrame {
         .join(" ")})`,
     );
   }
-  let text: string;
+  let decompressed: ReturnType<typeof Bun.gunzipSync>;
   try {
-    text = new TextDecoder().decode(Bun.gunzipSync(bytes));
+    decompressed = Bun.gunzipSync(bytes);
   } catch (error) {
     throw new PpmFeedError(`gunzip failed: ${(error as Error).message}`);
+  }
+  let text: string;
+  try {
+    text = PPM_UTF8.decode(decompressed);
+  } catch (error) {
+    throw new PpmFeedError(`frame is not UTF-8: ${(error as Error).message}`);
   }
   let parsed: unknown;
   try {
@@ -85,7 +97,10 @@ export interface PpmSocketLike {
   close(): void;
   addEventListener(
     type: string,
-    handler: (event: { data?: unknown }) => void,
+    handler: (event: {
+      data?: unknown;
+      error?: { code?: unknown } | undefined;
+    }) => void,
   ): void;
 }
 
@@ -229,9 +244,16 @@ export function connectPpmFeed(options: PpmSocketFeedOptions): {
     }
   });
 
-  socket.addEventListener("error", () =>
-    report(new PpmFeedError("socket error")),
-  );
+  socket.addEventListener("error", (event) => {
+    const code = event.error?.code;
+    const typed = typeof code === "string" ? code : undefined;
+    report(
+      new PpmFeedError(
+        typed === undefined ? "socket error" : `socket error: ${typed}`,
+        typed,
+      ),
+    );
+  });
 
   return {
     close: () => {

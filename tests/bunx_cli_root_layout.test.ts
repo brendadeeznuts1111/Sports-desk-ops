@@ -46,7 +46,7 @@ describe("Zero root command scripts & bun x CLI workspace contract", () => {
     ).toBe(false);
   });
 
-  test("2. root package.json and packages/sportsdesk-ops/package.json share aligned 23-bin zero-spawn symlinks", async () => {
+  test("2. root package.json and packages/sportsdesk-ops/package.json share aligned 23-bin zero-spawn entries", async () => {
     const rootPkg = (await Bun.file(join(ROOT, "package.json")).json()) as {
       bin?: Record<string, string>;
       scripts?: Record<string, string>;
@@ -78,9 +78,19 @@ describe("Zero root command scripts & bun x CLI workspace contract", () => {
       expect(existsSync(rootTarget)).toBe(true);
       expect(existsSync(wsTarget)).toBe(true);
 
-      // Workspace bin entry must be a direct symlink resolving to the exact canonical root target (zero child spawn)
-      expect(lstatSync(wsTarget).isSymbolicLink()).toBe(true);
-      expect(realpathSync(wsTarget)).toBe(realpathSync(rootTarget));
+      // `bun-surface` dispatches the package-owned DOD snapshot CLI through an
+      // importing shim (src/bin/bun-surface.ts); the other 22 bins are direct
+      // symlinks resolving to the exact canonical root target (zero child spawn).
+      const isPackageSrcShim = binName === "bun-surface";
+      if (isPackageSrcShim) {
+        expect(lstatSync(wsTarget).isFile()).toBe(true);
+        expect(await Bun.file(wsTarget).text()).toContain(
+          'from "../src/bin/bun-surface.ts"',
+        );
+      } else {
+        expect(lstatSync(wsTarget).isSymbolicLink()).toBe(true);
+        expect(realpathSync(wsTarget)).toBe(realpathSync(rootTarget));
+      }
 
       const rootHead = (await Bun.file(rootTarget).text()).split("\n")[0] ?? "";
       expect(rootHead.startsWith("#!/usr/bin/env ")).toBe(true);
@@ -88,7 +98,9 @@ describe("Zero root command scripts & bun x CLI workspace contract", () => {
       if (existsSync(join(ROOT, "node_modules/.bin"))) {
         const linkedShim = join(ROOT, "node_modules/.bin", binName);
         expect(lstatSync(linkedShim).isSymbolicLink()).toBe(true);
-        expect(realpathSync(linkedShim)).toBe(realpathSync(rootTarget));
+        expect(realpathSync(linkedShim)).toBe(
+          realpathSync(isPackageSrcShim ? wsTarget : rootTarget),
+        );
       }
     }
 
@@ -259,7 +271,7 @@ describe("Zero root command scripts & bun x CLI workspace contract", () => {
     expect(hierOut).toContain("f402_manager_hierarchy_ingest");
 
     expect(await bunSurfRes.exited).toBe(0);
-    expect(bunSurfOut).toContain("dx bun — runtime surface");
+    expect(bunSurfOut).toContain("bun-surface — Bun declaration snapshot");
 
     // Verify stdin-streaming utility CLIs via bun x --no-install
     const xmlProc = Bun.spawn(

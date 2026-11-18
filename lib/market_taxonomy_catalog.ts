@@ -17,6 +17,8 @@ import type {
   PeriodCode,
   PeriodFilter,
   PointBuyPolicy,
+  RegimeCode,
+  RegimeFilter,
   SportCode,
   SportFilter,
   SubSportCode,
@@ -128,6 +130,17 @@ export const MARKET_LABELS: readonly string[] = [
   "Player & Game Props",
   "Other / Exotic",
 ];
+
+export const REGIME_CODES: readonly RegimeCode[] = ["pregame", "live_in_play"];
+export const REGIME_COUNT = 2;
+
+export const REGIME_LABELS: readonly string[] = [
+  "PREGAME (wagerType3=0..6 · 5s/90s)",
+  "LIVE_IN_PLAY / GSLive (wagerType3=7 · 1.5s)",
+];
+
+export const REGIME_ID_PREGAME = 0;
+export const REGIME_ID_LIVE_IN_PLAY = 1;
 
 // Integer constants for fast hot-loop branching
 export const SPORT_ID_FOOTBALL = 0;
@@ -660,6 +673,13 @@ for (let i = 0; i < MARKET_CODES.length; i++) {
   MARKET_INDEX_BY_CODE[MARKET_CODES[i]!] = i;
 }
 
+const REGIME_INDEX_BY_CODE = Object.create(null) as Record<string, number>;
+for (let i = 0; i < REGIME_CODES.length; i++) {
+  REGIME_INDEX_BY_CODE[REGIME_CODES[i]!] = i;
+}
+REGIME_INDEX_BY_CODE["PREGAME"] = REGIME_ID_PREGAME;
+REGIME_INDEX_BY_CODE["LIVE_IN_PLAY"] = REGIME_ID_LIVE_IN_PLAY;
+
 for (let s = 0; s < SUBSPORT_TAXONOMY_CATALOG.length; s++) {
   const spec = SUBSPORT_TAXONOMY_CATALOG[s]!;
   SUBSPORT_INDEX_BY_CODE[spec.code] = s;
@@ -701,6 +721,12 @@ export function periodIndexOf(filter: PeriodFilter | undefined): number {
 export function marketIndexOf(filter: MarketFilter | undefined): number {
   if (!filter || filter === "ALL") return -1;
   const idx = MARKET_INDEX_BY_CODE[filter];
+  return idx !== undefined ? idx : -1;
+}
+
+export function regimeIndexOf(filter: RegimeFilter | undefined): number {
+  if (!filter || filter === "ALL") return -1;
+  const idx = REGIME_INDEX_BY_CODE[filter];
   return idx !== undefined ? idx : -1;
 }
 
@@ -771,6 +797,7 @@ export function resolveSlicePolicyAndRisk(
   marketId: number,
   holdPct: number,
   buyLegs: number,
+  regimeId = -1,
 ): {
   readonly pointBuyPolicy: PointBuyPolicy;
   readonly riskStatus: TaxonomyRiskStatus;
@@ -817,7 +844,11 @@ export function resolveSlicePolicyAndRisk(
   }
 
   // LIVE in-play
-  if (effectiveSport === SPORT_ID_LIVE || subSpec?.isLive) {
+  if (
+    regimeId === REGIME_ID_LIVE_IN_PLAY ||
+    effectiveSport === SPORT_ID_LIVE ||
+    subSpec?.isLive
+  ) {
     return {
       pointBuyPolicy: "STRICTLY_BLOCKED",
       riskStatus: "IMMUNE_BLOCKED",

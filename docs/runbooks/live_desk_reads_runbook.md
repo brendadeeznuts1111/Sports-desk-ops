@@ -28,6 +28,7 @@ object:
   "servedFromCache": false,
   "transport": "session-file | proxy | injected-fetch",
   "diagnostic": null,
+  "scopeSource": "env",
   "customersAttempted": 2,
   "customersFailed": 0,
   "ttlMs": 60000
@@ -137,14 +138,15 @@ curl -s -o /dev/null -w '%{http_code}\n' 'localhost:4020/api/live-wagers?source=
 curl -s 'localhost:4020/api/live-wagers?source=file'
 ```
 
-| Symptom                                    | Meaning / fix                                                               |
-| ------------------------------------------ | --------------------------------------------------------------------------- |
-| `diagnostic.code: "transport_unavailable"` | No session file and no proxy: run `bun run session:login` (normal terminal) |
-| `diagnostic.code: "unauthorized"`          | Session rejected/expired: re-run `bun run session:login`                    |
-| `diagnostic.code: "no_customer_scope"`     | Set `SPORTSDESK_LIVE_PENDING_CUSTOMERS`, or fix the live ticker read first  |
-| `diagnostic.code: "agent_required"`        | Set `F402_AGENT_ID` or seed the `f402-agent-id` keychain entry              |
-| `live.status: "disabled"`                  | Gate is off (`SPORTSDESK_LIVE_*` / `bun test` / `?source=file`)             |
-| `servedFromCache: true`                    | Within TTL; the value is the last observation, not a new POST               |
+| Symptom                                    | Meaning / fix                                                                                                                                  |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `diagnostic.code: "transport_unavailable"` | No session file and no proxy: run `bun run session:login` (normal terminal)                                                                    |
+| `diagnostic.code: "unauthorized"`          | Session rejected/expired: re-run `bun run session:login`                                                                                       |
+| `diagnostic.code: "no_customer_scope"`     | Set `SPORTSDESK_LIVE_PENDING_CUSTOMERS`, or fix the live ticker read first. `scopeSource: "none"` confirms neither source supplied a customer. |
+| `f402.status: "unverified"`                | The session file expires in the future but contains only Cloudflare cookies; run `F402_LIVE_LOGIN=1 bun run session:login --from-keychain`.    |
+| `diagnostic.code: "agent_required"`        | Set `F402_AGENT_ID` or seed the `f402-agent-id` keychain entry                                                                                 |
+| `live.status: "disabled"`                  | Gate is off (`SPORTSDESK_LIVE_*` / `bun test` / `?source=file`)                                                                                |
+| `servedFromCache: true`                    | Within TTL; the value is the last observation, not a new POST                                                                                  |
 
 The dashboard mirrors these diagnostics: the KPI tiles carry a compact note and the Live Desk
 section carries the full message and hint; fallback data keeps its CAPTURE/PASTE/STALE labels.

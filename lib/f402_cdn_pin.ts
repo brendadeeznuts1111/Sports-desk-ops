@@ -693,3 +693,36 @@ export async function collectLiveCdnAssetDrift(options?: {
 
   return details;
 }
+
+/**
+ * Third-party origins that rotate their payload on their own cadence without changing the URL or
+ * the document's vendor version (#267). Observed on 2026-11-15: the Maps JS API returned
+ * 2b5ff1cb… → b2267597… → 534cc8a4… at an unchanged 331,754 B, twice within one session.
+ *
+ * Explicit and narrow on purpose: this exists only for bytes we do not control and cannot pin
+ * stably. Adding an origin here is a decision about accepting unattributable change, not a
+ * convenience.
+ */
+export const ROTATING_VENDOR_ORIGINS: ReadonlySet<string> = new Set([
+  "https://maps.googleapis.com",
+]);
+
+/**
+ * Whether a byte change on a pinned asset is a tolerated vendor rotation rather than drift.
+ *
+ * Tolerated only when the origin is allowlisted **and** the byte length is unchanged. A payload
+ * that changes size is a different asset, not a rebundle, so it stays drift — and an unparseable
+ * URL is never tolerated.
+ */
+export function isToleratedVendorRotation(input: {
+  readonly url: string;
+  readonly pinnedBytes: number;
+  readonly liveBytes: number;
+}): boolean {
+  if (input.liveBytes !== input.pinnedBytes) return false;
+  try {
+    return ROTATING_VENDOR_ORIGINS.has(new URL(input.url).origin);
+  } catch {
+    return false;
+  }
+}

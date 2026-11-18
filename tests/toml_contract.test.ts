@@ -24,6 +24,23 @@ describe("Bun.TOML contract", () => {
     expect(() => Bun.TOML.parse(new Blob([text]))).not.toThrow();
   });
 
+  test("an S3 file-backed Blob throws like Bun.file() instead of parsing as empty", () => {
+    const s3 = new Bun.S3Client({
+      accessKeyId: "contract-test",
+      secretAccessKey: "contract-test",
+      endpoint: "http://127.0.0.1:1",
+      bucket: "contract-test",
+    });
+    // The old behaviour was `{}` for TOML / null for YAML, which a loader could
+    // mistake for a legitimately empty config. Both now fail like Bun.file().
+    expect(() => Bun.TOML.parse(s3.file("config/slab.toml"))).toThrow(
+      TypeError,
+    );
+    expect(() => Bun.YAML.parse(s3.file("config/slab.yaml"))).toThrow(
+      TypeError,
+    );
+  });
+
   test("integers outside the safe range throw at parse", () => {
     // 2^53 and INT64_MAX cannot be represented losslessly as JS numbers; the
     // parse fails instead of rounding, which is why slab sentinels stay within

@@ -3,19 +3,22 @@
 <!--
   F402 session auto-refresh LaunchAgent (template).
 
-  Supervises `scripts/f402_session_refresh.ts` on a 5-minute interval so the 30-min default
-  session TTL cannot silently kill the bridge again. The script is idempotent — when the
-  session is fresh it is a no-op and the exit code is 0; it only spawns `session_login.ts
-  --ttl-min 1440` (using `op run` env credentials when present, or `--from-keychain` otherwise)
-  when the current session is missing, expired, or within 5 min of expiring.
+  Supervises `scripts/f402_session_refresh.ts` on a 5-minute interval so the 21-minute server
+  bearer cannot silently kill the bridge. The script is idempotent — when the session is fresh
+  it is a no-op and the exit code is 0; it only spawns `session_login.ts --from-keychain` (the
+  TTL is a cap; a bearer session's file expiry is the JWT `exp` minus 2 minutes) when the current
+  session is missing, expired, or within 5 min of expiring.
+
+  Runs Bun directly with `--no-env-file`: credentials come from the login keychain
+  (`--from-keychain`), not from `.env.op`/`op`. This keeps the refresher independent of the
+  service-account token and the 1Password Desktop `.env` FIFO. The watchdog template is likewise
+  keychain-only.
 
   Substitute these placeholders before loading (see `scripts/install_session_refresh_agent.sh`):
-    __OPERATOR_HOME__             absolute path to $HOME on the target machine
-    __REPO_PATH__                 absolute path to the sportsdesk-ops working copy
-    __OP_BIN__                    absolute path to `op` (`/opt/homebrew/bin/op`)
-    __BUN_BIN__                   absolute path to `bun` (`$(which bun)`)
-    __BUN_BIN_DIR__               directory containing `__BUN_BIN__` (`$(dirname "$(which bun)")`)
-    __OP_SERVICE_ACCOUNT_TOKEN__  1Password service-account token (`chmod 0600` on installed plist)
+    __OPERATOR_HOME__  absolute path to $HOME on the target machine
+    __REPO_PATH__      absolute path to the sportsdesk-ops working copy
+    __BUN_BIN__        absolute path to `bun` (`$(which bun)`)
+    __BUN_BIN_DIR__    directory containing `__BUN_BIN__` (`$(dirname "$(which bun)")`)
 
   This file deliberately does not ship a prefilled plist: the operator home and the repo path
   are machine-specific, and `~/Library/LaunchAgents/` writes require the plist to live outside
@@ -28,11 +31,8 @@
 
     <key>ProgramArguments</key>
     <array>
-      <string>__OP_BIN__</string>
-      <string>run</string>
-      <string>--env-file=__REPO_PATH__/.env.op</string>
-      <string>--</string>
       <string>__BUN_BIN__</string>
+      <string>--no-orphans</string>
       <string>--no-env-file</string>
       <string>run</string>
       <string>scripts/f402_session_refresh.ts</string>
@@ -45,16 +45,11 @@
     <dict>
       <key>HOME</key>
       <string>__OPERATOR_HOME__</string>
-      <!--
-        Include __BUN_BIN_DIR__ and Homebrew so both `op` and `bun` resolve even when child
-        processes look up tools on PATH.
-      -->
+      <!-- Bun is invoked by absolute path; Homebrew stays on PATH for the keychain helper. -->
       <key>PATH</key>
       <string>__BUN_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
       <key>NO_PROXY</key>
       <string>127.0.0.1,localhost,::1</string>
-      <key>OP_SERVICE_ACCOUNT_TOKEN</key>
-      <string>__OP_SERVICE_ACCOUNT_TOKEN__</string>
     </dict>
 
     <!-- Fire every 5 minutes. StartInterval is wall-clock seconds, not elapsed. -->

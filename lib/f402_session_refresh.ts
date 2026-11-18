@@ -1,12 +1,11 @@
 /**
  * @file f402_session_refresh.ts
  * @description Decide whether the cached F402 session file needs re-minting, and (via the runner)
- * spawn `session:login --from-keychain` when it does. The core bug this closes: the default
- * session TTL in `lib/f402_session.ts` is 30 minutes, so an operator who mints a session (even
- * via `--from-keychain`) and walks away gets a silent bridge outage half an hour later. That is
- * exactly what happened on 2026-11-04 (session minted 06:03 UTC, expired 06:33 UTC, every bridge
- * rollup since then failed with "missing credentials: no F402 session file" — see
- * `scratch/bridge-rollup-cron.jsonl` for the 36 consecutive ok:false entries).
+ * spawn `session:login --from-keychain` when it does. A bearer session's `expiresAtIso` is the
+ * server JWT's `exp` minus a small margin (see `sessionFromAuth`), so this decision tracks the
+ * real 21-minute window; cookie-only sessions fall back to the client TTL. The runner exists
+ * because of 2026-11-04 (session minted 06:03 UTC, expired 06:33 UTC, every bridge rollup after
+ * that failed for 14+ hours — see `scratch/bridge-rollup-cron.jsonl`).
  *
  * The decision logic lives here, in a pure function that takes a session + now + grace and
  * returns a `RefreshDecision`. The runner (`scripts/f402_session_refresh.ts`) drives it on a
@@ -17,12 +16,17 @@
  * password. It only sees the session's `expiresAtIso` timestamp and derived metadata.
  */
 
+import { decodeF402BearerWindow, type F402TokenWindow } from "./f402_jwt.ts";
 import type { F402Session } from "./f402_session.ts";
 
-/** How close to expiry triggers a refresh. 5 min default; 1/6 of the 30-min TTL. */
+/** How close to expiry triggers a refresh. 5 min default; about a quarter of the 21-min window. */
 export const DEFAULT_REFRESH_GRACE_MS = 5 * 60 * 1000;
 
-/** TTL for a refreshed session. 24h matches the bridge cadence; the client is the only enforcer. */
+/**
+ * Client-side TTL cap passed to the mint. For a bearer session the file expiry is derived from
+ * the JWT `exp` (see `sessionFromAuth`), so this value only bounds cookie-only sessions and a
+ * deliberately shorter caller TTL. The 21-minute window is observational, not an input.
+ */
 export const DEFAULT_REFRESH_TTL_MINUTES = 1440;
 
 export type RefreshReason =
@@ -88,10 +92,39 @@ export interface RefreshOutcome {
   readonly error?: string;
   /** Duration of the mint attempt in ms; 0 when no mint was attempted. */
   readonly mintDurationMs: number;
+  /**
+   * Bearer window read back after a successful mint. Absent when no mint ran or the token is
+   * opaque. Never contains the token itself.
+   */
+  readonly tokenWindow?: TokenWindow;
 }
 
 export type RefreshErrorKind =
   "exit-nonzero" | "post-read-missing" | "post-read-stale" | "spawn-error";
+
+/**
+ * Observed F402 bearer window (`exp - nbf`), measured 2026-11-17: 21 minutes. This is an
+ * observability threshold for the alert below, not the expiry input: `sessionFromAuth` derives
+ * `expiresAtIso` from the token's own `exp`.
+ */
+export const EXPECTED_TOKEN_WINDOW_MINUTES = 21;
+
+/** Deviation beyond this many minutes appends a `f402-token-window-alert` journal line. */
+export const TOKEN_WINDOW_TOLERANCE_MINUTES = 2;
+
+/** Bearer validity window, decoded without exposing the token. */
+export type TokenWindow = F402TokenWindow;
+
+/**
+ * Decode the bearer JWT's `nbf`/`exp` claims. Returns null for an opaque token, a missing header,
+ * or an unparseable payload — never throws, and never returns the token.
+ */
+export function tokenWindowFromSession(
+  session: F402Session | null,
+): TokenWindow | null {
+  if (session === null) return null;
+  return decodeF402BearerWindow(session.authorizationHeader);
+}
 
 /** Build a stable JSONL line for the runner's journal. No cookie, password, or stderr leaks. */
 export function journalLine(outcome: RefreshOutcome): string {
@@ -104,6 +137,13 @@ export function journalLine(outcome: RefreshOutcome): string {
     ok: outcome.ok,
     mintDurationMs: outcome.mintDurationMs,
     ...(outcome.error === undefined ? {} : { error: outcome.error }),
+    ...(outcome.tokenWindow === undefined
+      ? {}
+      : {
+          tokenNbfIso: outcome.tokenWindow.nbfIso,
+          tokenExpIso: outcome.tokenWindow.expIso,
+          tokenWindowMin: outcome.tokenWindow.windowMinutes,
+        }),
   } as const;
   return `${JSON.stringify(payload)}\n`;
 }
