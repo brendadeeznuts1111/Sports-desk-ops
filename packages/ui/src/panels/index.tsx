@@ -17,6 +17,12 @@ export {
   type BuildMatrixDrawerProps,
 } from "./BuildMatrixDrawer.tsx";
 export {
+  BunAssetsTabPanel,
+  type BunAssetsPayload,
+  type BunAssetsTabPanelProps,
+  type BunImageAssetRow,
+} from "./BunAssetsTabPanel.tsx";
+export {
   buildRegistryRootCss,
   HOUDINI_TOKENS,
   TOKEN_ALIAS_SPECS,

@@ -31,6 +31,7 @@ import {
   renderAnsiMarkdown,
 } from "../lib/canonical_osc8_links.ts";
 import {
+  BUN_DNS_CACHE_CAPACITY,
   benchmarkResolverLatency,
   classifyIpAddress,
   getDnsTelemetry,
@@ -1977,11 +1978,17 @@ export async function handleDnsCommand(args: string[] = []): Promise<void> {
   );
 
   console.log("\x1b[1mCache Statistics (Bun.dns.getCacheStats):\x1b[0m");
-  console.log(`  • Cache Size:       ${telemetry.size} / 256 entries`);
-  console.log(`  • Hit Rate:         ${telemetry.hitRatePercent}%`);
+  console.log(
+    `  • Cache Size:       ${telemetry.size} / ${BUN_DNS_CACHE_CAPACITY} entries`,
+  );
+  console.log(`  • Request Hit Rate: ${telemetry.hitRatePercent}%`);
+  console.log(`  • Cache Hit Rate:   ${telemetry.cacheHitRatePercent}%`);
+  console.log(`  • Unclassified Req: ${telemetry.unclassifiedRequests}`);
   console.log(`  • Hits (Completed): ${telemetry.cacheHitsCompleted}`);
   console.log(`  • Hits (Inflight):  ${telemetry.cacheHitsInflight}`);
   console.log(`  • Cache Misses:     ${telemetry.cacheMisses}`);
+  console.log(`  • Errors:           ${telemetry.errors}`);
+  console.log(`  • Cache TTL:        ${telemetry.defaultTtlSeconds}s`);
   console.log(`  • Total Invocations: ${telemetry.totalCount}\n`);
 }
 

@@ -47,6 +47,8 @@ function fixture(
   return root;
 }
 
+// @bun-behavior: package-catalogs
+
 describe("resolveWorkspaces agrees with the bun.lock Bun writes", () => {
   test("globs, ! patterns, nameless manifests and nested node_modules", async () => {
     const root = fixture("globs", ["packages/**", "!packages/**/test/**"], {

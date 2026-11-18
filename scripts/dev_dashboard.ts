@@ -20,6 +20,7 @@ import {
   createR2PipelineService,
   DashboardHealthTracker,
   DashboardMarkdownCache,
+  DEFAULT_R2_PUBLIC_BASE,
   isDashboardAuthRequired,
 } from "@sportsdesk-ops/backend";
 import {
@@ -38,6 +39,7 @@ import {
   retryAlert,
 } from "../lib/alerts.ts";
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
+import { bunImageAssetSnapshot } from "../lib/bun_image_asset_snapshot.ts";
 import { buildAutomationsSnapshot } from "../lib/automations_status.ts";
 import {
   benchmarkResolverLatency,
@@ -55,8 +57,10 @@ import {
   requireSession,
 } from "../lib/http_auth.ts";
 import { encodedResponse } from "../lib/http_compression.ts";
+import { readImageProvenance } from "../lib/image_provenance.ts";
 import { parseShortDesc } from "../lib/live_wagers.ts";
 import { isSentinelTickerWriter } from "@sportsdesk-ops/backend";
+import { createServeFile } from "../lib/serve_file.ts";
 import { SLAB_SERVER } from "../lib/slab_config.ts";
 import {
   inventoryStaticDirectory,
@@ -608,6 +612,34 @@ export function startDashboardServer(
       getWagersTabPolicy: () => loadWagersTabPolicyStamp(),
       getBetTickerPayload: (filters) => betTickerService.getPayload(filters),
       getR2PipelinePayload: (opts) => r2PipelineService.probeAll(opts),
+      getR2PipelineHistoryPayload: (opts) => r2PipelineService.getHistory(opts),
+      getR2ImageProvenancePayload: async ({ key }) => {
+        const publicUrl = `${DEFAULT_R2_PUBLIC_BASE}/${key}`;
+        const limit = 8 * 1024 * 1024;
+        const response = await fetch(publicUrl, {
+          signal: AbortSignal.timeout(8_000),
+        });
+        if (!response.ok) {
+          throw new Error(`R2 fetch HTTP ${response.status} for ${key}`);
+        }
+        const declared = Number(response.headers.get("content-length") ?? "0");
+        if (Number.isFinite(declared) && declared > limit) {
+          throw new Error(
+            `R2 object ${key} is ${declared} bytes (limit ${limit})`,
+          );
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (bytes.length > limit) {
+          throw new Error(`R2 object ${key} exceeded ${limit} bytes`);
+        }
+        return {
+          schemaVersion: 1 as const,
+          key,
+          publicUrl,
+          fetchedBytes: bytes.length,
+          report: await readImageProvenance(bytes),
+        };
+      },
       getDaemonStatusPayload: () => r2PipelineService.probeDaemon(),
       getAutomationsPayload: () => buildAutomationsSnapshot(),
       runGsliveTicketVerify: async (opts) => {
@@ -657,12 +689,28 @@ export function startDashboardServer(
     { clients },
   );
 
+  const serveStaticAsset = createServeFile({
+    root: resolve(cwd, "static"),
+    cacheControl: "public, max-age=60",
+  });
+
   const uiRoutes = {
     "/": indexHtml,
     "/dashboard": indexHtml,
-    // Bun's native directory route: zero-JS static dispatch with range/ETag
-    // handling and symlink clamping; files live under repo `static/`.
-    "/static/*": { dir: resolve(cwd, "static") },
+    // `/static/*` through the range-aware handler, not Bun's native `{ dir }` mount. The mount
+    // was chosen for its "symlink clamping", which it does not do: measured on 1.4.4, a symlink
+    // inside `static/` pointing at a file outside it was served with that file's content
+    // (`/static/escape.txt` → 200 with the outside bytes). `containedAssetPath`, which the handler
+    // uses, resolves the real path and refuses it. The same swap also replaces the directory
+    // route's weak `W/"…"` validator with a strong one, and adds `If-Range` and multi-range.
+    // `static/` is flat — no `index.html`, no subdirectories — so nothing relied on directory
+    // index or the 301 for a missing trailing slash.
+    "/static/*": (req: Request): Response | Promise<Response> => {
+      const url = new URL(req.url);
+      const stripped = url.pathname.slice("/static".length);
+      url.pathname = stripped === "" ? "/" : stripped;
+      return serveStaticAsset(req, url);
+    },
     "/index.js": {
       GET: async (req: Request): Promise<Response> => {
         const bundle = await ensureLegacyBundle();
@@ -859,6 +907,28 @@ export function startDashboardServer(
     "/api/signals/*": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url)),
     "/api/logo/*": (req: Request) => proxy4020OrFallback(req, new URL(req.url)),
+    "/api/diagnostics/image-assets": async (req: Request) => {
+      const url = new URL(req.url);
+      const requested = Number(url.searchParams.get("limit") ?? "24");
+      const limit = Number.isInteger(requested)
+        ? Math.min(Math.max(requested, 1), 100)
+        : 24;
+      const source = bunImageAssetSnapshot(resolve(cwd, "docs/assets"), {
+        limit,
+        visibility: "RISK_MANAGER",
+        displayRoot: "docs/assets",
+        ttlMs: 5_000,
+      });
+      const snapshot = await source.snapshot();
+      const headers = {
+        ETag: snapshot.etag,
+        "Cache-Control": "no-cache",
+      };
+      if (req.headers.get("if-none-match") === snapshot.etag) {
+        return new Response(null, { status: 304, headers });
+      }
+      return Response.json(snapshot, { headers });
+    },
     "/combo-uniqueness.json": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url), () =>
         serveStaticFileResponse(

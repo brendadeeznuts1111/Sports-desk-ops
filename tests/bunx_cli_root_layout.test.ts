@@ -2,7 +2,7 @@
  * @file tests/bunx_cli_root_layout.test.ts
  * @description Verifies:
  *   1. Zero executable command scripts (`.ts`, `.js`, `.mjs`, `.sh`) or `wrangler` wrapper pollute the repository root.
- *   2. Root `package.json` and workspace `packages/sportsdesk-ops/package.json` declare identical 23-entry `bin` maps,
+ *   2. Root `package.json` and workspace `packages/sportsdesk-ops/package.json` declare identical `bin` maps,
  *      every workspace `bin` entry is a direct relative symlink (zero double-spawn `_dispatch.ts` wrapper),
  *      every target exists on disk with a valid `#!/usr/bin/env` shebang, and `node_modules/.bin/<name>` is linked.
  *   3. `bun x --no-install <bin>` executes cleanly across the CLI catalog (`dx`, `sportsdesk`, `image-meta`,
@@ -19,6 +19,8 @@ import { join, resolve } from "node:path";
 import { collectBinCatalog } from "../scripts/dx_scripts.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
+
+// @bun-behavior: bun-x-catalog
 
 describe("Zero root command scripts & bun x CLI workspace contract", () => {
   test("1. repository root contains zero tracked executable scripts (.ts, .js, .mjs, .sh) or wrangler wrapper", () => {
@@ -46,7 +48,7 @@ describe("Zero root command scripts & bun x CLI workspace contract", () => {
     ).toBe(false);
   });
 
-  test("2. root package.json and packages/sportsdesk-ops/package.json share aligned 23-bin zero-spawn entries", async () => {
+  test("2. root package.json and packages/sportsdesk-ops/package.json share aligned zero-spawn bin entries", async () => {
     const rootPkg = (await Bun.file(join(ROOT, "package.json")).json()) as {
       bin?: Record<string, string>;
       scripts?: Record<string, string>;
@@ -65,7 +67,6 @@ describe("Zero root command scripts & bun x CLI workspace contract", () => {
 
     const rootBins = Object.keys(rootPkg.bin ?? {}).sort();
     const wsBins = Object.keys(wsPkg.bin ?? {}).sort();
-    expect(rootBins.length).toBe(23);
     expect(wsBins).toEqual(rootBins);
 
     for (const binName of rootBins) {
@@ -309,7 +310,8 @@ describe("Zero root command scripts & bun x CLI workspace contract", () => {
       scripts: Record<string, string>;
     };
     const rows = collectBinCatalog(ROOT, rootPkg.bin, rootPkg.scripts);
-    expect(rows.length).toBe(23);
+    const expectedCount = Object.keys(rootPkg.bin).length;
+    expect(rows.length).toBe(expectedCount);
     expect(rows.every((r) => r.script !== null)).toBe(true);
 
     const yamlProc = Bun.spawn(
@@ -323,7 +325,7 @@ describe("Zero root command scripts & bun x CLI workspace contract", () => {
       count: number;
       bins: Array<{ bin: string; bunx: string; target: string }>;
     };
-    expect(parsed.count).toBe(23);
+    expect(parsed.count).toBe(expectedCount);
     expect(parsed.bins.some((b) => b.bin === "sql-query")).toBe(true);
     expect(parsed.bins.some((b) => b.bin === "desk-provenance")).toBe(true);
     expect(parsed.bins.some((b) => b.bin === "sportsdesk-layoff-risk")).toBe(

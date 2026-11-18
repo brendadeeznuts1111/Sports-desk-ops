@@ -25,6 +25,8 @@ const { values } = parseArgs({
 if (values.help) {
   console.log(`f402_manager_hierarchy_ingest — GENERAL → agents table (levels 1–12)
 
+Usage: sportsdesk-hierarchy-ingest [options]
+
 Options:
   --db <path>           SQLite file (created if missing)
   --envelope <path>     Raw getListAgenstByAgent JSON (PLAYERS not written; only GENERAL read)

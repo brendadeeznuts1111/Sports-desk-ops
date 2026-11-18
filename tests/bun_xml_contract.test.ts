@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import rssFixture from "./fixtures/bun-xml-golden-ast/rss-multi-item-channel-semver.xml";
@@ -171,6 +173,32 @@ describe("Bun.XML contract", () => {
       `<?xml version="1.0" encoding="Shift_JIS"?><a>1</a>`,
     );
     expect(() => Bun.XML.parse(unsupported)).toThrow(/Unsupported encoding/);
+  });
+
+  test("parsing decoded text corrupts a declared non-UTF-8 document silently", async () => {
+    // The trap the byte-decoding test above cannot show: `text()` resolves the
+    // encoding by BOM/UTF-8 default before the prolog is read, so 0xE9 becomes
+    // U+FFFD and Bun.XML.parse then accepts the mangled document without error.
+    // Callers must hand the parser bytes — measured on 1.4.4, 2026-11-18.
+    const dir = mkdtempSync(join(tmpdir(), "bun-xml-encoding-"));
+    const path = join(dir, "latin1.xml");
+    const iso = new Uint8Array([
+      ...new TextEncoder().encode(
+        `<?xml version="1.0" encoding="ISO-8859-1"?><venue name="Caf`,
+      ),
+      0xe9, // é in ISO-8859-1, invalid standalone in UTF-8
+      ...new TextEncoder().encode(`"/>`),
+    ]);
+    await Bun.write(path, iso);
+
+    const asText = await Bun.file(path).text();
+    expect(asText.includes("\uFFFD")).toBe(true);
+    // Silent: no throw, and the parser returns the replacement character.
+    expect(JSON.stringify(Bun.XML.parse(asText))).toContain("\uFFFD");
+
+    // The same document as bytes keeps the character.
+    const asBytes = await Bun.file(path).bytes();
+    expect(Bun.XML.parse(asBytes)).toEqual({ venue: { "@name": "Café" } });
   });
 
   test("parse accepts Blob, ArrayBuffer and DataView", () => {

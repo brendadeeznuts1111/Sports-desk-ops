@@ -38,6 +38,10 @@ const zeroDns: DnsCacheTelemetry = {
   errors: 0,
   totalCount: 0,
   hitRatePercent: 0,
+  cacheHitsTotal: 0,
+  classifiedRequests: 0,
+  unclassifiedRequests: 0,
+  cacheHitRatePercent: 0,
   defaultTtlSeconds: 30,
 };
 

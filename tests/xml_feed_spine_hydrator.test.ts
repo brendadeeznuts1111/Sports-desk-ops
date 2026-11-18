@@ -17,6 +17,8 @@ const SAMPLE_FEED = `<?xml version="1.0" encoding="UTF-8"?>
   <event id="43" sport="BASKETBALL" subSport="NBA" line="-110" wagerType="2" period="0" marketKind="0"/>
 </feed>`;
 
+// @bun-behavior: xml-parse
+
 describe("xml ingest preflight", () => {
   test("rejects Class A HTML-on-200", () => {
     const html = new TextEncoder().encode(

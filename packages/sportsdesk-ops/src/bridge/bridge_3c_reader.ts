@@ -10,6 +10,27 @@ import {
 } from "../types/wager_soa";
 
 export type Bridge3cCompression = "gzip" | "zstd" | "deflate" | "none";
+
+/** Bun/Node SystemError: an Error from a failed system call. */
+export interface SystemError extends Error {
+  readonly cause?: unknown;
+  readonly code?: string;
+  readonly errno?: number;
+  readonly path?: string;
+  readonly syscall?: string;
+}
+
+/** True when `error` carries system-call metadata (errno/code/path/syscall). */
+export function isSystemError(error: unknown): error is SystemError {
+  if (!(error instanceof Error)) return false;
+  const candidate = error as Partial<SystemError>;
+  return (
+    typeof candidate.errno === "number" ||
+    typeof candidate.code === "string" ||
+    typeof candidate.syscall === "string" ||
+    typeof candidate.path === "string"
+  );
+}
 export type Bridge3cParseMode = "auto" | "bun-native-jsonl" | "text-stream";
 
 export interface ProcessBridge3cOptions {
@@ -283,6 +304,9 @@ async function processNativeJsonlStream(
         pending = trimLeadingWhitespace(pending.subarray(res.read));
 
         if (res.error) {
+          // A failed syscall is not a malformed row: never skip it, and never
+          // bury its errno/code/path/syscall under a wrapper's `cause`.
+          if (isSystemError(res.error)) throw res.error;
           malformedRows++;
           const nextNl = pending.indexOf(0x0a);
           const poisonLine =

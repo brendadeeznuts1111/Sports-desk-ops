@@ -29,6 +29,9 @@ export const MACHINE_OWNED_INSTALL_KEYS = [
   "cache",
   "frozenLockfile",
   "minimumReleaseAge",
+  // The exemption list is the other half of the age gate: a project copy would override the
+  // machine's vetted exemptions, so it stays machine-owned for the same reason.
+  "minimumReleaseAgeExcludes",
 ] as const;
 
 export const FOREIGN_LOCKFILES = [

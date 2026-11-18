@@ -98,8 +98,8 @@ before a read.
 5. **Environment gaps discovered one failure at a time.** `bun run agent:doctor` reports them in
    one call (see §4).
 6. **Browser verification.** Stock Chrome cannot initialize its own sandbox inside DSH. Use
-   `./bin/dx shot <url> --out scratch/shots/x.png` (WebKit backend, zero deps), or the Playwright
-   headless shell with `--no-sandbox`; do not retry stock Chrome.
+   `./bin/dx shot <url> --out scratch/shots/x.png` — WebKit through `Bun.WebView`, in-process and
+   zero-dependency; do not retry stock Chrome and do not install an external browser for it.
 7. **Deploy credentials.** Pages deploy needs a Pages-scoped `CLOUDFLARE_API_TOKEN` +
    `CLOUDFLARE_ACCOUNT_ID` from `./cloudflare.env` or `$XDG_CONFIG_HOME/cloudflare/pages.env`.
    Never source `.env`: it is a 1Password FIFO and carries the R2/F402 secrets that would shadow
@@ -107,14 +107,14 @@ before a read.
 
 ## 4. What this repo now provides
 
-| Surface                                                      | What it removes                                                                                                                                                                                                                             |
-| :----------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `bun run agent:doctor`                                       | One report: Bun/worktree, `node_modules`, gitignored `enriched_customers_full.json`, feed/provenance, dist staging, graphviz, headless browser/CDP, port 4020 daemon, `~/.dsh` writability, Pages token. Each line carries the fix command. |
-| `bun run desk:doctor`                                        | One command over the desk's own routes: per-panel basis (`capture`/`paste`/`fixture`/`derived`), age, verdict, and the exact refresh command. `--json` for agents, `--check`/`--strict` for a gate, `--max-age` to add a budget. Read-only. |
-| `bun run audit:tool-calls`                                   | Reproducible version of this audit (48h default, `--json`, `--since-hours`, `--project`).                                                                                                                                                   |
-| `bun run ci:local`                                           | Replays the CI chain in order (`--list`, `--keep-going`, `--install`); agents no longer need to assemble gates by hand and discover failures one at a time.                                                                                 |
-| `scripts/graph_feed_poller_daemon.ts --no-backtest-artifact` | A live feed refresh no longer rewrites `docs/backtest-4wk-cfb-nba.json` with environment-dependent inputs.                                                                                                                                  |
-| `AGENTS.md` “Agent friction quick reference”                 | The rules in §3 in the file every session loads.                                                                                                                                                                                            |
+| Surface                                                      | What it removes                                                                                                                                                                                                                                                                      |
+| :----------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun run agent:doctor`                                       | One report: Bun/worktree, `node_modules`, installed-package drift from `bun.lock`, gitignored `enriched_customers_full.json`, feed/provenance, dist staging, graphviz, headless browser/CDP, port 4020 daemon, `~/.dsh` writability, Pages token. Each line carries the fix command. |
+| `bun run desk:doctor`                                        | One command over the desk's own routes: per-panel basis (`capture`/`paste`/`fixture`/`derived`), age, verdict, and the exact refresh command. `--json` for agents, `--check`/`--strict` for a gate, `--max-age` to add a budget. Read-only.                                          |
+| `bun run audit:tool-calls`                                   | Reproducible version of this audit (48h default, `--json`, `--since-hours`, `--project`).                                                                                                                                                                                            |
+| `bun run ci:local`                                           | Replays the CI chain in order (`--list`, `--keep-going`, `--install`); agents no longer need to assemble gates by hand and discover failures one at a time.                                                                                                                          |
+| `scripts/graph_feed_poller_daemon.ts --no-backtest-artifact` | A live feed refresh no longer rewrites `docs/backtest-4wk-cfb-nba.json` with environment-dependent inputs.                                                                                                                                                                           |
+| `AGENTS.md` “Agent friction quick reference”                 | The rules in §3 in the file every session loads.                                                                                                                                                                                                                                     |
 
 The two rankings tests that need the gitignored `enriched_customers_full.json` remain
 environment-gated; `agent:doctor` prints the symlink command for a linked worktree instead of
@@ -138,8 +138,8 @@ guard. File references are to the DSH checkout.
    with line numbers turns a blind retry into a correct anchor.
    Path: `packages/fs/tool-str-replace-editor/src/index.ts`.
 4. **Browser/CDP failures should name the working fallback.** The current text says Chrome is
-   unavailable; the measured workaround (Playwright headless shell with `--no-sandbox`, or
-   `./bin/dx shot`) is what actually succeeds in this environment.
+   unavailable; the measured workaround (`./bin/dx shot`, WebKit through `Bun.WebView`) is what
+   actually succeeds in this environment.
 5. **The inspector timeout should say “reconnect and retry” once.** 5 of 97 errors were
    `Slots.listSubTree` timeouts; the message already hints at the Harness page, but a single
    automatic retry after the page reconnects would remove the manual step.

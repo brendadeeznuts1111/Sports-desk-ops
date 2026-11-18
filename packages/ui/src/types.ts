@@ -17,7 +17,11 @@ import type {
   DashboardWsTopic,
   LiveWagersApiResponse,
   R2PipelineApiResponse,
+  R2PipelineHistoryApiResponse,
   R2SinkDetail,
+  R2SinkHistory,
+  R2SinkHistorySample,
+  R2SinkSlaStatus,
   SlabPolicySummary,
   TicketVerificationMode,
   TicketVerificationSummary,
@@ -45,7 +49,11 @@ export type {
   DashboardWsTopic,
   LiveWagersApiResponse,
   R2PipelineApiResponse,
+  R2PipelineHistoryApiResponse,
   R2SinkDetail,
+  R2SinkHistory,
+  R2SinkHistorySample,
+  R2SinkSlaStatus,
   SlabPolicySummary,
   TicketVerificationMode,
   TicketVerificationSummary,
@@ -342,6 +350,7 @@ export const DASHBOARD_TAB_IDS = [
   "bet-ticker",
   "r2",
   "alerts",
+  "assets",
 ] as const;
 
 export type DashboardTabId = (typeof DASHBOARD_TAB_IDS)[number];
@@ -429,6 +438,14 @@ export const DASHBOARD_TAB_SPECS: Readonly<
     shortcut: "Ctrl+9",
     description: "Operator alert delivery queue, dead-letter retry & acks",
     aliases: ["dlq", "notifications"],
+  },
+  assets: {
+    id: "assets",
+    label: "Bun Assets",
+    icon: "🖼️",
+    shortcut: "Ctrl+0",
+    description: "Bun.Image asset attributes for the served dashboard images",
+    aliases: ["images", "image-assets", "bun-assets", "image-metadata"],
   },
 };
 

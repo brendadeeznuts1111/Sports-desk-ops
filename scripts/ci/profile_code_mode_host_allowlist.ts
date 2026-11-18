@@ -51,7 +51,15 @@ const FACTORY_REEXPORT_ALLOW = new Set(FACTORY_IMPORT_ALLOW);
 
 const DEFINITION_FILE = "lib/profile_code_mode_host.ts";
 
-/** Path segments — any file under these dirs is skipped (not string-substring noise). */
+/**
+ * Path segments — any file under these dirs is skipped (not string-substring noise).
+ *
+ * `Scratch/` and `scratch/` are gitignored local experiments; `.agents/` and `.worktrees/` are local
+ * worktree checkouts. Each can carry a full copy of `lib/` at a path the symbol allowlist does not
+ * recognize: on 2026-11-17 a stale `Scratch/wt-pm-state-fix` copy produced 8 false violations and
+ * made the gate scan >1 GB of tooling. Dot-directories are already skipped by the glob, but the
+ * explicit entries keep the rule true if the scan ever enables dot files.
+ */
 const SKIP_PATH_SEGMENTS = new Set([
   "node_modules",
   "dist",
@@ -59,6 +67,10 @@ const SKIP_PATH_SEGMENTS = new Set([
   "coverage",
   ".stryker-tmp",
   ".materialized",
+  "Scratch",
+  "scratch",
+  ".agents",
+  ".worktrees",
 ]);
 
 /** Exact directory prefixes (relative to repo root) excluded from production scans. */

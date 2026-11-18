@@ -110,6 +110,8 @@ export async function buildBunSurfaceSnapshot(
 const HELP = `
 bun-surface — Bun declaration snapshot (DOD-DEHARDCODE-02)
 
+Usage: bun-surface [--json|--no-json] [--symbols|--no-symbols] [--filter <name>]
+
 Options:
   --json               Emit one JSON object on stdout (default)
   --no-json            Human-readable summary

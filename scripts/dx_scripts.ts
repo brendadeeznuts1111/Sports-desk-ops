@@ -13,6 +13,7 @@
 import { lstatSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { findMatchingScript } from "../lib/cli_catalog.ts";
 import { inspectWorkspaces } from "../lib/pm_policy.ts";
 
 export type ScriptMap = Readonly<Record<string, string>>;
@@ -71,26 +72,6 @@ function isSymlink(filePath: string): boolean {
   } catch {
     return false;
   }
-}
-
-function findMatchingScript(scripts: ScriptMap, target: string): string | null {
-  const normalized = target.replace(/^\.\//, "");
-  // Prefer short exact invocations (`bun run <target>` or `./<target>` without subcommand args)
-  let fallback: string | null = null;
-  for (const [name, cmd] of Object.entries(scripts)) {
-    const trimmed = cmd.trim();
-    if (
-      trimmed === `bun run ${normalized}` ||
-      trimmed === `bun ${normalized}` ||
-      trimmed === `./${normalized}`
-    ) {
-      return name;
-    }
-    if (fallback === null && trimmed.includes(normalized)) {
-      fallback = name;
-    }
-  }
-  return fallback;
 }
 
 export function collectBinCatalog(

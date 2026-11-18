@@ -1,44 +1,17 @@
 #!/usr/bin/env bun
 /**
  * @file scripts/verify_cli_bins.ts
- * @description DOD-DEHARDCODE-04: verify workspace CLI shims via `Bun.which` only (no package.json read).
+ * @description Verify every declared workspace CLI shim resolves and has a Bun/shebang head.
  *
- * Trade-off: this list must stay in sync when bins are added; `dx scripts --bins` still catalogs
- * targets from package.json for human inspection.
+ * The bin list is derived from the root `package.json` `bin` map (`requiredCliBins`), so adding a
+ * bin does not require editing this file; `bun x <bin> --help` and the generated `cli/README.md`
+ * catalog are gated separately.
  */
 import { resolve } from "node:path";
-
-/** SSOT for workspace `bin` names (23); must match root `package.json` `bin` keys. */
-export const REQUIRED_CLI_BINS = [
-  "blob-formdata",
-  "bun-surface",
-  "desk-provenance",
-  "dx",
-  "image-meta",
-  "nsh-desk",
-  "sportsdesk",
-  "sportsdesk-autobet",
-  "sportsdesk-bet-flags",
-  "sportsdesk-candidate",
-  "sportsdesk-catalog",
-  "sportsdesk-combo",
-  "sportsdesk-fraud",
-  "sportsdesk-flags",
-  "sportsdesk-hierarchy-ingest",
-  "sportsdesk-layoff-risk",
-  "sportsdesk-replay",
-  "sportsdesk-schema",
-  "sportsdesk-settlement",
-  "sportsdesk-ticket",
-  "sql-query",
-  "wrangler",
-  "xml-parse",
-] as const;
-
-export type RequiredCliBin = (typeof REQUIRED_CLI_BINS)[number];
+import { requiredCliBins } from "../lib/cli_catalog.ts";
 
 export interface VerifiedCliBin {
-  readonly bin: RequiredCliBin;
+  readonly bin: string;
   readonly resolvedPath: string;
 }
 
@@ -74,8 +47,9 @@ export async function verifyWorkspaceCliBins(options?: {
   const workspaceBinDir = resolve(repoRoot, "node_modules/.bin");
 
   const verified: VerifiedCliBin[] = [];
+  const bins = await requiredCliBins(repoRoot);
 
-  for (const binName of REQUIRED_CLI_BINS) {
+  for (const binName of bins) {
     const resolvedShim = Bun.which(binName, {
       cwd: packageRoot,
       PATH: workspaceBinDir,

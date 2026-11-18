@@ -116,3 +116,7 @@ data/profile-snapshot.real.json
 
 # local Bun cache packs (bun pm cache pack)
 .ci/
+
+# Generated thumbnails and their manifest (`bun run assets:diagnostics --thumbs`). Source images
+# stay tracked; the directory is reproducible from the manifest and `--thumbs-check`.
+**/.thumbs/

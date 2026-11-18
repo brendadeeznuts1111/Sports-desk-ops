@@ -41,6 +41,31 @@ describe("Bun.markdown.AnsiTheme <-> design/tokens.toml v1.5.0 gates", () => {
     expect(formatChannelBadge(16, SD_ANSI_THEMES.pipe_ascii)).toBe("[UNKNOWN]");
   });
 
+  test("formatChannelBadge never aliases a non-integer id onto a channel", () => {
+    // `>>> 0` used to coerce all of these onto channel 0, and truncate the float
+    // to channel 1 — silent aliases onto real channels (measured on 1.4.4).
+    for (const value of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      2 ** 32,
+      1.9,
+      -0.5,
+    ]) {
+      expect(formatChannelBadge(value, SD_ANSI_THEMES.pipe_ascii)).toBe(
+        "[UNKNOWN]",
+      );
+      expect(
+        formatChannelBadge(value, SD_ANSI_THEMES.ghostty_interactive),
+      ).toBe("[UNKNOWN]");
+    }
+    // The real ids still resolve, including the last one.
+    expect(formatChannelBadge(0, SD_ANSI_THEMES.pipe_ascii)).toBe(
+      "[NON_SPORTS]",
+    );
+    expect(formatChannelBadge(10, SD_ANSI_THEMES.pipe_ascii)).toBe("[HOUSE]");
+  });
+
   test("emitGeneratedAnsiTokensModule rejects an empty profile set instead of emitting invalid TS", () => {
     // generate_tokens.ts passes `ssot.cli_ansi_profiles ?? {}`; without this
     // guard the union joins nothing and the generated file reads

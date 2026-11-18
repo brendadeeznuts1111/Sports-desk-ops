@@ -10,7 +10,9 @@ import type {
   Daemon4020Status,
   MarketFilter,
   PeriodFilter,
+  R2ImageProvenanceApiResponse,
   R2PipelineApiResponse,
+  R2PipelineHistoryApiResponse,
   RegimeFilter,
   RouterAuditMode,
   ShadowRepriceMode,
@@ -182,6 +184,28 @@ export interface DashboardApiDeps {
     | ((options?: {
         readonly refresh?: boolean | undefined;
       }) => Promise<R2PipelineApiResponse> | R2PipelineApiResponse)
+    | undefined;
+  /**
+   * Process-local freshness samples for the R2 sinks. Optional so hermetic API
+   * tests need no service; when absent the route reports an empty series
+   * (`source: "process-memory"`, no samples) instead of inventing points.
+   */
+  readonly getR2PipelineHistoryPayload?:
+    | ((options?: {
+        readonly refresh?: boolean | undefined;
+        readonly limit?: number | undefined;
+      }) =>
+        Promise<R2PipelineHistoryApiResponse> | R2PipelineHistoryApiResponse)
+    | undefined;
+  /**
+   * Header-only `sportsdesk:*` provenance for one public R2 PNG/WebP key.
+   * Optional: when absent the route reports an explicit "not configured" issue.
+   */
+  readonly getR2ImageProvenancePayload?:
+    | ((options: {
+        readonly key: string;
+      }) =>
+        Promise<R2ImageProvenanceApiResponse> | R2ImageProvenanceApiResponse)
     | undefined;
   readonly getDaemonStatusPayload?:
     (() => Promise<Daemon4020Status> | Daemon4020Status) | undefined;

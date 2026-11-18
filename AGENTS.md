@@ -74,9 +74,6 @@ slowest files first, so the deliberate ~12.6 s SSE keepalive soak
 Regenerate the committed baseline after large suite changes:
 `bun test --parallel --timings=config/test-timings.json --update-timings`.
 
-Actions do run on this repo (2026-11-02: PR #10's `verify` job ran and failed at `format:check`);
-because the job stops at the first failure, an early red step hides every later one.
-
 When you change `market/**`, the `@deepseek-ai/dsh-plugin-market-index` devDep, or the market steps
 in `.github/workflows/ci.yml`, run **`bun run test:market-index`** first. Discover contract:
 [market/README.md](market/README.md). Upstream format:
@@ -88,8 +85,8 @@ in `.github/workflows/ci.yml`, run **`bun run test:market-index`** first. Discov
 `node_modules`, installed-package drift from `bun.lock` (the 2026-11-17 red-typecheck cause),
 blocked dependency lifecycle scripts (`bun pm untrusted` exits 0 either way, so a
 skipped native build is otherwise silent), the gitignored `enriched_customers_full.json`, feed
-provenance, dist staging, graphviz, a headless browser, the `:4020` daemon, sandbox write access and
-the Pages deploy token. The tool-call audit lives in
+provenance, dist staging, graphviz, `Bun.WebView` availability, the `:4020` daemon, sandbox write
+access and the Pages deploy token. The tool-call audit lives in
 [`docs/runbooks/agent_tool_friction.md`](docs/runbooks/agent_tool_friction.md) and is reproducible
 with `bun run audit:tool-calls`.
 
@@ -110,6 +107,9 @@ with `bun run audit:tool-calls`.
   State the behavioural contract and let `bun test`, `Bun.Glob` or the committed baselines
   (`tests/bun_docs_surface_baseline.json`, `docs/artifacts.lock.json`) enforce exactness. Prefer
   generating an inventory from its source over writing one down.
+- **Regenerate derived artifacts from the committed state.** Generators that scan `git ls-files`
+  (the shape catalogue, its runbook, the Bun docs baseline) cannot see an untracked file, so
+  generating before staging writes an artifact CI rejects. Stage first, regenerate, commit both.
 
 **Evidence and citations**
 
@@ -120,35 +120,50 @@ with `bun run audit:tool-calls`.
   they do not identify one site.
 - **Evidence labelling:** any claim in docs or commits states what was measured and when. The docs
   gates exist because fabricated contracts shipped before.
+- **A gate verdict belongs to the tree it ran in.** `bun fmt`, `bun check` and `oxlint` read
+  `bunfig.toml` and `tsconfig.json` from the working tree, so another session's uncommitted config
+  decides the answer. 2026-11-18: `bun fmt --check` failed on a committed file only while an
+  uncommitted `[[fmt.overrides]]` block was present; that file passes under every committed
+  `bunfig.toml` (pre- and post-#384). The same checkout also loses work when the other session
+  switches branches, which is why a claim about `main` gets verified in a clean worktree
+  (`git worktree add --detach`) rather than in the shared one.
 
 **Bun toolchain**
 
-- **Linting is `oxlint`; stable Bun 1.4.4 has no native `bun lint`.** `bun run lint:check` runs
-  oxlint twice — `.oxlintrc.json`, then `.oxlintrc.type-aware.json` passed explicitly as
-  `-c .oxlintrc.type-aware.json` (it is not auto-discovered). On the pinned 1.4.4, `bun lint` is not
-  a subcommand: it resolves to the package `"lint"` script, which is `bun --bun run oxlint --fix`
-  and **rewrites files**, and `--no-script` does not bypass it (measured 2026-11-15: the flag is
-  forwarded to oxlint; outside a package.json `bun lint` reports `Script not found "lint"`). So
-  never run bare `bun lint` / `bun run lint` as a check; use `bun run lint:check`. The older note
-  that `"lint": "bun lint"` recurses still holds on 1.4.4. A native linter (`bun lint`,
-  `--no-script`, `--doctor`, `--type-aware`, `[lint]` in `bunfig.toml`) exists only on the 1.4.5
-  canary (measured on `1.4.5-canary.1+ed4363334`); there the package script still wins unless
-  `--no-script` is passed. On 1.4.4 the `[lint]` block is inert future-native configuration.
+- **Linting is `oxlint`; stable 1.4.4 has no native `bun lint`.** `bun run lint:check` runs oxlint
+  twice — `.oxlintrc.json`, then `.oxlintrc.type-aware.json` passed explicitly as
+  `-c .oxlintrc.type-aware.json` (it is not auto-discovered). On 1.4.4 a bare `bun lint` is not a
+  subcommand: it resolves to the package `"lint"` script (`bun --bun run oxlint --fix`, which
+  **rewrites files**), and `--no-script` does not bypass it — the flag is forwarded to oxlint
+  (measured 2026-11-15). Outside a package.json it reports `Script not found "lint"`. Never run
+  `bun lint` / `bun run lint` as a check; use `bun run lint:check`, or `bun run lint:bun` for a
+  read-only wrapper that refuses the mutable path.
 - **CI runs the native linter on a canary runtime:** job `lint-native` installs
   `bun-version: canary` and runs `bun run lint:native` / `bun run lint:native:type-aware` (both
-  fail on 1.4.4 by design). The repo pin stays exact — do not add canary to `.bun-version`; the pin
-  contract requires one X.Y.Z across `.bun-version`, `engines.bun`, `packageManager`, and
-  `@types/bun`, and `@types/bun` has no canary version.
-- Keep `oxlint` in `devDependencies`: the `lint` script and `lint:check` run it, and editors use
-  it via `oxlint --lsp`. The canary's `--doctor` view of which packages are removable does not
-  apply to 1.4.4.
+  fail on 1.4.4 by design). The pin stays exact — one X.Y.Z across `.bun-version`, `engines.bun`,
+  `packageManager` and `@types/bun`; `@types/bun` has no canary version. A native linter
+  (`--no-script`, `--doctor`, `--type-aware`, `[lint]` in bunfig) exists only on the 1.4.5 canary
+  (measured on `1.4.5-canary.1+ed4363334`); on 1.4.4 the `[lint]` block is inert.
+- Keep `oxlint` in `devDependencies`: `lint`, `lint:check` and editors (`oxlint --lsp`) need it.
 - **`bun:bundle` AST constraint:** `feature()` from `"bun:bundle"` can only appear directly inside
   an `if` condition or ternary (`feature("FLAG") ? true : false`). Passing it to functions like
   `expect()` or `expectTypeOf()` fails at parse time. Testing `--feature=FLAG` requires subprocess spawning
   (`Bun.spawnSync`); flags cannot be toggled mid-process.
 - **`Bun.semver` vs npm `semver`:** `Bun.semver.satisfies` takes only `(version, range)` and does
-  NOT support `{ includePrerelease: true }`. The npm `semver` package in `devDependencies` is required by
-  `tests/market_index.test.ts` to match upstream Harness install behaviour. Do not swap it out.
+  NOT support `{ includePrerelease: true }` (the third argument is ignored). A range is also
+  **tuple-bound for prereleases**: `satisfies("1.4.5-canary.1", ">=1.4.4-0")` is `false` even
+  though that build is newer than the floor. Gate a floor with
+  `Bun.semver.order(v, "1.4.4-0") >= 0` — see `lib/manager_fetch.ts`. The npm `semver` package in
+  `devDependencies` is required by `tests/market_index.test.ts` to match upstream Harness install
+  behaviour. Do not swap it out.
+- **Never `bun x <name>` for a bin this repo declares.** `bun x` only prefers the local link; when
+  `node_modules/.bin/<name>` is missing — a fresh worktree, or a bin added in the same commit — it
+  resolves the **name on the npm registry** and runs that package instead. Measured 2026-11-18:
+  `bun x image-assets --help` installed and built `image-assets@0.10.0` (a 2015 iOS asset generator
+  depending on `sharp`) rather than running `scripts/image_asset_diagnostics.ts`; no repository file
+  was written. Run `node_modules/.bin/<bin>` when it is linked, else `bun <package.json bin target>`
+  (`sportsdesk-assets` is the asset bin). `tests/bun_x_cli_help.test.ts` follows that rule, so the
+  help-surface test cannot reach the registry.
 - **`bun run` flag position & profiling flags:**
   - **Runtime & runner flags** (`--watch`, `--hot`, `--smol`, `--check`, `--bun`, `--console-depth=<val>`,
     `--inspect`, `--cpu-prof`, `--heap-prof`, `--no-env-file`) must appear **before** the target script or
@@ -159,12 +174,22 @@ with `bun run audit:tool-calls`.
     bypassing Bun's runtime controls completely.
   - **Profiling flags:** Bun's native profiler flags are `--cpu-prof` (with `--cpu-prof-md` for LLM analysis),
     `--cpu-prof-name`, `--cpu-prof-dir`, and `--heap-prof` — never `--profile-cpu`.
+- **`bun --check` type-checks and then _runs_ the target; `bun check` only checks.** Measured on
+  1.4.4: `bun --check src/dashboard/index.tsx` type-checked clean and executed the browser entry
+  (`ReferenceError: document is not defined`), and `bun --check a.ts b.ts` checked only `a.ts`,
+  ran it with `b.ts` as argv, and never reported `b.ts`'s type error. `bun check a.ts b.ts`
+  reported both and followed the import graph (57 files for the schema set). So use
+  `bun check <files…>` for a gate — `schema:typecheck` used `bun --check` with 43 paths, which
+  checked one file and executed it — and reserve `--check` for entrypoints where running on
+  success is intended. For stdin there is no check-only form: `bun check -` answers
+  `error: Unknown flag "-"`, and `… | bun --check run -` executes the input once it type-checks.
 
 **Environment and tooling**
 
 - **Stock Chrome does not start under the sandbox.** Verify pages with
-  `./bin/dx shot <url> --out scratch/shots/x.png` (WebKit) or the Playwright headless shell with
-  `--no-sandbox`; `agent:doctor` prints the available binary.
+  `./bin/dx shot <url> --out scratch/shots/x.png` — WebKit through `Bun.WebView`, in-process and
+  zero-dependency; `agent:doctor` reports it as `OK Bun.WebView available`. The `chrome` backend
+  (Linux/Windows) needs a system Chrome, Chromium, Edge or Brave, not a downloaded browser.
 - **Deploy credentials** come from `./cloudflare.env` or `$XDG_CONFIG_HOME/cloudflare/pages.env`.
   Never source `.env` — it is a 1Password FIFO carrying R2/F402 secrets that shadow the Pages token.
 - **Feed-only refresh:** `graph_feed_poller_daemon.ts --once --live --no-backtest-artifact` (under
@@ -260,48 +285,36 @@ flags).
   `.env` is a 1Password-mounted pipe on the operator machine). Do not hand-write secrets into the
   repo.
 - **Bun-native policy ratchet removed 2026-11-09 (operator decision).** The `policy:check` ratchet,
-  the `~/platform` checkout it required, the pinned `PLATFORM_SHA` and the `PLATFORM_DEPLOY_KEY` CI
-  secret are gone. The rules it enforced (`zod-not-guard-calls`, `bun-env`,
-  `node-fs-read-write-file` and the rest) are now a review convention, **not a gate** — nothing
-  fails when they are violated. It was reporting 239 matches over the frozen baseline across 91
-  files (137 of them `zod-not-guard-calls`). Reintroducing it means restoring the copy, the
-  baseline and a decision about that debt, not just re-adding a step.
+  its `~/platform` checkout, `PLATFORM_SHA` and the `PLATFORM_DEPLOY_KEY` CI secret are gone. The
+  rules it enforced (`zod-not-guard-calls`, `bun-env`, `node-fs-read-write-file`, …) are now a
+  review convention, **not a gate** — nothing fails when they are violated. Reinstating it means
+  restoring the copy, the frozen baseline and a decision about that debt.
 
 ### PR bodies, commit messages, and closing keywords
 
-GitHub's auto-close parser reads closing keywords **literally — inside backticks, inside fenced
-code, in commit messages, and with the negation ignored**. The keywords are `close`, `closes`,
-`closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves`, `resolved`, each followed by an issue
-reference (`#248`, `GH-248`, or the issue URL).
+GitHub's auto-close parser reads closing keywords **literally** — inside backticks, inside fenced
+code, in commit messages — and ignores the negation. `close`/`closes`/`closed`,
+`fix`/`fixes`/`fixed`, `resolve`/`resolves`/`resolved` followed by `#248`, `GH-248` or the issue URL
+closes it, so a sentence _explaining that you are not closing an issue_ closes it. That happened
+twice on 2026-11-15.
 
-So a sentence _explaining that you are not closing an issue_ closes it. That happened twice on
-2026-11-15, both times writing `deliberately not Fixes #248` — the second time after the first had
-already been noticed. The second one is a documentation failure, not a parser surprise.
-
-- **Safe:** mention the number alone — `#248` with no keyword anywhere near it.
-- **Unsafe:** any closing keyword followed by a `#N` reference, however it is quoted or formatted.
-  Backticks do not protect it; a code fence does not protect it.
-- If you must discuss the mechanism, describe it without putting the keyword next to a reference:
-  "the closing keyword", "auto-close", "a `Fixes`-style reference".
-- To close deliberately, write it once on its own line: `Closes #248`.
-- **Check issue state after merging.** A premature close is silent, and reopening loses the
-  ordering a reader would expect from the thread.
+- Reference an issue by number alone. Anything that pairs a keyword with a reference closes it,
+  however it is quoted.
+- To close deliberately, write it once on its own line with the reference.
+- Re-check issue state after merging: a premature close is silent, and reopening loses the thread
+  order a reader expects.
 
 ### Check the run, not the green tick
 
-Check runs attach to a **commit SHA**, not to a pull request. Retarget a PR, rebase it, or move a
-stacked base, and the PR can keep showing the results of a run against the **previous** head or
-base — passing, and no longer about the code being merged. Observed on 2026-11-15: a PR recreated
-against `main` displayed the run from its stacked base (`43764453809`) until a branch update fired
-`synchronize` and produced `43764621840`.
+Check runs attach to a **commit SHA**, not to a pull request. Retarget, rebase, or move a stacked
+base and the PR can keep displaying a passing run against the **previous** head — no longer about
+the code being merged (observed 2026-11-15 on a PR recreated against `main`).
 
-- After a retarget, rebase, or base change, compare `git rev-parse HEAD` with the check run's head
-  SHA before trusting a green tick, and push or update to force a fresh run.
-- `strict: true` branch protection forces an update before merge, and the update fires
-  `synchronize`, so a fresh run normally exists by merge time. That is a backstop, not a
-  substitute for looking.
-- Same class as the closing-keyword rule above: what GitHub _displays_ as "your checks" is not
-  necessarily the run you think it is.
+- After a retarget, rebase or base change, compare `git rev-parse HEAD` with the run's head SHA,
+  then push or update to force a fresh `synchronize` run.
+- `strict: true` protection forces that update before merge, but it is a backstop, not a substitute
+  for looking. Same class as the closing-keyword rule: what GitHub _displays_ is not necessarily
+  what merged.
 
 ### Data-handling budgets
 

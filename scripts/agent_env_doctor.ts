@@ -137,7 +137,92 @@ export function parseBlockedInstallScripts(
   return blocked;
 }
 
-/** The main checkout when `root` is a linked worktree; null for a normal checkout. */
+/** One installed dependency whose node_modules copy does not match the bun.lock resolution. */
+export interface DependencyDrift {
+  readonly packageName: string;
+  readonly installed: string;
+  readonly locked: string;
+}
+
+/**
+ * Registry versions from a Bun text lockfile. bun.lock v2 is a bespoke text format (not JSON -
+ * JSON.parse rejects it), so this reads the packages map in the shape the file uses:
+ * "name": ["name@version", "", {}, "sha512-..."]. Workspace and git resolutions do not start with
+ * a digit and are skipped: they have no installable registry version to compare.
+ */
+export function lockedRegistryVersions(lockText: string): Map<string, string> {
+  const locked = new Map<string, string>();
+  const start = lockText.indexOf(
+    String.fromCharCode(34) + "packages" + String.fromCharCode(34) + ": {",
+  );
+  if (start === -1) return locked;
+  const entry =
+    /^\s*"((?:@[^"/]+\/)?[^"/]+)": \["(?:[^"\\]|\\.)*?@([0-9][^"+]*?)"/gm;
+  for (const match of lockText.slice(start).matchAll(entry)) {
+    const name = match[1];
+    const version = match[2];
+    if (name !== undefined && version !== undefined && !locked.has(name)) {
+      locked.set(name, version);
+    }
+  }
+  return locked;
+}
+
+function readPackageVersion(dir: string): string | null {
+  const manifest = record(readJson(path.join(dir, "package.json")));
+  const version = manifest?.version;
+  return typeof version === "string" ? version : null;
+}
+
+/**
+ * Top-level node_modules entries whose installed version differs from bun.lock.
+ *
+ * Catches the failure `bun install --frozen-lockfile` reported as "no changes" on 2026-11-17:
+ * the lock pinned @types/node@26.6.6 while node_modules/@types/node still linked 22.15.3, so
+ * `bun check` typechecked against stale Node globals and every typecheck gate went red. Only
+ * top-level entries are compared; nested store links are the package manager's business.
+ */
+export function findDependencyDrift(root: string): DependencyDrift[] {
+  const nodeModules = path.join(root, "node_modules");
+  if (!exists(nodeModules)) return [];
+  let lockText: string;
+  try {
+    lockText = fs.readFileSync(path.join(root, "bun.lock"), "utf8");
+  } catch {
+    return [];
+  }
+  const locked = lockedRegistryVersions(lockText);
+  const drifts: DependencyDrift[] = [];
+
+  const check = (pkgDir: string, packageName: string): void => {
+    const wanted = locked.get(packageName);
+    if (wanted === undefined || !/^\d+\.\d+\.\d+/.test(wanted)) return;
+    const installed = readPackageVersion(pkgDir);
+    if (installed === null || installed === wanted) return;
+    drifts.push({ packageName, installed, locked: wanted });
+  };
+
+  for (const entry of fs.readdirSync(nodeModules)) {
+    if (entry.startsWith(".")) continue;
+    if (entry.startsWith("@")) {
+      const scopedDir = path.join(nodeModules, entry);
+      let scoped: string[];
+      try {
+        scoped = fs.readdirSync(scopedDir);
+      } catch {
+        continue;
+      }
+      for (const name of scoped) {
+        check(path.join(scopedDir, name), entry + "/" + name);
+      }
+    } else {
+      check(path.join(nodeModules, entry), entry);
+    }
+  }
+  return drifts.sort((a, b) => a.packageName.localeCompare(b.packageName));
+}
+
+/** The main checkout when root is a linked worktree; null for a normal checkout. */
 export function mainCheckoutRoot(root: string): string | null {
   const common = spawnText(["git", "rev-parse", "--git-common-dir"], root);
   if (common === null || common === "") return null;
@@ -147,30 +232,14 @@ export function mainCheckoutRoot(root: string): string | null {
   return parent === root ? null : parent;
 }
 
-function playwrightHeadlessShell(): string | null {
-  const base = Bun.env.PLAYWRIGHT_BROWSERS_PATH
-    ? path.resolve(Bun.env.PLAYWRIGHT_BROWSERS_PATH)
-    : path.join(os.homedir(), "Library/Caches/ms-playwright");
-  let entries: string[] = [];
-  try {
-    entries = fs.readdirSync(base);
-  } catch {
-    return null;
-  }
-  const candidates = [
-    "chrome-headless-shell-mac-arm64/chrome-headless-shell",
-    "chrome-headless-shell-mac-x64/chrome-headless-shell",
-    "chrome-headless-shell-linux64/chrome-headless-shell",
-  ];
-  for (const entry of entries.sort().reverse()) {
-    if (!entry.startsWith("chromium_headless_shell-")) continue;
-    for (const suffix of candidates) {
-      const candidate = path.join(base, entry, suffix);
-      if (exists(candidate)) return candidate;
-    }
-  }
-  return null;
-}
+/**
+ * `Bun.WebView` is the capture path this repo uses (`./bin/dx shot`,
+ * scripts/capture/webview.ts), and it needs no external browser. The previous
+ * Playwright-cache probe predates that and told operators to install Chromium for
+ * a job WebView already does — a stale pointer, not a real gap.
+ */
+const webViewAvailable = (): boolean =>
+  typeof (Bun as unknown as { WebView?: unknown }).WebView === "function";
 
 async function probe(url: string): Promise<boolean> {
   try {
@@ -239,6 +308,36 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
       status: "fail",
       title: "node_modules missing",
       fix: "bun install --frozen-lockfile",
+    });
+  }
+
+  if (exists(nodeModules)) {
+    const drift = findDependencyDrift(root);
+    checks.push({
+      id: "deps-drift",
+      status: drift.length === 0 ? "ok" : "warn",
+      title:
+        drift.length === 0
+          ? "installed packages match bun.lock"
+          : drift.length + " installed package(s) drift from bun.lock",
+      ...(drift.length === 0
+        ? {}
+        : {
+            detail:
+              drift
+                .slice(0, 5)
+                .map(
+                  (entry) =>
+                    entry.packageName +
+                    ": installed " +
+                    entry.installed +
+                    ", lock " +
+                    entry.locked,
+                )
+                .join(" | ") +
+              (drift.length > 5 ? " | +" + (drift.length - 5) + " more" : ""),
+            fix: "bun install --frozen-lockfile   # if it reports no changes, delete the stale node_modules entry and reinstall",
+          }),
     });
   }
 
@@ -375,23 +474,22 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
     fix: "brew install graphviz  # the dot-render test needs it",
   });
 
-  const shell = playwrightHeadlessShell();
+  const webView = webViewAvailable();
   const cdpUp = await probe("http://127.0.0.1:9222/json/version");
   checks.push({
     id: "browser",
-    status: cdpUp || shell !== null ? "ok" : "warn",
-    title: cdpUp
-      ? "browser CDP reachable on :9222"
-      : shell !== null
-        ? "Playwright headless shell available (stock Chrome is blocked by the sandbox)"
-        : "no headless browser found",
-    detail: cdpUp
-      ? ""
-      : (shell ?? "stock Chrome cannot initialize its own sandbox here"),
-    fix:
-      shell === null
-        ? "bunx playwright install chromium"
-        : `"${shell}" --no-sandbox --remote-debugging-port=9222 about:blank   # or: ./bin/dx shot <url>`,
+    status: webView ? "ok" : "warn",
+    title: webView
+      ? `Bun.WebView available (${Bun.version})`
+      : "Bun.WebView is missing from this runtime",
+    detail: webView
+      ? cdpUp
+        ? "a CDP endpoint is also reachable on :9222"
+        : "capture needs no external browser"
+      : "stock Chrome cannot initialize its own sandbox here",
+    fix: webView
+      ? "./bin/dx shot <url> --out scratch/shots/x.png   # WebKit via Bun.WebView"
+      : "reinstall the pinned Bun (/ .bun-version) — Bun.WebView is built in",
   });
 
   const sportsdeskPort = resolveSportsdeskDaemonPort(Bun.env, 4020);

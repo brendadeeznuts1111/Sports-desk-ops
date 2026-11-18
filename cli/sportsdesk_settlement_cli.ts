@@ -23,6 +23,8 @@ type GlobalOpts = { json: boolean };
 function printRootHelp(): void {
   console.log(`Fantasy402 wager settlement / history ingest
 
+Usage: sportsdesk-settlement <ingest|poll|verify|status> [options]
+
 Commands:
   ingest    Append-only rows from fixture JSON
   poll      Live POST Manager/getHistory → SQLite (requires SPORTSDESK_PORTAL_HTTP_BASE)
