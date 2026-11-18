@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { resolve } from "node:path";
 import {
+  assertCleanTomlBytes,
   parseTokensToml,
   parseTokensTomlFromParsed,
 } from "../lib/gen_tokens/tokens_ssot.ts";
@@ -52,20 +53,28 @@ function makeValidMinimalDoc(): Record<string, unknown> {
 }
 
 describe("parseTokensToml", () => {
-  it("parses production tokens.toml v1.4.0 with discriminated sla, thresholds, bridges, bitmasks, aliases, and bijective keymap", async () => {
+  it("parses production tokens.toml v1.5.0 with discriminated sla, thresholds, bridges, bitmasks, aliases, and bijective keymap", async () => {
     const tomlText = await Bun.file(
       resolve(rootDir, "design/tokens.toml"),
     ).text();
     const ssot = parseTokensToml(tomlText);
 
-    expect(ssot.meta.version).toBe("1.4.0");
+    expect(ssot.meta.version).toBe("1.5.0");
     expect(ssot.meta.schema).toBe("sportsdesk-tokens/v1");
-    expect(ssot.meta.updated_at).toBe("2026-11-16T00:45:00Z");
+    expect(ssot.meta.updated_at).toBe("2026-11-18T00:00:00Z");
     expect(ssot.surfaces).toHaveLength(2);
     expect(ssot.ingestion).toHaveLength(11);
     expect(ssot.routes).toHaveLength(4);
     expect(ssot.ui).toHaveLength(12);
     expect(ssot.sla).toHaveLength(4);
+    expect(ssot.cas_states).toHaveLength(4);
+    expect(ssot.layout?.grid_unit_px).toBe(4);
+    expect(ssot.motion?.aria_live_coalesce_ms).toBe(500);
+    expect(ssot.aliases.accessibility).toHaveLength(2);
+    expect(
+      ssot.sla.every((s) => Boolean(s.glyph) && Boolean(s.border_style)),
+    ).toBe(true);
+    expect(ssot.ingestion.every((c) => Boolean(c.glyph))).toBe(true);
     expect(ssot.keymap).toHaveLength(10);
     expect(ssot.ui.map((u) => u.token_name)).toEqual(
       expect.arrayContaining([
@@ -163,6 +172,18 @@ describe("parseTokensToml", () => {
       expect(alias).toBeDefined();
       expect(hexOf(alias!.target)).toBe(ssot.tokens[accentKey]);
     }
+  });
+
+  it("rejects UTF-8 NBSP and BOM bytes before Bun.TOML.parse", () => {
+    expect(() =>
+      assertCleanTomlBytes(new Uint8Array([0xef, 0xbb, 0xbf, 0x61])),
+    ).toThrow("ERR_SPEC_TOML_BOM_BYTE");
+    expect(() =>
+      assertCleanTomlBytes(new Uint8Array([0x61, 0x3d, 0x31, 0xc2, 0xa0])),
+    ).toThrow("ERR_SPEC_TOML_NBSP_BYTE");
+    expect(() => parseTokensToml("a = 1\u00a0# nbsp")).toThrow(
+      "ERR_SPEC_TOML_NBSP_BYTE",
+    );
   });
 
   it("rejects aliases that do not resolve, shadow a token, or repeat", () => {

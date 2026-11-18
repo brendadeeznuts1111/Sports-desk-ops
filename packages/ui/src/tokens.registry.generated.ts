@@ -1,11 +1,11 @@
 /**
  * @file packages/ui/src/tokens.registry.generated.ts
- * @description Generated from design/tokens.toml (v1.4.0) via `bun run gen:tokens`.
+ * @description Generated from design/tokens.toml (v1.5.0) via `bun run gen:tokens`.
  * DO NOT EDIT BY HAND — enforced by `bun run gen:tokens:gate`.
  */
 
 /** tokens.toml SSOT version this module was generated from. */
-export const TOKENS_TOML_VERSION = "1.4.0" as const;
+export const TOKENS_TOML_VERSION = "1.5.0" as const;
 
 export type GeneratedTokenGroup =
   "surfaces" | "ui" | "sla" | "ingestion" | "routes";

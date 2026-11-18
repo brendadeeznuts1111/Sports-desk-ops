@@ -37,8 +37,42 @@ export type TokensGatesToml = {
   readonly min_body_contrast_ratio_milli: number;
   readonly min_aaa_slate_contrast_milli: number;
   readonly min_ui_component_contrast_milli: number;
+  readonly min_badge_border_contrast_milli?: number;
   readonly min_cross_state_delta_e00_milli: number;
   readonly min_fresh_vs_stale_delta_e00_milli: number;
+  readonly min_adjacent_channel_delta_e00_milli?: number;
+};
+
+export type TokensLayoutToml = {
+  readonly grid_unit_px: number;
+  readonly card_padding_px: number;
+  readonly row_height_compact_px: number;
+  readonly row_height_comfortable_px: number;
+  readonly border_hairline_px: number;
+  readonly border_interactive_px: number;
+  readonly focus_ring_width_px: number;
+  readonly focus_ring_offset_px: number;
+  readonly radius_badge_px: number;
+  readonly radius_card_px: number;
+  readonly radius_modal_px: number;
+};
+
+export type TokensMotionToml = {
+  readonly aria_live_coalesce_ms: number;
+  readonly tooltip_delay_ms: number;
+  readonly drawer_transition_ms: number;
+  readonly pulse_critical_period_ms: number;
+};
+
+export type CasStateToml = {
+  readonly key: string;
+  readonly state_id: string;
+  readonly token_name: string;
+  readonly fg_hex: string;
+  readonly bg_hex: string;
+  readonly border_hex: string;
+  readonly glyph: string;
+  readonly description: string;
 };
 
 export type SurfaceToml = {
@@ -59,6 +93,8 @@ export type SlaStateToml = {
   readonly fg_hex: string;
   readonly bg_hex: string;
   readonly border_hex: string;
+  readonly border_style?: string;
+  readonly glyph?: string;
   readonly description: string;
 };
 
@@ -74,6 +110,7 @@ export type IngestionChannelToml = {
   legacy_token_name?: string;
   hex: string;
   legacy_wire_hex?: string;
+  glyph?: string;
   channel_code: string;
   wire_aliases: readonly string[];
   signal_tier: string;
@@ -153,14 +190,19 @@ export type TokenAliasesToml = {
   readonly legacy: readonly AliasToml[];
   /** Emitted into `src/dashboard/tokens.generated.css` only. */
   readonly dashboard: readonly AliasToml[];
+  /** Optional `@media (prefers-contrast: more)` alias overrides. */
+  readonly accessibility?: readonly AliasToml[];
 };
 
 export type TokensSsot = {
   meta: TokensMeta;
   gates: TokensGatesToml;
+  layout?: TokensLayoutToml;
+  motion?: TokensMotionToml;
   surfaces: SurfaceToml[];
   ui: UiTokenToml[];
   sla: SlaStateToml[];
+  cas_states?: CasStateToml[];
   bridges: Readonly<Record<string, number>>;
   ingestion: IngestionChannelToml[];
   routes: RouteToml[];
@@ -323,10 +365,44 @@ function parseMeta(raw: unknown): TokensMeta {
   return out;
 }
 
+function optString(
+  obj: Record<string, unknown>,
+  key: string,
+  ctx: string,
+): string | undefined {
+  const raw = obj[key];
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "string" || raw.length === 0) {
+    throw new Error(
+      `[tokens_ssot] ${ctx}: ${key} must be a non-empty string if provided`,
+    );
+  }
+  return raw;
+}
+
+function optPositiveInt(
+  obj: Record<string, unknown>,
+  key: string,
+  ctx: string,
+): number | undefined {
+  if (obj[key] === undefined) return undefined;
+  return reqPositiveInt(obj, key, ctx);
+}
+
 function parseGates(raw: unknown): TokensGatesToml {
   if (!isRecord(raw)) {
     throw new Error("[tokens_ssot] gates must be a table");
   }
+  const minBadgeBorder = optPositiveInt(
+    raw,
+    "min_badge_border_contrast_milli",
+    "gates",
+  );
+  const minAdjChannel = optPositiveInt(
+    raw,
+    "min_adjacent_channel_delta_e00_milli",
+    "gates",
+  );
   return {
     min_body_contrast_ratio_milli: reqPositiveInt(
       raw,
@@ -343,6 +419,9 @@ function parseGates(raw: unknown): TokensGatesToml {
       "min_ui_component_contrast_milli",
       "gates",
     ),
+    ...(minBadgeBorder !== undefined
+      ? { min_badge_border_contrast_milli: minBadgeBorder }
+      : {}),
     min_cross_state_delta_e00_milli: reqPositiveInt(
       raw,
       "min_cross_state_delta_e00_milli",
@@ -352,6 +431,62 @@ function parseGates(raw: unknown): TokensGatesToml {
       raw,
       "min_fresh_vs_stale_delta_e00_milli",
       "gates",
+    ),
+    ...(minAdjChannel !== undefined
+      ? { min_adjacent_channel_delta_e00_milli: minAdjChannel }
+      : {}),
+  };
+}
+
+function parseLayout(raw: unknown): TokensLayoutToml | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    throw new Error("[tokens_ssot] layout must be a table");
+  }
+  return {
+    grid_unit_px: reqPositiveInt(raw, "grid_unit_px", "layout"),
+    card_padding_px: reqPositiveInt(raw, "card_padding_px", "layout"),
+    row_height_compact_px: reqPositiveInt(
+      raw,
+      "row_height_compact_px",
+      "layout",
+    ),
+    row_height_comfortable_px: reqPositiveInt(
+      raw,
+      "row_height_comfortable_px",
+      "layout",
+    ),
+    border_hairline_px: reqPositiveInt(raw, "border_hairline_px", "layout"),
+    border_interactive_px: reqPositiveInt(
+      raw,
+      "border_interactive_px",
+      "layout",
+    ),
+    focus_ring_width_px: reqPositiveInt(raw, "focus_ring_width_px", "layout"),
+    focus_ring_offset_px: reqPositiveInt(raw, "focus_ring_offset_px", "layout"),
+    radius_badge_px: reqPositiveInt(raw, "radius_badge_px", "layout"),
+    radius_card_px: reqPositiveInt(raw, "radius_card_px", "layout"),
+    radius_modal_px: reqPositiveInt(raw, "radius_modal_px", "layout"),
+  };
+}
+
+function parseMotion(raw: unknown): TokensMotionToml | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    throw new Error("[tokens_ssot] motion must be a table");
+  }
+  return {
+    aria_live_coalesce_ms: reqPositiveInt(
+      raw,
+      "aria_live_coalesce_ms",
+      "motion",
+    ),
+    tooltip_delay_ms: reqPositiveInt(raw, "tooltip_delay_ms", "motion"),
+    drawer_transition_ms: reqPositiveInt(raw, "drawer_transition_ms", "motion"),
+    pulse_critical_period_ms: reqPositiveInt(
+      raw,
+      "pulse_critical_period_ms",
+      "motion",
     ),
   };
 }
@@ -382,6 +517,8 @@ function parseSlaEntry(key: string, raw: unknown): SlaStateToml {
   if (!isRecord(raw)) {
     throw new Error(`[tokens_ssot] sla.${key}: expected table`);
   }
+  const border_style = optString(raw, "border_style", `sla.${key}`);
+  const glyph = optString(raw, "glyph", `sla.${key}`);
   return {
     key,
     state_id: reqString(raw, "state_id", `sla.${key}`),
@@ -389,7 +526,25 @@ function parseSlaEntry(key: string, raw: unknown): SlaStateToml {
     fg_hex: reqHex(raw, "fg_hex", `sla.${key}`),
     bg_hex: reqHex(raw, "bg_hex", `sla.${key}`),
     border_hex: reqHex(raw, "border_hex", `sla.${key}`),
+    ...(border_style !== undefined ? { border_style } : {}),
+    ...(glyph !== undefined ? { glyph } : {}),
     description: reqString(raw, "description", `sla.${key}`),
+  };
+}
+
+function parseCasStateEntry(key: string, raw: unknown): CasStateToml {
+  if (!isRecord(raw)) {
+    throw new Error(`[tokens_ssot] cas_states.${key}: expected table`);
+  }
+  return {
+    key,
+    state_id: reqString(raw, "state_id", `cas_states.${key}`),
+    token_name: reqString(raw, "token_name", `cas_states.${key}`),
+    fg_hex: reqHex(raw, "fg_hex", `cas_states.${key}`),
+    bg_hex: reqHex(raw, "bg_hex", `cas_states.${key}`),
+    border_hex: reqHex(raw, "border_hex", `cas_states.${key}`),
+    glyph: reqString(raw, "glyph", `cas_states.${key}`),
+    description: reqString(raw, "description", `cas_states.${key}`),
   };
 }
 
@@ -487,6 +642,7 @@ function parseIngestion(
     "legacy_token_name",
     `ingestion.${key}`,
   );
+  const glyph = optString(raw, "glyph", `ingestion.${key}`);
 
   const base: IngestionChannelToml = {
     channel_id,
@@ -501,6 +657,7 @@ function parseIngestion(
     ...(legacy_token_name !== undefined ? { legacy_token_name } : {}),
     hex: reqHex(raw, "hex", `ingestion.${key}`),
     ...(legacy_wire_hex !== undefined ? { legacy_wire_hex } : {}),
+    ...(glyph !== undefined ? { glyph } : {}),
     channel_code: reqString(raw, "channel_code", `ingestion.${key}`),
     wire_aliases: reqStringArray(raw, "wire_aliases", `ingestion.${key}`),
     signal_tier: reqString(raw, "signal_tier", `ingestion.${key}`),
@@ -805,6 +962,18 @@ function validateAliases(ssot: TokensSsot): void {
       seen.add(entry.alias);
     }
   }
+  for (const entry of ssot.aliases.accessibility ?? []) {
+    if (canonical.has(entry.alias)) {
+      throw new Error(
+        `ERR_TOKEN_ALIAS_SHADOWS_TOKEN: aliases.accessibility.${entry.alias} collides with a canonical token`,
+      );
+    }
+    if (!canonical.has(entry.target)) {
+      throw new Error(
+        `ERR_TOKEN_ALIAS_TARGET_UNKNOWN: aliases.accessibility.${entry.alias} -> ${entry.target}`,
+      );
+    }
+  }
   for (const channel of ssot.ingestion) {
     const legacyToken = channel.legacy_token_name;
     if (legacyToken === undefined) continue;
@@ -831,7 +1000,28 @@ function tableValues(section: string, raw: unknown): [string, unknown][] {
   return Object.entries(raw);
 }
 
+/**
+ * Zero-allocation byte preflight before `Bun.TOML.parse`: rejects UTF-8 BOM (`0xEF 0xBB 0xBF`)
+ * and UTF-8 non-breaking space (`0xC2 0xA0`), which fail strict TOML v1.0 whitespace rules.
+ */
+export function assertCleanTomlBytes(buf: Uint8Array): void {
+  if (
+    buf.length >= 3 &&
+    buf[0] === 0xef &&
+    buf[1] === 0xbb &&
+    buf[2] === 0xbf
+  ) {
+    throw new Error("ERR_SPEC_TOML_BOM_BYTE at offset 0");
+  }
+  for (let i = 0; i < buf.length - 1; i++) {
+    if (buf[i] === 0xc2 && buf[i + 1] === 0xa0) {
+      throw new Error(`ERR_SPEC_TOML_NBSP_BYTE at offset ${i}`);
+    }
+  }
+}
+
 export function parseTokensToml(tomlText: string): TokensSsot {
+  assertCleanTomlBytes(new TextEncoder().encode(tomlText));
   const parsed: unknown = Bun.TOML.parse(tomlText);
   return parseTokensTomlFromParsed(parsed);
 }
@@ -841,6 +1031,8 @@ export function parseTokensTomlFromParsed(parsed: unknown): TokensSsot {
     throw new Error("[tokens_ssot] root must be a TOML table");
   }
   if (parsed.gates !== undefined) scanNoFloats(parsed.gates, "gates");
+  if (parsed.layout !== undefined) scanNoFloats(parsed.layout, "layout");
+  if (parsed.motion !== undefined) scanNoFloats(parsed.motion, "motion");
   if (parsed.bridges !== undefined) scanNoFloats(parsed.bridges, "bridges");
   if (parsed.ingestion !== undefined)
     scanNoFloats(parsed.ingestion, "ingestion");
@@ -863,9 +1055,17 @@ export function parseTokensTomlFromParsed(parsed: unknown): TokensSsot {
   const ui = tableValues("ui", parsed.ui ?? {}).map(([k, v]) => parseUi(k, v));
 
   const gates = parseGates(parsed.gates);
+  const layout = parseLayout(parsed.layout);
+  const motion = parseMotion(parsed.motion);
   const sla = tableValues("sla", parsed.sla).map(([k, v]) =>
     parseSlaEntry(k, v),
   );
+  const cas_states =
+    parsed.cas_states === undefined
+      ? undefined
+      : tableValues("cas_states", parsed.cas_states).map(([k, v]) =>
+          parseCasStateEntry(k, v),
+        );
   const bridges = parseBridges(parsed.bridges);
   const bitmasks = parseBitmasks(parsed.bitmasks);
   const keymap = parseKeymap(parsed.keymap);
@@ -874,6 +1074,10 @@ export function parseTokensTomlFromParsed(parsed: unknown): TokensSsot {
   if (rawAliases !== undefined && !isRecord(rawAliases)) {
     throw new Error("[tokens_ssot] aliases must be a table");
   }
+  const accessibilityAliases =
+    isRecord(rawAliases) && rawAliases.accessibility !== undefined
+      ? parseAliasGroup(rawAliases.accessibility, "aliases.accessibility")
+      : undefined;
   const aliases: TokenAliasesToml = {
     legacy: parseAliasGroup(
       isRecord(rawAliases) ? rawAliases.legacy : undefined,
@@ -883,14 +1087,20 @@ export function parseTokensTomlFromParsed(parsed: unknown): TokensSsot {
       isRecord(rawAliases) ? rawAliases.dashboard : undefined,
       "aliases.dashboard",
     ),
+    ...(accessibilityAliases !== undefined
+      ? { accessibility: accessibilityAliases }
+      : {}),
   };
 
   const ssot: TokensSsot = {
     meta,
     gates,
+    ...(layout !== undefined ? { layout } : {}),
+    ...(motion !== undefined ? { motion } : {}),
     surfaces,
     ui,
     sla,
+    ...(cas_states !== undefined ? { cas_states } : {}),
     bridges,
     ingestion,
     routes,

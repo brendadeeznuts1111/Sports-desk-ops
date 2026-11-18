@@ -114,7 +114,7 @@ describe("1. Single Source of Truth & Zero-Drift Regeneration", () => {
       await import("../lib/gen_tokens/tokens_ssot.ts");
     const ssot = parseTokensToml(tomlText);
 
-    expect(ssot.meta.version).toBe("1.4.0");
+    expect(ssot.meta.version).toBe("1.5.0");
     expect(ssot.meta.schema).toBe("sportsdesk-tokens/v1");
 
     const surfaces = ssot.surfaces;
