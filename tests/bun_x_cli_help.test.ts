@@ -40,12 +40,18 @@ describe("bun x CLI help surface", () => {
         target === undefined
           ? ""
           : ((await Bun.file(join(ROOT, target)).text()).split("\n")[0] ?? "");
-      const requiresUsage = head.startsWith("#!/usr/bin/env bun");
-      if (
-        proc.exitCode !== 0 ||
-        output.length < 10 ||
-        (requiresUsage && !/usage/i.test(output))
-      ) {
+      const isBunBin = head.startsWith("#!/usr/bin/env bun");
+      // Bun bins must describe themselves: exit 0 and a usage line.
+      //
+      // A bash shim delegates to an external CLI, and there are three measured machines:
+      // absent on the CI runner (our shim exits 1 with "[wrangler] ... is not installed."),
+      // installed and working locally (`answered`), and a broken global install
+      // (`error: Cannot find package 'blake3-wasm'`). Only "it said something" is portable,
+      // and silence is the failure this guards against.
+      const ok = isBunBin
+        ? proc.exitCode === 0 && /usage/i.test(output)
+        : output.length >= 10;
+      if (!ok) {
         failures.push(
           `${bin}: exit=${proc.exitCode} usage=${/usage/i.test(output)} output=${JSON.stringify(output.slice(0, 120))}`,
         );
