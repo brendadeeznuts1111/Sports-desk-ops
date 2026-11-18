@@ -100,6 +100,12 @@ export const FLAG_SPECS: readonly CliFlagSpec[] = Object.freeze([
     description: `Fail any asset wider or taller than N pixels (max ${MAX_THUMBNAIL_EDGE})`,
   },
   {
+    flags: "--require-sibling",
+    value: "EXT",
+    description:
+      "Fail an asset when its .EXT sibling is missing (for example, webp)",
+  },
+  {
     flags: "--baseline",
     value: "FILE",
     description:
