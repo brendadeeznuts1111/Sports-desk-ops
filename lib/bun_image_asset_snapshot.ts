@@ -8,8 +8,8 @@
  */
 
 import {
-  scanBunImageAssetDirectory,
   type BunImageAssetScanEntry,
+  scanBunImageAssetDirectory,
 } from "./bun_image_assets.ts";
 import type { InspectVisibility } from "./inspect_redactor.ts";
 

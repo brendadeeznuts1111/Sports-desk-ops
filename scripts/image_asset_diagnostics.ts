@@ -11,29 +11,49 @@
  * Run: bun run assets:diagnostics [dir ...] [options]   (see --help)
  */
 
-import { useColor } from "../lib/ansi_color.ts";
 import { statSync } from "node:fs";
 import { dirname, join } from "node:path";
+
+import { useColor } from "../lib/ansi_color.ts";
 import {
-  scanBunImageAssetFiles,
-  scanBunImageAssetPaths,
+  type BaselineCandidate,
+  type BaselineDrift,
+  buildAssetBaseline,
+  compareAssetBaseline,
+  readAssetBaseline,
+  writeAssetBaseline,
+} from "../lib/asset_baseline.ts";
+import {
   type BunImageAssetFile,
   type BunImageAssetScanFailure,
+  scanBunImageAssetFiles,
+  scanBunImageAssetPaths,
 } from "../lib/bun_image_assets.ts";
 import {
+  type BunImageBackend,
   DEFAULT_THUMBNAIL_EDGE,
   DEFAULT_THUMBNAIL_QUALITY,
   MAX_THUMBNAIL_EDGE,
   thumbnailDestination,
   writeWebpThumbnail,
-  type BunImageBackend,
 } from "../lib/bun_thumbnail.ts";
+import {
+  hashFile,
+  readThumbnailManifest,
+  THUMBNAIL_MANIFEST_VERSION,
+  thumbnailArtifactKey,
+  type ThumbnailManifest,
+  type ThumbnailManifestEntry,
+  thumbnailManifestPath,
+  thumbnailSourceKey,
+  writeThumbnailManifest,
+} from "../lib/bun_thumbnail_manifest.ts";
 import { formatByteCount } from "../lib/format_bytes.ts";
+import { maskAssetSource } from "../lib/inspect_diagnostics.ts";
 import {
   INSPECT_VISIBILITIES,
   type InspectVisibility,
 } from "../lib/inspect_redactor.ts";
-import { maskAssetSource } from "../lib/inspect_diagnostics.ts";
 import {
   DEFAULT_ASSET_ROOT,
   TOOL_VERSION,
@@ -54,6 +74,8 @@ interface ParsedArgs {
   readonly headerBytes: number | undefined;
   readonly budgetBytes: number | undefined;
   readonly maxDimension: number | undefined;
+  readonly baseline: string | undefined;
+  readonly writeBaseline: string | undefined;
   readonly recursive: boolean;
   readonly filter: string | undefined;
   readonly exclude: string | undefined;
@@ -63,6 +85,8 @@ interface ParsedArgs {
   readonly backend: BunImageBackend | undefined;
   readonly thumbs: number | null;
   readonly thumbsDir: string | undefined;
+  readonly thumbsCheck: boolean;
+  readonly thumbsForce: boolean;
   readonly thumbQuality: number;
   readonly fail: boolean;
   readonly color: boolean;
@@ -70,6 +94,7 @@ interface ParsedArgs {
 
 interface ThumbnailWritten {
   readonly ok: true;
+  readonly skipped: false;
   readonly source: string;
   readonly destination: string;
   readonly bytes: number;
@@ -78,13 +103,20 @@ interface ThumbnailWritten {
   readonly backend: string;
 }
 
+interface ThumbnailSkipped {
+  readonly ok: true;
+  readonly skipped: true;
+  readonly source: string;
+  readonly destination: string;
+}
+
 interface ThumbnailFailed {
   readonly ok: false;
   readonly source: string;
   readonly error: string;
 }
 
-type ThumbnailOutcome = ThumbnailWritten | ThumbnailFailed;
+type ThumbnailOutcome = ThumbnailWritten | ThumbnailSkipped | ThumbnailFailed;
 
 interface DirectoryReport {
   readonly root: string;
@@ -146,6 +178,37 @@ function resolveInputs(args: readonly string[]): readonly ResolvedInput[] {
 
 const BUDGET_CODE = "ERR_ASSET_BUDGET_EXCEEDED";
 const DIMENSION_CODE = "ERR_ASSET_DIMENSION_EXCEEDED";
+
+interface ThumbnailCheckInput {
+  readonly manifest: ThumbnailManifest | null;
+  readonly configMatches: boolean;
+  readonly entry: ThumbnailManifestEntry | undefined;
+  readonly destination: string;
+  readonly sourceBytes: number;
+  readonly sourceMtimeMs: number;
+}
+
+/** Returns a failure code, or `null` when the manifest entry and artifact agree. */
+async function checkThumbnailArtifact(
+  input: ThumbnailCheckInput,
+): Promise<string | null> {
+  if (input.manifest === null) return "ERR_THUMBNAIL_MANIFEST_MISSING";
+  if (!input.configMatches) return "ERR_THUMBNAIL_CONFIG_DRIFT";
+  if (input.entry === undefined) return "ERR_THUMBNAIL_MISSING";
+  if (
+    input.entry.sourceBytes !== input.sourceBytes ||
+    input.entry.sourceMtimeMs !== input.sourceMtimeMs
+  ) {
+    return "ERR_THUMBNAIL_STALE";
+  }
+  if (!(await Bun.file(input.destination).exists())) {
+    return "ERR_THUMBNAIL_MISSING";
+  }
+  if ((await hashFile(input.destination)) !== input.entry.hash) {
+    return "ERR_THUMBNAIL_HASH_MISMATCH";
+  }
+  return null;
+}
 
 /** Converts over-budget assets into failure entries, so the exit code follows the gate. */
 function applyBudgets(
@@ -211,6 +274,8 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   let headerBytes: number | undefined;
   let budgetBytes: number | undefined;
   let maxDimension: number | undefined;
+  let baseline: string | undefined;
+  let writeBaseline: string | undefined;
   let recursive = false;
   let filter: string | undefined;
   let exclude: string | undefined;
@@ -220,6 +285,8 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   let backend: BunImageBackend | undefined;
   let thumbs: number | null = null;
   let thumbsDir: string | undefined;
+  let thumbsCheck = false;
+  let thumbsForce = false;
   let thumbQuality = DEFAULT_THUMBNAIL_QUALITY;
   let thumbQualitySet = false;
   let fail = true;
@@ -244,6 +311,10 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       color = false;
     } else if (arg === "--thumbs") {
       thumbs = DEFAULT_THUMBNAIL_EDGE;
+    } else if (arg === "--thumbs-check") {
+      thumbsCheck = true;
+    } else if (arg === "--thumbs-force") {
+      thumbsForce = true;
     } else if (arg.startsWith("--thumbs=")) {
       thumbs = intInRange(
         "--thumbs",
@@ -299,6 +370,14 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
         1,
         MAX_THUMBNAIL_EDGE,
       );
+    } else if (arg.startsWith("--baseline=")) {
+      const value = arg.slice("--baseline=".length).trim();
+      if (value === "") throw new Error("--baseline must name a file");
+      baseline = value;
+    } else if (arg.startsWith("--write-baseline=")) {
+      const value = arg.slice("--write-baseline=".length).trim();
+      if (value === "") throw new Error("--write-baseline must name a file");
+      writeBaseline = value;
     } else if (arg.startsWith("--sort=")) {
       const value = arg.slice("--sort=".length);
       if (!isSortMode(value)) {
@@ -333,11 +412,20 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   if (thumbsDir !== undefined && thumbs === null) {
     throw new Error("--thumbs-dir requires --thumbs");
   }
+  if (thumbsCheck && thumbs === null) {
+    throw new Error("--thumbs-check requires --thumbs");
+  }
+  if (thumbsForce && thumbs === null) {
+    throw new Error("--thumbs-force requires --thumbs");
+  }
   if (thumbQualitySet && thumbs === null) {
     throw new Error("--thumb-quality requires --thumbs");
   }
   if (headerBytes !== undefined && placeholders) {
     throw new Error("--header-bytes cannot be combined with --placeholders");
+  }
+  if (baseline !== undefined && writeBaseline !== undefined) {
+    throw new Error("--baseline and --write-baseline are mutually exclusive");
   }
 
   return {
@@ -349,6 +437,8 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     headerBytes,
     budgetBytes,
     maxDimension,
+    baseline,
+    writeBaseline,
     recursive,
     filter,
     exclude,
@@ -358,6 +448,8 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     backend,
     thumbs,
     thumbsDir,
+    thumbsCheck,
+    thumbsForce,
     thumbQuality,
     fail,
     color,
@@ -420,6 +512,18 @@ async function buildReport(
     const thumbsRoot =
       input.kind === "dir" ? input.dir : dirname(input.paths[0] ?? ".");
     const thumbsDir = args.thumbsDir ?? join(thumbsRoot, ".thumbs");
+    const backend = args.backend ?? "bun";
+    const manifest = await readThumbnailManifest(thumbsDir);
+    const configMatches =
+      manifest !== null &&
+      manifest.maxEdge === args.thumbs &&
+      manifest.quality === args.thumbQuality &&
+      manifest.backend === backend;
+    const nextEntries: Record<string, ThumbnailManifestEntry> = {
+      ...manifest?.entries,
+    };
+    let manifestDirty = manifest === null || !configMatches;
+
     for (const file of files) {
       if (file.entry.type !== "BunImageAssetDiagnostic") continue;
       const destination = thumbnailDestination(
@@ -427,15 +531,87 @@ async function buildReport(
         file.path,
         thumbsDir,
       );
+      const key = thumbnailSourceKey(file.path);
       try {
+        const sourceStat = statSync(file.path);
+        const sourceMtimeMs = sourceStat.mtimeMs;
+        const sourceBytes = sourceStat.size;
+        const entry = manifest?.entries[key];
+
+        if (args.thumbsCheck) {
+          const error = await checkThumbnailArtifact({
+            manifest,
+            configMatches,
+            entry,
+            destination,
+            sourceBytes,
+            sourceMtimeMs,
+          });
+          if (error !== null) {
+            thumbnailFailures += 1;
+            thumbnails.push(
+              Object.freeze({
+                ok: false as const,
+                source: file.path,
+                error,
+              }),
+            );
+          } else {
+            thumbnails.push(
+              Object.freeze({
+                ok: true as const,
+                skipped: true as const,
+                source: file.path,
+                destination,
+              }),
+            );
+          }
+          continue;
+        }
+
+        let fresh = false;
+        if (
+          !args.thumbsForce &&
+          configMatches &&
+          entry !== undefined &&
+          entry.sourceBytes === sourceBytes &&
+          entry.sourceMtimeMs === sourceMtimeMs &&
+          (await Bun.file(destination).exists())
+        ) {
+          fresh = (await hashFile(destination)) === entry.hash;
+        }
+        if (fresh) {
+          thumbnails.push(
+            Object.freeze({
+              ok: true as const,
+              skipped: true as const,
+              source: file.path,
+              destination,
+            }),
+          );
+          continue;
+        }
+
         const thumb = await writeWebpThumbnail(file.path, destination, {
           maxEdge: args.thumbs,
           quality: args.thumbQuality,
-          backend: args.backend ?? "bun",
+          backend,
         });
+        nextEntries[key] = Object.freeze({
+          source: key,
+          thumb: thumbnailArtifactKey(thumbsDir, destination),
+          sourceBytes,
+          sourceMtimeMs,
+          width: thumb.width,
+          height: thumb.height,
+          bytes: thumb.bytesWritten,
+          hash: await hashFile(destination),
+        });
+        manifestDirty = true;
         thumbnails.push(
           Object.freeze({
             ok: true as const,
+            skipped: false as const,
             source: file.path,
             destination,
             bytes: thumb.bytesWritten,
@@ -450,6 +626,28 @@ async function buildReport(
           Object.freeze({
             ok: false as const,
             source: file.path,
+            error: errorCodeOf(error),
+          }),
+        );
+      }
+    }
+
+    if (!args.thumbsCheck && manifestDirty) {
+      try {
+        await writeThumbnailManifest(thumbsDir, {
+          version: THUMBNAIL_MANIFEST_VERSION,
+          generatedAt: new Date().toISOString(),
+          maxEdge: args.thumbs,
+          quality: args.thumbQuality,
+          backend,
+          entries: nextEntries,
+        });
+      } catch (error) {
+        thumbnailFailures += 1;
+        thumbnails.push(
+          Object.freeze({
+            ok: false as const,
+            source: thumbnailManifestPath(thumbsDir),
             error: errorCodeOf(error),
           }),
         );
@@ -484,10 +682,17 @@ function printText(
           : ` · header≤${args.headerBytes} B`),
     );
     if (args.summary) {
+      const written = report.thumbnails.filter(
+        (thumb) => thumb.ok && !thumb.skipped,
+      ).length;
+      const skipped = report.thumbnails.filter(
+        (thumb) => thumb.ok && thumb.skipped,
+      ).length;
       const thumbs =
         args.thumbs === null
           ? ""
-          : ` · thumbnails=${report.thumbnails.length - report.thumbnailFailures}` +
+          : ` · thumbnails=${written}` +
+            (skipped > 0 ? ` skipped=${skipped}` : "") +
             (report.thumbnailFailures > 0
               ? ` thumbFailures=${report.thumbnailFailures}`
               : "");
@@ -510,9 +715,13 @@ function printText(
             thumb.destination,
             args.visibility,
           );
-          console.log(
-            `  ${source} → ${destination} (${thumb.width}×${thumb.height}, ${formatByteCount(thumb.bytes)})`,
-          );
+          if (thumb.skipped) {
+            console.log(`  ${source} → ${destination} (fresh, skipped)`);
+          } else {
+            console.log(
+              `  ${source} → ${destination} (${thumb.width}×${thumb.height}, ${formatByteCount(thumb.bytes)})`,
+            );
+          }
         } else {
           console.log(`  ${source} → failed: ${thumb.error}`);
         }
@@ -559,10 +768,55 @@ async function main(argv: readonly string[]): Promise<number> {
   for (const input of resolveInputs(args.dirs)) {
     reports.push(await buildReport(input, args));
   }
-  const failures = reports.reduce(
-    (sum, report) => sum + report.failures + report.thumbnailFailures,
-    0,
-  );
+
+  const candidates: BaselineCandidate[] = [];
+  for (const report of reports) {
+    for (const file of report.files) {
+      if (file.entry.type === "BunImageAssetDiagnostic") {
+        candidates.push({
+          path: file.path,
+          format: file.entry.format,
+          width: file.entry.width,
+          height: file.entry.height,
+          bytes: file.entry.bytes ?? 0,
+        });
+      }
+    }
+  }
+
+  let baselineDrift: BaselineDrift | null = null;
+  let baselineError: string | null = null;
+  if (args.writeBaseline !== undefined) {
+    try {
+      await writeAssetBaseline(
+        args.writeBaseline,
+        buildAssetBaseline(candidates, args.visibility),
+      );
+    } catch (error) {
+      baselineError = errorCodeOf(error);
+    }
+  }
+  if (args.baseline !== undefined) {
+    const baseline = await readAssetBaseline(args.baseline);
+    if (baseline === null) {
+      baselineError = "ERR_ASSET_BASELINE_MISSING";
+    } else {
+      baselineDrift = compareAssetBaseline(baseline, candidates);
+    }
+  }
+  const driftFailures =
+    baselineDrift === null
+      ? 0
+      : baselineDrift.added.length +
+        baselineDrift.removed.length +
+        baselineDrift.changed.length;
+  const baselineFailures = driftFailures + (baselineError === null ? 0 : 1);
+
+  const failures =
+    reports.reduce(
+      (sum, report) => sum + report.failures + report.thumbnailFailures,
+      0,
+    ) + baselineFailures;
 
   if (args.json) {
     console.log(
@@ -579,12 +833,17 @@ async function main(argv: readonly string[]): Promise<number> {
           sort: args.sort,
           budgetBytes: args.budgetBytes ?? null,
           maxDimension: args.maxDimension ?? null,
+          baseline: baselineDrift,
+          baselineError,
+          baselineWritten: args.writeBaseline ?? null,
           failures,
           thumbnails:
             args.thumbs === null
               ? { enabled: false }
               : {
                   enabled: true,
+                  mode: args.thumbsCheck ? "check" : "write",
+                  force: args.thumbsForce,
                   maxEdge: args.thumbs,
                   quality: args.thumbQuality,
                   backend: args.backend ?? "bun",
@@ -595,21 +854,30 @@ async function main(argv: readonly string[]): Promise<number> {
             truncated: report.truncated,
             count: report.files.length,
             assets: report.files.map((file) => file.entry),
-            thumbnails: report.thumbnails.map((thumb) =>
-              thumb.ok
-                ? {
-                    source: maskAssetSource(thumb.source, args.visibility),
-                    path: maskAssetSource(thumb.destination, args.visibility),
-                    bytes: thumb.bytes,
-                    width: thumb.width,
-                    height: thumb.height,
-                    backend: thumb.backend,
-                  }
-                : {
-                    source: maskAssetSource(thumb.source, args.visibility),
-                    error: thumb.error,
-                  },
-            ),
+            thumbnails: report.thumbnails.map((thumb) => {
+              if (!thumb.ok) {
+                return {
+                  source: maskAssetSource(thumb.source, args.visibility),
+                  error: thumb.error,
+                };
+              }
+              const path = maskAssetSource(thumb.destination, args.visibility);
+              if (thumb.skipped) {
+                return {
+                  source: maskAssetSource(thumb.source, args.visibility),
+                  path,
+                  skipped: true,
+                };
+              }
+              return {
+                source: maskAssetSource(thumb.source, args.visibility),
+                path,
+                bytes: thumb.bytes,
+                width: thumb.width,
+                height: thumb.height,
+                backend: thumb.backend,
+              };
+            }),
           })),
         },
         null,
@@ -623,6 +891,30 @@ async function main(argv: readonly string[]): Promise<number> {
       args.color &&
         useColor({ env: Bun.env, isTTY: process.stdout.isTTY === true }),
     );
+    if (args.writeBaseline !== undefined) {
+      console.log(
+        `Baseline ${baselineError === null ? "written" : "write failed"} · ` +
+          `${args.writeBaseline} · ${candidates.length} asset(s)` +
+          (baselineError === null ? "" : ` · ${baselineError}`),
+      );
+    }
+    if (args.baseline !== undefined) {
+      if (baselineDrift === null) {
+        console.log(
+          `Baseline unreadable · ${args.baseline} · ${baselineError}`,
+        );
+      } else {
+        console.log(
+          `Baseline drift · compared=${baselineDrift.compared} ` +
+            `added=${baselineDrift.added.length} ` +
+            `removed=${baselineDrift.removed.length} ` +
+            `changed=${baselineDrift.changed.length}`,
+        );
+        for (const key of baselineDrift.added) console.log(`  + ${key}`);
+        for (const key of baselineDrift.removed) console.log(`  - ${key}`);
+        for (const key of baselineDrift.changed) console.log(`  ~ ${key}`);
+      }
+    }
   }
 
   if (failures > 0 && args.fail) return 1;

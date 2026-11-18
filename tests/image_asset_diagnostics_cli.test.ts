@@ -4,22 +4,28 @@
  * tier, reports truncation honestly and exits non-zero when a file cannot be decoded.
  */
 import { afterAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
 import {
-  DEFAULT_THUMBNAIL_EDGE,
-  thumbnailDestination,
-} from "../lib/bun_thumbnail.ts";
-import {
   DEFAULT_ASSET_LIMIT,
   DEFAULT_MAX_ASSET_BYTES,
 } from "../lib/bun_image_assets.ts";
+import {
+  DEFAULT_THUMBNAIL_EDGE,
+  thumbnailDestination,
+} from "../lib/bun_thumbnail.ts";
 import { formatByteCount } from "../lib/format_bytes.ts";
 import {
-  TOOL_VERSION,
   FLAG_SPECS,
+  TOOL_VERSION,
   USAGE,
 } from "../scripts/image_asset_cli_spec.ts";
 import { makePng, png1x1 } from "./support/image_fixtures.ts";
@@ -64,6 +70,7 @@ interface CliThumbnail {
   readonly width?: number;
   readonly height?: number;
   readonly backend?: string;
+  readonly skipped?: boolean;
   readonly error?: string;
 }
 
@@ -81,6 +88,13 @@ interface CliDirectory {
   readonly thumbnails: readonly CliThumbnail[];
 }
 
+interface CliBaselineDrift {
+  readonly compared: number;
+  readonly added: readonly string[];
+  readonly removed: readonly string[];
+  readonly changed: readonly string[];
+}
+
 interface CliPayload {
   readonly ok: boolean;
   readonly visibility: string;
@@ -92,9 +106,14 @@ interface CliPayload {
   readonly headerBytes: number | null;
   readonly budgetBytes: number | null;
   readonly maxDimension: number | null;
+  readonly baseline: CliBaselineDrift | null;
+  readonly baselineError: string | null;
+  readonly baselineWritten: string | null;
   readonly failures: number;
   readonly thumbnails: {
     readonly enabled: boolean;
+    readonly mode?: string;
+    readonly force?: boolean;
     readonly maxEdge?: number;
     readonly quality?: number;
     readonly backend?: string;
@@ -493,6 +512,267 @@ test("--max-dimension fails an oversized asset", async () => {
   }
 });
 
+test("--thumbs skips a fresh destination and --thumbs-force rewrites it", async () => {
+  const thumbDir = mkdtempSync(join(tmpdir(), "sd-cli-thumbs-fresh-"));
+  try {
+    await makePng(join(thumbDir, "wide.png"), 120, 90);
+
+    const first = runCli(["--json", "--thumbs=40", thumbDir]);
+    expect(first.code).toBe(0);
+    const firstPayload = JSON.parse(first.stdout) as CliPayload;
+    const firstThumb = firstPayload.directories[0]?.thumbnails[0];
+    if (firstThumb === undefined) throw new Error("missing thumbnail report");
+    expect(firstThumb.skipped).toBeUndefined();
+    expect(firstThumb.width).toBe(40);
+
+    const second = runCli(["--json", "--thumbs=40", thumbDir]);
+    expect(second.code).toBe(0);
+    const secondPayload = JSON.parse(second.stdout) as CliPayload;
+    const secondThumb = secondPayload.directories[0]?.thumbnails[0];
+    if (secondThumb === undefined) throw new Error("missing thumbnail report");
+    expect(secondThumb.skipped).toBe(true);
+    expect(secondThumb.bytes).toBeUndefined();
+    expect(secondPayload.thumbnails.mode).toBe("write");
+
+    const forced = runCli([
+      "--json",
+      "--thumbs=40",
+      "--thumbs-force",
+      thumbDir,
+    ]);
+    expect(forced.code).toBe(0);
+    const forcedPayload = JSON.parse(forced.stdout) as CliPayload;
+    const forcedThumb = forcedPayload.directories[0]?.thumbnails[0];
+    if (forcedThumb === undefined) throw new Error("missing thumbnail report");
+    expect(forcedThumb.skipped).toBeUndefined();
+    expect(forcedThumb.width).toBe(40);
+    expect(forcedPayload.thumbnails.force).toBe(true);
+  } finally {
+    rmSync(thumbDir, { recursive: true, force: true });
+  }
+});
+
+test("--thumbs-check reports missing and stale thumbnails without writing", async () => {
+  const thumbDir = mkdtempSync(join(tmpdir(), "sd-cli-thumbs-check-"));
+  try {
+    const source = join(thumbDir, "wide.png");
+    await makePng(source, 120, 90);
+
+    const missing = runCli([
+      "--json",
+      "--thumbs=40",
+      "--thumbs-check",
+      thumbDir,
+    ]);
+    expect(missing.code).toBe(1);
+    const missingPayload = JSON.parse(missing.stdout) as CliPayload;
+    expect(missingPayload.thumbnails.mode).toBe("check");
+    expect(missingPayload.directories[0]?.thumbnails[0]?.error).toBe(
+      "ERR_THUMBNAIL_MANIFEST_MISSING",
+    );
+
+    expect(runCli(["--thumbs=40", thumbDir]).code).toBe(0);
+
+    const fresh = runCli(["--json", "--thumbs=40", "--thumbs-check", thumbDir]);
+    expect(fresh.code).toBe(0);
+    const freshPayload = JSON.parse(fresh.stdout) as CliPayload;
+    expect(freshPayload.directories[0]?.thumbnails[0]?.skipped).toBe(true);
+
+    const future = new Date(Date.now() + 5_000);
+    utimesSync(source, future, future);
+    const stale = runCli(["--json", "--thumbs=40", "--thumbs-check", thumbDir]);
+    expect(stale.code).toBe(1);
+    const stalePayload = JSON.parse(stale.stdout) as CliPayload;
+    expect(stalePayload.directories[0]?.thumbnails[0]?.error).toBe(
+      "ERR_THUMBNAIL_STALE",
+    );
+  } finally {
+    rmSync(thumbDir, { recursive: true, force: true });
+  }
+});
+
+test("--thumbs-check and --thumbs-force require --thumbs", () => {
+  for (const flag of ["--thumbs-check", "--thumbs-force"]) {
+    const result = runCli([flag, dir]);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain(`${flag} requires --thumbs`);
+  }
+});
+
+test("--write-baseline writes a bun-fmt-clean artifact and --baseline compares it", async () => {
+  const baseDir = mkdtempSync(join(tmpdir(), "sd-cli-baseline-"));
+  try {
+    const source = join(baseDir, "wide.png");
+    await makePng(source, 120, 90);
+    const baselinePath = join(baseDir, "baseline.json");
+
+    const write = runCli([
+      "--json",
+      `--write-baseline=${baselinePath}`,
+      baseDir,
+    ]);
+    expect(write.code).toBe(0);
+    const writePayload = JSON.parse(write.stdout) as CliPayload;
+    expect(writePayload.baselineWritten).toBe(baselinePath);
+    expect(writePayload.baseline).toBeNull();
+    expect(await Bun.file(baselinePath).exists()).toBe(true);
+
+    const formatted = Bun.spawnSync(
+      [process.execPath, "fmt", "--check", baselinePath],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(formatted.exitCode).toBe(0);
+
+    const clean = runCli(["--json", `--baseline=${baselinePath}`, baseDir]);
+    expect(clean.code).toBe(0);
+    const cleanPayload = JSON.parse(clean.stdout) as CliPayload;
+    expect(cleanPayload.baseline).toMatchObject({
+      compared: 1,
+      added: [],
+      removed: [],
+      changed: [],
+    });
+
+    await makePng(source, 60, 40);
+    const changed = runCli(["--json", `--baseline=${baselinePath}`, baseDir]);
+    expect(changed.code).toBe(1);
+    const changedPayload = JSON.parse(changed.stdout) as CliPayload;
+    expect(changedPayload.baseline?.changed.length).toBe(1);
+
+    writeFileSync(join(baseDir, "extra.png"), png1x1());
+    const added = runCli(["--json", `--baseline=${baselinePath}`, baseDir]);
+    expect(added.code).toBe(1);
+    const addedPayload = JSON.parse(added.stdout) as CliPayload;
+    expect(addedPayload.baseline?.added.length).toBe(1);
+
+    const noFail = runCli([
+      "--json",
+      `--baseline=${baselinePath}`,
+      "--no-fail",
+      baseDir,
+    ]);
+    expect(noFail.code).toBe(0);
+  } finally {
+    rmSync(baseDir, { recursive: true, force: true });
+  }
+});
+
+test("--baseline reports a missing artifact and removed assets", async () => {
+  const baseDir = mkdtempSync(join(tmpdir(), "sd-cli-baseline-removed-"));
+  try {
+    const source = join(baseDir, "wide.png");
+    await makePng(source, 120, 90);
+    const baselinePath = join(baseDir, "baseline.json");
+    expect(
+      runCli(["--json", `--write-baseline=${baselinePath}`, baseDir]).code,
+    ).toBe(0);
+
+    rmSync(source);
+    const removed = runCli(["--json", `--baseline=${baselinePath}`, baseDir]);
+    expect(removed.code).toBe(1);
+    const removedPayload = JSON.parse(removed.stdout) as CliPayload;
+    expect(removedPayload.baseline?.removed.length).toBe(1);
+
+    const missing = runCli([
+      "--json",
+      `--baseline=${join(baseDir, "absent.json")}`,
+      baseDir,
+    ]);
+    expect(missing.code).toBe(1);
+    const missingPayload = JSON.parse(missing.stdout) as CliPayload;
+    expect(missingPayload.baseline).toBeNull();
+    expect(missingPayload.baselineError).toBe("ERR_ASSET_BASELINE_MISSING");
+
+    const both = runCli([
+      `--baseline=${baselinePath}`,
+      `--write-baseline=${baselinePath}`,
+      baseDir,
+    ]);
+    expect(both.code).toBe(2);
+    expect(both.stderr).toContain("mutually exclusive");
+  } finally {
+    rmSync(baseDir, { recursive: true, force: true });
+  }
+});
+
+test("--thumbs writes a manifest artifact and leaves it untouched when nothing changes", async () => {
+  const thumbDir = mkdtempSync(join(tmpdir(), "sd-cli-thumbs-manifest-"));
+  try {
+    await makePng(join(thumbDir, "wide.png"), 120, 90);
+    expect(runCli(["--json", "--thumbs=40", thumbDir]).code).toBe(0);
+
+    const manifestPath = join(thumbDir, ".thumbs", "manifest.json");
+    expect(await Bun.file(manifestPath).exists()).toBe(true);
+    const manifest = (await Bun.file(manifestPath).json()) as {
+      version: number;
+      maxEdge: number;
+      quality: number;
+      backend: string;
+      entries: Record<
+        string,
+        { width: number; height: number; bytes: number; hash: string }
+      >;
+    };
+    expect(manifest).toMatchObject({
+      version: 1,
+      maxEdge: 40,
+      quality: 80,
+      backend: "bun",
+    });
+    const entries = Object.values(manifest.entries);
+    expect(entries.length).toBe(1);
+    expect(entries[0]?.width).toBe(40);
+    expect(entries[0]?.height).toBe(30);
+    expect(entries[0]?.bytes).toBeGreaterThan(0);
+    expect(entries[0]?.hash).toMatch(/^[0-9a-f]+$/);
+
+    const before = await Bun.file(manifestPath).text();
+    expect(runCli(["--json", "--thumbs=40", thumbDir]).code).toBe(0);
+    expect(await Bun.file(manifestPath).text()).toBe(before);
+  } finally {
+    rmSync(thumbDir, { recursive: true, force: true });
+  }
+});
+
+test("--thumbs-check catches config drift and a corrupted artifact", async () => {
+  const thumbDir = mkdtempSync(join(tmpdir(), "sd-cli-thumbs-mismatch-"));
+  try {
+    const source = join(thumbDir, "wide.png");
+    await makePng(source, 120, 90);
+    expect(runCli(["--thumbs=40", thumbDir]).code).toBe(0);
+
+    const drift = runCli(["--json", "--thumbs=32", "--thumbs-check", thumbDir]);
+    expect(drift.code).toBe(1);
+    const driftPayload = JSON.parse(drift.stdout) as CliPayload;
+    expect(driftPayload.directories[0]?.thumbnails[0]?.error).toBe(
+      "ERR_THUMBNAIL_CONFIG_DRIFT",
+    );
+
+    const thumbPath = thumbnailDestination(
+      thumbDir,
+      source,
+      join(thumbDir, ".thumbs"),
+    );
+    writeFileSync(
+      thumbPath,
+      Uint8Array.from([...(await Bun.file(thumbPath).bytes()), 0]),
+    );
+    const corrupt = runCli([
+      "--json",
+      "--thumbs=40",
+      "--thumbs-check",
+      thumbDir,
+    ]);
+    expect(corrupt.code).toBe(1);
+    const corruptPayload = JSON.parse(corrupt.stdout) as CliPayload;
+    expect(corruptPayload.directories[0]?.thumbnails[0]?.error).toBe(
+      "ERR_THUMBNAIL_HASH_MISMATCH",
+    );
+  } finally {
+    rmSync(thumbDir, { recursive: true, force: true });
+  }
+});
+
 test("a thumbnail write failure exits 1 with an error code, not a host path", async () => {
   const thumbDir = mkdtempSync(join(tmpdir(), "sd-cli-thumbs-fail-"));
   try {
@@ -508,14 +788,15 @@ test("a thumbnail write failure exits 1 with an error code, not a host path", as
     expect(result.code).toBe(1);
     const payload = JSON.parse(result.stdout) as CliPayload;
     expect(payload.ok).toBe(false);
-    expect(payload.failures).toBe(1);
+    expect(payload.failures).toBe(2);
     const directory = payload.directories[0];
     if (directory === undefined) throw new Error("missing directory report");
-    const failed = directory.thumbnails[0];
-    if (failed === undefined) throw new Error("missing thumbnail report");
-    expect(failed.error).toBeDefined();
-    expect(failed.error ?? "").not.toContain(thumbDir);
-    expect(failed.error ?? "").toMatch(/^[A-Z_]+$/);
+    expect(directory.thumbnails.length).toBe(2);
+    for (const failed of directory.thumbnails) {
+      expect(failed.error).toBeDefined();
+      expect(failed.error ?? "").not.toContain(thumbDir);
+      expect(failed.error ?? "").toMatch(/^[A-Z_]+$/);
+    }
   } finally {
     rmSync(thumbDir, { recursive: true, force: true });
   }

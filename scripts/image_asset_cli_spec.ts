@@ -95,6 +95,18 @@ export const FLAG_SPECS: readonly CliFlagSpec[] = Object.freeze([
     description: `Fail any asset wider or taller than N pixels (max ${MAX_THUMBNAIL_EDGE})`,
   },
   {
+    flags: "--baseline",
+    value: "FILE",
+    description:
+      "Compare attributes against a baseline and fail on added, removed or changed assets",
+  },
+  {
+    flags: "--write-baseline",
+    value: "FILE",
+    description:
+      "Write the current attribute baseline (mutually exclusive with --baseline)",
+  },
+  {
     flags: "--visibility",
     value: "TIER",
     description: INSPECT_VISIBILITIES.join(" | "),
@@ -114,6 +126,15 @@ export const FLAG_SPECS: readonly CliFlagSpec[] = Object.freeze([
     flags: "--thumbs-dir",
     value: "DIR",
     description: "Thumbnail directory (default: <dir>/.thumbs)",
+  },
+  {
+    flags: "--thumbs-check",
+    description:
+      "Verify thumbnails exist and are newer than the source; write nothing",
+  },
+  {
+    flags: "--thumbs-force",
+    description: "Rewrite a thumbnail even when the destination is fresh",
   },
   {
     flags: "--thumb-quality",
@@ -169,4 +190,6 @@ Examples:
   bun run assets:diagnostics --json --sort=size --placeholders > /tmp/assets.json
   bun run assets:diagnostics --header-bytes=65536 --recursive
   bun run assets:diagnostics "${DEFAULT_ASSET_ROOT}/*.webp" --budget-bytes=262144
+  bun run assets:diagnostics --write-baseline=config/assets-baseline.json
+  bun run assets:diagnostics --baseline=config/assets-baseline.json --recursive
   bun run assets:diagnostics --thumbs=320 --recursive --summary`;

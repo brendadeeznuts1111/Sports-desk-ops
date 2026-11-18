@@ -7,10 +7,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  IMAGE_HEADER_MIN_BYTES,
   detectImageFormat,
-  readImageHeaderMetadata,
+  IMAGE_HEADER_MIN_BYTES,
   type ImageHeaderResult,
+  readImageHeaderMetadata,
 } from "../lib/image_header.ts";
 import { png1x1 } from "./support/image_fixtures.ts";
 

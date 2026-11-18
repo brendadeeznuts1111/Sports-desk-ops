@@ -4,12 +4,13 @@
  * payload: header-only dimensions, byte counts, backend and per-file failure codes.
  */
 import { describe, expect, test } from "bun:test";
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
-  BunAssetsTabPanel,
   type BunAssetsPayload,
+  BunAssetsTabPanel,
 } from "../packages/ui/src/panels/BunAssetsTabPanel.tsx";
 
 const payload: BunAssetsPayload = {

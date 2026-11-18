@@ -10,6 +10,7 @@
 
 import { readdirSync } from "node:fs";
 import { extname, join } from "node:path";
+
 import { imageErrorCode } from "./image_errors.ts";
 import { readImageHeaderMetadata } from "./image_header.ts";
 import {

@@ -143,6 +143,7 @@
     "typecheck:ui": "bun check --no-script -p packages/ui/tsconfig.json && bun check --no-script -p src/dashboard/tsconfig.json",
     "typecheck": "bun run ensure:deep-tsconfig && bun run typecheck:ws && bun check --no-script -p tsconfig.json && bun check --no-script -p src/dashboard/tsconfig.json",
     "lint": "bun --bun run oxlint --fix",
+    "lint:bun": "bun run scripts/bun_lint.ts",
     "lint:check": "bun --bun run oxlint --deny-warnings && bun --bun run oxlint --type-aware -c .oxlintrc.type-aware.json --deny-warnings",
     "lint:native": "bun lint --no-script --deny-warnings",
     "lint:native:type-aware": "bun lint --no-script --type-aware -c .oxlintrc.type-aware.json --deny-warnings",

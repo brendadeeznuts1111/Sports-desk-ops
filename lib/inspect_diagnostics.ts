@@ -16,14 +16,15 @@
  */
 
 import { basename, isAbsolute, relative, resolve } from "node:path";
+
 import { formatByteCount } from "./format_bytes.ts";
 import { DEFAULT_MAX_PIXELS } from "./image_limits.ts";
 import {
+  type InspectVisibility,
   redactDiagnosticSurface,
   resolveInspectVisibility,
   sanitizeDiagnosticUrl,
   sanitizeRouteRecord,
-  type InspectVisibility,
 } from "./inspect_redactor.ts";
 
 type InspectOptions = NonNullable<Parameters<typeof Bun.inspect>[1]>;

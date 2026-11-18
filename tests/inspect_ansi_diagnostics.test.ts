@@ -6,7 +6,6 @@
  * formatter branch, and each visibility tier masks paths, addresses and identities differently.
  */
 import { afterAll, describe, expect, test } from "bun:test";
-import type { BunRequest } from "bun";
 import {
   mkdirSync,
   mkdtempSync,
@@ -16,16 +15,19 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import type { BunRequest } from "bun";
+
+import { scanBunImageAssets } from "../lib/bun_image_assets.ts";
 import {
   BunRequestDiagnostic,
-  MatchedRouteDiagnostic,
+  type DiagnosticRequest,
   inspectBunImageAsset,
   maskAssetSource,
+  MatchedRouteDiagnostic,
   splitRouteQuery,
   wrapMatchedRouteDiagnostic,
-  type DiagnosticRequest,
 } from "../lib/inspect_diagnostics.ts";
-import { scanBunImageAssets } from "../lib/bun_image_assets.ts";
 import {
   redactDiagnosticSurface,
   runWithInspectVisibility,
