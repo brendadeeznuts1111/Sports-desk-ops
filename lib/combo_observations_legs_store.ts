@@ -9,6 +9,10 @@ import type { Database } from "bun:sqlite";
 import { openSportsdeskSqlite } from "./sportsdesk_sqlite.ts";
 import type { CanonicalPeriod } from "./leg_taxonomy.ts";
 import {
+  DeskAggregateInputError,
+  registerDeskAggregates,
+} from "./desk_sqlite_aggregates.ts";
+import {
   type CanonicalLeg,
   type LineHundredths,
   type F402CustomerReportPendingRow,
@@ -104,6 +108,7 @@ export function createComboObservationsLegsStore(
       ON wallet_customer_attributions(agent_owner);
   `);
 
+  registerDeskAggregates(db);
   return new ComboObservationsLegsStore(db);
 }
 
@@ -268,6 +273,78 @@ export class ComboObservationsLegsStore {
       }
     }
     return insertedLegs;
+  }
+
+  /** Stake per ticket (legs repeat the ticket stake) placed in `[fromIso, toIso)`. */
+  stakeCentsInWindow(account: string, fromIso: string, toIso: string): number {
+    const row = this.db
+      .query(
+        `SELECT desk_stake_sum(stake_cents) AS total FROM (
+          SELECT MAX(stake_cents) AS stake_cents
+          FROM combo_observations_legs
+          WHERE UPPER(wallet_or_account) = UPPER(?1)
+            AND placed_at >= ?2 AND placed_at < ?3
+          GROUP BY source_venue, source_ticket
+        )`,
+      )
+      .get(account, fromIso, toIso) as { total: number | bigint };
+    return Number(row.total);
+  }
+
+  /**
+   * Stake-weighted CLV in basis points over the account's latest `lastN` priced legs that have a
+   * closing decimal price in `closingDecimalByLegId`; `null` when none qualify.
+   */
+  rollingClvBps(
+    account: string,
+    lastN: number,
+    closingDecimalByLegId: ReadonlyMap<number, number>,
+  ): number | null {
+    if (!Number.isSafeInteger(lastN) || lastN < 1) {
+      throw new DeskAggregateInputError(
+        "rollingClvBps",
+        `lastN must be a positive integer, got ${lastN}`,
+      );
+    }
+    const row = this.db
+      .query(
+        `SELECT desk_clv_bps(stake_cents, desk_decimal_odds(odds_american), close) AS clv FROM (
+          SELECT l.stake_cents, l.odds_american, c.value AS close
+          FROM combo_observations_legs l
+          JOIN json_each(?2) c ON c.key = CAST(l.id AS TEXT)
+          WHERE UPPER(l.wallet_or_account) = UPPER(?1)
+            AND l.odds_american IS NOT NULL
+          ORDER BY l.placed_at DESC, l.id DESC
+          LIMIT ?3
+        )`,
+      )
+      .get(
+        account,
+        JSON.stringify(Object.fromEntries(closingDecimalByLegId)),
+        lastN,
+      ) as { clv: number | null };
+    return row.clv === null ? null : Number(row.clv);
+  }
+
+  /** Max drawdown of cumulative P&L across the account's tickets in `pnlCentsByTicket`, by placement time. */
+  maxDrawdownCents(
+    account: string,
+    pnlCentsByTicket: ReadonlyMap<string, number>,
+  ): number {
+    const row = this.db
+      .query(
+        `SELECT desk_max_drawdown(order_key, pnl) AS drawdown FROM (
+          SELECT printf('%s|%012d', MIN(l.placed_at), MIN(l.id)) AS order_key, c.value AS pnl
+          FROM combo_observations_legs l
+          JOIN json_each(?2) c ON c.key = l.source_ticket
+          WHERE UPPER(l.wallet_or_account) = UPPER(?1)
+          GROUP BY l.source_venue, l.source_ticket
+        )`,
+      )
+      .get(account, JSON.stringify(Object.fromEntries(pnlCentsByTicket))) as {
+      drawdown: number | bigint;
+    };
+    return Number(row.drawdown);
   }
 
   countLegs(): number {
