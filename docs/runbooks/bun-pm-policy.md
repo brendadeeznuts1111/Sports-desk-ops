@@ -484,17 +484,17 @@ What CI and tests enforce without a maintainer machine bunfig.
 
 ### `tests/bun_config_policy.test.ts`
 
-| Test                                                   | Asserts                                                                                                            |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| project bunfig does not set machine-owned install keys | No `linker`, `globalStore`, `cache`, `frozenLockfile`, `minimumReleaseAge` under `[install]` in repo `bunfig.toml` |
-| lifecycle scripts are not trusted implicitly           | `trustedDependencies === []`                                                                                       |
-| package manager and engine match the runtime           | `packageManager === bun@${engines.bun}` and semver satisfies                                                       |
-| lockfile is text format and only one                   | `bun.lock` exists; no `FOREIGN_LOCKFILES`                                                                          |
-| lockfile workspaces match package.json                 | `lockWorkspaceNames` parity                                                                                        |
-| lockfile workspace versions match                      | `lockWorkspaceVersions` parity (excludes root `""` version)                                                        |
-| every declared patch in lock and on disk               | `patchState` declared = locked, files exist                                                                        |
-| global bunfig path XDG rule                            | `globalBunfigPath()` unit cases                                                                                    |
-| no committed loopback registry or token                | `.npmrc` (if present) and root `publishConfig` reject `127.0.0.1` / `localhost` and `_authToken`                   |
+| Test                                                   | Asserts                                                                                                                                         |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| project bunfig does not set machine-owned install keys | No `linker`, `globalStore`, `cache`, `frozenLockfile`, `minimumReleaseAge`, `minimumReleaseAgeExcludes` under `[install]` in repo `bunfig.toml` |
+| lifecycle scripts are not trusted implicitly           | `trustedDependencies === []`                                                                                                                    |
+| package manager and engine match the runtime           | `packageManager === bun@${engines.bun}` and semver satisfies                                                                                    |
+| lockfile is text format and only one                   | `bun.lock` exists; no `FOREIGN_LOCKFILES`                                                                                                       |
+| lockfile workspaces match package.json                 | `lockWorkspaceNames` parity                                                                                                                     |
+| lockfile workspace versions match                      | `lockWorkspaceVersions` parity (excludes root `""` version)                                                                                     |
+| every declared patch in lock and on disk               | `patchState` declared = locked, files exist                                                                                                     |
+| global bunfig path XDG rule                            | `globalBunfigPath()` unit cases                                                                                                                 |
+| no committed loopback registry or token                | `.npmrc` (if present) and root `publishConfig` reject `127.0.0.1` / `localhost` and `_authToken`                                                |
 
 ### `tests/pm_policy_workspaces.test.ts`
 

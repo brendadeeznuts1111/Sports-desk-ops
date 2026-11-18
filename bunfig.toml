@@ -63,8 +63,9 @@ files = [
 ]
 options = { sortImports = true }
 
-# Install keys (linker, globalStore, cache.dir, frozenLockfile, minimumReleaseAge) are owned by the
-# machine config at ~/.bunfig.toml. Setting them here would override that SSOT, so they stay out:
+# Install keys (linker, globalStore, cache.dir, frozenLockfile, minimumReleaseAge,
+# minimumReleaseAgeExcludes) are owned by the machine config at ~/.bunfig.toml. Setting one here
+# would override that SSOT, so they stay out:
 # `pm:doctor` fails the "project bunfig" check when one is present (`lib/pm_policy.ts`
 # MACHINE_OWNED_INSTALL_KEYS). Non-machine keys are safe and are pinned here.
 #
