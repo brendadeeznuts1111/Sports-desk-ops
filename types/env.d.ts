@@ -85,6 +85,8 @@ declare module "bun" {
     // Cloudflare API & R2 Storage
     readonly CLOUDFLARE_ACCOUNT_ID?: string;
     readonly CLOUDFLARE_API_TOKEN?: string;
+    /** Read-only Cloudflare infrastructure audit credential; never used by Wrangler deployments. */
+    readonly CLOUDFLARE_AUDIT_TOKEN?: string;
     readonly R2_ACCESS_KEY_ID?: string;
     readonly R2_SECRET_ACCESS_KEY?: string;
     readonly R2_ENDPOINT?: string;
