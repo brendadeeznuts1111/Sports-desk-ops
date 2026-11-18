@@ -8,6 +8,8 @@
  * - Deterministic image output: `Bun.Image.backend = "bun"` before resize/webp bytes.
  * - WebSocket access by short-lived HMAC ticket (browser-friendly); message size + JSON limits.
  * - Injectable `BlobStore` so the tests never touch R2.
+ * - Boot reads `config/blob-live.yaml` and each channel's latest chunk manifest; `/health`
+ *   reports `streams`, with NO ACTIVE STREAM when a manifest is missing or its body was used.
  *
  * Run: BLOB_API_TOKEN=… BLOB_TICKET_SECRET=… R2_* env bun services/blob_and_live_bets_server.ts
  */
@@ -30,6 +32,12 @@ import {
   resolveR2CredentialsAsync,
   resolveSecretBackedEnv,
 } from "../lib/r2_s3_client.ts";
+import { loadBlobLiveConfig } from "../lib/blob_live_config.ts";
+import {
+  loadStreamTelemetry,
+  S3ManifestStore,
+  type StreamTelemetryEntry,
+} from "../lib/r2_chunk_manifest.ts";
 import {
   sendFrameOrClose,
   WS_BACKPRESSURE_OPTIONS,
@@ -136,6 +144,8 @@ export interface BlobLiveBetsOptions {
   readonly nowSec?: () => number;
   /** Visibility tier applied by `GET ?attributes=1` and the PUT attribute block. Default RISK_MANAGER. */
   readonly diagnosticVisibility?: InspectVisibility;
+  /** Per-channel manifest state read on boot; `/health` reports it as `streams`. */
+  readonly streamTelemetry?: readonly StreamTelemetryEntry[];
 }
 
 export interface SocketData {
@@ -468,6 +478,9 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
             status: "ok",
             bunRevision: Bun.revision,
             uptimeNs: Bun.nanoseconds(),
+            ...(options.streamTelemetry === undefined
+              ? {}
+              : { streams: options.streamTelemetry }),
           }),
       },
       "/api/v1/ws-tickets": {
@@ -940,6 +953,20 @@ if (import.meta.main) {
         "R2 credentials are unavailable in env or Bun.secrets service com.bookdeskops.sportsdesk",
       );
     }
+    const config = await loadBlobLiveConfig();
+    const manifests = new S3ManifestStore(
+      new Bun.S3Client({
+        accessKeyId: resolved.accessKeyId,
+        secretAccessKey: resolved.secretAccessKey,
+        endpoint: resolved.endpoint,
+        bucket: config.bucket,
+      }),
+    );
+    const streamTelemetry = await loadStreamTelemetry(
+      manifests,
+      config.manifest_prefix,
+      config.channels,
+    );
     const blobs = createS3BlobStore({
       accessKeyId: resolved.accessKeyId,
       secretAccessKey: resolved.secretAccessKey,
@@ -956,7 +983,9 @@ if (import.meta.main) {
       blobs,
       apiToken,
       ticketSecret,
-      port: numberEnv("BLOB_PORT", 4021, 0),
+      port: numberEnv("BLOB_PORT", config.port, 0),
+      hostname: config.hostname,
+      streamTelemetry,
       maxUploadBytes: numberEnv("BLOB_MAX_UPLOAD_BYTES", MAX_UPLOAD_BYTES),
       maxPixels: numberEnv("BLOB_MAX_PIXELS", MAX_PIXELS),
     });
@@ -965,6 +994,7 @@ if (import.meta.main) {
         service: "blob-and-live-bets",
         port: server.port,
         hostname: server.hostname,
+        streams: streamTelemetry,
       }),
     );
   } catch (error) {
