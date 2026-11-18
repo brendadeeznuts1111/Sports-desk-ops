@@ -140,6 +140,7 @@ function workspace(
     `registry=${registryUrl}\n//127.0.0.1:${server.port}/:_authToken=fake-token\n`,
   );
   state.root = dir;
+  state.markersAtFirstUpload = null;
   return { dir, npmrc };
 }
 
@@ -173,7 +174,7 @@ async function publish(
 // @bun-behavior: publish-recursive
 
 describe("bun publish --recursive on a mock registry", () => {
-  test("publishes public workspaces, skips private ones, and packs everything first", async () => {
+  test("publishes public workspaces and skips private ones", async () => {
     const fixture = workspace([
       { name: "@probe/a1", marker: "a" },
       { name: "@probe/b1", marker: "b" },
@@ -188,10 +189,22 @@ describe("bun publish --recursive on a mock registry", () => {
 
     const uploaded = state.uploads.slice(before).map((u) => u.name);
     expect(uploaded.sort()).toEqual(["@probe/a1", "@probe/b1"]);
+  }, 60_000);
+
+  test("packs every package before the first upload", async () => {
+    const fixture = workspace([
+      { name: "@probe/a4", marker: "a" },
+      { name: "@probe/b4", marker: "b" },
+    ]);
+    const result = await publish(fixture.dir, fixture.npmrc, [
+      "--recursive",
+      "--quiet",
+    ]);
+    expect(result.exitCode).toBe(0);
     expect(state.markersAtFirstUpload).toEqual(["marker-a", "marker-b"]);
   }, 60_000);
 
-  test("--filter publishes only matching workspaces", async () => {
+  test("publishes only workspaces matching --filter", async () => {
     const fixture = workspace([
       { name: "@probe/a2", marker: "a" },
       { name: "@probe/b2", marker: "b" },
@@ -209,7 +222,7 @@ describe("bun publish --recursive on a mock registry", () => {
     ]);
   }, 60_000);
 
-  test("a re-run skips versions already on the registry", async () => {
+  test("skips versions already on the registry on a re-run", async () => {
     const fixture = workspace([{ name: "@probe/a3", marker: "a" }]);
     const first = await publish(fixture.dir, fixture.npmrc, [
       "--recursive",

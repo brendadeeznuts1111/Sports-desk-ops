@@ -148,7 +148,7 @@ describe("bun add deprecated packages", () => {
     expect(manifest.dependencies?.["dep-probe"]).toBe("1.0.0");
   }, 60_000);
 
-  test("bun add pkg skips a deprecated latest version", async () => {
+  test("skips a deprecated latest version", async () => {
     const { dir, npmrc } = fixture();
     const result = await add(dir, npmrc, "dep-probe");
     expect(result.exitCode).toBe(0);

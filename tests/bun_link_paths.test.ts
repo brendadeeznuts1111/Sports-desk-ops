@@ -22,7 +22,7 @@ import { join } from "node:path";
 // @bun-behavior: link-paths
 
 describe("bun link: paths", () => {
-  test("link:./dir symlinks the directory into node_modules", () => {
+  test("symlinks a link: directory into node_modules", () => {
     const dir = mkdtempSync(join(tmpdir(), "bun-link-"));
     try {
       const linkedDir = join(dir, "vendor", "linked");
