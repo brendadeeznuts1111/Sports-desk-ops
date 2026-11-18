@@ -17,6 +17,7 @@ import {
   predictAccount,
   predictAccounts,
   runLinkAnalysis,
+  assertNoRawIp,
   containsUnhashedIp,
   runPredictAnalysis,
   signedAmountCents,
@@ -218,6 +219,59 @@ describe("ip hashing and CLI output", () => {
     expect(containsUnhashedIp(parsed)).toBe(false);
     expect(logs[0]).not.toContain("203.0.113.10");
     expect(logs[0]).toContain("evidence-scored guess");
+  });
+});
+
+describe("analyzer hashes every IP and refuses raw output", () => {
+  test("every IPv4 and IPv6 in one string is hashed", () => {
+    const out = hashIpsDeep({
+      note: "from 10.1.2.3 then 10.9.8.7",
+      v6: "2026-11-01T10:00:00Z from 2600:380::1 and 2607:fb90::9",
+    }) as { note: string; v6: string };
+    expect(out.note).toBe(
+      `from ${hashIp("10.1.2.3")} then ${hashIp("10.9.8.7")}`,
+    );
+    expect(out.v6).toBe(
+      `2026-11-01T10:00:00Z from ${hashIp("2600:380::1")} and ${hashIp("2607:fb90::9")}`,
+    );
+    expect(containsUnhashedIp(out)).toBe(false);
+  });
+
+  test("the backstop flags a second raw IP, an IPv6 and a raw IP-named field", () => {
+    expect(containsUnhashedIp(`x ${hashIp("10.1.2.3")} then 10.9.8.7`)).toBe(
+      true,
+    );
+    expect(containsUnhashedIp({ note: "via 2600:380::1" })).toBe(true);
+    expect(containsUnhashedIp({ IPAddress: "not-hashed" })).toBe(true);
+    expect(containsUnhashedIp({ IPAddress: hashIp("10.1.2.3") })).toBe(false);
+    expect(containsUnhashedIp({ ip: "" })).toBe(false);
+  });
+
+  test("assertNoRawIp throws a named F402AnalyzeError", () => {
+    expect(() => assertNoRawIp("a 10.1.2.3 b 10.9.8.7", "link")).toThrow(
+      F402AnalyzeError,
+    );
+    expect(() =>
+      assertNoRawIp(hashIpsDeep("a 10.1.2.3 b 10.9.8.7"), "link"),
+    ).not.toThrow();
+  });
+
+  test("CLI csv output hashes IPs in csv rows too", async () => {
+    const root = plantedTree();
+    const logs: string[] = [];
+    const original = console.log;
+    console.log = (...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    };
+    try {
+      const code = await analyzeMain(["link", "--in", root, "--format", "csv"]);
+      expect(code).toBe(0);
+    } finally {
+      console.log = original;
+    }
+    const text = logs.join("\n");
+    expect(text).not.toContain("203.0.113.10");
+    expect(containsUnhashedIp(text)).toBe(false);
   });
 });
 

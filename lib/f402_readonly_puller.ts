@@ -18,6 +18,8 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { replaceIpsInText, textContainsIp } from "./f402_ip_text.ts";
+
 import {
   parseCustomerAdminListEnvelope,
   redactCustomerAdminListEnvelope,
@@ -103,8 +105,6 @@ export class F402PullerError extends Error {
 const SECRET_KEY =
   /^(?:password|pass|passwd|pin|phone|phonenumber|telegramid|token|authToken|authorization|cookie|secret)$/i;
 const IP_KEY = /^(?:ip|ipaddress|ip_address)$/i;
-const IPV4 =
-  /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/;
 
 export const REDACTED = "<redacted>";
 
@@ -117,8 +117,8 @@ function redactWalk(value: unknown, stripIps: boolean): unknown {
     return value.map((item) => redactWalk(item, stripIps));
   }
   if (!isPlainObject(value)) {
-    if (stripIps && typeof value === "string" && IPV4.test(value)) {
-      return value.replace(IPV4, REDACTED);
+    if (stripIps && typeof value === "string") {
+      return replaceIpsInText(value, () => REDACTED);
     }
     return value;
   }
@@ -148,7 +148,7 @@ export function redactSecretsAndIps(value: unknown): unknown {
 }
 
 export function containsRawIp(value: unknown): boolean {
-  if (typeof value === "string") return IPV4.test(value);
+  if (typeof value === "string") return textContainsIp(value);
   if (Array.isArray(value)) return value.some(containsRawIp);
   if (isPlainObject(value)) {
     return Object.entries(value).some(([key, child]) => {

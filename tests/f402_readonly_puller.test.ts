@@ -30,6 +30,7 @@ import {
   parseHierarchyList,
   redactSecrets,
   redactSecretsAndIps,
+  writeSummaryJson,
   resolvePullSession,
   runCensus,
   runContract,
@@ -170,6 +171,44 @@ describe("redaction", () => {
     expect(noIps.IPAddress).toBe("<redacted>");
     expect(containsRawIp(secretsOnly)).toBe(true);
     expect(containsRawIp(noIps)).toBe(false);
+  });
+});
+
+describe("redaction masks every IP", () => {
+  test("two or more IPs in one text field are all masked", () => {
+    const raw = {
+      Operation: "from 10.1.2.3 then 10.9.8.7 via 2600:380::1",
+      rows: ["a 198.51.100.1 b 198.51.100.2"],
+    };
+    const masked = redactSecretsAndIps(raw) as {
+      Operation: string;
+      rows: string[];
+    };
+    expect(masked.Operation).toBe(
+      "from <redacted> then <redacted> via <redacted>",
+    );
+    expect(masked.rows[0]).toBe("a <redacted> b <redacted>");
+    expect(containsRawIp(masked)).toBe(false);
+  });
+
+  test("containsRawIp sees a second IPv4 and a bare IPv6", () => {
+    expect(containsRawIp("ok <redacted> then 10.9.8.7")).toBe(true);
+    expect(containsRawIp({ note: "2607:fb90::5" })).toBe(true);
+    expect(containsRawIp({ at: "2026-11-01T10:00:00.000Z" })).toBe(false);
+  });
+
+  test("writeSummaryJson writes a summary with several IPs in one field", () => {
+    const dir = mkdtempSync(join(tmpdir(), "f402-multi-ip-"));
+    try {
+      const path = writeSummaryJson(dir, "s.json", {
+        note: "from 10.1.2.3 then 10.9.8.7",
+      });
+      const text = readFileSync(path, "utf8");
+      expect(text).not.toContain("10.1.2.3");
+      expect(text).not.toContain("10.9.8.7");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
