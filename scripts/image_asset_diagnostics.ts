@@ -11,8 +11,8 @@
  * Run: bun run assets:diagnostics [dir ...] [options]   (see --help)
  */
 
-import { statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, statSync } from "node:fs";
+import { dirname, extname, join, resolve } from "node:path";
 
 import { useColor } from "../lib/ansi_color.ts";
 import {
@@ -75,6 +75,7 @@ interface ParsedArgs {
   readonly headerBytes: number | undefined;
   readonly budgetBytes: number | undefined;
   readonly maxDimension: number | undefined;
+  readonly requireSibling: string | undefined;
   readonly baseline: string | undefined;
   readonly writeBaseline: string | undefined;
   readonly recursive: boolean;
@@ -179,6 +180,7 @@ function resolveInputs(args: readonly string[]): readonly ResolvedInput[] {
 
 const BUDGET_CODE = "ERR_ASSET_BUDGET_EXCEEDED";
 const DIMENSION_CODE = "ERR_ASSET_DIMENSION_EXCEEDED";
+const SIBLING_CODE = "ERR_ASSET_SIBLING_MISSING";
 
 interface ThumbnailCheckInput {
   readonly manifest: ThumbnailManifest | null;
@@ -239,6 +241,26 @@ function applyBudgets(
   return Object.freeze({ path: file.path, entry });
 }
 
+/** Fails an asset when a sibling with the requested extension is missing. */
+function applySiblingRequirement(
+  file: BunImageAssetFile,
+  extension: string | undefined,
+): BunImageAssetFile {
+  if (file.entry.type !== "BunImageAssetDiagnostic") return file;
+  if (extension === undefined || extension === "") return file;
+  const current = extname(file.path).toLowerCase().replace(/^\./, "");
+  if (current === extension) return file;
+  const stem =
+    current === "" ? file.path : file.path.slice(0, -(current.length + 1));
+  if (existsSync(`${stem}.${extension}`)) return file;
+  const entry: BunImageAssetScanFailure = Object.freeze({
+    type: "BunImageAssetScanFailure",
+    source: file.entry.source,
+    code: SIBLING_CODE,
+  });
+  return Object.freeze({ path: file.path, entry });
+}
+
 function isVisibility(value: string): value is InspectVisibility {
   return VISIBILITY_NAMES.has(value);
 }
@@ -276,6 +298,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   let headerBytes: number | undefined;
   let budgetBytes: number | undefined;
   let maxDimension: number | undefined;
+  let requireSibling: string | undefined;
   let baseline: string | undefined;
   let writeBaseline: string | undefined;
   let recursive = false;
@@ -374,6 +397,18 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
         1,
         MAX_THUMBNAIL_EDGE,
       );
+    } else if (arg.startsWith("--require-sibling=")) {
+      const value = arg
+        .slice("--require-sibling=".length)
+        .trim()
+        .replace(/^\./, "")
+        .toLowerCase();
+      if (!/^[a-z0-9]{1,8}$/.test(value)) {
+        throw new Error(
+          `--require-sibling must be a file extension like webp, got "${value}"`,
+        );
+      }
+      requireSibling = value;
     } else if (arg.startsWith("--baseline=")) {
       const value = arg.slice("--baseline=".length).trim();
       if (value === "") throw new Error("--baseline must name a file");
@@ -445,6 +480,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     headerBytes,
     budgetBytes,
     maxDimension,
+    requireSibling,
     baseline,
     writeBaseline,
     recursive,
@@ -507,7 +543,9 @@ async function buildReport(
       : scan.files;
   const limited =
     args.limit === undefined ? ordered : ordered.slice(0, args.limit);
-  const files = limited.map((file) => applyBudgets(file, args));
+  const files = limited
+    .map((file) => applyBudgets(file, args))
+    .map((file) => applySiblingRequirement(file, args.requireSibling));
 
   let failures = 0;
   for (const file of files) {
@@ -996,6 +1034,7 @@ async function main(argv: readonly string[]): Promise<number> {
           sort: args.sort,
           budgetBytes: args.budgetBytes ?? null,
           maxDimension: args.maxDimension ?? null,
+          requireSibling: args.requireSibling ?? null,
           baseline: baselineDrift,
           baselineError,
           baselineWritten: args.writeBaseline ?? null,

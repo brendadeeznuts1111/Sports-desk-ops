@@ -46,8 +46,9 @@ const CONTENT_POLL_INTERVAL_MS = 150;
 const CONTENT_SETTLED_MIN_TEXT_LENGTH = 1_000;
 const LIVE_FETCH_TIMEOUT_MS = 15_000;
 // Release contract: the committed spec must document exactly these paths. Bumped from 99 when
-// /api/v2/live-bets was published alongside the deprecated v1 route (#138).
-const EXPECTED_OPENAPI_PATH_COUNT = 100;
+// /api/v2/live-bets was published alongside the deprecated v1 route (#138), and from 100 when
+// /api/diagnostics/image-assets was published with its daemon arm (#416).
+const EXPECTED_OPENAPI_PATH_COUNT = 101;
 const REQUIRED_TITLE_PATTERN = /Wire API Reference|Scalar/i;
 const DOCUMENTED_OPERATION_MARKERS = [
   "getWebLog",

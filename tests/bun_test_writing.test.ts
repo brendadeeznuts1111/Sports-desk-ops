@@ -77,7 +77,11 @@ describe("test options", () => {
     });
     const result = run(dir, [], { RETRY_MARKER: join(dir, "marker") });
     expect(result.exitCode).toBe(0);
-    expect(result.output).toContain("attempt 2");
+    // The retry happened iff the second attempt ran, and the run reports one passing test.
+    // Asserting reporter text (`attempt 2`) only holds under some reporters: the per-test
+    // line is emitted on GitHub Actions but not in a local non-TTY run (measured on 1.4.4).
+    expect(existsSync(join(dir, "marker"))).toBe(true);
+    expect(result.output).toContain("1 pass");
   });
 
   test("{ repeats: 2 } runs the test three times", () => {
@@ -94,7 +98,9 @@ describe("test options", () => {
     const result = run(dir, [], { REPEAT_LOG: log });
     expect(result.exitCode).toBe(0);
     expect(logLines(log).length).toBe(3);
-    expect(result.output).toContain("run 3");
+    // `{ repeats: 2 }` is one test that ran three times, so the summary counts one pass and
+    // the repeat count is proved by the log, not by reporter output (which varies by reporter).
+    expect(result.output).toContain("1 pass");
   });
 
   test("a per-test timeout fails the test", () => {
@@ -124,7 +130,7 @@ describe("test options", () => {
     });
     const result = run(dir);
     expect(result.exitCode).toBe(0);
-    expect(result.output).toContain("(pass) done");
+    expect(result.output).toContain("1 pass");
   });
 });
 
@@ -139,7 +145,10 @@ describe("test modifiers", () => {
       ].join("\n"),
     });
     const log = join(dir, "only.log");
-    const result = run(dir, [], { RUN_LOG: log });
+    // `.only` is disabled whenever CI is truthy, and the child inherits it, so the CI run of
+    // this suite would otherwise measure the guard instead of the filter. CI=false restores
+    // the documented behaviour (measured on 1.4.4: CI=true/1 throw, CI=false/0/unset do not).
+    const result = run(dir, [], { RUN_LOG: log, CI: "false" });
     expect(result.exitCode).toBe(0);
     expect(logLines(log)).toEqual(["two"]);
   });
@@ -153,7 +162,7 @@ describe("test modifiers", () => {
     });
     const reported = run(dir);
     expect(reported.exitCode).toBe(0);
-    expect(reported.output).toContain("(todo) passes later");
+    expect(reported.output).toContain("1 todo");
 
     const checked = run(dir, ["--todo"]);
     expect(checked.exitCode).not.toBe(0);
@@ -167,7 +176,7 @@ describe("test modifiers", () => {
     });
     const result = run(dir);
     expect(result.exitCode).toBe(0);
-    expect(result.output).toContain("(todo) todo if");
+    expect(result.output).toContain("1 todo");
   });
 });
 

@@ -27,7 +27,8 @@
     "xml-parse": "./bin/xml-parse.ts",
     "bun-surface": "./bin/bun-surface.ts",
     "sql-query": "./bin/sql-query.ts",
-    "desk-provenance": "./bin/desk-provenance.ts"
+    "desk-provenance": "./bin/desk-provenance.ts",
+    "sportsdesk-assets": "./bin/sportsdesk-assets.ts"
   },
   "scripts": {
     "sportsdesk": "bun ./bin/sportsdesk.ts",
@@ -53,6 +54,7 @@
     "check:spec-citations-blob": "bun ./src/scripts/check_spec_citations.ts",
     "sql:query": "bun ./bin/sql-query.ts",
     "desk:provenance": "bun ./bin/desk-provenance.ts",
+    "assets:diagnostics": "bun ./bin/sportsdesk-assets.ts",
     "cli:bins": "bun run --cwd ../.. cli:bins",
     "cli:bins:verify": "bun run --cwd ../.. cli:bins:verify",
     "format:check": "bun --cwd ../.. fmt --check packages/sportsdesk-ops lib/r2_manifest_cas.ts src/lib/customer_pairwise_cross_ref.ts cli/sportsdesk_fraud_cli.ts tests/customer_pairwise_cross_ref.test.ts",
