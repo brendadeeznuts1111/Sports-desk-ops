@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import {
   describeProbe,
+  endpointUrl,
   describeStatus,
   probeDaemonEndpoint,
   statusCommand,
@@ -179,5 +180,53 @@ describe("statusCommand exit code", () => {
         daemonFetch: async () => Response.json({}, { status: 502 }),
       }),
     ).toBe(1);
+  });
+});
+
+/**
+ * The probe accepts a `URL` and a base that carries a path prefix. `new URL("/api/x", "http://h/base")`
+ * answers `http://h/api/x` — an absolute path discards the base prefix — so the resolver strips the
+ * leading slashes and treats the base as a directory.
+ */
+describe("endpointUrl", () => {
+  test("resolves a path against a bare origin", () => {
+    expect(endpointUrl("http://127.0.0.1:4020", "/api/x").toString()).toBe(
+      "http://127.0.0.1:4020/api/x",
+    );
+    expect(endpointUrl("http://h:1/", "api/x").toString()).toBe(
+      "http://h:1/api/x",
+    );
+  });
+
+  test("keeps a base path prefix instead of discarding it", () => {
+    expect(endpointUrl(new URL("http://h:1/desk"), "/api/x").toString()).toBe(
+      "http://h:1/desk/api/x",
+    );
+    expect(endpointUrl("http://h:1/desk/", "api/x").toString()).toBe(
+      "http://h:1/desk/api/x",
+    );
+  });
+
+  test("accepts a URL object for the base", () => {
+    expect(
+      endpointUrl(new URL("https://desk.example"), "/api/x").toString(),
+    ).toBe("https://desk.example/api/x");
+  });
+});
+
+describe("probeDaemonEndpoint with a URL base", () => {
+  test("probes the resolved path and reports the origin", async () => {
+    const seen: string[] = [];
+    const probe = await probeDaemonEndpoint(
+      new URL("http://h:1/desk"),
+      async (url) => {
+        seen.push(url);
+        return Response.json({ rowCount: 2 });
+      },
+      1_000,
+      "/api/xml-odds/soa",
+    );
+    expect(seen).toEqual(["http://h:1/desk/api/xml-odds/soa"]);
+    expect(probe).toMatchObject({ origin: "http://h:1", kind: "serving" });
   });
 });

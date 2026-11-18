@@ -26,9 +26,12 @@ const PARSER = "bin/xml-parse.ts";
 const USAGE = `xml — canonical XML-ingest snapshot
 
 Usage:
-  ./bin/dx xml status [--json]        Is the snapshot published, and is the running daemon serving
+  ./bin/dx xml status [--json] [--base <url>] [--path <path>]
+                                      Is the snapshot published, and is the running daemon serving
                                       it? Prints the artifact state, then the daemon's answer on
                                       /api/xml-odds/soa (200 / 502 / 404 / unreachable).
+                                      --base takes a URL (and keeps a path prefix such as
+                                      http://127.0.0.1:4020/desk); --path probes another route.
                                       Exit 0 only when the panel would render rows.
   ./bin/dx xml ingest [flags...]      Run the shipped publisher. Key flags:
                                         --dry-run        parse + plan, no writes at all
@@ -63,16 +66,26 @@ export interface EndpointProbe {
 
 export const XML_ODDS_SOA_PATH = "/api/xml-odds/soa";
 
-function daemonOrigin(
-  env: Readonly<Record<string, string | undefined>>,
-): string {
+function daemonOrigin(env: Readonly<Record<string, string | undefined>>): URL {
   const explicit =
     env.SPORTSDESK_DAEMON_URL?.trim() || env.SPORTSDESK_ORIGIN?.trim() || "";
   const port = env.PORT?.trim() || "4020";
-  return (explicit !== "" ? explicit : `http://127.0.0.1:${port}`).replace(
-    /\/+$/,
-    "",
-  );
+  return new URL(explicit !== "" ? explicit : `http://127.0.0.1:${port}`);
+}
+
+/**
+ * Resolve a probe path against a base that may itself carry a path prefix.
+ *
+ * `new URL("/api/x", "http://h/prefix")` answers `http://h/api/x` — an absolute path discards the
+ * base prefix — so the leading slashes come off the path and the base is treated as a directory.
+ * Both a `URL` and a string are accepted, and a base without a trailing slash is normalised.
+ *
+ * @example endpointUrl(new URL("http://h:1/desk"), "api/x") // http://h:1/desk/api/x
+ */
+export function endpointUrl(base: string | URL, path: string): URL {
+  const resolved = new URL(base.toString());
+  if (!resolved.pathname.endsWith("/")) resolved.pathname += "/";
+  return new URL(path.replace(/^\/+/, ""), resolved);
 }
 
 /**
@@ -84,16 +97,19 @@ function daemonOrigin(
  * unreachable rather than thrown, because "no daemon" is a normal state on a workstation.
  */
 export async function probeDaemonEndpoint(
-  origin: string,
+  base: string | URL,
   fetchImpl: (
     url: string,
     init: { signal: AbortSignal },
   ) => Promise<Response> = (url, init) => fetch(url, init),
   timeoutMs = 5_000,
+  path: string = XML_ODDS_SOA_PATH,
 ): Promise<EndpointProbe> {
+  const target = endpointUrl(base, path);
+  const origin = target.origin;
   let response: Response;
   try {
-    response = await fetchImpl(`${origin}${XML_ODDS_SOA_PATH}`, {
+    response = await fetchImpl(target.toString(), {
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
@@ -198,6 +214,10 @@ function forward(script: string, args: readonly string[]): number {
 export interface StatusOptions {
   readonly json: boolean;
   readonly env?: Readonly<Record<string, string | undefined>>;
+  /** Daemon base, as a string or a `URL`; may carry a path prefix (`http://h/desk`). */
+  readonly base?: string | URL | undefined;
+  /** Probe path override; defaults to `/api/xml-odds/soa`. */
+  readonly path?: string | undefined;
   /** Injected for tests: the R2 artifact read (defaults to the route's own producer). */
   readonly readArtifact?: () => Promise<ArtifactOutcome>;
   /** Injected for tests: the daemon probe's fetch. */
@@ -232,8 +252,10 @@ export async function statusCommand(options: StatusOptions): Promise<number> {
   const [outcome, probe] = await Promise.all([
     readArtifact(),
     probeDaemonEndpoint(
-      daemonOrigin(env),
+      options.base ?? daemonOrigin(env),
       options.daemonFetch ?? ((url, init) => fetch(url, init)),
+      5_000,
+      options.path,
     ),
   ]);
   const artifact = describeStatus(outcome);
@@ -260,14 +282,42 @@ async function main(argv: readonly string[]): Promise<number> {
   const [sub, ...rest] = argv;
   switch (sub) {
     case "status": {
-      const unknown = rest.filter((a) => a !== "--json");
-      if (unknown.length > 0) {
+      let base: string | undefined;
+      let path: string | undefined;
+      for (let index = 0; index < rest.length; index += 1) {
+        const arg = rest[index]!;
+        if (arg === "--json") continue;
+        if (arg === "--base" || arg === "--path") {
+          const value = rest[index + 1];
+          if (value === undefined || value.startsWith("--")) {
+            process.stderr.write(
+              `xml status: ${arg} needs a value\n${USAGE}\n`,
+            );
+            return 2;
+          }
+          if (arg === "--base") base = value;
+          else path = value;
+          index += 1;
+          continue;
+        }
+        process.stderr.write(`xml status: unknown flag ${arg}\n${USAGE}\n`);
+        return 2;
+      }
+      try {
+        return await statusCommand({
+          json: rest.includes("--json"),
+          ...(base === undefined ? {} : { base }),
+          ...(path === undefined ? {} : { path }),
+        });
+      } catch (error) {
+        // `new URL("not-a-url")` throws; a bad --base is a usage error, not a crash.
         process.stderr.write(
-          `xml status: unknown flag ${unknown[0]}\n${USAGE}\n`,
+          `xml status: invalid base "${base}": ${
+            error instanceof Error ? error.message : String(error)
+          }\n`,
         );
         return 2;
       }
-      return statusCommand({ json: rest.includes("--json") });
     }
     case "ingest": {
       const code = forward(PUBLISHER, rest);
