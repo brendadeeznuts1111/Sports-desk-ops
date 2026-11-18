@@ -31,6 +31,8 @@ import {
   redactSecrets,
   REDACTED,
   redactSecretsAndIps,
+  safePathSegment,
+  writeRawJson,
   writeSummaryJson,
   resolvePullSession,
   runCensus,
@@ -258,6 +260,96 @@ describe("redaction masks every IP", () => {
       expect(text).not.toContain("10.9.8.7");
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("raw file path safety", () => {
+  const unsafe = [
+    "../x",
+    "..",
+    "a/b",
+    "a\\b",
+    "/etc/passwd",
+    "C:\\x",
+    "",
+    " CUST1",
+    "CUST.1",
+  ];
+
+  test("safePathSegment accepts plain ids and refuses traversal and separators", () => {
+    for (const id of ["CUST1", "cust_2", "A-9", "2026-11-01"]) {
+      expect(safePathSegment(id, "test")).toBe(id);
+    }
+    for (const id of unsafe) {
+      let caught: unknown;
+      try {
+        safePathSegment(id, "test");
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(F402PullerError);
+      expect((caught as F402PullerError).code).toBe("unsafe-path");
+    }
+  });
+
+  test("writeRawJson refuses paths that leave raw/", () => {
+    const dir = mkdtempSync(join(tmpdir(), "f402-raw-path-"));
+    try {
+      for (const rel of [
+        "../escape.json",
+        "a/../../escape.json",
+        "/tmp/x.json",
+        "",
+      ]) {
+        expect(() => writeRawJson(dir, rel, {})).toThrow(F402PullerError);
+      }
+      expect(writeRawJson(dir, "contract/CUST1.json", {})).toBe(
+        join(dir, "raw", "contract/CUST1.json"),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("phases refuse an unsafe customer id before any request", async () => {
+    const calls: string[] = [];
+    const client = new F402PullClient({
+      session,
+      intervalMs: 0,
+      fetchImpl: async (url) => {
+        calls.push(String(url));
+        return new Response(JSON.stringify({ LIST: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+    const outDir = tempOut();
+    const context = {
+      client,
+      outDir,
+      agentId: "ROOT1",
+      agentOwner: "ROOT1",
+      agentType: "M",
+    } as const;
+    try {
+      await expect(
+        runContract(context, { customerId: "../../etc" }),
+      ).rejects.toMatchObject({ code: "unsafe-path" });
+      saveCheckpoint(outDir, {
+        ...emptyCheckpoint("ROOT1", "2026-11-14T00:00:00.000Z"),
+        customerIds: ["CUST1", "../CUST2"],
+      });
+      await expect(
+        runTransactions(context, { start: "" }),
+      ).rejects.toMatchObject({ code: "unsafe-path" });
+      await expect(
+        runWagers(context, { from: "2026-11-01", to: "2026-11-01" }),
+      ).rejects.toMatchObject({ code: "unsafe-path" });
+      expect(calls).toEqual([]);
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
     }
   });
 });
