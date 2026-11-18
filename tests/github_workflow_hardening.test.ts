@@ -33,10 +33,11 @@ describe("GitHub workflow hardening", () => {
 
   for (const file of workflowFiles) {
     test(`${file} pins actions and declares permissions/timeouts`, async () => {
-      const document = Bun.YAML.parse(
-        await Bun.file(file).text(),
-      ) as WorkflowDocument;
+      const text = await Bun.file(file).text();
+      const document = Bun.YAML.parse(text) as WorkflowDocument;
       expect(document.permissions).toBeDefined();
+      expect(document.permissions).toMatchObject({ contents: "read" });
+      expect(text).not.toContain("pull_request_target");
       const jobs = Object.entries(document.jobs ?? {});
       expect(jobs.length).toBeGreaterThan(0);
 
