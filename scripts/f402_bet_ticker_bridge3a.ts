@@ -52,9 +52,11 @@ import {
 } from "../lib/f402_ingest.ts";
 import {
   describeF402Session,
+  loadF402Session,
+  primeF402Session,
   readF402Session,
   refreshF402Session,
-  writeF402Session,
+  saveF402Session,
 } from "../lib/f402_session.ts";
 import {
   createF402ReplayTransport,
@@ -165,15 +167,16 @@ class SessionProbe {
   private transport: F402ReplayTransport | null = null;
 
   async probe(wagerNumber: string): Promise<F402Probe> {
-    let session = readF402Session();
+    // Keychain store: re-load each probe so a rotation by the refresher is picked up.
+    let session = await loadF402Session();
     if (session === null) {
       session = await refreshF402Session();
-      writeF402Session(session);
+      await saveF402Session(session);
     }
     const first = await this.run(session, wagerNumber);
     if (first.error !== "unauthorized") return first;
     const refreshed = await refreshF402Session();
-    writeF402Session(refreshed);
+    await saveF402Session(refreshed);
     await this.reset();
     return this.run(refreshed, wagerNumber);
   }
@@ -437,6 +440,7 @@ async function main(): Promise<number> {
   };
 
   if (session !== null) {
+    await primeF402Session();
     console.error(
       `[bridge3a] session: ${describeF402Session(readF402Session())} ` +
         `channel=${F402_BET_TICKER_LIVE_CHANNEL} r2=${F402_BET_TICKER_R2_KEY}`,

@@ -38,7 +38,11 @@ import {
   createF402ReplayTransport,
   type F402ReplayTransport,
 } from "../lib/f402_replay_transport.ts";
-import { describeF402Session, readF402Session } from "../lib/f402_session.ts";
+import {
+  describeF402Session,
+  primeF402Session,
+  readF402Session,
+} from "../lib/f402_session.ts";
 import type { Dod6SpineOverlay } from "../lib/dod6_spine_overlay.ts";
 import type { GsliveSteamIndex } from "../lib/gslive_steam_index.ts";
 import {
@@ -693,6 +697,7 @@ async function main(): Promise<number> {
     /\/$/,
     "",
   );
+  await primeF402Session();
   const session = readF402Session();
   if (session === null) {
     console.error(

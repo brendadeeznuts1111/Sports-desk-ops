@@ -68,10 +68,11 @@ import {
 } from "../lib/wagers_live_sink.ts";
 import {
   describeF402Session,
-  readF402Session,
+  loadF402Session,
   refreshF402Session,
-  writeF402Session,
+  saveF402Session,
 } from "../lib/f402_session.ts";
+import { F402SecretError } from "../lib/f402_secret_store.ts";
 
 const repoRoot = path.resolve(
   import.meta.dirname ?? path.dirname(Bun.main),
@@ -1268,11 +1269,18 @@ export async function writeGraphLiveFeedOnce(
     } else {
       const agentId = Bun.env.F402_AGENT_ID?.trim() || "BILLY666";
       const baseUrl = Bun.env.F402_BASE_URL?.trim() || "https://fantasy402.com";
-      let session = readF402Session();
+      // Keychain store unusable → same path as a missing session; config errors still throw.
+      let session = await loadF402Session().catch((error: unknown) => {
+        if (!(error instanceof F402SecretError)) throw error;
+        console.warn(
+          `[GraphPoller] f402 session store: ${error.name}: ${error.message}`,
+        );
+        return null;
+      });
       if (session === null) {
         try {
           session = await refreshF402Session();
-          writeF402Session(session);
+          await saveF402Session(session);
           console.log(
             `[GraphPoller] f402 logged in: ${describeF402Session(session)}`,
           );
@@ -1292,7 +1300,7 @@ export async function writeGraphLiveFeedOnce(
         if (f402Probe.error === "unauthorized") {
           try {
             session = await refreshF402Session();
-            writeF402Session(session);
+            await saveF402Session(session);
             f402Probe = await probeF402BetTicker(session, { baseUrl, agentId });
             console.log("[GraphPoller] f402 session refreshed after 401");
           } catch (error) {

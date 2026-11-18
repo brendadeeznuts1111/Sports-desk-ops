@@ -39,6 +39,7 @@ import {
 import {
   ensureF402Session,
   loadF402Session,
+  primeF402Session,
   readF402Session,
   refreshF402Session,
   saveF402Session,
@@ -796,10 +797,9 @@ export async function resolvePullSession(options: {
 }): Promise<F402Session> {
   const provider = options.provider ?? defaultSessionProvider();
   const now = options.now ?? Date.now();
-  // Keychain store: load the Bun.secrets entry into this process before the sync read below.
   if (options.provider === undefined) {
     try {
-      await loadF402Session();
+      await primeF402Session();
     } catch (error) {
       const message =
         error instanceof Error

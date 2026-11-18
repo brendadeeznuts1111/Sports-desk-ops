@@ -11,7 +11,7 @@ import {
   type WebLogRequest,
 } from "./f402_weblog_fetch.ts";
 import type { ResolveF402BearerOptions } from "./f402_pending_fetch.ts";
-import { readF402Session } from "./f402_session.ts";
+import { primeF402Session, readF402Session } from "./f402_session.ts";
 import { resolveFourcRoot } from "./fourc_root.ts";
 
 export const WEBLOG_BRIDGE_USAGE_HINT = [
@@ -241,6 +241,7 @@ export async function resolveWeblogCorpusPaths(
       ...(values.ip !== undefined ? { ip: values.ip } : {}),
     };
 
+    await primeF402Session();
     const session = readF402Session();
     const cookieHeader = session?.cookieHeader?.trim();
 
