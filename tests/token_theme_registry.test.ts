@@ -149,14 +149,20 @@ describe("deterministic emission", () => {
     ).not.toBe(a);
   });
 
-  test("env and example share the body but not the mode header", () => {
+  test("env example keeps keys but redacts live values", () => {
     const fingerprint = computeSnapshotFingerprint(rows);
     const live = renderEnvFile(rows, fingerprint, "live");
     const example = renderEnvFile(rows, fingerprint, "example");
     expect(live).toContain(`PROFILE_OPS_02_COLOR_HEX="#1e90ff"`);
     expect(live).toContain("PROFILE_DESK_01_COLOR_INT=16711680");
     expect(live).toContain(`PROFILE_OPS_02_COLOR_INT=${0x1e90ff}`);
-    expect(example).toBe(live.replace("Mode: live", "Mode: example"));
+    expect(example).toContain("Mode: example");
+    expect(example).toContain(`PROFILE_OPS_02_COLOR_LABEL="<label>"`);
+    expect(example).toContain(`PROFILE_OPS_02_COLOR_CSS="<css>"`);
+    expect(example).toContain("PROFILE_OPS_02_COLOR_INT=0");
+    expect(example).toContain(`PROFILE_OPS_02_COLOR_HEX="#000000"`);
+    expect(example).not.toContain("#1e90ff");
+    expect(example).not.toContain("16711680");
     expect(renderEnvFile(rows, fingerprint)).toBe(live);
     expect(sanitizeEnvValue('a"b\\c`d\ne')).toBe('a\\"b\\\\c\\`de');
   });
@@ -234,6 +240,97 @@ describe("syncIfChanged", () => {
       store.close();
       reader.close();
       writer.close();
+    }
+  });
+
+  test("sees same-connection writes when PRAGMA data_version does not change", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "theme-sync-same-conn-"));
+    dirs.push(dir);
+    const dbPath = join(dir, "themes.sqlite");
+    const reader = openSportsdeskSqlite(dbPath);
+    const store = new AutomatedDualTokenStore(dbPath, false);
+    const envPath = join(dir, ".env");
+    const targets = {
+      envPath,
+      envExamplePath: join(dir, ".env.example"),
+      themeGenPath: join(dir, "index.theme.gen.ts"),
+    };
+    const state: SyncState = { lastDataVersion: -1, lastFingerprint: "" };
+    try {
+      const input = normalizeColorInput("dodgerblue", "accent");
+      store.upsertProfileTheme({
+        profile_id: assertProfileId("desk-01"),
+        color_hex: `#${input.color_int.toString(16).padStart(6, "0")}`,
+        ...input,
+      });
+      expect(await syncIfChanged(reader, state, targets)).toBe(true);
+
+      const before = Number(
+        (reader.query("PRAGMA data_version").get() as { data_version: number })
+          .data_version,
+      );
+      reader
+        .query("UPDATE profile_themes SET color_int = ?1 WHERE profile_id = ?2")
+        .run(0xff0000, "desk-01");
+      const after = Number(
+        (reader.query("PRAGMA data_version").get() as { data_version: number })
+          .data_version,
+      );
+      expect(after).toBe(before);
+      expect(await syncIfChanged(reader, state, targets)).toBe(true);
+      expect(await Bun.file(envPath).text()).toContain(
+        "PROFILE_DESK_01_COLOR_INT=16711680",
+      );
+    } finally {
+      store.close();
+      reader.close();
+    }
+  });
+
+  test("retries after a failed target write instead of advancing state", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "theme-sync-failure-"));
+    dirs.push(dir);
+    const dbPath = join(dir, "themes.sqlite");
+    const reader = openSportsdeskSqlite(dbPath);
+    const store = new AutomatedDualTokenStore(dbPath, false);
+    const envPath = join(dir, ".env");
+    const targets = {
+      envPath,
+      envExamplePath: join(dir, ".env.example"),
+      themeGenPath: join(dir, "index.theme.gen.ts"),
+    };
+    const state: SyncState = { lastDataVersion: -1, lastFingerprint: "" };
+    try {
+      const input = normalizeColorInput("dodgerblue", "accent");
+      store.upsertProfileTheme({
+        profile_id: assertProfileId("desk-01"),
+        color_hex: `#${input.color_int.toString(16).padStart(6, "0")}`,
+        ...input,
+      });
+      expect(await syncIfChanged(reader, state, targets)).toBe(true);
+
+      const next = normalizeColorInput("crimson", "alert");
+      store.upsertProfileTheme({
+        profile_id: assertProfileId("desk-01"),
+        color_hex: `#${next.color_int.toString(16).padStart(6, "0")}`,
+        ...next,
+      });
+
+      const blocker = join(dir, "blocker");
+      await Bun.write(blocker, "not a directory");
+      await expect(
+        syncIfChanged(reader, state, {
+          ...targets,
+          envPath: join(blocker, ".env"),
+        }),
+      ).rejects.toThrow();
+      expect(await syncIfChanged(reader, state, targets)).toBe(true);
+      expect(await Bun.file(envPath).text()).toContain(
+        'PROFILE_DESK_01_COLOR_HEX="#dc143c"',
+      );
+    } finally {
+      store.close();
+      reader.close();
     }
   });
 });

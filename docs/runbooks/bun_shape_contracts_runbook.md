@@ -250,14 +250,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/stdout)
 - **Shape:** value: `object` · writable true · enumerable true
-- **Here:** `cli/sportsdesk_replay_cli.ts`, `scripts/capture/f402_hierarchy_probe.ts`
+- **Here:** `cli/sportsdesk_replay_cli.ts`, `src/pty-session.ts`
 - **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/subprocess_deadlock.test.ts`, `probe:proc.stdio`
 
 #### Bun.Subprocess (type)
 
 - **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/child-process#spawn-a-process-bun-spawn))
 - **Shape:** type-only: declared, no runtime value
-- **Here:** `lib/bun_terminal.ts`
+- **Here:** `lib/bun_terminal.ts`, `src/pty-session.ts`
 - **Evidence:** `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bundle_runtime.test.ts`, `test:tests/dev_dashboard_endpoints.test.ts`, `test:tests/pty_feature_flags.test.ts`
 
 #### Bun.Terminal
@@ -359,14 +359,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/sliceAnsi)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `bin/bun_surface.ts`
+- **Here:** `bin/bun_surface.ts`, `lib/token_watch_native.ts`
 - **Evidence:** `surface:sliceAnsi`, `test:tests/bun_builtin_replacements.test.ts`
 
 #### Bun.stringWidth
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/stringWidth)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/wagers_report.ts`, `lib/cli_inspect.ts`
+- **Here:** `lib/wagers_report.ts`, `src/lib/terminal_links.ts`
 - **Evidence:** `test:scripts/gslive_wagers_by_state.test.ts`, `test:tests/ansi_markdown_theme.test.ts`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_url_native_utils.test.ts`
 
 #### Bun.stripANSI
@@ -380,7 +380,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/wrapAnsi)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/render_docs.ts`, `scripts/gslive_wagers_by_state.ts`
+- **Here:** `scripts/render_docs.ts`, `lib/token_watch_native.ts`
 - **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_url_native_utils.test.ts`, `test:tests/bun_v140_primitives.test.ts`, `test:tests/dashboard_build_and_markdown.test.ts`
 
 ## Data formats and parsing
