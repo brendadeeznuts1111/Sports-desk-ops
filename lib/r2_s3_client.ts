@@ -14,6 +14,12 @@ import type {
   S3Stats,
 } from "bun";
 import type { BunSecretSetOptions } from "../types/bun-api.ts";
+import {
+  fetchWithProxyPolicy,
+  type R2Proxy,
+  R2ProxyTunnelError,
+  resolveR2Proxy,
+} from "./desk_fetch_proxy.ts";
 import { getSecretBounded, KeychainTimeoutError } from "./secrets.ts";
 
 export type R2S3Env = Readonly<Record<string, string | undefined>>;
@@ -59,6 +65,8 @@ export interface R2S3Options {
   readonly sessionToken?: string;
   readonly region?: string;
   readonly publicBase: string;
+  /** Proxy for the signed PUT/HEAD fetches; caller-supplied only, default direct. */
+  readonly proxy?: R2Proxy;
 }
 
 /** The subset of Bun.S3Client this adapter delegates to (fake-able in tests). */
@@ -420,6 +428,7 @@ async function putObjectWithMetadata(
     readonly retry?: number;
     readonly retryDelayMs?: number;
     readonly fetchImpl?: typeof fetch;
+    readonly proxy?: R2Proxy;
   } = {},
 ): Promise<void> {
   if (
@@ -442,6 +451,7 @@ async function putObjectWithMetadata(
     ),
   );
   const doFetch = retryOptions.fetchImpl ?? fetch;
+  resolveR2Proxy(retryOptions.proxy);
 
   let lastError: Error | undefined;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -477,13 +487,17 @@ async function putObjectWithMetadata(
     });
     let response: Response;
     try {
-      response = await doFetch(`${endpoint.origin}${path}`, {
-        method: "PUT",
-        headers: requestHeaders,
-        body: payload,
-      });
+      response = await fetchWithProxyPolicy(
+        doFetch,
+        `${endpoint.origin}${path}`,
+        { method: "PUT", headers: requestHeaders, body: payload },
+        retryOptions.proxy,
+      );
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
+      if (lastError instanceof R2ProxyTunnelError && lastError.status === 407) {
+        throw lastError;
+      }
       if (attempt < maxRetries) continue;
       throw lastError;
     }
@@ -509,7 +523,10 @@ export class R2S3Client {
     readonly bucket: string,
     readonly publicBase: string,
     private readonly auth?: R2S3Auth,
-  ) {}
+    private readonly proxy: R2Proxy = false,
+  ) {
+    resolveR2Proxy(proxy);
+  }
 
   static fromOptions(
     options: R2S3Options,
@@ -526,7 +543,13 @@ export class R2S3Client {
       ...(options.region === undefined ? {} : { region: options.region }),
     };
     const backend = client ?? new Bun.S3Client(credentials);
-    return new R2S3Client(backend, options.bucket, options.publicBase, options);
+    return new R2S3Client(
+      backend,
+      options.bucket,
+      options.publicBase,
+      options,
+      options.proxy ?? false,
+    );
   }
 
   static fromEnv(env: R2S3Env = Bun.env): R2S3Client | null {
@@ -641,6 +664,7 @@ export class R2S3Client {
         ...(options.fetchImpl === undefined
           ? {}
           : { fetchImpl: options.fetchImpl }),
+        proxy: this.proxy,
       },
     );
     return byteLength(data);
@@ -668,10 +692,12 @@ export class R2S3Client {
       headers: {},
     });
     const doFetch = options.fetchImpl ?? fetch;
-    const response = await doFetch(`${endpoint.origin}${path}`, {
-      method: "HEAD",
-      headers: requestHeaders,
-    });
+    const response = await fetchWithProxyPolicy(
+      doFetch,
+      `${endpoint.origin}${path}`,
+      { method: "HEAD", headers: requestHeaders },
+      this.proxy,
+    );
     if (response.status === 404) return null;
     if (!response.ok) {
       throw new Error(`R2 HEAD ${key} failed (${response.status})`);

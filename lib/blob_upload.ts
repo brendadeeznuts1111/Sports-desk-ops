@@ -7,6 +7,7 @@
 
 import { z } from "zod";
 
+import { fetchWithProxyPolicy, type R2Proxy } from "./desk_fetch_proxy.ts";
 import { R2_SECRETS_SERVICE } from "./r2_s3_client.ts";
 import { getSecretBounded } from "./secrets.ts";
 
@@ -37,6 +38,8 @@ export interface ScreenshotBlobUploadOptions {
     input: string | URL | Request,
     init?: RequestInit,
   ) => Promise<Response>;
+  /** Caller-supplied proxy for gateway calls; default direct. */
+  readonly proxy?: R2Proxy;
 }
 
 export interface ScreenshotBlobUploadResult {
@@ -124,14 +127,19 @@ export async function uploadScreenshotToGateway(
   if (!BLOB_KEY_RE.test(key)) throw new Error("invalid blob key");
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const response = await fetchImpl(`${base}/api/v1/blobs/${key}`, {
-    method: "PUT",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": contentType,
+  const response = await fetchWithProxyPolicy(
+    fetchImpl,
+    `${base}/api/v1/blobs/${key}`,
+    {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": contentType,
+      },
+      body: bytes,
     },
-    body: bytes,
-  });
+    options.proxy,
+  );
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const code = errorCode(body);
@@ -144,9 +152,12 @@ export async function uploadScreenshotToGateway(
     throw new Error("blob gateway returned an invalid upload response");
   }
 
-  const verify = await fetchImpl(`${base}/api/v1/blobs/${key}?download=1`, {
-    headers: { authorization: `Bearer ${token}` },
-  });
+  const verify = await fetchWithProxyPolicy(
+    fetchImpl,
+    `${base}/api/v1/blobs/${key}?download=1`,
+    { headers: { authorization: `Bearer ${token}` } },
+    options.proxy,
+  );
   if (!verify.ok) {
     throw new Error(`blob verification failed (HTTP ${verify.status})`);
   }

@@ -108,6 +108,25 @@ describe("wagers live sink", () => {
     expect(resolveWagersGatewayUrl({})).toBe("http://127.0.0.1:4021");
   });
 
+  test("posts to the gateway with proxy:false unless the caller passes one", async () => {
+    const proxies: unknown[] = [];
+    const sink = createWagersLiveSink({
+      liveBets: true,
+      r2: false,
+      gatewayUrl: "http://gateway.test",
+      apiToken: "token",
+      fetchImpl: async (_input, init) => {
+        proxies.push((init as BunFetchRequestInit | undefined)?.proxy);
+        return Response.json({ published: 1 });
+      },
+    });
+    expect(await sink.publishLiveBets(OUTCOME)).toEqual({
+      ok: true,
+      published: 1,
+    });
+    expect(proxies).toEqual([false]);
+  });
+
   test("posts exactly one gslive-wagers event with bearer auth", async () => {
     let captured: { url: string; body: unknown; headers: Headers } | undefined;
     const sink = createWagersLiveSink({

@@ -12,6 +12,7 @@ import {
   type WagersHistoryState,
   type WagersHistoryTotals,
 } from "../scripts/gslive_wagers_by_state.ts";
+import { fetchWithProxyPolicy, type R2Proxy } from "./desk_fetch_proxy.ts";
 import { R2S3Client } from "./r2_s3_client.ts";
 
 export const WAGERS_LIVE_CHANNEL = "gslive-wagers";
@@ -58,6 +59,8 @@ export interface WagersLiveSinkOptions {
     input: string | URL | Request,
     init?: RequestInit,
   ) => Promise<Response>;
+  /** Caller-supplied proxy for the live-bets gateway; default direct. */
+  readonly proxy?: R2Proxy;
   /** Injectable for tests; `undefined` resolves from the environment, `null` disables R2. */
   readonly r2Client?: R2S3Client | null;
 }
@@ -144,15 +147,20 @@ export function createWagersLiveSink(
       }
       const event = buildWagersLiveEvent(outcome);
       try {
-        const response = await fetchImpl(`${gatewayUrl}/api/v1/live-bets`, {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${apiToken}`,
-            "content-type": "application/json",
+        const response = await fetchWithProxyPolicy(
+          fetchImpl,
+          `${gatewayUrl}/api/v1/live-bets`,
+          {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${apiToken}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ channel, event }),
+            signal: AbortSignal.timeout(5_000),
           },
-          body: JSON.stringify({ channel, event }),
-          signal: AbortSignal.timeout(5_000),
-        });
+          options.proxy,
+        );
         if (!response.ok) {
           return {
             ok: false,

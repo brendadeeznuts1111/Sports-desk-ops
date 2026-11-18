@@ -19,6 +19,8 @@
  * cannot be read is reported as unread, never as zero.
  */
 
+import { fetchWithProxyPolicy, type R2Proxy } from "./desk_fetch_proxy.ts";
+
 /** Version of the {@link DeskHealth} document shape. */
 export const DESK_HEALTH_SCHEMA_VERSION = 1;
 
@@ -130,6 +132,8 @@ export interface DeskHealthOptions {
   readonly baseUrl?: string;
   /** Injected for tests. Defaults to the global `fetch`. */
   readonly fetchImpl?: DeskFetch;
+  /** Caller-supplied proxy; default direct. */
+  readonly proxy?: R2Proxy;
   /** Injected clock. Defaults to now. */
   readonly now?: Date;
   readonly timeoutMs?: number;
@@ -509,12 +513,18 @@ async function probe(
   fetchImpl: DeskFetch,
   url: string,
   timeoutMs: number,
+  proxy: R2Proxy | undefined,
 ): Promise<ProbeResult> {
   try {
-    const response = await fetchImpl(url, {
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    const response = await fetchWithProxyPolicy(
+      fetchImpl,
+      url,
+      {
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(timeoutMs),
+      },
+      proxy,
+    );
     const parsed: unknown = await response
       .json()
       .catch((): unknown => ({ success: false, error: "body is not JSON" }));
@@ -595,7 +605,12 @@ export async function collectDeskHealth(
     return unreachableHealth(rawBaseUrl, "not a URL", null, now);
   }
 
-  const health = await probe(fetchImpl, `${baseUrl}/health`, timeoutMs);
+  const health = await probe(
+    fetchImpl,
+    `${baseUrl}/health`,
+    timeoutMs,
+    options.proxy,
+  );
   if (!health.ok) {
     return unreachableHealth(
       baseUrl,
@@ -604,7 +619,12 @@ export async function collectDeskHealth(
       now,
     );
   }
-  const status = await probe(fetchImpl, `${baseUrl}/api/status`, timeoutMs);
+  const status = await probe(
+    fetchImpl,
+    `${baseUrl}/api/status`,
+    timeoutMs,
+    options.proxy,
+  );
 
   const endpoints = [...new Set(PANELS.map((panel) => panel.endpoint))].sort(
     (left, right) => left.localeCompare(right),
@@ -614,7 +634,12 @@ export async function collectDeskHealth(
     endpoints.map(async (endpoint) => {
       results.set(
         endpoint,
-        await probe(fetchImpl, `${baseUrl}${endpoint}`, timeoutMs),
+        await probe(
+          fetchImpl,
+          `${baseUrl}${endpoint}`,
+          timeoutMs,
+          options.proxy,
+        ),
       );
     }),
   );

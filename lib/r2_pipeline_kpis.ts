@@ -150,6 +150,7 @@ export async function probeR2PipelineKpis(
   fetchImpl: R2PipelineFetcher = (url, init) =>
     fetch(url, {
       ...init,
+      proxy: false,
       signal: AbortSignal.timeout(DEFAULT_R2_PROBE_TIMEOUT_MS),
     }),
 ): Promise<R2PipelineKpis> {
