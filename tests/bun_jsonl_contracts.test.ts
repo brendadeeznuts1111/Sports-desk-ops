@@ -103,3 +103,30 @@ describe("Bun.JSONL.parse fail-open", () => {
     expect(() => Bun.JSONL.parse("{not json}\n")).toThrow(SyntaxError);
   });
 });
+
+describe("Bun.JSONL read units", () => {
+  test("read counts characters for string input and bytes for Uint8Array", () => {
+    // Same record, two units. Mixing them corrupts every multi-byte UTF-8
+    // record — a silent wrong offset, not a thrown error. Documented at
+    // lib/f402_bet_ticker_jsonl.ts:266, which advances a byte buffer past the
+    // newline instead of reusing a string-derived offset.
+    const raw = '{"n":"é"}\n';
+    const bytes = new TextEncoder().encode(raw);
+    expect(raw.length).toBe(10); // characters
+    expect(bytes.length).toBe(11); // UTF-8 bytes: é is 2
+
+    const fromString = Bun.JSONL.parseChunk(raw);
+    const fromBytes = Bun.JSONL.parseChunk(bytes);
+
+    expect(fromString.values).toEqual([{ n: "é" }]);
+    expect(fromBytes.values).toEqual([{ n: "é" }]);
+    expect(fromString.done).toBe(true);
+    expect(fromBytes.done).toBe(true);
+
+    // Both stop one unit before their own terminator: 9 chars, 10 bytes.
+    expect(fromString.read).toBe(9);
+    expect(fromBytes.read).toBe(10);
+    // The gap is exactly the extra UTF-8 byte, not a rounding difference.
+    expect(fromBytes.read - fromString.read).toBe(bytes.length - raw.length);
+  });
+});
