@@ -41,6 +41,11 @@ export const FLAG_SPECS: readonly CliFlagSpec[] = Object.freeze([
     description: "Machine output (single JSON object, full entries)",
   },
   {
+    flags: "--markdown",
+    description:
+      "Render a Markdown summary (CI step summary) instead of per-asset cards",
+  },
+  {
     flags: "--summary",
     description: "Text totals per directory; skip per-asset cards",
   },

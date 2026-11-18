@@ -801,3 +801,59 @@ test("a thumbnail write failure exits 1 with an error code, not a host path", as
     rmSync(thumbDir, { recursive: true, force: true });
   }
 });
+
+test("--markdown renders a table and escapes pipes", async () => {
+  const mdDir = mkdtempSync(join(tmpdir(), "sd-cli-md-"));
+  try {
+    writeFileSync(join(mdDir, "a.png"), png1x1());
+    writeFileSync(join(mdDir, "pipe|name.png"), png1x1());
+    writeFileSync(join(mdDir, "broken.png"), "not an image");
+
+    const result = runCli(["--markdown", "--limit=10", mdDir]);
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain("# Image assets");
+    expect(result.stdout).toContain(
+      "| Source | Format | Dimensions | Bytes | Status |",
+    );
+    expect(result.stdout).toContain("pipe\\|name.png");
+    expect(result.stdout).toContain("ERR_IMAGE_UNKNOWN_FORMAT");
+    expect(result.stdout).not.toContain("\x1b");
+  } finally {
+    rmSync(mdDir, { recursive: true, force: true });
+  }
+});
+
+test("--markdown includes thumbnail and baseline sections", async () => {
+  const mdDir = mkdtempSync(join(tmpdir(), "sd-cli-md-thumbs-"));
+  try {
+    await makePng(join(mdDir, "wide.png"), 120, 90);
+    const baselinePath = join(mdDir, "baseline.json");
+
+    const written = runCli([
+      "--markdown",
+      "--thumbs=40",
+      `--write-baseline=${baselinePath}`,
+      mdDir,
+    ]);
+    expect(written.code).toBe(0);
+    expect(written.stdout).toContain("### Thumbnails");
+    expect(written.stdout).toContain("| written |");
+    expect(written.stdout).toContain("Baseline written");
+
+    const compared = runCli([
+      "--markdown",
+      `--baseline=${baselinePath}`,
+      mdDir,
+    ]);
+    expect(compared.code).toBe(0);
+    expect(compared.stdout).toContain(
+      "Baseline drift · compared=1 added=0 removed=0 changed=0",
+    );
+
+    const conflict = runCli(["--markdown", "--json", mdDir]);
+    expect(conflict.code).toBe(2);
+    expect(conflict.stderr).toContain("mutually exclusive");
+  } finally {
+    rmSync(mdDir, { recursive: true, force: true });
+  }
+});

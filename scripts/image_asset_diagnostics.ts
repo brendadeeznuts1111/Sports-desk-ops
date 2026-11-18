@@ -68,6 +68,7 @@ const BACKEND_MODES = ["bun", "system"] as const;
 interface ParsedArgs {
   readonly dirs: readonly string[];
   readonly json: boolean;
+  readonly markdown: boolean;
   readonly summary: boolean;
   readonly limit: number | undefined;
   readonly maxBytes: number | undefined;
@@ -268,6 +269,7 @@ function intInRange(
 function parseArgs(argv: readonly string[]): ParsedArgs {
   const dirs: string[] = [];
   let json = false;
+  let markdown = false;
   let summary = false;
   let limit: number | undefined;
   let maxBytes: number | undefined;
@@ -299,6 +301,8 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       continue; // handled before parsing
     } else if (arg === "--json") {
       json = true;
+    } else if (arg === "--markdown") {
+      markdown = true;
     } else if (arg === "--summary") {
       summary = true;
     } else if (arg === "--recursive" || arg === "-r") {
@@ -427,10 +431,14 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   if (baseline !== undefined && writeBaseline !== undefined) {
     throw new Error("--baseline and --write-baseline are mutually exclusive");
   }
+  if (markdown && json) {
+    throw new Error("--markdown and --json are mutually exclusive");
+  }
 
   return {
     dirs: dirs.length === 0 ? [DEFAULT_ASSET_ROOT] : dirs,
     json,
+    markdown,
     summary,
     limit,
     maxBytes,
@@ -740,6 +748,124 @@ function printText(
   }
 }
 
+function markdownCell(value: string): string {
+  return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+}
+
+function markdownCode(value: string): string {
+  return `\`${value.replace(/`/g, "\\`")}\``;
+}
+
+/** Markdown summary for CI step summaries; sources are already masked. */
+function printMarkdown(
+  reports: readonly DirectoryReport[],
+  args: ParsedArgs,
+): void {
+  console.log("# Image assets");
+  console.log("");
+  console.log(`- visibility: ${markdownCode(args.visibility)}`);
+  console.log(`- backend: ${markdownCode(Bun.Image.backend)}`);
+  console.log(`- generated: ${new Date().toISOString()}`);
+  if (args.headerBytes !== undefined) {
+    console.log(`- header budget: ${args.headerBytes} B`);
+  }
+  console.log("");
+
+  for (const report of reports) {
+    console.log(`## ${markdownCell(report.root)}`);
+    console.log("");
+    const suffix = report.truncated
+      ? ` · truncated (${report.total} total)`
+      : "";
+    console.log(`shown ${report.files.length}${suffix}`);
+    console.log("");
+    console.log("| Source | Format | Dimensions | Bytes | Status |");
+    console.log("| --- | --- | --- | --- | --- |");
+    for (const file of report.files) {
+      const entry = file.entry;
+      if (entry.type === "BunImageAssetScanFailure") {
+        console.log(
+          `| ${markdownCell(entry.source)} | — | — | — | ${markdownCode(entry.code)} |`,
+        );
+        continue;
+      }
+      const bytes = entry.bytes === null ? "—" : formatByteCount(entry.bytes);
+      console.log(
+        `| ${markdownCell(entry.source)} | ${entry.format} | ${entry.width}×${entry.height} | ${bytes} | ok |`,
+      );
+    }
+    console.log("");
+
+    if (args.thumbs !== null && report.thumbnails.length > 0) {
+      console.log("### Thumbnails");
+      console.log("");
+      console.log("| Source | Thumbnail | Dimensions | Bytes | Status |");
+      console.log("| --- | --- | --- | --- | --- |");
+      for (const thumb of report.thumbnails) {
+        const source = markdownCell(
+          maskAssetSource(thumb.source, args.visibility),
+        );
+        if (!thumb.ok) {
+          console.log(
+            `| ${source} | — | — | — | ${markdownCode(thumb.error)} |`,
+          );
+          continue;
+        }
+        const destination = markdownCell(
+          maskAssetSource(thumb.destination, args.visibility),
+        );
+        if (thumb.skipped) {
+          console.log(`| ${source} | ${destination} | — | — | skipped |`);
+          continue;
+        }
+        console.log(
+          `| ${source} | ${destination} | ${thumb.width}×${thumb.height} | ${formatByteCount(thumb.bytes)} | written |`,
+        );
+      }
+      console.log("");
+    }
+  }
+}
+
+function printBaselineReport(
+  args: ParsedArgs,
+  baselineDrift: BaselineDrift | null,
+  baselineError: string | null,
+  candidateCount: number,
+  markdown: boolean,
+): void {
+  const prefix = markdown ? "- " : "";
+  if (args.writeBaseline !== undefined) {
+    console.log(
+      `${prefix}Baseline ${baselineError === null ? "written" : "write failed"} · ` +
+        `${markdown ? markdownCode(args.writeBaseline) : args.writeBaseline} · ${candidateCount} asset(s)` +
+        (baselineError === null ? "" : ` · ${baselineError}`),
+    );
+  }
+  if (args.baseline === undefined) return;
+  if (baselineDrift === null) {
+    console.log(
+      `${prefix}Baseline unreadable · ${markdown ? markdownCode(args.baseline) : args.baseline} · ${baselineError}`,
+    );
+    return;
+  }
+  console.log(
+    `${prefix}Baseline drift · compared=${baselineDrift.compared} ` +
+      `added=${baselineDrift.added.length} ` +
+      `removed=${baselineDrift.removed.length} ` +
+      `changed=${baselineDrift.changed.length}`,
+  );
+  for (const key of baselineDrift.added) {
+    console.log(markdown ? `  - added: ${markdownCode(key)}` : `  + ${key}`);
+  }
+  for (const key of baselineDrift.removed) {
+    console.log(markdown ? `  - removed: ${markdownCode(key)}` : `  - ${key}`);
+  }
+  for (const key of baselineDrift.changed) {
+    console.log(markdown ? `  - changed: ${markdownCode(key)}` : `  ~ ${key}`);
+  }
+}
+
 async function main(argv: readonly string[]): Promise<number> {
   if (argv.includes("-h") || argv.includes("--help")) {
     console.log(USAGE);
@@ -884,6 +1010,15 @@ async function main(argv: readonly string[]): Promise<number> {
         2,
       ),
     );
+  } else if (args.markdown) {
+    printMarkdown(reports, args);
+    printBaselineReport(
+      args,
+      baselineDrift,
+      baselineError,
+      candidates.length,
+      true,
+    );
   } else {
     printText(
       reports,
@@ -891,30 +1026,13 @@ async function main(argv: readonly string[]): Promise<number> {
       args.color &&
         useColor({ env: Bun.env, isTTY: process.stdout.isTTY === true }),
     );
-    if (args.writeBaseline !== undefined) {
-      console.log(
-        `Baseline ${baselineError === null ? "written" : "write failed"} · ` +
-          `${args.writeBaseline} · ${candidates.length} asset(s)` +
-          (baselineError === null ? "" : ` · ${baselineError}`),
-      );
-    }
-    if (args.baseline !== undefined) {
-      if (baselineDrift === null) {
-        console.log(
-          `Baseline unreadable · ${args.baseline} · ${baselineError}`,
-        );
-      } else {
-        console.log(
-          `Baseline drift · compared=${baselineDrift.compared} ` +
-            `added=${baselineDrift.added.length} ` +
-            `removed=${baselineDrift.removed.length} ` +
-            `changed=${baselineDrift.changed.length}`,
-        );
-        for (const key of baselineDrift.added) console.log(`  + ${key}`);
-        for (const key of baselineDrift.removed) console.log(`  - ${key}`);
-        for (const key of baselineDrift.changed) console.log(`  ~ ${key}`);
-      }
-    }
+    printBaselineReport(
+      args,
+      baselineDrift,
+      baselineError,
+      candidates.length,
+      false,
+    );
   }
 
   if (failures > 0 && args.fail) return 1;
