@@ -222,6 +222,66 @@ no network, fake bearer token):
 - The mock registry test is the evidence: it starts `Bun.serve`, spawns the real CLI asynchronously,
   and records the `PUT` order, so the pack-before-publish claim is checked rather than assumed.
 
+<!-- bun-behavior: link-paths -->
+
+## `link:` paths (measured 2026-11-18)
+
+The pinned [bun-v1.4.4 release](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) makes
+`link:` accept a path. Measured in a fixture whose `package.json` declares
+`"linked": "link:./vendor/linked"`: `bun install` creates
+`node_modules/linked -> ../vendor/linked` (a real symlink; `bun link` is not required first).
+The path is relative to the `package.json` that declares it. `tests/bun_link_paths.test.ts`
+re-measures the symlink target.
+
+<!-- bun-behavior: bunx-cwd-env-file -->
+
+## `bunx --cwd` and `--env-file` (measured 2026-11-18)
+
+The same release adds the package-manager `--env-file` and `bunx` flags. Measured with a local
+`node_modules/.bin/probe-cli` shim, invoked from a different working directory:
+
+```
+bunx --cwd <fixture> --env-file <fixture>/ci.env probe-cli
+→ {"cwd":"<fixture>","token":"abc123"}
+```
+
+So both flags reach the executed tool (`process.cwd()` and the loaded variable), not just the
+installer. `tests/bunx_flags.test.ts` re-measures it without the network.
+
+<!-- bun-behavior: deprecated-packages -->
+
+## Deprecated packages (measured 2026-11-18)
+
+Measured against a mock registry that serves a deprecated `1.0.0` and a clean `1.0.1`:
+
+| Invocation                                | Result                                                                     |
+| :---------------------------------------- | :------------------------------------------------------------------------- |
+| `bun add dep-probe@1.0.0`                 | warns once: `warn: deprecated dep-probe@1.0.0: use 1.0.1`; records `1.0.0` |
+| `bun add dep-probe` (deprecated `latest`) | resolves `^1.0.1` — the deprecated latest is skipped                       |
+
+The release notes also say `--verbose` lists transitive deprecations and that versions already in
+`bun.lock` do not change until `bun update`; those two are not re-measured here.
+`tests/bun_deprecated_add.test.ts` owns the measured rows.
+
+<!-- bun-behavior: package-extensions -->
+
+## `packageExtensions` (measured 2026-11-18)
+
+The repo's existing contract test resolves an undeclared import under `--linker=isolated` by
+declaring it in the root `packageExtensions` block (`tests/bun_pm_behaviors.test.ts`,
+"packageExtensions resolves an undeclared import under isolated installs"). The block uses the
+pnpm/Yarn format; the release notes add that Bun copies it across when migrating a
+`pnpm-lock.yaml` or `yarn.lock` (not re-measured here).
+
+<!-- bun-behavior: minimum-release-age -->
+
+## `minimumReleaseAge` units and exclusions (measured 2026-11-18)
+
+`tests/bun_pm_behaviors.test.ts` accepts the unit forms and the exclusions flag on the pinned
+runtime (`--minimum-release-age`, `--minimum-release-age-excludes`), including a plain number
+interpreted as seconds. The per-version exclusion (`typescript@5.9.3`) and the "security fix
+today, rest of the package waits" semantics are release-note statements, not re-measured here.
+
 ## Upstream doc commit pins
 
 | Pin                                                                                                                      | Tree                               | Use                                                                       |

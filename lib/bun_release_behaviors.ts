@@ -72,6 +72,31 @@ const BEHAVIOR_METADATA: Readonly<Record<string, BehaviorMetadata>> = {
     docsPage: "/docs/cli/publish",
     shapes: [],
   },
+  "link-paths": {
+    title: "link: path dependencies",
+    docsPage: "/docs/cli/link",
+    shapes: [],
+  },
+  "bunx-cwd-env-file": {
+    title: "bunx --cwd and --env-file",
+    docsPage: "/docs/cli/bunx",
+    shapes: [],
+  },
+  "deprecated-packages": {
+    title: "bun add deprecated-package warnings and resolution",
+    docsPage: "/docs/cli/add",
+    shapes: [],
+  },
+  "package-extensions": {
+    title: "packageExtensions for undeclared dependencies",
+    docsPage: "/docs/install/lifecycle",
+    shapes: [],
+  },
+  "minimum-release-age": {
+    title: "minimumReleaseAge units and exclusions",
+    docsPage: "/docs/install/lifecycle",
+    shapes: [],
+  },
 };
 
 const DOC_PATH = "docs/bun-upstream-reference.md";
