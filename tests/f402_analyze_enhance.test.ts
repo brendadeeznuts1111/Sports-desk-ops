@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -16,6 +24,8 @@ import {
   renderAnalyzeOutput,
   runCalibrateAnalysis,
   runDiffAnalysis,
+  runLinkAnalysis,
+  runReviewAnalysis,
   runExplainAnalysis,
 } from "../lib/f402_analyze.ts";
 import { F402AnalyzeError } from "../lib/f402_analyze_ingest.ts";
@@ -60,7 +70,7 @@ function enhanceTree(): string {
 }
 
 describe("analyze config schema", () => {
-  test("accepts known weights and thresholds, and rejects unknown keys", () => {
+  test("accepts known weights and thresholds, and rejects unknown keys", async () => {
     const parsed = parseAnalyzeConfig({
       weights: { link: { steam_chase: 0 }, predict: { activity_gaps: 0.1 } },
       thresholds: { minEdgeScore: 0.4, ringMinEdgeScore: 0.5 },
@@ -77,7 +87,46 @@ describe("analyze config schema", () => {
     ).toThrow(F402AnalyzeError);
     const path = join(tempRoot(), "cfg.json");
     writeFileSync(path, JSON.stringify({ weights: { link: { clv_beat: 1 } } }));
-    expect(loadAnalyzeConfig(path).weights.link.clv_beat).toBe(1);
+    expect((await loadAnalyzeConfig(path)).weights.link.clv_beat).toBe(1);
+  });
+});
+
+describe("analyze config file", () => {
+  test("a missing or unreadable --config is a named config error", async () => {
+    for (const path of [join(tempRoot(), "absent.json"), "  "]) {
+      const error = await loadAnalyzeConfig(path).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(F402AnalyzeError);
+      expect((error as F402AnalyzeError).code).toBe("config");
+    }
+    const bad = join(tempRoot(), "bad.json");
+    writeFileSync(bad, "{");
+    const error = await loadAnalyzeConfig(bad).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(F402AnalyzeError);
+    expect((error as F402AnalyzeError).message).toContain("not valid JSON");
+  });
+});
+
+describe("analyze output files", () => {
+  test("summaries and the review are 0600 even when an older file was wider", () => {
+    const root = tempRoot();
+    writeSyntheticPull(root, plantedClusterPull());
+    const outDir = join(root, "analysis");
+    mkdirSync(outDir, { recursive: true });
+    const names = [
+      "link-summary.json",
+      "rings-summary.json",
+      "review-summary.json",
+      "review.md",
+    ];
+    for (const name of names) {
+      writeFileSync(join(outDir, name), "old\n", { mode: 0o644 });
+      chmodSync(join(outDir, name), 0o644);
+    }
+    runLinkAnalysis(root, { outDir });
+    runReviewAnalysis(root, { outDir });
+    for (const name of names) {
+      expect(statSync(join(outDir, name)).mode & 0o777).toBe(0o600);
+    }
   });
 });
 

@@ -3,7 +3,7 @@
  * and change prediction. Summaries hash IPs and never print them raw.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { sha256Hex } from "./f402_bet_ticker_delta.ts";
@@ -162,10 +162,15 @@ export function analysisOutDir(inDir: string, outDir?: string): string {
     : join(inDir, "analysis");
 }
 
+function writePrivateFile(path: string, text: string): void {
+  writeFileSync(path, text, { mode: 0o600 });
+  chmodSync(path, 0o600);
+}
+
 function writeSummary(path: string, value: unknown, operation: string): void {
   assertNoRawIp(value, operation);
   mkdirSync(join(path, ".."), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  writePrivateFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 export function runLinkAnalysis(
@@ -316,12 +321,9 @@ export function runReviewAnalysis(
     "report",
   );
   assertNoRawIp(sanitized, "report");
-  writeFileSync(
+  writePrivateFile(
     outPath,
     sanitized.endsWith("\n") ? sanitized : `${sanitized}\n`,
-    {
-      mode: 0o600,
-    },
   );
   return { markdown: sanitized, outPath, join: joinCoverage };
 }

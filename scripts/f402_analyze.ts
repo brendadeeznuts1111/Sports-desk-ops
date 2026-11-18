@@ -157,7 +157,7 @@ async function main(argv: string[]): Promise<number> {
     ...(horizonDays === undefined ? {} : { horizonDays }),
     ...(configPath === undefined
       ? {}
-      : { config: loadAnalyzeConfig(configPath) }),
+      : { config: await loadAnalyzeConfig(configPath) }),
     format,
     filters: {
       ...(accountsRaw === undefined

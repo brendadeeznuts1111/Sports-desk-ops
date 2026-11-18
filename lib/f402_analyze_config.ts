@@ -3,8 +3,6 @@
  * fail loudly; omitted keys keep the stock defaults so existing tests stay put.
  */
 
-import { readFileSync } from "node:fs";
-
 import { F402AnalyzeError } from "./f402_analyze_ingest.ts";
 
 export const LINK_EVIDENCE_TYPES = [
@@ -198,12 +196,12 @@ export function parseAnalyzeConfig(raw: unknown): AnalyzeConfig {
   return { weights: { link, predict }, thresholds, lists };
 }
 
-export function loadAnalyzeConfig(path: string): AnalyzeConfig {
+export async function loadAnalyzeConfig(path: string): Promise<AnalyzeConfig> {
   const trimmed = path.trim();
   if (trimmed === "") fail("missing --config path");
   let text: string;
   try {
-    text = readFileSync(trimmed, "utf8");
+    text = await Bun.file(trimmed).text();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     fail(`cannot read --config ${trimmed}: ${message}`);
