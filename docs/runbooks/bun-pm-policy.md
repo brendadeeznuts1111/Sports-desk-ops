@@ -312,6 +312,20 @@ Root manifest: `"private": true` and `"workspaces": ["packages/*"]` ([workspaces
 | `packages/nsh-desk`       | `@sportsdesk-ops/nsh-desk` | Native Shell (NSH) multi-plane terminal workspace (`version` locked to `nsh.json`)      |
 | `packages/ba-example`     | `ba-example`               | Doc-style reference workspace for `bun run --filter`                                    |
 
+`ba-example` declares a single `schema` script, so it also pins what a filtered run does when a
+matched package lacks the requested script:
+
+```sh
+bun run --filter 'ba*' schema                   # runs only ba-example; output is prefixed `ba-example schema:`
+bun run --filter 'ba*' --if-present typecheck   # exit 0, nothing to run
+```
+
+`--filter` matches package **names**, not directory paths (`--filter 'packages/ba*'` matches
+nothing — exit 1, `No workspace packages matched the filter`). A matched package without the
+script fails the whole run — `error: Script "typecheck" not found in package "ba-example"`, exit 1
+— so add `--if-present` when the glob can include a package that does not declare it. Measured on
+Bun 1.4.4, 2026-11-18.
+
 **Workspace Dev Control CLI (`scripts/dx_workspaces.ts` / `./bin/dx workspaces`):**
 
 ```sh
