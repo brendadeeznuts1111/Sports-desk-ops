@@ -19,6 +19,17 @@
 
 import { parseArgs } from "node:util";
 
+import { f402FetchSessions } from "../lib/f402_fetch_sessions.ts";
+import {
+  applyF402NetOptions,
+  assertBunNetworkEnv,
+  F402_NET_ARG_OPTIONS,
+  F402_NET_USAGE,
+  F402NetOptionsError,
+  f402NetReport,
+  resolveF402NetOptions,
+} from "../lib/f402_net_options.ts";
+
 import {
   F402_PULL_BASE_URL_ENV,
   F402_PULL_DEFAULT_BASE_URL,
@@ -29,6 +40,7 @@ import {
   createPaceClock,
   defaultTransactionStartDate,
   redactSecretsAndIps,
+  resolveF402PortalOrigin,
   resolvePullBaseUrl,
   resolvePullSession,
   runCensus,
@@ -74,7 +86,8 @@ Options:
   --since <YYYY-MM-DD>     Incremental start; later of --since and --from wins
   --mode <A|B|C|I>         getWebLog type (default: I)
   --skip-figure-date       Wagers: skip per-customer getWagersByFigureDate
-  --base-url <url>         https portal origin (default: ${F402_PULL_BASE_URL_ENV} or ${F402_PULL_DEFAULT_BASE_URL})
+  --base-url <url>         https portal origin, http only for loopback (default: ${F402_PULL_BASE_URL_ENV} or ${F402_PULL_DEFAULT_BASE_URL});
+                           the host must be allowlisted (see --host)
   --interval-ms <n>        Minimum delay between requests (default: ${F402_PULL_DEFAULT_INTERVAL_MS})
   --rate <n>               Requests per second (default 1); do not also pass a conflicting --interval-ms
   --concurrency <n>        Max in-flight per-customer jobs (default 1, checkpoint-safe)
@@ -82,6 +95,8 @@ Options:
   --no-resume              Ignore completed ids/dates in the checkpoint
   --dry-run                Print the planned allowlisted calls only; no session, no writes
   --help
+
+${F402_NET_USAGE}
 
 Session (existing path only; this CLI does not invent a login):
   Preferred: a cached session at ~/.cache/sportsdesk/f402-session.json
@@ -117,6 +132,10 @@ function requirePhase(argv: string[]): F402PullPhase {
   return positional as F402PullPhase;
 }
 
+function printNetReport(net: ReturnType<typeof resolveF402NetOptions>): void {
+  console.error(JSON.stringify(f402NetReport(net)));
+}
+
 async function main(argv: string[]): Promise<number> {
   if (argv.includes("--help") || argv.includes("-h")) {
     printUsage();
@@ -149,6 +168,7 @@ async function main(argv: string[]): Promise<number> {
       "recurse-downline": { type: "boolean", default: false },
       "skip-figure-date": { type: "boolean", default: false },
       help: { type: "boolean", default: false },
+      ...F402_NET_ARG_OPTIONS,
     },
     strict: true,
     allowPositionals: false,
@@ -198,7 +218,11 @@ async function main(argv: string[]): Promise<number> {
     accounts,
     recurseDownline: values["recurse-downline"] === true,
   };
-  const baseUrl = resolvePullBaseUrl(flagString(values, "base-url"));
+  const net = resolveF402NetOptions(values);
+  const baseUrl = resolveF402PortalOrigin(
+    resolvePullBaseUrl(flagString(values, "base-url")),
+    net.host,
+  );
 
   if (pullOptions.dryRun) {
     const from = flagString(values, "from");
@@ -223,6 +247,10 @@ async function main(argv: string[]): Promise<number> {
     console.log(JSON.stringify(redactSecretsAndIps(plan)));
     return 0;
   }
+
+  assertBunNetworkEnv(net);
+  applyF402NetOptions(net, f402FetchSessions);
+  if (net.verbose) process.once("exit", () => printNetReport(net));
 
   const session = await resolvePullSession({});
   const client = new F402PullClient({
@@ -347,6 +375,10 @@ if (import.meta.main) {
     if (error instanceof F402PullerError) {
       console.error(error.message);
       process.exit(error.code === "config" ? 2 : 1);
+    }
+    if (error instanceof F402NetOptionsError) {
+      console.error(`f402-pull ${error.message}`);
+      process.exit(2);
     }
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);

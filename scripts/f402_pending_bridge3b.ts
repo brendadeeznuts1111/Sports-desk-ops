@@ -5,8 +5,8 @@ import { buildF402PendingRollup } from "../lib/f402_pending_rollup.ts";
 import {
   defaultPendingDate,
   fetchAndPersistPending,
-  f402BearerResolvable,
-  resolveF402BearerToken,
+  f402BearerResolvableAsync,
+  resolveF402BearerTokenDetailedAsync,
 } from "../lib/f402_pending_fetch.ts";
 import { createF402PendingSink } from "../lib/f402_pending_sink.ts";
 const { values } = parseArgs({
@@ -55,13 +55,13 @@ if (
     "--three-c-rollup must be a gslive-tally rollup with totals.openExposureCents",
   );
 }
-const fetchRequested = f402BearerResolvable({
+const fetchRequested = await f402BearerResolvableAsync({
   cliToken: values["bearer-token"] as string | undefined,
 });
 let fromPath = (values["from-file"] ?? values.from) as string;
 let sourceKindOverride = values["source-kind"] as string | undefined;
 if (fetchRequested) {
-  const token = resolveF402BearerToken({
+  const { token } = await resolveF402BearerTokenDetailedAsync({
     cliToken: values["bearer-token"] as string | undefined,
   });
   const date = defaultPendingDate(

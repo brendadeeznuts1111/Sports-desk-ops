@@ -4,10 +4,14 @@
  *
  *   bun run capture:probe-protocol-matrix
  *   bun run capture:probe-protocol-matrix --customer TACO217
+ *
+ * The rows come from in-page fetch, so the browser picks their HTTP version; the network flags
+ * steer only the Bun-side preflight (DNS, TLS and its ALPN).
  */
 
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { parseArgs } from "node:util";
 
 import {
   buildApiPrefixMatrixExpression,
@@ -21,29 +25,99 @@ import {
   buildReportCustomerContextExpression,
   reportCustomerContextUrl,
 } from "../../lib/f402_report_context.ts";
-import { preflight, warmCaptureNetwork } from "../../lib/preflight.ts";
+import {
+  assertBunNetworkEnv,
+  F402_NET_ARG_OPTIONS,
+  F402_NET_USAGE,
+  F402NetOptionsError,
+  f402NetReport,
+  resolveF402NetOptions,
+} from "../../lib/f402_net_options.ts";
+import {
+  F402PullerError,
+  resolveF402PortalOrigin,
+  resolvePullBaseUrl,
+} from "../../lib/f402_readonly_puller.ts";
+import { preflight, prefetchDns } from "../../lib/preflight.ts";
 import { buildDnsPrefetchExpression } from "../../lib/f402_report_context.ts";
 import { resolveAgentId } from "./f402_probe.ts";
 import { loginF402 } from "./f402_login.ts";
 import { ManagedWebView } from "./webview.ts";
 
 const root = join(import.meta.dir, "../..");
-const args = process.argv.slice(2);
 
-function flag(name: string, fallback: string): string {
-  const i = args.indexOf(name);
-  if (i === -1) return fallback;
-  return args[i + 1] ?? fallback;
+export const PROBE_USAGE = `Usage: bun run capture:probe-protocol-matrix [options]
+
+  --base-url <url>         https portal origin, http only for loopback (default: F402_BASE_URL or https://www.fantasy402.com);
+                           --base is an alias; the host must be allowlisted (see --host)
+  --customer <id>          Customer for the report context (default: TACO217)
+  --backend <webkit|chrome>
+  --profile <dir>          WebView profile (default: scratch/webview-profile)
+  --out <dir>              Output root (default: scratch/f402-probes)
+
+${F402_NET_USAGE}`;
+
+export class ProbeUsageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProbeUsageError";
+  }
 }
 
-const base = flag(
-  "--base",
-  Bun.env.F402_BASE_URL?.trim() || "https://fantasy402.com",
-);
-const customer = flag("--customer", "TACO217").trim();
-const backend = flag("--backend", "webkit") === "chrome" ? "chrome" : "webkit";
-const profile = flag("--profile", "scratch/webview-profile");
-const outRoot = flag("--out", "scratch/f402-probes");
+export function parseProbeArgs(
+  argv: readonly string[],
+  env: Record<string, string | undefined> = Bun.env,
+) {
+  let values: Record<string, unknown>;
+  try {
+    ({ values } = parseArgs({
+      args: [...argv],
+      options: {
+        "base-url": { type: "string" },
+        base: { type: "string" },
+        customer: { type: "string" },
+        backend: { type: "string" },
+        profile: { type: "string" },
+        out: { type: "string" },
+        help: { type: "boolean", default: false },
+        ...F402_NET_ARG_OPTIONS,
+      },
+      strict: true,
+      allowPositionals: false,
+    }));
+  } catch (error) {
+    throw new ProbeUsageError(
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  const baseFlag = values["base-url"] ?? values.base;
+  if (values["base-url"] !== undefined && values.base !== undefined) {
+    throw new ProbeUsageError("pass --base-url or --base, not both");
+  }
+  const backendRaw = String(values.backend ?? "webkit").trim();
+  if (backendRaw !== "webkit" && backendRaw !== "chrome") {
+    throw new ProbeUsageError(
+      `--backend must be webkit or chrome, got ${JSON.stringify(backendRaw)}`,
+    );
+  }
+  const net = resolveF402NetOptions(values, env);
+  const base = resolveF402PortalOrigin(
+    resolvePullBaseUrl(
+      typeof baseFlag === "string" ? baseFlag : undefined,
+      env,
+    ),
+    net.host,
+  );
+  return {
+    help: values.help === true,
+    base,
+    customer: String(values.customer ?? "TACO217").trim(),
+    backend: backendRaw as "webkit" | "chrome",
+    profile: String(values.profile ?? "scratch/webview-profile"),
+    outRoot: String(values.out ?? "scratch/f402-probes"),
+    net,
+  };
+}
 
 function findOp(name: string) {
   const op = PROBE_OPS.find((row) => row.operation === name);
@@ -51,12 +125,31 @@ function findOp(name: string) {
   return op;
 }
 
-export async function main(): Promise<number> {
-  const warmed = warmCaptureNetwork(base);
+export async function main(argv: readonly string[]): Promise<number> {
+  const { help, base, customer, backend, profile, outRoot, net } =
+    parseProbeArgs(argv);
+  if (help) {
+    console.log(PROBE_USAGE);
+    return 0;
+  }
+  assertBunNetworkEnv(net);
+
+  const baseParsed = new URL(base);
+  const warmed = {
+    host: baseParsed.hostname,
+    port:
+      baseParsed.port !== ""
+        ? Number(baseParsed.port)
+        : baseParsed.protocol === "http:"
+          ? 80
+          : 443,
+  };
+  if (net.dnsPrefetch) prefetchDns(warmed.host, warmed.port);
   const pf = await preflight(warmed.host, {
     port: warmed.port,
     timeoutMs: 10_000,
     skipDnsPrefetch: true,
+    ...(net.family === "auto" ? {} : { family: Number(net.family) as 4 | 6 }),
   });
   if (!pf.ok) {
     console.error(`capture:protocol-matrix: preflight failed: ${pf.error}`);
@@ -105,7 +198,7 @@ export async function main(): Promise<number> {
   if (agentId === "" && outcome.agentId !== "") agentId = outcome.agentId;
 
   await Bun.sleep(250);
-  await view.evaluate(buildDnsPrefetchExpression(base));
+  if (net.dnsPrefetch) await view.evaluate(buildDnsPrefetchExpression(base));
   await view.navigate(reportCustomerContextUrl(base, customer));
   await view.waitForLoad();
   await view.evaluate(buildReportCustomerContextExpression(customer));
@@ -128,7 +221,7 @@ export async function main(): Promise<number> {
     networkWarm: {
       host: warmed.host,
       port: warmed.port,
-      dnsPrefetched: true,
+      dnsPrefetched: net.dnsPrefetch,
       dns: pf.dns,
       dnsCacheStats: pf.dnsCacheStats ?? null,
       tls: pf.tls
@@ -146,6 +239,7 @@ export async function main(): Promise<number> {
       tokenPresent: true,
     }),
     rows,
+    network: f402NetReport(net),
   };
 
   await Bun.write(
@@ -159,6 +253,7 @@ export async function main(): Promise<number> {
       2,
     ),
   );
+  if (net.verbose) console.error(JSON.stringify(f402NetReport(net)));
   for (const row of rows as Array<Record<string, unknown>>) {
     console.log(
       `${String(row.prefix).padEnd(22)} ${String(row.operation).padEnd(28)} ${row.status} ${row.bytes}B`,
@@ -175,5 +270,18 @@ export async function main(): Promise<number> {
 }
 
 if (import.meta.main) {
-  process.exit(await main());
+  try {
+    process.exit(await main(process.argv.slice(2)));
+  } catch (error) {
+    if (
+      error instanceof ProbeUsageError ||
+      error instanceof F402NetOptionsError ||
+      (error instanceof F402PullerError && error.code === "config")
+    ) {
+      console.error(`capture:protocol-matrix: ${error.message}`);
+      console.error(PROBE_USAGE);
+      process.exit(2);
+    }
+    throw error;
+  }
 }

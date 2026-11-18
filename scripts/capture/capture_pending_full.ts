@@ -168,8 +168,10 @@ async function fetchPendingBody(customerID: string): Promise<string> {
 
   // Fail before the request rather than surfacing an openresty 401 page: the transport
   // degrades to a cookie-less fetch when nothing is configured.
-  const { readF402Session } = await import("../../lib/f402_session.ts");
+  const { primeF402Session, readF402Session } =
+    await import("../../lib/f402_session.ts");
   const proxyConfigured = (Bun.env.F402_REPLAY_PROXY_URL ?? "").trim() !== "";
+  if (!proxyConfigured) await primeF402Session();
   // A WebView profile is not a session: `createF402ReplayTransport` never reads one
   // (lib/f402_replay_transport.ts:2-3), so counting it here silenced this guard and then sent a
   // cookie-less request into a 401 page.

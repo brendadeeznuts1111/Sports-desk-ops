@@ -73,9 +73,11 @@ if (values.help) {
 async function fetchTickerBody(agentID: string): Promise<string> {
   const { createF402ReplayTransport } =
     await import("../../lib/f402_replay_transport.ts");
-  const { readF402Session } = await import("../../lib/f402_session.ts");
+  const { primeF402Session, readF402Session } =
+    await import("../../lib/f402_session.ts");
 
   const proxyConfigured = (Bun.env.F402_REPLAY_PROXY_URL ?? "").trim() !== "";
+  if (!proxyConfigured) await primeF402Session();
   const session = readF402Session();
   // Without a session the transport degrades to a cookie-less fetch and gets a 401 page.
   if (!proxyConfigured && session === null) {

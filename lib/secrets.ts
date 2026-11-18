@@ -123,19 +123,31 @@ export function setSecretsProviderForTests(next: SecretsProvider | null): void {
   provider = next ?? Bun.secrets;
 }
 
-/** One service/name read; a locked or unavailable keychain is `null`, never a throw. */
+/**
+ * One service/name read. `null` when the entry is absent or blank, and when there is no usable
+ * keychain: a timeout ({@link KeychainTimeoutError}, unchanged) or any error the F402 error map
+ * names `F402KeychainUnavailable` (no libsecret / D-Bus / Secret Service, macOS errSecNotAvailable).
+ * Every other failure (access denied, interaction required, user canceled, platform error, an
+ * unknown or missing code) throws the named error from `classifySecretsError`.
+ */
 export async function readSecretOrNull(
   service: string,
   name: string,
 ): Promise<string | null> {
+  let value: string | null;
   try {
-    const value = await getSecretBounded(provider, { service, name });
-    const trimmed = value?.trim() ?? "";
-    return trimmed === "" ? null : trimmed;
-  } catch {
-    // Locked, missing, or timed-out keychain entry is treated as unset.
-    return null;
+    value = await getSecretBounded(provider, { service, name });
+  } catch (error) {
+    if (error instanceof KeychainTimeoutError) return null;
+    // Loaded on the error path only: f402_secret_store.ts imports this module at load time.
+    const { classifySecretsError, F402KeychainUnavailable } =
+      await import("./f402_secret_store.ts");
+    const named = classifySecretsError(error, { service, name, op: "get" });
+    if (named instanceof F402KeychainUnavailable) return null;
+    throw named;
   }
+  const trimmed = value?.trim() ?? "";
+  return trimmed === "" ? null : trimmed;
 }
 
 /**

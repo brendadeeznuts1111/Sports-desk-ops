@@ -8,9 +8,15 @@
 import { join } from "node:path";
 
 import {
+  type F402FetchSessionPool,
+  f402FetchSessions,
+} from "./f402_fetch_sessions.ts";
+import {
+  loadF402Session,
+  primeF402Session,
   readF402Session,
   refreshF402Session,
-  writeF402Session,
+  saveF402Session,
 } from "./f402_session.ts";
 
 export const DEPRECATED_F402_COOKIE_ENV = "F402_COOKIE";
@@ -45,7 +51,9 @@ export interface F402ReplayTransportOptions {
   readonly env?: NodeJS.ProcessEnv;
   /** Test seam: replace the Bun FetchSession wire call. */
   readonly fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
-  /** Test seam: replace 401 re-mint (default: `refreshF402Session` + `writeF402Session`). */
+  /** Per-origin FetchSession pool (default: the process-wide {@link f402FetchSessions}). */
+  readonly sessions?: F402FetchSessionPool;
+  /** Test seam: replace 401 re-mint (default: `refreshF402Session` + `saveF402Session`). */
   readonly refreshSession?: () => Promise<void>;
   readonly readSession?: () => ReturnType<typeof readF402Session>;
 }
@@ -79,17 +87,16 @@ export async function createF402ReplayTransport(
     };
   }
 
-  const bunSession = new Bun.FetchSession({
-    tls: { rejectUnauthorized: true },
-  });
+  const sessions = options?.sessions ?? f402FetchSessions;
 
+  if (options?.readSession === undefined) await primeF402Session();
   const readSession = options?.readSession ?? (() => readF402Session());
   const initial = readSession();
   const deprecatedCookie = env[DEPRECATED_F402_COOKIE_ENV]?.trim() ?? "";
 
   const wireFetch =
     options?.fetchImpl ??
-    ((url: string, init: RequestInit) => bunSession.fetch(url, init));
+    ((url: string, init: RequestInit) => sessions.fetch(url, init));
 
   async function fetchOnce(url: string, init: RequestInit): Promise<Response> {
     const headers = new Headers(init.headers);
@@ -114,7 +121,7 @@ export async function createF402ReplayTransport(
       return;
     }
     const fresh = await refreshF402Session({ env });
-    writeF402Session(fresh);
+    await saveF402Session(fresh);
   }
 
   return {
@@ -136,15 +143,20 @@ export async function createF402ReplayTransport(
       return response;
     },
     async close(): Promise<void> {
-      await bunSession.close();
+      sessions.closeIdle();
     },
   };
 }
 
-/** @deprecated Prefer {@link createF402ReplayTransport}. */
-export function cookieHeaderFromEnv(env: NodeJS.ProcessEnv = Bun.env): string {
+/**
+ * @deprecated Prefer {@link createF402ReplayTransport}. Async so the keychain session store is
+ * loaded before the read (a store failure throws by name); no callers remain in this repo.
+ */
+export async function cookieHeaderFromEnv(
+  env: NodeJS.ProcessEnv = Bun.env,
+): Promise<string> {
   warnIfDeprecatedCookieEnv(env);
-  const session = readF402Session();
+  const session = await loadF402Session();
   if (session !== null) return session.cookieHeader;
   return env[DEPRECATED_F402_COOKIE_ENV]?.trim() ?? "";
 }

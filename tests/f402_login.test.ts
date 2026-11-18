@@ -9,6 +9,7 @@ import {
   loginF402,
   resolveF402Credentials,
 } from "../scripts/capture/f402_login.ts";
+import { F402SecretBackendError } from "../lib/f402_secret_store.ts";
 
 const TEST_CREDS = {
   agentId: "agent-118",
@@ -283,13 +284,32 @@ describe("F402 credential sources", () => {
     expect(credentials.password).toBe("env-secret");
   });
 
-  test("treats a failing store as absent and never leaks values", async () => {
+  test("a refusing store throws its named error (no value in it); no store is absent", async () => {
+    // Was "treats a failing store as absent" (catch-all in lib/f402_credentials_policy.ts);
+    // Q001 maps it explicitly: only a timeout or F402KeychainUnavailable counts as absent.
+    const refused = await loadF402Credentials(
+      {},
+      {
+        async get() {
+          throw new Error("keychain locked");
+        },
+      },
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(refused).toBeInstanceOf(F402SecretBackendError);
+    expect(refused).toMatchObject({ kind: "uncoded", op: "get" });
+
     await expect(
       loadF402Credentials(
         {},
         {
           async get() {
-            throw new Error("keychain locked");
+            throw Object.assign(
+              new Error("Cannot autolaunch D-Bus without X11 $DISPLAY"),
+              { code: "ERR_SECRETS_PLATFORM_ERROR" },
+            );
           },
         },
       ),

@@ -54,8 +54,12 @@ import {
   resolveBridgeWeblogCorpusFrom,
 } from "./f402_weblog_bridge_inputs.ts";
 import {
+  describeF402SessionStoreFailure,
   ensureF402Session,
+  F402SessionStoreConfigError,
   readF402Session,
+  readF402SessionForReader,
+  resolveF402SessionStore,
   type F402Session,
 } from "./f402_session.ts";
 import { resolveF402BearerForCredentialProbe } from "./f402_pending_fetch.ts";
@@ -614,9 +618,12 @@ export interface KeychainCredentialProbeOptions {
   readonly root?: string;
   /** Canonical-then-legacy keychain read. Default `readSecretCanonicalThenLegacy`. */
   readonly readSecret?: (name: string) => Promise<string | null>;
-  /** Default: `readF402Session() !== null`. */
+  /**
+   * Default: `readF402Session() !== null`. With F402_SESSION_STORE=keychain the session is loaded
+   * from the keychain first (per check), and a store error fails the check by name.
+   */
   readonly sessionPresent?: () => boolean;
-  /** Default: `readF402Session`. Used for bridge3b bearer-from-session. */
+  /** Default: `readF402Session` (keychain store: loaded first, as above). Bridge3b bearer-from-session. */
   readonly readSession?: () => F402Session | null;
   /** Default: the token file exists and is non-empty. */
   readonly tokenFilePresent?: (path: string) => boolean;
@@ -625,6 +632,27 @@ export interface KeychainCredentialProbeOptions {
   /** Keychain names, passed in so lib/ does not import scripts/. */
   readonly gsidName?: string;
   readonly agentIdName?: string;
+}
+
+/**
+ * Keychain session store: load the session into this process so the synchronous default reads
+ * below see it. Returns the failure text for a named store error, `null` otherwise. The file store
+ * needs nothing, and an invalid F402_SESSION_STORE is left for the sync read to throw, exactly as
+ * before.
+ */
+async function primeSessionForProbe(): Promise<string | null> {
+  let store: ReturnType<typeof resolveF402SessionStore>;
+  try {
+    store = resolveF402SessionStore();
+  } catch (error) {
+    if (error instanceof F402SessionStoreConfigError) return null;
+    throw error;
+  }
+  if (store !== "keychain") return null;
+  const read = await readF402SessionForReader({ store });
+  return read.ok
+    ? null
+    : `session store unavailable: ${describeF402SessionStoreFailure(read.error)}`;
 }
 
 /**
@@ -688,6 +716,10 @@ export function keychainCredentialProbe(
         };
       }
       if (job.id === "bridge3b") {
+        if (options.readSession === undefined) {
+          const storeFailure = await primeSessionForProbe();
+          if (storeFailure !== null) return { ok: false, error: storeFailure };
+        }
         try {
           const resolved = resolveF402BearerForCredentialProbe({
             environment: env,
@@ -713,6 +745,10 @@ export function keychainCredentialProbe(
           : await readSecret(agentIdName).catch(() => null);
       if (agentId === null || agentId === "") {
         return { ok: false, error: "missing credentials: F402_AGENT_ID" };
+      }
+      if (options.sessionPresent === undefined) {
+        const storeFailure = await primeSessionForProbe();
+        if (storeFailure !== null) return { ok: false, error: storeFailure };
       }
       if (!sessionPresent()) {
         return {

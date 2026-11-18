@@ -23,6 +23,11 @@ import {
   type SecretsReader,
 } from "../scripts/capture/f402_login.ts";
 import {
+  classifySecretsError,
+  F402KeychainUnavailable,
+  F402SecretError,
+} from "./f402_secret_store.ts";
+import {
   CANONICAL_SECRETS_SERVICE,
   getSecretBounded,
   KeychainTimeoutError,
@@ -111,6 +116,12 @@ export function wrapF402Credentials(
  * The reader is asked canonical-first then legacy, matching `lib/secrets.ts`. Explicit `null`
  * or an omitted reader disables keychain lookup completely so tests remain deterministic and
  * never touch the real keychain.
+ *
+ * Errors go through the F402 error map (`classifySecretsError`):
+ * - a timeout returns "" at once without asking the next service (unchanged), and so does any
+ *   other `F402KeychainUnavailable` (no usable store), so the env/TTY fallbacks still apply;
+ * - everything else (access denied, interaction required, user canceled, platform error, an
+ *   unknown or missing code) throws the named error.
  */
 async function readKeychain(
   secrets: SecretsReader | null | undefined,
@@ -118,14 +129,17 @@ async function readKeychain(
 ): Promise<string> {
   if (!secrets) return "";
   for (const service of KEYCHAIN_SERVICES) {
+    let value: string;
     try {
-      const value =
+      value =
         (await getSecretBounded(secrets, { service, name }))?.trim() ?? "";
-      if (value !== "") return value;
     } catch (err) {
-      // Locked/unavailable/timed-out keychain: fail closed or fall through to the next service.
       if (err instanceof KeychainTimeoutError) return "";
+      const named = classifySecretsError(err, { service, name, op: "get" });
+      if (named instanceof F402KeychainUnavailable) return "";
+      throw named;
     }
+    if (value !== "") return value;
   }
   return "";
 }
@@ -183,16 +197,30 @@ export async function loadF402CredentialsSecure(
   env: Env = Bun.env,
   secrets: SecretsReader | null = Bun.secrets,
 ): Promise<SecureF402Credentials> {
-  const agentId = await readKeychain(secrets, SECRET_NAMES.agentId);
-  const password = await readKeychain(secrets, SECRET_NAMES.password);
-  if (agentId !== "" && password !== "") {
+  let agentId = "";
+  let password = "";
+  let keychainError: F402SecretError | null = null;
+  try {
+    agentId = await readKeychain(secrets, SECRET_NAMES.agentId);
+    password = await readKeychain(secrets, SECRET_NAMES.password);
+  } catch (error) {
+    if (!(error instanceof F402SecretError)) throw error;
+    keychainError = error;
+  }
+  if (keychainError === null && agentId !== "" && password !== "") {
     return wrapF402Credentials({ agentId, password }, "keychain");
   }
 
+  // The explicit env opt-in still wins over a refusing keychain; the refusal is logged by name.
   if (env[DEPRECATED_ENV_CREDENTIALS_FLAG]?.trim() === "1") {
     const envAgent = env["F402_AGENT_ID"]?.trim() ?? "";
     const envPassword = env["F402_PASSWORD"]?.trim() ?? "";
     if (envAgent !== "" && envPassword !== "") {
+      if (keychainError !== null) {
+        console.warn(
+          `[f402-credentials] keychain read failed: ${keychainError.name} (${keychainError.bunCode ?? keychainError.kind}); using ${DEPRECATED_ENV_CREDENTIALS_FLAG} credentials`,
+        );
+      }
       warnDeprecatedEnvCredentials();
       return wrapF402Credentials(
         { agentId: envAgent, password: envPassword },
@@ -200,6 +228,8 @@ export async function loadF402CredentialsSecure(
       );
     }
   }
+
+  if (keychainError !== null) throw keychainError;
 
   if (input.isTTY) {
     return promptF402CredentialsTTY();

@@ -81,8 +81,14 @@ export function warmCaptureNetwork(baseUrl: string): {
   return { host: parsed.hostname, port };
 }
 
-export async function resolveHost(host: string): Promise<DnsAnswer[]> {
-  const answers = await Bun.dns.lookup(host);
+export async function resolveHost(
+  host: string,
+  family?: 4 | 6,
+): Promise<DnsAnswer[]> {
+  const answers =
+    family === undefined
+      ? await Bun.dns.lookup(host)
+      : await Bun.dns.lookup(host, { family });
   return answers.map((answer) => ({
     address: String(answer.address),
     family: Number(answer.family),
@@ -96,6 +102,7 @@ export async function preflight(
     port?: number;
     timeoutMs?: number;
     skipDnsPrefetch?: boolean;
+    family?: 4 | 6;
   } = {},
 ): Promise<PreflightResult> {
   const port = options.port ?? 443;
@@ -103,7 +110,7 @@ export async function preflight(
   const dnsCacheStats = readDnsCacheStats();
   let dns: DnsAnswer[] = [];
   try {
-    dns = await resolveHost(host);
+    dns = await resolveHost(host, options.family);
   } catch (error) {
     return {
       host,

@@ -5,7 +5,15 @@
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { readF402Session, resolveF402SessionPath } from "./f402_session.ts";
+import {
+  describeF402SessionStoreFailure,
+  loadedF402KeychainEntryPresent,
+  readF402Session,
+  readF402SessionForReader,
+  resolveF402SessionPath,
+  resolveF402SessionStore,
+  type F402Session,
+} from "./f402_session.ts";
 import {
   GSLIVE_MANUAL_DUAL_AUTH_ACTION,
   gsliveConsecutiveMintFailures,
@@ -41,12 +49,18 @@ export interface DegradedReason {
   readonly severity: DegradedReasonSeverity;
 }
 
-export type F402AuthStatus = "ok" | "missing" | "expired" | "unverified";
+/** `unavailable`: F402_SESSION_STORE=keychain and the keychain could not be read. */
+export type F402AuthStatus =
+  "ok" | "missing" | "expired" | "unverified" | "unavailable";
 
 export interface F402AuthProbe {
   readonly status: F402AuthStatus;
-  readonly source: "session-file" | "bearer" | "token-file" | "none";
+  /** `keychain` only with F402_SESSION_STORE=keychain; the file store reports `session-file`. */
+  readonly source:
+    "session-file" | "keychain" | "bearer" | "token-file" | "none";
   readonly expiresInSeconds: number | null;
+  /** Named store error (name and code, never a value); only when `status` is `unavailable`. */
+  readonly storeError?: string;
   /** Keychain (or env) has credentials for a live WebView mint. */
   readonly mintCapable: boolean;
   /** Operator-facing hint when {@link status} is not ok; null when healthy. */
@@ -97,6 +111,10 @@ export interface DeskEnhancedHealthInput {
   readonly uptimeSeconds: number;
   readonly now?: Date;
   readonly resolveGitSha?: () => string | null;
+  /**
+   * Sync session read (tests). When omitted the configured store is read: the session file, or
+   * with F402_SESSION_STORE=keychain an async Bun.secrets load.
+   */
   readonly readF402?: typeof readF402Session;
   readonly readGsliveHealth?: () => Promise<GsliveSessionHealth>;
   readonly gsliveHealthTimeoutMs?: number;
@@ -220,10 +238,30 @@ function defaultBuildTime(): string | null {
 
 type F402AuthCore = Omit<F402AuthProbe, "mintCapable" | "remediation">;
 
-function probeF402Auth(
+function sessionAuthCore(
+  session: F402Session,
   nowMs: number,
-  readSession: typeof readF402Session,
+  source: "session-file" | "keychain",
 ): F402AuthCore {
+  const expiresAt = Date.parse(session.expiresAtIso);
+  const expiresInSeconds = Number.isFinite(expiresAt)
+    ? Math.max(0, Math.floor((expiresAt - nowMs) / 1000))
+    : null;
+  // Expiry is necessary but not sufficient: a Cloudflare-only cookie jar can
+  // be unexpired and still return 401 on every portal read.
+  const cloudflareOnly = session.cookieNames.every((name) =>
+    ["cf_clearance", "__cf_bm", "_cfuvid", "csrftoken"].includes(name),
+  );
+  if (session.authorizationHeader === undefined && cloudflareOnly) {
+    return { status: "unverified", source, expiresInSeconds };
+  }
+  return { status: "ok", source, expiresInSeconds };
+}
+
+async function probeF402Auth(
+  nowMs: number,
+  injectedRead: typeof readF402Session | undefined,
+): Promise<F402AuthCore> {
   const bearer = (Bun.env.F402_BEARER_TOKEN ?? "").trim();
   if (bearer !== "") {
     return { status: "ok", source: "bearer", expiresInSeconds: null };
@@ -238,25 +276,27 @@ function probeF402Auth(
       /* fall through */
     }
   }
-  const session = readSession({ now: nowMs });
-  if (session !== null) {
-    const expiresAt = Date.parse(session.expiresAtIso);
-    const expiresInSeconds = Number.isFinite(expiresAt)
-      ? Math.max(0, Math.floor((expiresAt - nowMs) / 1000))
-      : null;
-    // Expiry is necessary but not sufficient: a Cloudflare-only cookie jar can
-    // be unexpired and still return 401 on every portal read.
-    const cloudflareOnly = session.cookieNames.every((name) =>
-      ["cf_clearance", "__cf_bm", "_cfuvid", "csrftoken"].includes(name),
-    );
-    if (session.authorizationHeader === undefined && cloudflareOnly) {
+  if (injectedRead === undefined && resolveF402SessionStore() === "keychain") {
+    const read = await readF402SessionForReader({ now: nowMs });
+    if (!read.ok) {
       return {
-        status: "unverified",
-        source: "session-file",
-        expiresInSeconds,
+        status: "unavailable",
+        source: "keychain",
+        expiresInSeconds: null,
+        storeError: describeF402SessionStoreFailure(read.error),
       };
     }
-    return { status: "ok", source: "session-file", expiresInSeconds };
+    if (read.session !== null) {
+      return sessionAuthCore(read.session, nowMs, "keychain");
+    }
+    return loadedF402KeychainEntryPresent() === true
+      ? { status: "expired", source: "keychain", expiresInSeconds: 0 }
+      : { status: "missing", source: "none", expiresInSeconds: null };
+  }
+  const readSession = injectedRead ?? readF402Session;
+  const session = readSession({ now: nowMs });
+  if (session !== null) {
+    return sessionAuthCore(session, nowMs, "session-file");
   }
   const path = resolveF402SessionPath();
   if (existsSync(path)) {
@@ -465,6 +505,9 @@ function f402Remediation(
   if (status === "unverified") {
     return "F402_LIVE_LOGIN=1 bun run session:login --from-keychain";
   }
+  if (status === "unavailable") {
+    return "bun run secrets:f402 probe (OS keychain unreadable), or set F402_SESSION_STORE=file";
+  }
   return null;
 }
 
@@ -552,13 +595,12 @@ export async function buildDeskEnhancedHealth(
 ): Promise<DeskEnhancedHealthPayload> {
   const now = input.now ?? new Date();
   const nowMs = now.getTime();
-  const readSession = input.readF402 ?? readF402Session;
   const probeR2 = input.probeR2 ?? probeR2PipelineKpis;
   const resolveGitSha = input.resolveGitSha ?? defaultGitSha;
   const probeTimeoutMs =
     input.gsliveHealthTimeoutMs ?? GSLIVE_HEALTH_PROBE_TIMEOUT_MS;
 
-  const f402Core = probeF402Auth(nowMs, readSession);
+  const f402Core = await probeF402Auth(nowMs, input.readF402);
   const [gsliveProbe, hasF402Mint, kpis] = await Promise.all([
     probeGsliveBounded(input.readGsliveHealth, probeTimeoutMs),
     input.hasF402MintCredentials === undefined
@@ -611,6 +653,18 @@ export async function buildDeskEnhancedHealth(
         action:
           f402.remediation ??
           "F402_LIVE_LOGIN=1 bun run session:login --from-keychain",
+      },
+    );
+  } else if (f402.status === "unavailable") {
+    pushDegradedReason(
+      degradedReasons,
+      f402.storeError ?? "F402 session store unavailable",
+      "auth",
+      {
+        action:
+          f402.remediation ??
+          "bun run secrets:f402 probe, or set F402_SESSION_STORE=file",
+        severity: "error",
       },
     );
   } else if (f402.status === "unverified") {

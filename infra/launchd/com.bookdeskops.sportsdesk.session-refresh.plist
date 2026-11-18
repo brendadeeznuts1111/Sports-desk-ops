@@ -4,13 +4,14 @@
   F402 session auto-refresh LaunchAgent (template).
 
   Supervises `scripts/f402_session_refresh.ts` on a 5-minute interval so the 21-minute server
-  bearer cannot silently kill the bridge. The script is idempotent — when the session is fresh
-  it is a no-op and the exit code is 0; it only spawns `session_login.ts --from-keychain` (the
-  TTL is a cap; a bearer session's file expiry is the JWT `exp` minus 2 minutes) when the current
-  session is missing, expired, or within 5 min of expiring.
+  bearer cannot silently kill the bridge. The script is idempotent: when the session is fresh
+  it is a no-op and the exit code is 0; it only spawns `session_login.ts` with the from-keychain
+  flag (the TTL is a cap; a bearer session's file expiry is the JWT `exp` minus 2 minutes) when
+  the current session is missing, expired, or within 5 min of expiring. XML comments may not
+  contain a double hyphen, so flag names are spelled out here.
 
-  Runs Bun directly with `--no-env-file`: credentials come from the login keychain
-  (`--from-keychain`), not from `.env.op`/`op`. This keeps the refresher independent of the
+  Runs Bun directly with the no-env-file flag: credentials come from the login keychain
+  (from-keychain), not from `.env.op`/`op`. This keeps the refresher independent of the
   service-account token and the 1Password Desktop `.env` FIFO. The watchdog template is likewise
   keychain-only.
 
@@ -50,6 +51,15 @@
       <string>__BUN_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
       <key>NO_PROXY</key>
       <string>127.0.0.1,localhost,::1</string>
+      <!--
+        Session store. "file" keeps ~/.cache/sportsdesk/f402-session.json (0600). "keychain" keeps
+        the session in the login Keychain via Bun.secrets (service com.bookdeskops.sportsdesk,
+        entry f402-session) and writes no session file. Only switch to "keychain" once every
+        process that reads the session loads it with `await loadF402Session()` (see
+        docs/runbooks/f402_session_refresh.md), and set the same value for those processes.
+      -->
+      <key>F402_SESSION_STORE</key>
+      <string>file</string>
     </dict>
 
     <!-- Fire every 5 minutes. StartInterval is wall-clock seconds, not elapsed. -->

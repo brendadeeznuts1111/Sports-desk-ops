@@ -77,9 +77,12 @@ function describeRecord(record: LiveCaptureRecord): string {
 }
 
 async function requireSession(): Promise<void> {
-  const { readF402Session } = await import("../../lib/f402_session.ts");
+  const { primeF402Session, readF402Session } =
+    await import("../../lib/f402_session.ts");
   const proxyConfigured = (Bun.env.F402_REPLAY_PROXY_URL ?? "").trim() !== "";
-  if (proxyConfigured || readF402Session() !== null) return;
+  if (proxyConfigured) return;
+  await primeF402Session();
+  if (readF402Session() !== null) return;
   throw new Error(
     [
       "no F402 session available for a live capture.",

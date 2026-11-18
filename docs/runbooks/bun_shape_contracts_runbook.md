@@ -114,7 +114,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/main)
 - **Shape:** value: `undefined` · writable undefined · enumerable true
-- **Here:** `scripts/graph_feed_poller_daemon.ts`, `services/sportsdesk_webview_server.ts`
+- **Here:** `lib/f402_net_options.ts`, `scripts/graph_feed_poller_daemon.ts`
 - **Evidence:** `test:tests/bun_capabilities.test.ts`, `probe:proc.shell`
 
 #### Bun.mmap
@@ -586,7 +586,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (3):** `delete`, `get`, `set`
 - **Here:** `scripts/secrets_r2.ts`, `scripts/verify-gslive-tickets.ts`
-- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_eval_patterns.test.ts`, `test:tests/r2_s3_client.test.ts`, `test:tests/supervisor.test.ts`
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_eval_patterns.test.ts`, `test:tests/f402_secret_store.test.ts`, `test:tests/f402_secret_store_errors.test.ts`
 
 #### Bun.sql
 
@@ -910,7 +910,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/FetchSession)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `services/sportsdesk_telegram_bot.ts`, `bin/bun_surface.ts`
-- **Evidence:** `surface:FetchSession`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_types.test-d.ts`, `test:tests/fetch_session_contract.test.ts` · deep dive: [§7.3](./bun_server_runtime_shapes_runbook.md)
+- **Evidence:** `surface:FetchSession`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_types.test-d.ts`, `test:tests/f402_fetch_protocols.test.ts` · deep dive: [§7.3](./bun_server_runtime_shapes_runbook.md)
 
 #### Bun.FetchSessionInit (type)
 

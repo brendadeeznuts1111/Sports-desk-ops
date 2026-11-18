@@ -18,6 +18,7 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
+import { F402TlsVerificationError, f402Fetch } from "./f402_fetch_sessions.ts";
 import { replaceIpsInText, textContainsIp } from "./f402_ip_text.ts";
 
 import {
@@ -38,9 +39,11 @@ import {
 } from "./f402_list_agents_by_agent.ts";
 import {
   ensureF402Session,
+  loadF402Session,
+  primeF402Session,
   readF402Session,
   refreshF402Session,
-  writeF402Session,
+  saveF402Session,
   type F402Session,
   type RefreshF402SessionOptions,
 } from "./f402_session.ts";
@@ -62,6 +65,12 @@ import {
   assertPullReadOnly,
   type PullReadOnlyOp,
 } from "../scripts/capture/allowlist.ts";
+import {
+  applyHostOverride,
+  F402_ALLOWED_HOSTS,
+  isF402AllowedHost,
+  isF402LoopbackHost,
+} from "./f402_net_options.ts";
 
 export const F402_PULL_DEFAULT_OUT_DIR = "/workspace/f402-pull";
 export const F402_PULL_DEFAULT_BASE_URL = "https://www.fantasy402.com";
@@ -83,6 +92,7 @@ export type F402PullerErrorCode =
   | "response"
   | "checkpoint"
   | "rate-limited"
+  | "tls"
   | "unsafe-path";
 
 export class F402PullerError extends Error {
@@ -95,8 +105,12 @@ export class F402PullerError extends Error {
     operation: string,
     message: string,
     status: number | null = null,
+    cause?: unknown,
   ) {
-    super(`f402-pull ${operation}: ${message}`);
+    super(
+      `f402-pull ${operation}: ${message}`,
+      cause === undefined ? undefined : { cause },
+    );
     this.name = "F402PullerError";
     this.code = code;
     this.operation = operation;
@@ -431,8 +445,8 @@ export function writeSummaryJson(
  * The portal origin for every puller request. Sessions are minted on
  * `F402_BASE_URL` (default `https://www.fantasy402.com`, see
  * `lib/f402_session.ts`), so the puller reads the same variable to keep the
- * bearer and cookies on the host that issued them. Only a bare `https:`
- * origin is accepted.
+ * bearer and cookies on the host that issued them. Only a bare origin is
+ * accepted: `https:`, or `http:` for a loopback host (local test servers).
  */
 export function normalizePullBaseUrl(value: string): string {
   let url: URL;
@@ -441,11 +455,16 @@ export function normalizePullBaseUrl(value: string): string {
   } catch {
     throw new F402PullerError("config", "base-url", "not a valid URL");
   }
-  if (url.protocol !== "https:") {
+  if (
+    url.protocol !== "https:" &&
+    !(url.protocol === "http:" && isF402LoopbackHost(url.hostname))
+  ) {
     throw new F402PullerError(
       "config",
       "base-url",
-      `must use https:, got ${url.protocol}`,
+      url.protocol === "http:"
+        ? `must use https: (http: is allowed only for loopback hosts: localhost, 127.0.0.0/8, [::1]), got http://${url.host}`
+        : `must use https:, got ${url.protocol}`,
     );
   }
   if (url.username !== "" || url.password !== "") {
@@ -474,6 +493,27 @@ export function resolvePullBaseUrl(
   const fromEnv = env[F402_PULL_BASE_URL_ENV]?.trim();
   if (fromEnv) return normalizePullBaseUrl(fromEnv);
   return F402_PULL_DEFAULT_BASE_URL;
+}
+
+/**
+ * The origin the CLIs send the session to: the resolved base URL with any
+ * `--host` applied, limited to `F402_ALLOWED_HOSTS` or a loopback host, and
+ * to `http:` only on loopback.
+ */
+export function resolveF402PortalOrigin(
+  baseUrl: string,
+  host: string | null,
+): string {
+  const origin = normalizePullBaseUrl(applyHostOverride(baseUrl, host));
+  const { hostname } = new URL(origin);
+  if (!isF402AllowedHost(hostname)) {
+    throw new F402PullerError(
+      "config",
+      "base-url",
+      `host must be one of ${F402_ALLOWED_HOSTS.join(", ")} or a loopback host, got ${hostname}`,
+    );
+  }
+  return origin;
 }
 
 export interface ManagerPostOptions {
@@ -559,7 +599,7 @@ export class F402PullClient {
     this.baseUrl = normalizePullBaseUrl(
       options.baseUrl ?? F402_PULL_DEFAULT_BASE_URL,
     );
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? f402Fetch;
     this.clock = options.clock ?? createPaceClock();
     this.pacer =
       options.pacer ??
@@ -617,6 +657,9 @@ export class F402PullClient {
           redirect: "manual",
         });
       } catch (error) {
+        if (error instanceof F402TlsVerificationError) {
+          throw new F402PullerError("tls", op, error.message, null, error);
+        }
         throw new F402PullerError(
           "http",
           op,
@@ -843,7 +886,7 @@ export function defaultSessionProvider(): SessionProvider {
     read: () => readF402Session(),
     async ensure(options) {
       await ensureF402Session(options);
-      const session = readF402Session();
+      const session = await loadF402Session();
       if (session === null) {
         throw new F402PullerError(
           "auth",
@@ -855,7 +898,7 @@ export function defaultSessionProvider(): SessionProvider {
     },
     async refresh(options) {
       const session = await refreshF402Session(options);
-      writeF402Session(session);
+      await saveF402Session(session);
       return session;
     },
   };
@@ -870,6 +913,17 @@ export async function resolvePullSession(options: {
 }): Promise<F402Session> {
   const provider = options.provider ?? defaultSessionProvider();
   const now = options.now ?? Date.now();
+  if (options.provider === undefined) {
+    try {
+      await primeF402Session();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : "session store unreadable";
+      throw new F402PullerError("auth", "session", message);
+    }
+  }
   const refreshAfter =
     options.refreshAfterMs ?? F402_PULL_DEFAULT_REFRESH_AFTER_MS;
   const existing = provider.read();

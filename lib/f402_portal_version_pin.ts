@@ -4,6 +4,8 @@
 
 import { join } from "node:path";
 
+import { f402Fetch } from "./f402_fetch_sessions.ts";
+
 export interface PinnedManifest {
   readonly schemaVersion: number;
   readonly host: string;
@@ -50,7 +52,7 @@ export async function fetchLiveVersionJs(
   bust = "1.0.280",
 ): Promise<{ text: string; sha256: string }> {
   const url = `${baseUrl.replace(/\/$/, "")}/app/setting/version.js?bust=${bust}`;
-  const res = await fetch(url);
+  const res = await f402Fetch(url);
   if (!res.ok) throw new Error(`version.js fetch ${res.status}`);
   const text = await res.text();
   const sha256 = await sha256HexText(text);
@@ -83,7 +85,7 @@ export async function checkPinnedManagerDrift(
   const pinned = manifest.artifacts["app/manager/manager.js"]?.sha256;
   if (pinned === undefined) throw new Error("manifest missing manager.js");
   const url = `${baseUrl.replace(/\/$/, "")}/app/manager/manager.js?bust=${bust}`;
-  const res = await fetch(url);
+  const res = await f402Fetch(url);
   if (!res.ok) throw new Error(`manager.js fetch ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
   const live = await sha256HexFileBytes(bytes);

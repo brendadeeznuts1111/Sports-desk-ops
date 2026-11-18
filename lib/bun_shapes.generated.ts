@@ -799,8 +799,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "test:tests/bun_capabilities.test.ts",
       "test:tests/bun_eval_patterns.test.ts",
-      "test:tests/r2_s3_client.test.ts",
-      "test:tests/supervisor.test.ts",
+      "test:tests/f402_secret_store.test.ts",
+      "test:tests/f402_secret_store_errors.test.ts",
     ],
   },
   {
@@ -1208,7 +1208,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
       "surface:FetchSession",
       "test:tests/bun_capabilities.test.ts",
       "test:tests/bun_shapes_types.test-d.ts",
-      "test:tests/fetch_session_contract.test.ts",
+      "test:tests/f402_fetch_protocols.test.ts",
     ],
   },
   {

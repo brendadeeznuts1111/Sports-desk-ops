@@ -974,10 +974,30 @@ describe("base URL", () => {
     );
   });
 
-  test("accepts only a bare https origin", () => {
+  test("accepts only a bare https origin, or http on loopback", () => {
     expect(normalizePullBaseUrl("https://WWW.Fantasy402.com/")).toBe(
       "https://www.fantasy402.com",
     );
+    expect(normalizePullBaseUrl("http://127.0.0.1:8080/")).toBe(
+      "http://127.0.0.1:8080",
+    );
+    expect(normalizePullBaseUrl("http://127.1.2.3")).toBe("http://127.1.2.3");
+    expect(normalizePullBaseUrl("http://LOCALHOST:9")).toBe(
+      "http://localhost:9",
+    );
+    expect(normalizePullBaseUrl("http://[::1]:9")).toBe("http://[::1]:9");
+    for (const bad of [
+      "http://192.0.2.1:8080",
+      "http://localhost.example",
+      "http://127.0.0.1.nip.io",
+      "http://[::2]",
+      "http://0.0.0.0",
+    ]) {
+      expect(configError(() => normalizePullBaseUrl(bad)).message).toContain(
+        "loopback",
+      );
+    }
+    configError(() => normalizePullBaseUrl("ftp://127.0.0.1"));
     expect(
       configError(() => normalizePullBaseUrl("http://www.fantasy402.com"))
         .message,
@@ -997,13 +1017,13 @@ describe("base URL", () => {
     );
   });
 
-  test("the client refuses a non-https base before any request", () => {
+  test("the client refuses a non-loopback http base before any request", () => {
     const calls: string[] = [];
     configError(
       () =>
         new F402PullClient({
           session,
-          baseUrl: "http://127.0.0.1:1",
+          baseUrl: "http://192.0.2.1:1",
           intervalMs: 0,
           fetchImpl: async (url) => {
             calls.push(url);
@@ -1012,6 +1032,21 @@ describe("base URL", () => {
         }),
     );
     expect(calls).toEqual([]);
+  });
+
+  test("the client accepts a loopback http base and posts there", async () => {
+    const calls: string[] = [];
+    const client = new F402PullClient({
+      session,
+      baseUrl: "http://127.0.0.1:1",
+      intervalMs: 0,
+      fetchImpl: async (url) => {
+        calls.push(url);
+        return Response.json({ LIST: [] });
+      },
+    });
+    await client.post("getPlayers", {});
+    expect(calls[0]).toBe("http://127.0.0.1:1/cloud/api/Manager/getPlayers");
   });
 
   test("the client posts to the default host when no base is given", async () => {

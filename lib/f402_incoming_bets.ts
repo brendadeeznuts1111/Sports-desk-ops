@@ -30,7 +30,13 @@ import {
   createF402ReplayTransport,
   type F402ReplayTransport,
 } from "./f402_replay_transport.ts";
-import { readF402Session, type F402Session } from "./f402_session.ts";
+import type { F402SecretError } from "./f402_secret_store.ts";
+import {
+  describeF402SessionStoreFailure,
+  F402_SESSION_STORE_HINT,
+  readF402SessionForReader,
+  type F402Session,
+} from "./f402_session.ts";
 import { BET_TICKER_OPERATION } from "./live_wagers.ts";
 
 const BET_TICKER_URL = `https://fantasy402.com${BET_TICKER_OPERATION}`;
@@ -67,7 +73,10 @@ export interface IncomingBetsOptions {
   now?: Date;
   /** Fetch seam for tests; when set, no replay transport is created. */
   fetchImpl?: F402ProbeFetch;
-  /** Session seam for tests; `null` forces "no session" instead of reading the cache file. */
+  /**
+   * Session seam for tests; `null` forces "no session" instead of reading the configured store
+   * (keychain mode: an async read whose failure is `session_store_unavailable`).
+   */
   session?: F402Session | null;
   /** Root holding `data/live-wagers.json` and `data/live-bets.json`; defaults to cwd. */
   rootDir?: string;
@@ -78,6 +87,8 @@ export interface IncomingBetsOptions {
 export type IncomingBetsDiagnostic =
   | { code: "ok"; transport: string; httpStatus?: number }
   | { code: "transport_unavailable"; message: string; hint: string }
+  /** F402_SESSION_STORE=keychain and the keychain could not be read (named error in message). */
+  | { code: "session_store_unavailable"; message: string; hint: string }
   | { code: "agent_required"; message: string }
   | { code: "unauthorized"; message: string; httpStatus: number }
   | { code: "http_error"; message: string; httpStatus: number }
@@ -425,9 +436,10 @@ function capturesUnavailableMessage(rootDir: string): string {
 }
 
 /**
- * Fetches incoming bets for the flag engine. Never throws for a missing session/agent: every
- * refusal is a structured diagnostic. Live rows are `source: "live-ticker"`; fallback rows name
- * the artifact they came from.
+ * Fetches incoming bets for the flag engine. Never throws for a missing session/agent or an
+ * unreadable session store: every refusal is a structured diagnostic. A keychain store failure is
+ * reported (not replaced by the capture fallback) unless `source: "file"` was asked for. Live rows
+ * are `source: "live-ticker"`; fallback rows name the artifact they came from.
  */
 export async function fetchIncomingBets(
   options: IncomingBetsOptions = {},
@@ -457,8 +469,17 @@ export async function fetchIncomingBets(
     diagnostic,
   });
 
-  const session: F402Session | null =
-    options.session !== undefined ? options.session : readF402Session();
+  // Keychain store: a store failure is kept and reported once a live read would need the session
+  // (never as "no session"); the capture-file source does not use the session at all.
+  let session: F402Session | null = null;
+  let sessionStoreError: F402SecretError | null = null;
+  if (options.session !== undefined) {
+    session = options.session;
+  } else {
+    const read = await readF402SessionForReader();
+    if (read.ok) session = read.session;
+    else sessionStoreError = read.error;
+  }
   const proxyConfigured = (Bun.env[PROXY_ENV] ?? "").trim() !== "";
   // An injected fetch is a transport seam; otherwise a session or the proxy must exist.
   // Explicit capture-file source: parse a recorded JSON getBetTicker body. The HTML table is
@@ -535,6 +556,14 @@ export async function fetchIncomingBets(
       rows: deduped.slice(0, limit),
       diagnostic: { code: "ok", transport: "file-capture" },
     };
+  }
+
+  if (sessionStoreError !== null) {
+    return fail("live-ticker", {
+      code: "session_store_unavailable",
+      message: describeF402SessionStoreFailure(sessionStoreError),
+      hint: F402_SESSION_STORE_HINT,
+    });
   }
 
   const liveConfigured =

@@ -1,7 +1,11 @@
 /** Direct 4C `Manager/getPending` fetch, validation and capture persistence. */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { readF402Session, type F402Session } from "./f402_session.ts";
+import {
+  primeF402Session,
+  readF402Session,
+  type F402Session,
+} from "./f402_session.ts";
 import {
   F402_KEYCHAIN_NAMES,
   readSecretCanonicalThenLegacy,
@@ -103,7 +107,11 @@ function defaultF402TokenFilePath(
   return explicit !== "" ? explicit : `${configHome}/sportsdesk/f402-token`;
 }
 
-/** Resolve bearer + provenance: CLI, env, token file, then `session:login` authorizationHeader. */
+/**
+ * Resolve bearer + provenance: CLI, env, token file, then `session:login` authorizationHeader.
+ * Synchronous: with F402_SESSION_STORE=keychain the session comes from the in-process copy, so an
+ * async caller should use {@link resolveF402BearerTokenDetailedAsync}, which loads it first.
+ */
 export function resolveF402BearerTokenDetailed(
   options: ResolveF402BearerOptions = {},
 ): ResolvedF402Bearer {
@@ -139,6 +147,46 @@ export function resolveF402BearerTokenDetailed(
   }
 
   throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
+}
+
+/**
+ * Async form of {@link resolveF402BearerTokenDetailed} for the session store. CLI, env and token
+ * file are tried first with no session read; only when none resolves (and no `readSession` was
+ * injected) is the session loaded, which with F402_SESSION_STORE=keychain is an async Bun.secrets
+ * read whose named store error is thrown. File store: same result as the sync form.
+ */
+export async function resolveF402BearerTokenDetailedAsync(
+  options: ResolveF402BearerOptions = {},
+): Promise<ResolvedF402Bearer> {
+  if (options.readSession !== undefined) {
+    return resolveF402BearerTokenDetailed(options);
+  }
+  try {
+    return resolveF402BearerTokenDetailed({
+      ...options,
+      readSession: () => null,
+    });
+  } catch (error) {
+    if (!(error instanceof F402PendingFetchError)) throw error;
+  }
+  await primeF402Session();
+  return resolveF402BearerTokenDetailed(options);
+}
+
+/**
+ * Async {@link f402BearerResolvable}: `false` only when no bearer source exists; a session-store
+ * failure is thrown by name instead of being read as "no bearer".
+ */
+export async function f402BearerResolvableAsync(
+  options: ResolveF402BearerOptions = {},
+): Promise<boolean> {
+  try {
+    await resolveF402BearerTokenDetailedAsync(options);
+    return true;
+  } catch (error) {
+    if (error instanceof F402PendingFetchError) return false;
+    throw error;
+  }
 }
 
 /** Resolve the bearer token read-only; fail before network I/O. */
