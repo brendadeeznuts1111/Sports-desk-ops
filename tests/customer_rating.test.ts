@@ -6,10 +6,12 @@ import {
   computeClvSignificance,
   computeKellyMetrics,
   formatCustomerRatingMarkdown,
+  rateCustomerBookRow,
   rateCustomerFromObservations,
   rateCustomerFromTickets,
   rateIncomingWager,
   renderCustomerRatingAnsi,
+  ticketRowsToObservationTickets,
 } from "../lib/customer_rating.ts";
 import type { EnrichedTicketMaster } from "../lib/f402_figure_date_enricher.ts";
 import type {
@@ -396,5 +398,144 @@ describe("Customer Rating Engine", () => {
     expect(kelly.halfKellyFraction).toBeGreaterThan(0.01);
     expect(kelly.isKellyDisciplined).toBe(true);
     expect(kelly.growthRate).toBeGreaterThan(0);
+  });
+
+  it("fixes the 100x CLV percentage-point scaling bug in rateCustomerFromTickets", () => {
+    const tickets: NormalizedObservationTicket[] = [
+      {
+        ticketNumber: "1",
+        customerId: "CLV_FIX_1",
+        agentId: "AG1",
+        placedAtYmd: "2026-11-12",
+        placedAt: "2026-11-12T18:00:00Z",
+        eventStartsAt: null,
+        timing: "pregame",
+        sport: "Football",
+        competitionFamily: "NFL",
+        canonicalPeriod: "game",
+        elapsedMinutesFromStart: null,
+        placedIn2HWindow: false,
+        marketKind: "spread",
+        side: "home",
+        origSpread: -3,
+        adjSpread: -3,
+        buyPoints: 0,
+        touchedKeyNumber: 3,
+        priceVsCloseCents: 10, // +10%
+        movedInFavor: true,
+        riskUsd: 1000,
+        netUsd: 909,
+      },
+      {
+        ticketNumber: "2",
+        customerId: "CLV_FIX_1",
+        agentId: "AG1",
+        placedAtYmd: "2026-11-13",
+        placedAt: "2026-11-13T18:00:00Z",
+        eventStartsAt: null,
+        timing: "pregame",
+        sport: "Football",
+        competitionFamily: "NFL",
+        canonicalPeriod: "game",
+        elapsedMinutesFromStart: null,
+        placedIn2HWindow: false,
+        marketKind: "spread",
+        side: "away",
+        origSpread: 7,
+        adjSpread: 7,
+        buyPoints: 0,
+        touchedKeyNumber: 7,
+        priceVsCloseCents: 20, // +20%
+        movedInFavor: true,
+        riskUsd: 1000,
+        netUsd: 909,
+      },
+    ];
+
+    const rating = rateCustomerFromTickets("CLV_FIX_1", tickets);
+    // Mean is +15 percentage points -> 15.0%, NEVER 1500%.
+    expect(rating.clvSignificance?.meanClvPercent).toBe(15);
+  });
+
+  it("scores measuredClvBps on observations and rates CustomerRow without Kelly blowup or hold-sign inversion", () => {
+    const obs = new CustomerObservations(
+      "CLV_OBS_1",
+      25,
+      25_000,
+      -500,
+      [],
+      "2026-11-01",
+      "2026-11-10",
+    );
+    const withPositiveClv = rateCustomerFromObservations(obs, {
+      measuredClvBps: 240,
+    });
+    const withoutClv = rateCustomerFromObservations(obs);
+    expect(withPositiveClv.componentScores.clvEdgeScore).toBeGreaterThan(
+      withoutClv.componentScores.clvEdgeScore,
+    );
+
+    const bookRated = rateCustomerBookRow({
+      customer_id: "SYNTH_SYN_01",
+      agent_id: "BILLY666",
+      status: "Active",
+      lifetime_volume_usd: 500_000,
+      lifetime_net_usd: -25_000, // desk lost $25k, same sign as negative hold_pct -> player won +$25k
+      hold_pct: -5.0,
+      clv_bps: 185,
+      total_wagers: 200,
+      average_bet_usd: 2500,
+      recent_tickets: [
+        {
+          wager_number: "101",
+          league: "NFL",
+          market: "Spread",
+          selection: "Chiefs -3 (-110)",
+          risk_usd: 2500,
+          win_usd: 2272.73,
+          result: "WIN",
+          net_usd: 2272.73,
+          channel: "Internet",
+          placed_at: "2026-11-10T17:00:00Z",
+        },
+        {
+          wager_number: "102",
+          league: "NFL",
+          market: "Spread",
+          selection: "Ravens +7 (-110)",
+          risk_usd: 2500,
+          win_usd: 2272.73,
+          result: "WIN",
+          net_usd: 2272.73,
+          channel: "Internet",
+          placed_at: "2026-11-12T17:00:00Z",
+        },
+      ],
+    });
+
+    // Preserves normalizeCustomerId grouping and real CLV telemetry
+    expect(bookRated.customerId).toBe("SYNTH_SYN");
+    expect(bookRated.netUsd).toBe(25_000);
+    expect(bookRated.clvBps).toBe(185);
+    expect(bookRated.clvSource).toBe("book_clv_bps");
+    expect(bookRated.activeDays).toBe(2);
+    expect(bookRated.clvSignificance?.sampleCount).toBe(1);
+    expect(bookRated.clvSignificance?.isSignificant95).toBe(false);
+    expect(bookRated.bayesianSkill?.posteriorMeanWinRate).toBeGreaterThan(0.5);
+    expect(bookRated.kellyMetrics?.observedUnitFraction).toBeLessThan(0.2);
+    expect(bookRated.kellyMetrics?.growthRate).toBeGreaterThan(-0.05);
+
+    const mapped = ticketRowsToObservationTickets("SYNTH_SYN_01", [
+      {
+        wager_number: "103",
+        league: "NFL",
+        market: "Spread",
+        selection: "Chiefs -3 (-110)",
+        risk_usd: 500,
+        win_usd: 454.55,
+        placed_at: "2026-11-13T12:00:00Z",
+      },
+    ]);
+    expect(mapped[0]?.priceVsCloseCents).toBeNull();
   });
 });

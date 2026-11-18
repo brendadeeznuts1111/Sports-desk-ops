@@ -7,7 +7,12 @@
  * league/market. Fields the book does not carry (syndicate probability, line shading, LTV) are
  * left at their explicit zero/none values rather than guessed.
  */
-import type { LiveWager, RankedPlayer30d, ShowcaseCustomer } from "./types.ts";
+import type {
+  CustomerRatingApiPayload,
+  LiveWager,
+  RankedPlayer30d,
+  ShowcaseCustomer,
+} from "./types.ts";
 
 type Row = Record<string, unknown>;
 
@@ -149,6 +154,9 @@ export function bookRowsToProfiles(
     const rawSharp = Number(row.sharp_score);
     const sharpKnown = Number.isFinite(rawSharp);
     const score = sharpKnown ? clamp(rawSharp / 10, 0, 10) : 0;
+    const rawClv = row.clv_bps ?? row.clvBps;
+    const clvBps =
+      typeof rawClv === "number" && Number.isFinite(rawClv) ? rawClv : null;
     const clvScore = clamp(num(row.clv_bps) / 100, -10, 10);
     const rawDelay = nonNegativeFinite(row.delay_seconds);
     const delayKnown = rawDelay !== null;
@@ -211,6 +219,7 @@ export function bookRowsToProfiles(
       shadowCopyMultiplier: 1,
       action: score >= 7 ? "ALERT_OPERATOR" : "ACCEPT_NORMAL",
       ipAddress: String(row.ip_subnet ?? "—"),
+      ...(clvBps === null ? {} : { clvBps }),
       unknown,
       source,
     };
@@ -233,7 +242,10 @@ export function backtestRowsToProfiles(
     const rawSharp = Number(row.sharpScore ?? row.sharp_score);
     const sharpKnown = Number.isFinite(rawSharp) && rawSharp > 0;
     const score = sharpKnown ? clamp(rawSharp / 10, 0, 10) : 0;
-    const clvBps = num(row.avgClvBps ?? row.clv_bps);
+    const rawClv = row.avgClvBps ?? row.clv_bps ?? row.clvBps;
+    const measuredClvBps =
+      typeof rawClv === "number" && Number.isFinite(rawClv) ? rawClv : null;
+    const clvBps = num(rawClv);
     const clvScore = clamp(clvBps / 100, -10, 10);
     const tickets = num(row.totalParlayTickets);
     const handle = num(row.totalParlayHandleUsd);
@@ -288,6 +300,7 @@ export function backtestRowsToProfiles(
       shadowCopyMultiplier: 1,
       action: score >= 7 ? "ALERT_OPERATOR" : "ACCEPT_NORMAL",
       ipAddress: String(row.ipSubnet ?? row.ip_subnet ?? "—"),
+      ...(measuredClvBps === null ? {} : { clvBps: measuredClvBps }),
       unknown,
       source: "backtest",
     };
@@ -497,4 +510,137 @@ export function mergeMatrixProfileOverlay(
     ? liveOpenWagersToProfiles(liveWagers)
     : [];
   return mergeProfileRows(cohortProfiles, ranked, liveOpen);
+}
+
+/**
+ * Hydrates a `/api/customer/profile` + optional `/api/customer/rating` response
+ * into a UI `ShowcaseCustomer` for on-demand cross-tab inspection.
+ */
+export function profileApiPayloadToShowcase(
+  raw: unknown,
+  rating?: CustomerRatingApiPayload | null,
+): ShowcaseCustomer | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const outer = raw as Record<string, unknown>;
+  const prof =
+    typeof outer.profile === "object" && outer.profile !== null
+      ? (outer.profile as Record<string, unknown>)
+      : outer;
+  const rawId = prof.customerId ?? prof.customer_id ?? rating?.customerId;
+  if (typeof rawId !== "string" || rawId.trim() === "") return null;
+  const id = rawId.trim().toUpperCase();
+
+  const risk =
+    typeof prof.riskForensics === "object" && prof.riskForensics !== null
+      ? (prof.riskForensics as Record<string, unknown>)
+      : {};
+  const stake =
+    typeof prof.stakeProfile === "object" && prof.stakeProfile !== null
+      ? (prof.stakeProfile as Record<string, unknown>)
+      : {};
+  const market =
+    typeof prof.marketProfile === "object" && prof.marketProfile !== null
+      ? (prof.marketProfile as Record<string, unknown>)
+      : {};
+  const syndicate =
+    typeof prof.syndicateProfile === "object" && prof.syndicateProfile !== null
+      ? (prof.syndicateProfile as Record<string, unknown>)
+      : {};
+  const timing =
+    typeof prof.timingProfile === "object" && prof.timingProfile !== null
+      ? (prof.timingProfile as Record<string, unknown>)
+      : {};
+  const correlated =
+    typeof prof.correlatedParlayProfile === "object" &&
+    prof.correlatedParlayProfile !== null
+      ? (prof.correlatedParlayProfile as Record<string, unknown>)
+      : {};
+  const directives =
+    typeof prof.deskDirectives === "object" && prof.deskDirectives !== null
+      ? (prof.deskDirectives as Record<string, unknown>)
+      : {};
+  const composite =
+    typeof prof.compositeSharpness === "object" &&
+    prof.compositeSharpness !== null
+      ? (prof.compositeSharpness as Record<string, unknown>)
+      : {};
+  const ratingObj =
+    rating ??
+    (typeof prof.rating === "object" && prof.rating !== null
+      ? (prof.rating as unknown as CustomerRatingApiPayload)
+      : null);
+
+  const score = round(
+    clamp(num(ratingObj?.score ?? composite.compositeScore), 0, 10),
+    2,
+  );
+  const comp = ratingObj?.componentScores;
+  const clvBps =
+    typeof ratingObj?.clvBps === "number" && Number.isFinite(ratingObj.clvBps)
+      ? ratingObj.clvBps
+      : null;
+  const sampleCount = num(stake.sampleCount);
+  const giniVal = num(stake.giniCoefficient);
+  const unknown: string[] = [];
+  if (sampleCount === 0) unknown.push("meanStake");
+  if (sampleCount < 2) unknown.push("sizing", "gini", "var95");
+  if (clvBps === null && comp?.clvEdgeScore === undefined)
+    unknown.push("clvBps");
+
+  const mappedTier =
+    mapRankingTierCode(
+      ratingObj?.tier ?? (composite.tier as string | undefined) ?? "",
+    ) ?? tierFor(score);
+
+  return {
+    id,
+    name: id,
+    agentId: String(prof.agentId ?? "—"),
+    masterAgent: String(prof.masterAgent ?? "—"),
+    tier: mappedTier,
+    tierLabel: ratingObj?.tier,
+    score,
+    clvScore: round(comp?.clvEdgeScore ?? num(ratingObj?.clvBps) / 100, 2),
+    skillScore: round(comp?.keyNumberScore ?? score * 0.8, 2),
+    sizingScore: round(clamp(1 - giniVal, 0, 2), 2),
+    sigScore: round(comp?.steamLatencyScore ?? 0, 2),
+    timingScore: round(comp?.timingDisciplineScore ?? 0, 2),
+    sizingStrategy: String(stake.sizingStrategy ?? "PENDING_TICKETS"),
+    gini: round(giniVal, 4),
+    meanStake: round(num(stake.meanStakeUsd), 2),
+    specialization:
+      [market.dominantLeague, market.dominantMarket]
+        .filter((s) => typeof s === "string" && s !== "")
+        .join(" ") || String(prof.contextType ?? "UNKNOWN"),
+    timingArchetype: String(timing.archetype ?? prof.contextType ?? "UNKNOWN"),
+    correlatedRisk:
+      correlated.exploitRisk === "CRITICAL" ||
+      correlated.exploitRisk === "HIGH" ||
+      correlated.exploitRisk === "MODERATE"
+        ? correlated.exploitRisk
+        : "NONE",
+    correlatedExploitRate: round(num(correlated.exploitRate), 2),
+    syndicateRisk:
+      syndicate.syndicateRisk === "HIGH" ||
+      syndicate.syndicateRisk === "ELEVATED"
+        ? syndicate.syndicateRisk
+        : "LOW",
+    syndicateProb: round(num(syndicate.syndicateProbability), 2),
+    subAccountIndex: null,
+    var95Usd: round(num(risk.portfolioVar95Usd), 2),
+    cvar95Usd: round(num(risk.portfolioCvar95Usd), 2),
+    holdPct: round(num(risk.holdPct), 1),
+    ltvUsd: round(num(risk.estimatedLtvUsd ?? risk.lifetimeNetUsd), 2),
+    recommendedLimitUsd: round(num(directives.recommendedMaxLimitUsd), 2),
+    inPlayDelaySec: num(directives.inPlayDelaySec),
+    lineShadeCents: num(directives.lineShadeCents),
+    shadowCopyMultiplier: num(directives.shadowCopyMultiplier) || 1,
+    action: String(
+      ratingObj?.recommendedAction ?? directives.primaryAction ?? "MONITOR",
+    ),
+    ipAddress: "—",
+    ...(clvBps === null ? {} : { clvBps }),
+    unknown,
+    source: "book",
+  };
 }

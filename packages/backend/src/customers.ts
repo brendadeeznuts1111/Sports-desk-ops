@@ -18,6 +18,7 @@ export interface CustomerRowFinderOptions {
   readonly cwd?: string | undefined;
   readonly enrichedPaths?: readonly string[] | undefined;
   readonly profilesPath?: string | undefined;
+  readonly backtestPath?: string | undefined;
 }
 
 /** Build a stat-cached customer row lookup function over enriched JSON corpora & profiles. */
@@ -32,6 +33,8 @@ export function createCustomerRowFinder<
   ];
   const profilesPath =
     options.profilesPath ?? resolve(cwd, "data/customer-profiles.json");
+  const backtestPath =
+    options.backtestPath ?? resolve(cwd, "docs/backtest-4wk-cfb-nba.json");
 
   const indexCache = new BoundedStampCache<ReadonlyMap<string, TRow>>(8);
 
@@ -122,6 +125,38 @@ export function createCustomerRowFinder<
         if (found) return found;
       } catch {
         // signal-honesty: intentional-fallback-invalid-harvested-json
+      }
+    }
+
+    // 3b. Fallback: 4-week backtest leaderboard (`docs/backtest-4wk-cfb-nba.json`).
+    const backtestStamp = await statStamp(backtestPath);
+    if (backtestStamp !== null) {
+      try {
+        let byId = indexCache.getIfFresh(backtestPath, backtestStamp);
+        if (!byId) {
+          const data = (await Bun.file(backtestPath).json()) as {
+            customerLeaderboard?: unknown[];
+          };
+          const nextMap = new Map<string, TRow>();
+          if (Array.isArray(data?.customerLeaderboard)) {
+            for (const entry of data.customerLeaderboard) {
+              const row = backtestCustomerRow(entry, backtestPath);
+              if (row === null) continue;
+              const key = row.customer_id.trim().toUpperCase();
+              if (key && !nextMap.has(key))
+                nextMap.set(key, row as unknown as TRow);
+            }
+          }
+          byId = nextMap;
+          indexCache.set(backtestPath, backtestStamp, byId);
+        }
+        const stripped = normId.replace(/_\d+$/, "");
+        const found =
+          byId.get(normId) ??
+          (stripped !== normId ? byId.get(stripped) : undefined);
+        if (found) return found;
+      } catch {
+        // signal-honesty: intentional-fallback-invalid-backtest-json
       }
     }
 
@@ -306,6 +341,71 @@ function harvestedCustomerRow(value: unknown): SourcedRow | null {
   };
 }
 
+function backtestCustomerRow(
+  value: unknown,
+  sourcePath: string,
+): SourcedRow | null {
+  const rec = jsonRow(value);
+  if (!rec) return null;
+  const id =
+    nonEmptyText(rec.customerId) ??
+    nonEmptyText(rec.customer_id) ??
+    nonEmptyText(rec.id);
+  if (id === null) return null;
+
+  const totalWagers =
+    finiteNumber(rec.totalParlayTickets) ??
+    finiteNumber(rec.totalWagers) ??
+    finiteNumber(rec.tickets);
+  const volume =
+    finiteNumber(rec.totalParlayHandleUsd) ??
+    finiteNumber(rec.totalRiskUsd) ??
+    finiteNumber(rec.riskUsd) ??
+    finiteNumber(rec.volumeUsd);
+  const net =
+    finiteNumber(rec.baselineDeskNetUsd) ??
+    finiteNumber(rec.netUsd) ??
+    finiteNumber(rec.pnlUsd);
+  const hold = finiteNumber(rec.baselineHoldPct) ?? finiteNumber(rec.holdPct);
+  const clv = finiteNumber(rec.avgClvBps) ?? finiteNumber(rec.clvBps);
+  const sharp = finiteNumber(rec.sharpScore) ?? finiteNumber(rec.score);
+  const explicitAvgBet =
+    finiteNumber(rec.averageBetUsd) ??
+    finiteNumber(rec.avgStakeUsd) ??
+    finiteNumber(rec.avgRiskUsd);
+  const avgBet =
+    explicitAvgBet ??
+    (volume !== null && totalWagers !== null && totalWagers > 0
+      ? Math.round((volume / totalWagers) * 100) / 100
+      : null);
+  const agent = nonEmptyText(rec.agentId);
+  const masterAgent = nonEmptyText(rec.masterAgent);
+  const contextType =
+    nonEmptyText(rec.contextType) ??
+    nonEmptyText(rec.archetype) ??
+    nonEmptyText(rec.tier);
+  const lastActiveAt = nonEmptyText(rec.lastActiveAt);
+
+  return {
+    customer_id: id.toUpperCase(),
+    provenance: "backtest-leaderboard",
+    status: "Active",
+    ...(agent === null ? {} : { agent_id: agent }),
+    ...(masterAgent === null ? {} : { master_agent: masterAgent }),
+    ...(contextType === null ? {} : { context_type: contextType }),
+    ...(totalWagers === null ? {} : { total_wagers: totalWagers }),
+    ...(volume === null ? {} : { lifetime_volume_usd: volume }),
+    ...(net === null ? {} : { lifetime_net_usd: net }),
+    ...(hold === null ? {} : { hold_pct: hold }),
+    ...(clv === null ? {} : { clv_bps: clv }),
+    ...(sharp === null ? {} : { sharp_score: sharp }),
+    ...(avgBet === null ? {} : { average_bet_usd: avgBet }),
+    ...(lastActiveAt === null ? {} : { last_active_at: lastActiveAt }),
+    recent_tickets: [],
+    backtest_source_path: sourcePath,
+  };
+}
+
 function liveWagersCustomerRow(
   customerId: string,
   rows: readonly JsonRow[],
@@ -350,6 +450,7 @@ export interface CustomersCohortPayload {
   /** Every backtest-cohort customer, not just the leaderboard's top 20. */
   readonly backtestAll: ReadonlyArray<Record<string, unknown>>;
   readonly fixtures: ReadonlyArray<Record<string, unknown>>;
+  readonly book?: ReadonlyArray<Record<string, unknown>>;
   readonly provenance: DashboardSourceProvenance;
 }
 
@@ -391,9 +492,11 @@ export function computeCustomersCohortPayload(
   }
 
   const nowIso = new Date().toISOString();
-  const hasLocalBook = Boolean(
-    input.localBookRows && input.localBookRows.length > 0,
-  );
+  const localBookRows =
+    input.localBookRows && input.localBookRows.length > 0
+      ? input.localBookRows
+      : undefined;
+  const hasLocalBook = localBookRows !== undefined;
   const provenance: DashboardSourceProvenance =
     input.provenance ??
     (hasLocalBook
@@ -431,6 +534,7 @@ export function computeCustomersCohortPayload(
     backtestTop: input.backtestLeaderboard.slice(0, 20),
     backtestAll: input.backtestLeaderboard,
     fixtures: input.fixtures,
+    ...(localBookRows ? { book: localBookRows } : {}),
     provenance,
   };
 }

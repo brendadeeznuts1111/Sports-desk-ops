@@ -41,7 +41,9 @@ import { WireContractChip } from "./WireContractChip.tsx";
 import type {
   DashboardAlertRecord,
   DashboardSourceProvenance,
+  LiveBetsV2SummarySnapshot,
   LiveWager,
+  LiveWagersClvSummary,
   TierStyleConfig,
   SlabPolicySummary,
   WagerSortField,
@@ -50,6 +52,8 @@ import type {
 
 export interface LiveWagersTabPanelProps {
   readonly wagers?: readonly LiveWager[] | undefined;
+  readonly clvSummary?: LiveWagersClvSummary | null | undefined;
+  readonly liveBetsSnapshot?: LiveBetsV2SummarySnapshot | null | undefined;
   readonly provenance?: DashboardSourceProvenance | undefined;
   readonly wagersError?: string | null | undefined;
   /** Epoch ms of the last successful wager fetch, for the stream status line. */
@@ -194,6 +198,8 @@ function describeEmptyWagers(
 
 export function LiveWagersTabPanel({
   wagers = [],
+  clvSummary = null,
+  liveBetsSnapshot = null,
   provenance = PENDING_WAGERS_PROVENANCE,
   wagersError = null,
   wagersLastUpdatedAt = null,
@@ -227,6 +233,9 @@ export function LiveWagersTabPanel({
   alertRecords = [],
 }: LiveWagersTabPanelProps): React.ReactElement {
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
+  const [wagerClvFilter, setWagerClvFilter] = useState<
+    "ALL" | "POS_BOOK" | "NEG_BOOK" | "HAS_TICKET_CLV"
+  >("ALL");
   const [paused, setPaused] = useState(false);
   const [frozenWagers, setFrozenWagers] = useState<readonly LiveWager[] | null>(
     null,
@@ -405,6 +414,15 @@ export function LiveWagersTabPanel({
         w.betType.toUpperCase() !== wagerTypeFilter.toUpperCase()
       )
         return false;
+      if (wagerClvFilter === "POS_BOOK") {
+        if (typeof w.customerClvBps !== "number" || w.customerClvBps <= 0)
+          return false;
+      } else if (wagerClvFilter === "NEG_BOOK") {
+        if (typeof w.customerClvBps !== "number" || w.customerClvBps >= 0)
+          return false;
+      } else if (wagerClvFilter === "HAS_TICKET_CLV") {
+        if (w.clvCents === null) return false;
+      }
       return true;
     })
     .sort((a, b) => {
@@ -544,6 +562,71 @@ export function LiveWagersTabPanel({
             To Win: ${totalToWinUsd.toLocaleString()}
           </div>
         </div>
+        {(() => {
+          const ticketClvVals = activeWagers
+            .map((w) => w.clvCents)
+            .filter(
+              (v): v is number => typeof v === "number" && Number.isFinite(v),
+            );
+          const bookClvVals = activeWagers
+            .map((w) => w.customerClvBps)
+            .filter(
+              (v): v is number => typeof v === "number" && Number.isFinite(v),
+            );
+          const ticketCount =
+            clvSummary?.ticketClvCount ?? ticketClvVals.length;
+          const meanTicket = clvSummary
+            ? clvSummary.meanTicketClvCents
+            : ticketClvVals.length > 0
+              ? Math.round(
+                  (ticketClvVals.reduce((a, b) => a + b, 0) /
+                    ticketClvVals.length) *
+                    10,
+                ) / 10
+              : null;
+          const bookCount = clvSummary?.bookMatchedCount ?? bookClvVals.length;
+          const meanBook = clvSummary
+            ? clvSummary.meanCustomerClvBps
+            : bookClvVals.length > 0
+              ? Math.round(
+                  (bookClvVals.reduce((a, b) => a + b, 0) /
+                    bookClvVals.length) *
+                    10,
+                ) / 10
+              : null;
+          const headline =
+            meanTicket !== null
+              ? `Ticket ${meanTicket > 0 ? "+" : ""}${meanTicket}¢`
+              : meanBook !== null
+                ? `Book ${meanBook > 0 ? "+" : ""}${meanBook} bps`
+                : "— (0 measured)";
+          const headlineColor =
+            meanTicket !== null
+              ? meanTicket > 0
+                ? "#4ade80"
+                : "#f87171"
+              : meanBook !== null
+                ? meanBook > 0
+                  ? "#4ade80"
+                  : meanBook < 0
+                    ? "#f87171"
+                    : "#e2e8f0"
+                : "#94a3b8";
+          return (
+            <div style={styles.kpiCard} data-wagers-clv-kpi="true">
+              <div style={styles.kpiLabel}>CLV Telemetry</div>
+              <div style={{ ...styles.kpiVal, color: headlineColor }}>
+                {headline}
+              </div>
+              <div style={styles.kpiSub}>
+                Ticket CLV: {ticketCount} · Book matched: {bookCount}
+                {clvSummary
+                  ? ` (+${clvSummary.positiveCustomerClvCount} / -${clvSummary.negativeCustomerClvCount})`
+                  : ""}
+              </div>
+            </div>
+          );
+        })()}
         <div style={styles.kpiCard}>
           <div style={styles.kpiLabel}>Operator Guardrails</div>
           <div style={{ ...styles.kpiVal, color: "#4ade80" }}>
@@ -552,6 +635,51 @@ export function LiveWagersTabPanel({
           <div style={styles.kpiSub}>Production Safety Invariant Active</div>
         </div>
       </div>
+
+      {liveBetsSnapshot ? (
+        <div
+          data-live-bets-v2-strip="true"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "10px",
+            marginBottom: "12px",
+            padding: "8px 12px",
+            borderRadius: "8px",
+            backgroundColor: "rgba(15, 23, 42, 0.72)",
+            border: "1px solid rgba(56, 189, 248, 0.25)",
+            fontSize: "12px",
+            color: "#cbd5e1",
+          }}
+        >
+          <span>
+            <b style={{ color: "#38bdf8" }}>
+              Live Pending Bets Book (/api/v2/live-bets):
+            </b>{" "}
+            {liveBetsSnapshot.totalGames} games ·{" "}
+            {liveBetsSnapshot.totalPending} pending · Handle{" "}
+            <b>
+              $
+              {Math.round(
+                liveBetsSnapshot.totalWageredCents / 100,
+              ).toLocaleString()}
+            </b>{" "}
+            · To Win{" "}
+            <b>
+              $
+              {Math.round(
+                liveBetsSnapshot.totalToWinCents / 100,
+              ).toLocaleString()}
+            </b>
+          </span>
+          <span style={{ color: "#94a3b8", fontFamily: "monospace" }}>
+            source={liveBetsSnapshot.dataSource}
+            {liveBetsSnapshot.fallbackUsed ? " (sample fallback)" : ""}
+          </span>
+        </div>
+      ) : null}
 
       {/* Filter and Search Bar */}
       <div style={styles.filterBar}>
@@ -617,6 +745,26 @@ export function LiveWagersTabPanel({
                 wagerTypeFilter.toUpperCase() === pill.id.toUpperCase(),
               )}
               onClick={() => onWagerTypeFilterChange(pill.id)}
+            >
+              {pill.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={styles.tierFilterGroup}>
+          {(
+            [
+              { id: "ALL", label: "All CLV" },
+              { id: "POS_BOOK", label: "+CLV Book" },
+              { id: "NEG_BOOK", label: "-CLV Book" },
+              { id: "HAS_TICKET_CLV", label: "Has Ticket CLV" },
+            ] as const
+          ).map((pill) => (
+            <button
+              key={pill.id}
+              type="button"
+              style={styles.filterPill(wagerClvFilter === pill.id)}
+              onClick={() => setWagerClvFilter(pill.id)}
             >
               {pill.label}
             </button>
@@ -1233,6 +1381,28 @@ export function LiveWagersTabPanel({
                           ? `+${w.clvCents}¢`
                           : `${w.clvCents}¢`}
                     </span>
+                    {typeof w.customerClvBps === "number" &&
+                    Number.isFinite(w.customerClvBps) ? (
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          color:
+                            w.customerClvBps > 0
+                              ? "#4ade80"
+                              : w.customerClvBps < 0
+                                ? "#f87171"
+                                : "#94a3b8",
+                          marginTop: "2px",
+                        }}
+                        title="Customer book-level CLV (bps), distinct from ticket closing-line delta"
+                      >
+                        Book:{" "}
+                        {w.customerClvBps > 0
+                          ? `+${w.customerClvBps}`
+                          : w.customerClvBps}{" "}
+                        bps
+                      </div>
+                    ) : null}
                   </td>
                   <td style={styles.td}>
                     <span style={styles.wagerBadge(w.alertTier, tiersConfig)}>

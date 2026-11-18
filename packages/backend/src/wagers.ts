@@ -6,6 +6,7 @@
 import { basename, relative, resolve } from "node:path";
 import type {
   DashboardSourceProvenance,
+  LiveWagersClvSummary,
   WagerTier,
 } from "@sportsdesk-ops/contracts";
 import { BoundedStampCache, statStamp } from "./cache.ts";
@@ -54,6 +55,10 @@ export interface ProjectedDevWagerRow {
   readonly toWinUsd: number;
   /** Real CLV in cents, or null when no closing-line comparison exists. */
   readonly clvCents: number | null;
+  /** Customer book-level CLV in basis points from book/cohort lookup (distinct from ticket clvCents). */
+  readonly customerClvBps?: number | null;
+  /** Customer composite sharp score from book/cohort lookup (0-100). */
+  readonly customerSharpScore?: number | null;
   readonly vip: boolean;
   readonly isSentinelNoise: boolean;
   readonly alertTier: WagerTier;
@@ -75,11 +80,21 @@ export interface LiveWagersPayload {
   readonly wire_contract?: unknown;
   /** Host-supplied slab policy summary (see config/slab.toml). */
   readonly slab_policy?: unknown;
+  /** Aggregate ticket & book-level CLV summary across the projected wagers. */
+  readonly clvSummary?: LiveWagersClvSummary;
+}
+
+export interface CustomerBookWagerMeta {
+  readonly clvBps: number | null;
+  readonly sharpScore: number | null;
 }
 
 export interface ProjectLiveWagerDeps {
   readonly parseShortDesc: (raw: unknown) => ParsedShortDescLike;
   readonly sharpCustomerIds: ReadonlySet<string>;
+  readonly customerBookLookup?: (
+    customerId: string,
+  ) => CustomerBookWagerMeta | null;
 }
 
 /** Normalize a raw live-wager record and classify its surveillance directive (`autoExecute: false`). */
@@ -196,6 +211,19 @@ export function projectLiveWagerRow(
     volumeUsd,
     toWinUsd,
     clvCents,
+    ...((): {
+      readonly customerClvBps?: number | null;
+      readonly customerSharpScore?: number | null;
+    } => {
+      const bookMeta = customerId
+        ? (deps.customerBookLookup?.(customerId) ?? null)
+        : null;
+      if (bookMeta === null) return {};
+      return {
+        customerClvBps: bookMeta.clvBps,
+        customerSharpScore: bookMeta.sharpScore,
+      };
+    })(),
     vip,
     isSentinelNoise: sentinelNoise,
     alertTier,
@@ -203,6 +231,59 @@ export function projectLiveWagerRow(
     operatorDirective,
     maxRecommendedStake,
     autoExecute: false as const,
+  };
+}
+
+/** Compute separate ticket-level and customer-book CLV summaries without mixing them. */
+export function summarizeWagersClv(
+  wagers: ReadonlyArray<Record<string, unknown>>,
+): LiveWagersClvSummary {
+  let ticketClvCount = 0;
+  let ticketClvSum = 0;
+  let bookMatchedCount = 0;
+  let bookClvSum = 0;
+  let positiveCustomerClvCount = 0;
+  let negativeCustomerClvCount = 0;
+  let totalPositiveClvRiskUsd = 0;
+  let totalNegativeClvRiskUsd = 0;
+
+  for (const w of wagers) {
+    const ticketClv = w.clvCents;
+    if (typeof ticketClv === "number" && Number.isFinite(ticketClv)) {
+      ticketClvCount += 1;
+      ticketClvSum += ticketClv;
+    }
+    const custClv = w.customerClvBps;
+    if (typeof custClv === "number" && Number.isFinite(custClv)) {
+      bookMatchedCount += 1;
+      bookClvSum += custClv;
+      const risk = Number(w.riskUsd);
+      const safeRisk = Number.isFinite(risk) ? risk : 0;
+      if (custClv > 0) {
+        positiveCustomerClvCount += 1;
+        totalPositiveClvRiskUsd += safeRisk;
+      } else if (custClv < 0) {
+        negativeCustomerClvCount += 1;
+        totalNegativeClvRiskUsd += safeRisk;
+      }
+    }
+  }
+
+  return {
+    ticketClvCount,
+    meanTicketClvCents:
+      ticketClvCount > 0
+        ? Math.round((ticketClvSum / ticketClvCount) * 10) / 10
+        : null,
+    bookMatchedCount,
+    meanCustomerClvBps:
+      bookMatchedCount > 0
+        ? Math.round((bookClvSum / bookMatchedCount) * 10) / 10
+        : null,
+    positiveCustomerClvCount,
+    negativeCustomerClvCount,
+    totalPositiveClvRiskUsd: Math.round(totalPositiveClvRiskUsd * 100) / 100,
+    totalNegativeClvRiskUsd: Math.round(totalNegativeClvRiskUsd * 100) / 100,
   };
 }
 
@@ -436,6 +517,7 @@ export function createDevLiveWagersLoader(options: DevLiveWagersLoaderOptions) {
       wagers,
       ...(wire_contract === undefined ? {} : { wire_contract }),
       ...(slab_policy === undefined ? {} : { slab_policy }),
+      clvSummary: summarizeWagersClv(wagers),
       totalRiskUsd: wagers.reduce(
         (sum, w) => sum + (Number(w.riskUsd) || 0),
         0,

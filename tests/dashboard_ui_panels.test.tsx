@@ -2292,3 +2292,151 @@ test("the subsport column and league pills hide when the capture has no subsport
   expect(html).not.toContain("Subsport</th>");
   expect(html).not.toContain(">NFL</button>");
 });
+
+test("CustomersTabPanel and LiveWagersTabPanel render CLV extensions and signal-honest Book CLV", () => {
+  const noop = () => {};
+  const cust = { ...FIXTURE_PROFILE_CUSTOMERS[0]!, clvBps: 215 };
+  const customersHtml = renderToStaticMarkup(
+    React.createElement(CustomersTabPanel, {
+      bannerDismissed: false,
+      onDismissBanner: noop,
+      kpisCollapsed: false,
+      onToggleKpis: noop,
+      searchQuery: "",
+      onSearchQueryChange: noop,
+      filterTier: "ALL",
+      onFilterTierChange: noop,
+      sortedCustomers: [cust],
+      customerSort: { key: "clvBps", dir: -1 },
+      onCustomerSort: noop,
+      selectedCustomer: cust,
+      onSelectCustomer: noop,
+      selectedCustomerRating: {
+        customerId: cust.id,
+        score: 8.6,
+        tier: "ELITE_SHARP",
+        riskLevel: "CRITICAL",
+        primaryArchetype: "closing_line_sharp",
+        componentScores: {
+          keyNumberScore: 6.5,
+          clvEdgeScore: 7.7,
+          steamLatencyScore: 5.0,
+          timingDisciplineScore: 4.0,
+          derivativeSharpScore: 0,
+        },
+        confidence: 0.9,
+        sampleSize: 42,
+        totalRiskUsd: 120000,
+        netUsd: 14000,
+        recommendedAction: "ALERT_OPERATOR",
+        clvBps: 215,
+        clvSource: "book_clv_bps",
+        clvSignificance: {
+          meanClvPercent: 2.2,
+          stdDevClvPercent: 0,
+          sampleCount: 1,
+          standardError: 0,
+          tStatistic: 0,
+          pValue: 1,
+          isSignificant95: false,
+          isSignificant99: false,
+        },
+        bayesianSkill: {
+          priorAlpha: 10,
+          priorBeta: 10,
+          posteriorAlpha: 22,
+          posteriorBeta: 14,
+          posteriorMeanWinRate: 0.611,
+          variance: 0.006,
+          standardDeviation: 0.077,
+          credibleInterval95: [0.46, 0.76],
+          status: "PRELIMINARY",
+        },
+        kellyMetrics: {
+          impliedKellyFraction: 0.08,
+          halfKellyFraction: 0.04,
+          quarterKellyFraction: 0.02,
+          observedUnitFraction: 0.03,
+          kellyDivergence: 0.01,
+          isKellyDisciplined: true,
+          growthRate: 0.012,
+        },
+        autoExecute: false,
+        summary: "sharp",
+      },
+      copiedCliId: null,
+      onCopyCli: noop,
+      onClearForensicResult: noop,
+      onRunReverseLookup: noop,
+      onOpenTerminalProfile: noop,
+    }),
+  );
+  expect(customersHtml).toContain("CLV (bps)");
+  expect(customersHtml).toContain("+CLV Sharps");
+  expect(customersHtml).toContain("Avg CLV:");
+  expect(customersHtml).toContain("+215 bps");
+  expect(customersHtml).toContain("CLV, Bayesian Skill &amp; Kelly Rating");
+  expect(customersHtml).toContain("book_clv_bps");
+  expect(customersHtml).toContain("n=1 (book aggregate)");
+  expect(customersHtml).toContain("61.1%");
+  expect(customersHtml).toContain("Disciplined");
+
+  const baseWager = {
+    ...FIXTURE_LIVE_WAGERS[0]!,
+    clvCents: null,
+    customerClvBps: 295,
+    customerSharpScore: 91.4,
+  };
+  const wagersHtml = renderToStaticMarkup(
+    React.createElement(LiveWagersTabPanel, {
+      wagers: [baseWager],
+      clvSummary: {
+        ticketClvCount: 0,
+        meanTicketClvCents: null,
+        bookMatchedCount: 1,
+        meanCustomerClvBps: 295,
+        positiveCustomerClvCount: 1,
+        negativeCustomerClvCount: 0,
+        totalPositiveClvRiskUsd: baseWager.riskUsd,
+        totalNegativeClvRiskUsd: 0,
+      },
+      liveBetsSnapshot: {
+        dataSource: "fixture",
+        fallbackUsed: true,
+        totalGames: 2,
+        totalPending: 5,
+        totalWageredCents: 2500000,
+        totalToWinCents: 2200000,
+        capturedAt: null,
+        generatedAt: "2026-11-18T00:00:00Z",
+      },
+      wagerSearch: "",
+      onWagerSearchChange: noop,
+      wagerSportFilter: "ALL",
+      onWagerSportFilterChange: noop,
+      wagerAlertFilter: "ALL",
+      onWagerAlertFilterChange: noop,
+      wagerChannelFilter: "ALL",
+      onWagerChannelFilterChange: noop,
+      wagerTypeFilter: "ALL",
+      onWagerTypeFilterChange: noop,
+      wagerSortField: "timestamp" as const,
+      wagerSortDir: "desc" as const,
+      onWagerSort: noop,
+      selectedWager: baseWager,
+      onSelectWager: noop,
+      copiedTicketId: null,
+      onCopyText: noop,
+      tiersConfig: null,
+      onSelectCustomerById: noop,
+      onInspectPty: noop,
+    }),
+  );
+  expect(wagersHtml).toContain("CLV Telemetry");
+  expect(wagersHtml).toContain("+CLV Book");
+  expect(wagersHtml).toContain("Book: +295 bps");
+  expect(wagersHtml).toContain("Customer Book CLV:");
+  expect(wagersHtml).toContain("Sharp 91.4");
+  expect(wagersHtml).toContain("Live Pending Bets Book (/api/v2/live-bets):");
+  expect(wagersHtml).toContain("source=fixture (sample fallback)");
+});

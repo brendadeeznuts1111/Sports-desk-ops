@@ -311,7 +311,10 @@ export interface PositionRow {
 
 /** Artifact a synthesized row came from; the book's own rows leave this unset. */
 export type CustomerRowProvenance =
-  "harvested-live-profiles" | "live-wagers" | "live-bets";
+  | "harvested-live-profiles"
+  | "live-wagers"
+  | "live-bets"
+  | "backtest-leaderboard";
 
 /** Measured per-writer counts from the live wager capture, not from the five-ticket sample. */
 export interface ChannelEvidenceBucket {
@@ -339,6 +342,9 @@ export interface CustomerRow {
   readonly sports_7d_net_usd?: number;
   readonly clv_bps?: number;
   readonly sharp_score?: number;
+  readonly total_wagers?: number;
+  readonly average_bet_usd?: number;
+  readonly last_active_at?: string;
   readonly churn_hazard?: number;
   readonly churn_mode?: string;
   readonly recent_tickets?: readonly TicketRow[];

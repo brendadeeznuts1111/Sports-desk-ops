@@ -275,6 +275,32 @@ export function TicketInspectorPanel({
                   : `${wager.clvCents}¢`}
             </span>
           </div>
+          {typeof wager.customerClvBps === "number" ||
+          typeof wager.customerSharpScore === "number" ? (
+            <div style={styles.radarRow}>
+              <span style={{ color: "#94a3b8" }}>Customer Book CLV:</span>
+              <span
+                style={{
+                  fontWeight: 700,
+                  color:
+                    typeof wager.customerClvBps === "number"
+                      ? wager.customerClvBps > 0
+                        ? "#4ade80"
+                        : wager.customerClvBps < 0
+                          ? "#f87171"
+                          : "#e2e8f0"
+                      : "#e2e8f0",
+                }}
+              >
+                {typeof wager.customerClvBps === "number"
+                  ? `${wager.customerClvBps > 0 ? "+" : ""}${wager.customerClvBps} bps`
+                  : "—"}
+                {typeof wager.customerSharpScore === "number"
+                  ? ` · Sharp ${wager.customerSharpScore.toFixed(1)}`
+                  : ""}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         <div style={styles.radarCard}>

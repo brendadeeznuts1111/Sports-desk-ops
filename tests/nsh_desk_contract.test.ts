@@ -1621,6 +1621,62 @@ describe("packages/nsh-desk model and capability contracts", () => {
         },
       }).kellyFraction,
     ).toBe(0.2);
+    const realProfile = parseCustomerProfilePayload({
+      profile: {
+        customerId: "SYNTH_SYN_01",
+        agentId: "SYNTH_AGENT",
+        riskForensics: {
+          lifetimeNetUsd: -12400,
+          lifetimeVolumeUsd: 180000,
+          sevenDayNetUsd: 950,
+          holdPct: -6.9,
+        },
+        stakeProfile: { sampleCount: 14 },
+        rating: { score: 7.4, clvBps: 185 },
+      },
+    });
+    expect(realProfile.lifetimeNetUsd).toBe(-12400);
+    expect(realProfile.clvBps).toBe(185);
+    expect(realProfile.holdPct).toBe(-6.9);
+    expect(realProfile.sampleOnly).toBe(false);
+
+    const realRating = parseCustomerRatingPayload({
+      success: true,
+      rating: {
+        customerId: "SYNTH_SYN",
+        score: 7.5,
+        tier: "SHARP",
+        clvBps: 200,
+        clvSource: "book_clv_bps",
+        componentScores: { clvEdgeScore: 7.5 },
+        clvSignificance: {
+          meanClvPercent: 2.0,
+          sampleCount: 1,
+          pValue: 1.0,
+          isSignificant95: false,
+        },
+        bayesianSkill: {
+          posteriorMeanWinRate: 0.56,
+          status: "PRELIMINARY",
+        },
+        kellyMetrics: {
+          halfKellyFraction: 0.025,
+          observedUnitFraction: 0.02,
+          isKellyDisciplined: true,
+        },
+        recommendedAction: "ALERT_OPERATOR",
+      },
+    });
+    expect(realRating.clvBps).toBe(200);
+    expect(realRating.clvSource).toBe("book_clv_bps");
+    expect(realRating.bayesianMean).toBe(0.56);
+    expect(realRating.kellyFraction).toBe(0.025);
+    expect(realRating.observedUnitFraction).toBe(0.02);
+    expect(realRating.sharpProbability).toBeCloseTo(0.75, 5);
+    const v2Entry = DESK_ENDPOINT_CATALOG.find((e) => e.id === "v2-live-bets");
+    expect(v2Entry?.sweepPath).toBe(
+      "/api/v2/live-bets?source=file&fallback=sample",
+    );
     expect(
       parseDnsTelemetryPayload({ telemetry: { size: 8, hitRatePercent: 91 } })
         .hitRatePercent,

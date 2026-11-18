@@ -332,7 +332,7 @@ export function ForensicsWorkspace(props: { store?: DeskStore }): JSX.Element {
               <DeskInput
                 testID="forensics-customer-input"
                 accessibilityLabel="Customer ID lookup"
-                placeholder="Customer ID (e.g. DK121)…"
+                placeholder="Customer ID (e.g. SYNTH_SYN_01)…"
                 mono={true}
                 class="flex-1"
                 value={store.customerLookupId()}
@@ -392,7 +392,15 @@ export function ForensicsWorkspace(props: { store?: DeskStore }): JSX.Element {
                         p.data.week7dNetUsd !== null
                           ? formatUsd(p.data.week7dNetUsd)
                           : "n/a";
-                      return `Lifetime Net: ${life} · 7d Net: ${wk}`;
+                      const hold =
+                        p.data.holdPct !== null
+                          ? ` · Hold ${p.data.holdPct.toFixed(1)}%`
+                          : "";
+                      const clv =
+                        p.data.clvBps !== null
+                          ? ` · CLV ${p.data.clvBps > 0 ? "+" : ""}${p.data.clvBps} bps`
+                          : "";
+                      return `Lifetime Net: ${life} · 7d Net: ${wk}${hold}${clv}`;
                     })()}
                   </Text>
                 </If>
@@ -419,9 +427,12 @@ export function ForensicsWorkspace(props: { store?: DeskStore }): JSX.Element {
                     <Badge
                       label={(() => {
                         const r = ratingSnap();
-                        return r.status === "ready"
-                          ? `TIER · ${r.data.tier.toUpperCase()}`
-                          : "TIER";
+                        if (r.status !== "ready") return "TIER";
+                        const sc =
+                          r.data.score !== null
+                            ? ` · ${r.data.score.toFixed(1)}/10`
+                            : "";
+                        return `TIER · ${r.data.tier.toUpperCase()}${sc}`;
                       })()}
                       tone="info"
                     />
@@ -433,14 +444,39 @@ export function ForensicsWorkspace(props: { store?: DeskStore }): JSX.Element {
                           r.data.kellyFraction !== null
                             ? `${(r.data.kellyFraction * 100).toFixed(1)}%`
                             : "n/a";
+                        const obsUnit =
+                          r.data.observedUnitFraction !== null
+                            ? ` (obs ${(r.data.observedUnitFraction * 100).toFixed(1)}%)`
+                            : "";
                         const bayes =
                           r.data.bayesianMean !== null
                             ? r.data.bayesianMean.toFixed(3)
                             : "n/a";
-                        return `Bayes μ=${bayes} · Kelly=${kelly}`;
+                        return `Bayes μ=${bayes} · Kelly=${kelly}${obsUnit}`;
                       })()}
                     </Text>
                   </View>
+                  <Text class="font-mono text-xs tabular-nums text-muted-foreground">
+                    {(() => {
+                      const r = ratingSnap();
+                      if (r.status !== "ready") return "";
+                      const clvBps =
+                        r.data.clvBps !== null
+                          ? `${r.data.clvBps > 0 ? "+" : ""}${r.data.clvBps} bps`
+                          : "n/a";
+                      const edge =
+                        r.data.clvEdgeScore !== null
+                          ? `${r.data.clvEdgeScore.toFixed(1)}/10`
+                          : "n/a";
+                      const src = r.data.clvSource ?? "none";
+                      const sig =
+                        r.data.clvSampleCount !== null &&
+                        r.data.clvSampleCount > 0
+                          ? ` · μCLV=${r.data.clvMeanPercent?.toFixed(1) ?? "0.0"}% (n=${r.data.clvSampleCount}, p=${r.data.clvPValue?.toFixed(2) ?? "1.00"})`
+                          : "";
+                      return `CLV=${clvBps} (${src}) · Edge=${edge}${sig}`;
+                    })()}
+                  </Text>
                   <SpringBar
                     ratio={(() => {
                       const r = ratingSnap();

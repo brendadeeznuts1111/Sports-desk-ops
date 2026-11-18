@@ -12,6 +12,7 @@ import type { ReverseDnsForensicsView } from "../../../../lib/reverse_dns_forens
 import { ReverseDnsForensicsCard } from "./ReverseDnsForensicsCard.tsx";
 import { SharpnessDecomposition } from "../viz/SharpnessDecomposition.tsx";
 import type {
+  CustomerRatingApiPayload,
   CustomersApiResponse,
   CustomerSortKey,
   ShowcaseCustomer,
@@ -37,6 +38,8 @@ export interface CustomersTabPanelProps {
   readonly onCustomerSort: (key: CustomerSortKey) => void;
   readonly selectedCustomer: ShowcaseCustomer | null;
   readonly onSelectCustomer: (cust: ShowcaseCustomer) => void;
+  readonly selectedCustomerRating?: CustomerRatingApiPayload | null | undefined;
+  readonly selectedCustomerRatingLoading?: boolean | undefined;
   /** Account id the operator tried to inspect but the curated cohort lacks. */
   readonly customerLookupNotice?: string | null | undefined;
   readonly onClearCustomerLookupNotice?: (() => void) | undefined;
@@ -171,6 +174,8 @@ export function CustomersTabPanel({
   onCustomerSort,
   selectedCustomer,
   onSelectCustomer,
+  selectedCustomerRating = null,
+  selectedCustomerRatingLoading = false,
   customerLookupNotice = null,
   onClearCustomerLookupNotice,
   copiedCliId,
@@ -447,6 +452,13 @@ export function CustomersTabPanel({
           </button>
           <button
             type="button"
+            style={styles.pill(filterTier === "POSITIVE_CLV")}
+            onClick={() => onFilterTierChange("POSITIVE_CLV")}
+          >
+            📈 +CLV Sharps
+          </button>
+          <button
+            type="button"
             style={styles.pill(filterTier === "SYNDICATE")}
             onClick={() => onFilterTierChange("SYNDICATE")}
           >
@@ -466,6 +478,44 @@ export function CustomersTabPanel({
           >
             ✅ High-Hold Whales
           </button>
+          {(() => {
+            const clvValues = sortedCustomers
+              .map((c) => c.clvBps)
+              .filter(
+                (v): v is number => typeof v === "number" && Number.isFinite(v),
+              );
+            const avgClv =
+              clvValues.length > 0
+                ? Math.round(
+                    (clvValues.reduce((a, b) => a + b, 0) / clvValues.length) *
+                      10,
+                  ) / 10
+                : null;
+            return (
+              <span
+                data-customers-avg-clv="true"
+                style={{
+                  ...styles.pill(false),
+                  cursor: "default",
+                  color:
+                    avgClv === null
+                      ? "#94a3b8"
+                      : avgClv > 0
+                        ? "#4ade80"
+                        : avgClv < 0
+                          ? "#f87171"
+                          : "#e2e8f0",
+                  borderColor: "rgba(56, 189, 248, 0.25)",
+                }}
+                title="Mean measured book/backtest CLV (bps) across visible cohort rows"
+              >
+                Avg CLV:{" "}
+                {avgClv === null
+                  ? "—"
+                  : `${avgClv > 0 ? "+" : ""}${avgClv.toFixed(1)} bps (n=${clvValues.length})`}
+              </span>
+            );
+          })()}
           {matrixMode ? (
             <>
               {(
@@ -739,6 +789,21 @@ export function CustomersTabPanel({
                       <th
                         className="sortable"
                         style={styles.th}
+                        onClick={() => onCustomerSort("clvBps")}
+                        title="Sort by measured CLV in basis points"
+                      >
+                        CLV (bps)
+                        <span className="sort-arrow">
+                          {customerSort.key === "clvBps"
+                            ? customerSort.dir === 1
+                              ? "▲"
+                              : "▼"
+                            : ""}
+                        </span>
+                      </th>
+                      <th
+                        className="sortable"
+                        style={styles.th}
                         onClick={() => onCustomerSort("gini")}
                       >
                         Sizing Strategy
@@ -912,6 +977,29 @@ export function CustomersTabPanel({
                                 {cust.tierLabel}
                               </div>
                             ) : null}
+                          </td>
+                          <td style={styles.td}>
+                            {typeof cust.clvBps === "number" &&
+                            Number.isFinite(cust.clvBps) ? (
+                              <span
+                                style={{
+                                  fontWeight: 700,
+                                  color:
+                                    cust.clvBps > 0
+                                      ? "#4ade80"
+                                      : cust.clvBps < 0
+                                        ? "#f87171"
+                                        : "#cbd5e1",
+                                }}
+                              >
+                                {cust.clvBps > 0
+                                  ? `+${cust.clvBps}`
+                                  : `${cust.clvBps}`}{" "}
+                                bps
+                              </span>
+                            ) : (
+                              <span style={{ color: "#64748b" }}>—</span>
+                            )}
                           </td>
                           <td style={styles.td}>
                             <div>{cust.sizingStrategy}</div>
@@ -1320,6 +1408,151 @@ export function CustomersTabPanel({
                       </div>
                     </div>
                   </div>
+
+                  {selectedCustomerRatingLoading || selectedCustomerRating ? (
+                    <div
+                      data-customer-clv-rating-card="true"
+                      style={{
+                        ...styles.detailCard,
+                        marginBottom: "12px",
+                        borderColor: "rgba(56, 189, 248, 0.28)",
+                      }}
+                    >
+                      <h4 style={styles.cardHeader}>
+                        📐 CLV, Bayesian Skill &amp; Kelly Rating
+                        (/api/customer/rating)
+                      </h4>
+                      {selectedCustomerRatingLoading &&
+                      !selectedCustomerRating ? (
+                        <div style={{ color: "#94a3b8", fontSize: "12px" }}>
+                          Evaluating CLV &amp; Bayesian skill rating…
+                        </div>
+                      ) : selectedCustomerRating ? (
+                        <div style={styles.detailGrid}>
+                          <div>
+                            <div>
+                              Rating Score:{" "}
+                              <b>
+                                {selectedCustomerRating.score.toFixed(1)}/10 ·{" "}
+                                {selectedCustomerRating.tier}
+                              </b>{" "}
+                              ({selectedCustomerRating.recommendedAction})
+                            </div>
+                            <div>
+                              Measured CLV:{" "}
+                              <b
+                                style={{
+                                  color:
+                                    typeof selectedCustomerRating.clvBps ===
+                                    "number"
+                                      ? selectedCustomerRating.clvBps > 0
+                                        ? "#4ade80"
+                                        : selectedCustomerRating.clvBps < 0
+                                          ? "#f87171"
+                                          : "#e2e8f0"
+                                      : "#94a3b8",
+                                }}
+                              >
+                                {typeof selectedCustomerRating.clvBps ===
+                                "number"
+                                  ? `${selectedCustomerRating.clvBps > 0 ? "+" : ""}${selectedCustomerRating.clvBps} bps`
+                                  : "—"}
+                              </b>{" "}
+                              <span style={styles.subBadge}>
+                                source:{" "}
+                                {selectedCustomerRating.clvSource ?? "none"}
+                              </span>
+                            </div>
+                            <div>
+                              CLV Edge Component:{" "}
+                              <b>
+                                {selectedCustomerRating.componentScores.clvEdgeScore.toFixed(
+                                  1,
+                                )}
+                                /10
+                              </b>
+                            </div>
+                          </div>
+                          <div>
+                            <div>
+                              CLV Significance:{" "}
+                              <b>
+                                {selectedCustomerRating.clvSignificance
+                                  ? `${selectedCustomerRating.clvSignificance.meanClvPercent > 0 ? "+" : ""}${selectedCustomerRating.clvSignificance.meanClvPercent.toFixed(1)}% (${
+                                      selectedCustomerRating.clvSignificance
+                                        .sampleCount === 1
+                                        ? "n=1 (book aggregate)"
+                                        : `n=${selectedCustomerRating.clvSignificance.sampleCount} · p=${selectedCustomerRating.clvSignificance.pValue.toFixed(3)} · ${
+                                            selectedCustomerRating
+                                              .clvSignificance.isSignificant95
+                                              ? "Sig 95%"
+                                              : "Not Sig"
+                                          }`
+                                    })`
+                                  : "No CLV samples"}
+                              </b>
+                            </div>
+                            {selectedCustomerRating.bayesianSkill ? (
+                              <div>
+                                Bayesian Win Rate:{" "}
+                                <b>
+                                  {(
+                                    selectedCustomerRating.bayesianSkill
+                                      .posteriorMeanWinRate * 100
+                                  ).toFixed(1)}
+                                  %
+                                </b>{" "}
+                                [
+                                {(
+                                  selectedCustomerRating.bayesianSkill
+                                    .credibleInterval95[0] * 100
+                                ).toFixed(0)}
+                                %–
+                                {(
+                                  selectedCustomerRating.bayesianSkill
+                                    .credibleInterval95[1] * 100
+                                ).toFixed(0)}
+                                %] ·{" "}
+                                {selectedCustomerRating.bayesianSkill.status}
+                              </div>
+                            ) : null}
+                            {selectedCustomerRating.kellyMetrics ? (
+                              <div>
+                                Kelly Sizing:{" "}
+                                <b>
+                                  ½Kelly{" "}
+                                  {(
+                                    selectedCustomerRating.kellyMetrics
+                                      .halfKellyFraction * 100
+                                  ).toFixed(2)}
+                                  % vs Obs{" "}
+                                  {(
+                                    selectedCustomerRating.kellyMetrics
+                                      .observedUnitFraction * 100
+                                  ).toFixed(2)}
+                                  %
+                                </b>{" "}
+                                <span
+                                  style={{
+                                    ...styles.subBadge,
+                                    color: selectedCustomerRating.kellyMetrics
+                                      .isKellyDisciplined
+                                      ? "#4ade80"
+                                      : "#fbbf24",
+                                  }}
+                                >
+                                  {selectedCustomerRating.kellyMetrics
+                                    .isKellyDisciplined
+                                    ? "Disciplined"
+                                    : "Review"}
+                                </span>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {/* Correlated Parlay & Timing */}
                   <div style={styles.detailGrid}>

@@ -12,11 +12,14 @@ import {
   type WagersWireViolation,
 } from "@sportsdesk-ops/contracts";
 import type {
+  CustomerRatingApiPayload,
   CustomersApiResponse,
   CustomersCohortsSummary,
   DashboardFeedProvenanceKind,
   DashboardSourceProvenance,
+  LiveBetsV2SummarySnapshot,
   LiveWager,
+  LiveWagersClvSummary,
   ProxyConduit30d,
   RankedPlayer30d,
   TierStyleConfig,
@@ -55,6 +58,8 @@ export interface NormalizedLiveWagersResult {
   readonly wireContract: WagersWireContractSummary | null;
   /** Slab policy when the host exposes it; null otherwise. */
   readonly slabPolicy: SlabPolicySummary | null;
+  /** Aggregate ticket & customer-book CLV summary when exposed by backend. */
+  readonly clvSummary?: LiveWagersClvSummary | null;
 }
 
 export type CustomerCohortKpiId =
@@ -226,6 +231,16 @@ export function normalizeHydratedWagerRow(
     typeof raw.clvCents === "number" && Number.isFinite(raw.clvCents)
       ? raw.clvCents
       : null;
+  const customerClvBps =
+    typeof raw.customerClvBps === "number" &&
+    Number.isFinite(raw.customerClvBps)
+      ? raw.customerClvBps
+      : null;
+  const customerSharpScore =
+    typeof raw.customerSharpScore === "number" &&
+    Number.isFinite(raw.customerSharpScore)
+      ? raw.customerSharpScore
+      : null;
   const maxRecommendedStake = Number(raw.maxRecommendedStake ?? 0);
   const alertTier = normalizeAlertTier(raw.alertTier);
   const ticketWriter =
@@ -254,6 +269,8 @@ export function normalizeHydratedWagerRow(
     riskUsd: Number.isFinite(riskUsd) ? riskUsd : 0,
     toWinUsd: Number.isFinite(toWinUsd) ? toWinUsd : 0,
     clvCents,
+    ...(customerClvBps === null ? {} : { customerClvBps }),
+    ...(customerSharpScore === null ? {} : { customerSharpScore }),
     alertTier,
     alertBadge: String(raw.alertBadge ?? alertTier),
     operatorDirective: String(
@@ -263,6 +280,44 @@ export function normalizeHydratedWagerRow(
       ? maxRecommendedStake
       : 0,
     autoExecute: false,
+  };
+}
+
+/** Structural parse of `clvSummary`; drops malformed blocks instead of guessing. */
+function normalizeLiveWagersClvSummary(
+  raw: unknown,
+): LiveWagersClvSummary | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return null;
+  }
+  const rec = raw as Record<string, unknown>;
+  const fin = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const ticketClvCount = fin(rec.ticketClvCount);
+  const bookMatchedCount = fin(rec.bookMatchedCount);
+  const positiveCustomerClvCount = fin(rec.positiveCustomerClvCount);
+  const negativeCustomerClvCount = fin(rec.negativeCustomerClvCount);
+  const totalPositiveClvRiskUsd = fin(rec.totalPositiveClvRiskUsd);
+  const totalNegativeClvRiskUsd = fin(rec.totalNegativeClvRiskUsd);
+  if (
+    ticketClvCount === null ||
+    bookMatchedCount === null ||
+    positiveCustomerClvCount === null ||
+    negativeCustomerClvCount === null ||
+    totalPositiveClvRiskUsd === null ||
+    totalNegativeClvRiskUsd === null
+  ) {
+    return null;
+  }
+  return {
+    ticketClvCount,
+    meanTicketClvCents: fin(rec.meanTicketClvCents),
+    bookMatchedCount,
+    meanCustomerClvBps: fin(rec.meanCustomerClvBps),
+    positiveCustomerClvCount,
+    negativeCustomerClvCount,
+    totalPositiveClvRiskUsd,
+    totalNegativeClvRiskUsd,
   };
 }
 
@@ -286,6 +341,7 @@ export function normalizeLiveWagersResponse(
   const computedCritSteam = wagers.filter(
     (w) => w.alertTier === "CRITICAL" || w.alertTier === "STEAM",
   ).length;
+  const clvSummary = normalizeLiveWagersClvSummary(rec.clvSummary);
 
   return {
     wagers,
@@ -304,6 +360,7 @@ export function normalizeLiveWagersResponse(
     ),
     wireContract: normalizeWireContract(rec.wire_contract),
     slabPolicy: normalizeSlabPolicy(rec.slab_policy),
+    ...(clvSummary === null ? {} : { clvSummary }),
   };
 }
 
@@ -424,11 +481,199 @@ export function normalizeCustomersCohortResponse(
     fixtures: Array.isArray(rec.fixtures)
       ? (rec.fixtures as ReadonlyArray<Record<string, unknown>>)
       : [],
+    ...(Array.isArray(rec.book)
+      ? { book: rec.book as ReadonlyArray<Record<string, unknown>> }
+      : {}),
     provenance: normalizeProvenance(
       rec.provenance,
       "fixture",
       "API Customer Cohorts",
     ),
+  };
+}
+
+/** Validate and normalize a `GET /api/customer/rating` response envelope or bare payload. */
+export function normalizeCustomerRatingResponse(
+  raw: unknown,
+): CustomerRatingApiPayload | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return null;
+  }
+  const outer = raw as Record<string, unknown>;
+  const r =
+    typeof outer.rating === "object" && outer.rating !== null
+      ? (outer.rating as Record<string, unknown>)
+      : outer;
+  if (
+    typeof r.customerId !== "string" ||
+    typeof r.score !== "number" ||
+    !Number.isFinite(r.score) ||
+    typeof r.tier !== "string" ||
+    typeof r.componentScores !== "object" ||
+    r.componentScores === null
+  ) {
+    return null;
+  }
+  const cs = r.componentScores as Record<string, unknown>;
+  const num = (v: unknown, fallback = 0): number =>
+    typeof v === "number" && Number.isFinite(v) ? v : fallback;
+  const fin = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+
+  const rawSig =
+    typeof r.clvSignificance === "object" && r.clvSignificance !== null
+      ? (r.clvSignificance as Record<string, unknown>)
+      : null;
+  const rawBayes =
+    typeof r.bayesianSkill === "object" && r.bayesianSkill !== null
+      ? (r.bayesianSkill as Record<string, unknown>)
+      : null;
+  const rawKelly =
+    typeof r.kellyMetrics === "object" && r.kellyMetrics !== null
+      ? (r.kellyMetrics as Record<string, unknown>)
+      : null;
+
+  const rawClvSource = r.clvSource;
+  const clvSource =
+    rawClvSource === "ticket_prices" ||
+    rawClvSource === "book_clv_bps" ||
+    rawClvSource === "none"
+      ? rawClvSource
+      : undefined;
+
+  return {
+    customerId: r.customerId,
+    score: r.score,
+    tier: r.tier,
+    riskLevel: typeof r.riskLevel === "string" ? r.riskLevel : "STANDARD",
+    primaryArchetype:
+      typeof r.primaryArchetype === "string"
+        ? r.primaryArchetype
+        : "recreational",
+    componentScores: {
+      keyNumberScore: num(cs.keyNumberScore),
+      clvEdgeScore: num(cs.clvEdgeScore),
+      steamLatencyScore: num(cs.steamLatencyScore),
+      timingDisciplineScore: num(cs.timingDisciplineScore),
+      derivativeSharpScore: num(cs.derivativeSharpScore),
+    },
+    confidence: num(r.confidence),
+    sampleSize: num(r.sampleSize),
+    totalRiskUsd: num(r.totalRiskUsd),
+    netUsd: num(r.netUsd),
+    recommendedAction:
+      typeof r.recommendedAction === "string" ? r.recommendedAction : "ACCEPT",
+    autoExecute: false,
+    summary: typeof r.summary === "string" ? r.summary : "",
+    ...(r.clvBps !== undefined ? { clvBps: fin(r.clvBps) } : {}),
+    ...(clvSource !== undefined ? { clvSource } : {}),
+    ...(typeof r.activeDays === "number" && Number.isFinite(r.activeDays)
+      ? { activeDays: r.activeDays }
+      : {}),
+    ...(Array.isArray(r.signatures)
+      ? {
+          signatures: r.signatures.filter(
+            (s): s is string => typeof s === "string",
+          ),
+        }
+      : {}),
+    ...(rawSig !== null &&
+    typeof rawSig.meanClvPercent === "number" &&
+    typeof rawSig.sampleCount === "number"
+      ? {
+          clvSignificance: {
+            meanClvPercent: rawSig.meanClvPercent,
+            stdDevClvPercent: num(rawSig.stdDevClvPercent),
+            sampleCount: rawSig.sampleCount,
+            standardError: num(rawSig.standardError),
+            tStatistic: num(rawSig.tStatistic),
+            pValue: num(rawSig.pValue, 1),
+            isSignificant95: rawSig.isSignificant95 === true,
+            isSignificant99: rawSig.isSignificant99 === true,
+          },
+        }
+      : {}),
+    ...(rawBayes !== null &&
+    typeof rawBayes.posteriorMeanWinRate === "number" &&
+    Array.isArray(rawBayes.credibleInterval95) &&
+    rawBayes.credibleInterval95.length === 2
+      ? {
+          bayesianSkill: {
+            priorAlpha: num(rawBayes.priorAlpha, 10),
+            priorBeta: num(rawBayes.priorBeta, 10),
+            posteriorAlpha: num(rawBayes.posteriorAlpha, 10),
+            posteriorBeta: num(rawBayes.posteriorBeta, 10),
+            posteriorMeanWinRate: rawBayes.posteriorMeanWinRate,
+            variance: num(rawBayes.variance),
+            standardDeviation: num(rawBayes.standardDeviation),
+            credibleInterval95: [
+              num(rawBayes.credibleInterval95[0]),
+              num(rawBayes.credibleInterval95[1]),
+            ] as const,
+            status:
+              rawBayes.status === "CONFIRMED" ||
+              rawBayes.status === "CONVERGING"
+                ? rawBayes.status
+                : "PRELIMINARY",
+          },
+        }
+      : {}),
+    ...(rawKelly !== null &&
+    typeof rawKelly.halfKellyFraction === "number" &&
+    typeof rawKelly.observedUnitFraction === "number"
+      ? {
+          kellyMetrics: {
+            impliedKellyFraction: num(rawKelly.impliedKellyFraction),
+            halfKellyFraction: rawKelly.halfKellyFraction,
+            quarterKellyFraction: num(rawKelly.quarterKellyFraction),
+            observedUnitFraction: rawKelly.observedUnitFraction,
+            kellyDivergence: num(rawKelly.kellyDivergence),
+            isKellyDisciplined: rawKelly.isKellyDisciplined === true,
+            growthRate: num(rawKelly.growthRate),
+          },
+        }
+      : {}),
+  };
+}
+
+/** Validate and normalize a `GET /api/v2/live-bets` response into a compact summary strip. */
+export function normalizeLiveBetsV2Summary(
+  raw: unknown,
+): LiveBetsV2SummarySnapshot | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return null;
+  }
+  const rec = raw as Record<string, unknown>;
+  const summary =
+    typeof rec.summary === "object" && rec.summary !== null
+      ? (rec.summary as Record<string, unknown>)
+      : null;
+  if (summary === null) return null;
+  const prov =
+    typeof rec.provenance === "object" && rec.provenance !== null
+      ? (rec.provenance as Record<string, unknown>)
+      : {};
+  const num = (v: unknown): number =>
+    typeof v === "number" && Number.isFinite(v) ? v : 0;
+  return {
+    dataSource:
+      typeof rec.dataSource === "string"
+        ? rec.dataSource
+        : typeof summary.dataSource === "string"
+          ? summary.dataSource
+          : "unknown",
+    fallbackUsed: rec.fallbackUsed === true,
+    totalGames: num(summary.totalGames),
+    totalPending: num(summary.totalPending),
+    totalWageredCents: num(summary.totalWagered),
+    totalToWinCents: num(summary.totalToWin),
+    capturedAt:
+      typeof prov.capturedAt === "string"
+        ? prov.capturedAt
+        : typeof summary.capturedAt === "string"
+          ? summary.capturedAt
+          : null,
+    generatedAt: typeof prov.generatedAt === "string" ? prov.generatedAt : null,
   };
 }
 

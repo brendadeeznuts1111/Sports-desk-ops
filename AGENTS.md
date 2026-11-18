@@ -201,6 +201,14 @@ with `bun run audit:tool-calls`.
   checked one file and executed it — and reserve `--check` for entrypoints where running on
   success is intended. For stdin there is no check-only form: `bun check -` answers
   `error: Unknown flag "-"`, and `… | bun --check run -` executes the input once it type-checks.
+- **`bun fmt --changed` is diff-plus-untracked, not just `git diff`.** Measured on 1.4.4 in a
+  scratch repo: with `b.ts` modified and `u.ts` untracked, `bun fmt --changed` rewrote both while
+  `git diff --name-only main` listed only `b.ts`. The default ref is the default branch
+  (`origin/main` here); `--changed=<ref>` compares against that ref, `--check --changed` is the
+  read-only form, and an unknown ref exits 2 with `"nope" is not a branch, tag or commit`.
+  `--changed=HEAD` limits the set to uncommitted files; a bare `--check --changed` also includes
+  files changed by commits ahead of the default branch. Derive the file set from the ref, never
+  from a remembered count.
 
 **Environment and tooling**
 

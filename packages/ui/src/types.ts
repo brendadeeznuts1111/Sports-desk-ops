@@ -8,6 +8,8 @@ import type {
   BetTickerTicketRow,
   BetTickerTypeBucket,
   BridgeJobStatusSummary,
+  CustomerRatingApiPayload,
+  CustomerRatingApiResponse,
   CustomersApiResponse,
   CustomersCohortsSummary,
   Daemon4020State,
@@ -16,6 +18,7 @@ import type {
   DashboardSourceProvenance,
   DashboardWsTopic,
   LiveWagersApiResponse,
+  LiveWagersClvSummary,
   R2PipelineApiResponse,
   R2PipelineHistoryApiResponse,
   R2SinkDetail,
@@ -40,6 +43,8 @@ export type {
   BetTickerTicketRow,
   BetTickerTypeBucket,
   BridgeJobStatusSummary,
+  CustomerRatingApiPayload,
+  CustomerRatingApiResponse,
   CustomersApiResponse,
   CustomersCohortsSummary,
   Daemon4020State,
@@ -48,6 +53,7 @@ export type {
   DashboardSourceProvenance,
   DashboardWsTopic,
   LiveWagersApiResponse,
+  LiveWagersClvSummary,
   R2PipelineApiResponse,
   R2PipelineHistoryApiResponse,
   R2SinkDetail,
@@ -167,8 +173,21 @@ export interface ShowcaseCustomer {
     "book" | "fixture" | "backtest" | "rankings" | "live-open" | undefined;
   /** Human tier label when the API carried one (30d rankings). */
   readonly tierLabel?: string | undefined;
+  /** Measured CLV in basis points when present on book or backtest rows; null/omitted when unmeasured. */
+  readonly clvBps?: number | null | undefined;
   /** Open risk in USD when synthesized from the live wager tape (`?matrix=1` overlay). */
   readonly openRiskUsd?: number | undefined;
+}
+
+export interface LiveBetsV2SummarySnapshot {
+  readonly dataSource: string;
+  readonly fallbackUsed: boolean;
+  readonly totalGames: number;
+  readonly totalPending: number;
+  readonly totalWageredCents: number;
+  readonly totalToWinCents: number;
+  readonly capturedAt: string | null;
+  readonly generatedAt: string | null;
 }
 
 export interface RankedPlayer30d {
@@ -219,6 +238,10 @@ export interface LiveWager {
   readonly toWinUsd: number;
   /** Real CLV in cents, or null when no closing-line comparison exists. */
   readonly clvCents: number | null;
+  /** Customer book-level CLV in basis points (distinct from ticket-level clvCents). */
+  readonly customerClvBps?: number | null | undefined;
+  /** Customer composite sharp score from book/cohort lookup (0-100). */
+  readonly customerSharpScore?: number | null | undefined;
   readonly vip?: boolean | undefined;
   readonly alertTier: WagerTier;
   readonly alertBadge: string;
@@ -506,6 +529,7 @@ export type AlertFilter = (typeof ALERT_FILTERS)[number];
 export const CUSTOMER_SORT_KEYS = [
   "id",
   "score",
+  "clvBps",
   "gini",
   "var95Usd",
   "holdPct",

@@ -18,14 +18,14 @@
 import {
   type CustomerRow,
   type TicketRow,
-  CustomerObservations,
   normalizeCustomerId,
 } from "./customer_profile.ts";
 import {
   type CustomerRating,
   type RatingAction,
-  rateCustomerFromObservations,
+  rateCustomerBookRow,
   rateCustomerFromTickets,
+  ticketRowsToObservationTickets,
 } from "./customer_rating.ts";
 import {
   formatCustomerOsc8Markdown,
@@ -468,8 +468,13 @@ export function buildPortfolioRiskForensics(
   const netLife = Number(row.lifetime_net_usd) || 0;
   const hazard = Number(row.churn_hazard) || 0.15;
 
+  const rawHoldPct =
+    typeof row.hold_pct === "number" && Number.isFinite(row.hold_pct)
+      ? Math.round(row.hold_pct * 10) / 10
+      : null;
   const holdPct =
-    volLife > 0 ? Math.round((-netLife / volLife) * 1000) / 10 : 0.0;
+    rawHoldPct ??
+    (volLife > 0 ? Math.round((-netLife / volLife) * 1000) / 10 : 0.0);
 
   // Compute 7d VaR and CVaR from recent ticket stakes
   const stakes = tickets
@@ -1018,26 +1023,28 @@ export function buildComprehensiveCustomerProfile(
     masterAgent,
   );
   const riskForensics = buildPortfolioRiskForensics(row, tickets);
+  const effectiveObsTickets =
+    observationTickets.length > 0
+      ? observationTickets
+      : tickets.length > 0
+        ? ticketRowsToObservationTickets(customerId, tickets, agentId)
+        : [];
   const correlatedParlayProfile =
-    buildCorrelatedParlayProfile(observationTickets);
-  const timingProfile = buildTimingFingerprintProfile(observationTickets);
+    buildCorrelatedParlayProfile(effectiveObsTickets);
+  const timingProfile = buildTimingFingerprintProfile(effectiveObsTickets);
 
-  let rating: CustomerRating;
-  if (observationTickets.length > 0) {
-    rating = rateCustomerFromTickets(customerId, observationTickets);
-  } else {
-    // Fallback from customer book row numbers
-    const obs = new CustomerObservations(
-      customerId,
-      tickets.length,
-      riskForensics.lifetimeVolumeUsd,
-      riskForensics.lifetimeNetUsd,
-      [],
-      "2026-10-01",
-      "2026-11-09",
-    );
-    rating = rateCustomerFromObservations(obs);
-  }
+  const hasTicketClv = effectiveObsTickets.some(
+    (t) =>
+      (t.priceVsCloseCents !== null && t.priceVsCloseCents !== undefined) ||
+      t.movedInFavor !== null,
+  );
+  const hasBookClv =
+    typeof row.clv_bps === "number" && Number.isFinite(row.clv_bps);
+
+  const rating: CustomerRating =
+    observationTickets.length > 0 && (hasTicketClv || !hasBookClv)
+      ? rateCustomerFromTickets(customerId, observationTickets)
+      : rateCustomerBookRow(row, customerId, effectiveObsTickets);
 
   const compositeSharpness = computeSharpnessCompositeIndex(
     rating,

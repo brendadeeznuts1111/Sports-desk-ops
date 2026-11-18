@@ -13,10 +13,13 @@
 
 import {
   type CustomerBehavioralArchetype,
-  type CustomerObservations,
+  CustomerObservations,
+  type CustomerRow,
   type FootballKeyNumber,
+  type TicketRow,
   isKeyNumberBuy,
   normalizeCustomerId,
+  normalizeObservationTicket,
   runCustomerSignaturePipeline,
 } from "./customer_profile.ts";
 import type { EnrichedTicketMaster } from "./f402_figure_date_enricher.ts";
@@ -39,6 +42,12 @@ export type CustomerRiskLevel =
   "CRITICAL" | "HIGH" | "ELEVATED" | "STANDARD" | "LOW";
 
 export type RatingAction = "ALERT_OPERATOR" | "MONITOR" | "ACCEPT" | "INSPECT";
+
+export type ClvRatingSource = "ticket_prices" | "book_clv_bps" | "none";
+
+export interface RateObservationOptions {
+  readonly measuredClvBps?: number | null;
+}
 
 export interface CustomerComponentScores {
   /** 0..10 score measuring concentration on football key numbers (3, 7, 10, 14, 21). */
@@ -112,6 +121,13 @@ export interface CustomerRating {
   readonly toString: () => string;
 }
 
+export interface CustomerRatingBookResult extends CustomerRating {
+  readonly clvBps: number | null;
+  readonly clvSource: ClvRatingSource;
+  readonly signatures: readonly string[];
+  readonly activeDays: number;
+}
+
 export interface RatedIncomingWager {
   readonly type: "RATED_INCOMING_WAGER";
   readonly ticketNumber: string;
@@ -146,6 +162,51 @@ function round1(val: number): number {
 /**
  * Computes sequential Bayesian skill updates for a bettor based on their closing line value (CLV).
  */
+function buildBetaSkillProfile(
+  wins: number,
+  losses: number,
+  sampleCount: number,
+  priorAlpha: number = 10,
+  priorBeta: number = 10,
+): BayesianSkillProfile {
+  const posteriorAlpha = priorAlpha + wins;
+  const posteriorBeta = priorBeta + losses;
+  const total = posteriorAlpha + posteriorBeta;
+  const posteriorMeanWinRate =
+    Math.round((posteriorAlpha / total) * 1000) / 1000;
+  const variance =
+    (posteriorAlpha * posteriorBeta) / (total * total * (total + 1));
+  const standardDeviation = Math.round(Math.sqrt(variance) * 1000) / 1000;
+
+  const low95 = Math.max(
+    0,
+    Math.round((posteriorMeanWinRate - 1.96 * standardDeviation) * 1000) / 1000,
+  );
+  const high95 = Math.min(
+    1,
+    Math.round((posteriorMeanWinRate + 1.96 * standardDeviation) * 1000) / 1000,
+  );
+
+  let status: "PRELIMINARY" | "CONVERGING" | "CONFIRMED" = "PRELIMINARY";
+  if (sampleCount >= 50 || standardDeviation < 0.04) {
+    status = "CONFIRMED";
+  } else if (sampleCount >= 15) {
+    status = "CONVERGING";
+  }
+
+  return {
+    priorAlpha,
+    priorBeta,
+    posteriorAlpha: Math.round(posteriorAlpha * 10) / 10,
+    posteriorBeta: Math.round(posteriorBeta * 10) / 10,
+    posteriorMeanWinRate,
+    variance: Math.round(variance * 100000) / 100000,
+    standardDeviation,
+    credibleInterval95: [low95, high95],
+    status,
+  };
+}
+
 export function computeBayesianSkillProfile(
   tickets: readonly NormalizedObservationTicket[],
   priorAlpha: number = 10,
@@ -173,42 +234,13 @@ export function computeBayesianSkillProfile(
     }
   }
 
-  const posteriorAlpha = priorAlpha + clvWins;
-  const posteriorBeta = priorBeta + clvLosses;
-  const total = posteriorAlpha + posteriorBeta;
-  const posteriorMeanWinRate =
-    Math.round((posteriorAlpha / total) * 1000) / 1000;
-  const variance =
-    (posteriorAlpha * posteriorBeta) / (total * total * (total + 1));
-  const standardDeviation = Math.round(Math.sqrt(variance) * 1000) / 1000;
-
-  const low95 = Math.max(
-    0,
-    Math.round((posteriorMeanWinRate - 1.96 * standardDeviation) * 1000) / 1000,
-  );
-  const high95 = Math.min(
-    1,
-    Math.round((posteriorMeanWinRate + 1.96 * standardDeviation) * 1000) / 1000,
-  );
-
-  let status: "PRELIMINARY" | "CONVERGING" | "CONFIRMED" = "PRELIMINARY";
-  if (tickets.length >= 50 || standardDeviation < 0.04) {
-    status = "CONFIRMED";
-  } else if (tickets.length >= 15) {
-    status = "CONVERGING";
-  }
-
-  return {
+  return buildBetaSkillProfile(
+    clvWins,
+    clvLosses,
+    tickets.length,
     priorAlpha,
     priorBeta,
-    posteriorAlpha: Math.round(posteriorAlpha * 10) / 10,
-    posteriorBeta: Math.round(posteriorBeta * 10) / 10,
-    posteriorMeanWinRate,
-    variance: Math.round(variance * 100000) / 100000,
-    standardDeviation,
-    credibleInterval95: [low95, high95],
-    status,
-  };
+  );
 }
 
 /**
@@ -318,6 +350,7 @@ export function computeKellyMetrics(
  */
 export function rateCustomerFromObservations(
   obs: CustomerObservations,
+  options?: RateObservationOptions,
 ): CustomerRating {
   const normId = normalizeCustomerId(obs.customerId);
 
@@ -385,7 +418,18 @@ export function rateCustomerFromObservations(
   }
 
   // Net win / loss and CLV edge estimation
-  if (obs.nTickets > 0) {
+  const measuredClvBps = options?.measuredClvBps;
+  const hasMeasuredClv =
+    typeof measuredClvBps === "number" && Number.isFinite(measuredClvBps);
+  if (hasMeasuredClv) {
+    clvEdgeScore = clamp(5 + (measuredClvBps / 100) * 1.25, 0, 10);
+    if (obs.nTickets > 0 && measuredClvBps >= 0) {
+      const avgRisk = obs.totalRiskUsd / obs.nTickets;
+      if (avgRisk > 3000) {
+        clvEdgeScore = clamp(clvEdgeScore + 0.5, 0, 10);
+      }
+    }
+  } else if (obs.nTickets > 0) {
     const avgRisk = obs.totalRiskUsd / obs.nTickets;
     const winRate = obs.netUsd / Math.max(1, obs.totalRiskUsd);
     if (winRate > 0.05) {
@@ -545,7 +589,8 @@ export function rateCustomerFromTickets(
     const bayesianSkill = computeBayesianSkillProfile(relevantTickets);
     const clvSamples = relevantTickets
       .map((t) => t.priceVsCloseCents)
-      .filter((c): c is number => c !== null && c !== undefined);
+      .filter((c): c is number => c !== null && c !== undefined)
+      .map((c) => c / 100);
     const clvSignificance = computeClvSignificance(clvSamples);
     const avgRisk = obs.nTickets > 0 ? obs.totalRiskUsd / obs.nTickets : 100;
     const kellyMetrics = computeKellyMetrics(
@@ -593,6 +638,287 @@ export function rateCustomerFromTickets(
     toString(): string {
       return formatCustomerRating(this, 1, { colors: false });
     },
+  };
+}
+
+function finiteRatingNum(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function inferTicketPeriodDescription(
+  market?: string,
+  selection?: string,
+): string {
+  const combined = `${market ?? ""} ${selection ?? ""}`.trim();
+  if (/\b(?:2nd\s*half|2h|second\s*half)\b/i.test(combined)) {
+    return "2nd Half";
+  }
+  if (/\b(?:1st\s*half|1h|first\s*half)\b/i.test(combined)) {
+    return "1st Half";
+  }
+  if (/\b(?:1st\s*q(?:uarter)?|1q|q1)\b/i.test(combined)) {
+    return "1st Quarter";
+  }
+  if (/\b(?:2nd\s*q(?:uarter)?|2q|q2)\b/i.test(combined)) {
+    return "2nd Quarter";
+  }
+  if (/\b(?:3rd\s*q(?:uarter)?|3q|q3)\b/i.test(combined)) {
+    return "3rd Quarter";
+  }
+  if (/\b(?:4th\s*q(?:uarter)?|4q|q4)\b/i.test(combined)) {
+    return "4th Quarter";
+  }
+  return "";
+}
+
+function inferTicketWagerType(market?: string): string | undefined {
+  const m = (market ?? "").trim();
+  if (m === "") return undefined;
+  if (/\b(?:spread|point\s*spread|run\s*line|puck\s*line)\b/i.test(m)) {
+    return "S";
+  }
+  if (/\b(?:total|over\/under|o\/u)\b/i.test(m)) {
+    return "L";
+  }
+  if (/\b(?:money\s*line|ml)\b/i.test(m)) {
+    return "M";
+  }
+  return undefined;
+}
+
+/**
+ * Converts book `recent_tickets` (`TicketRow[]`) into `NormalizedObservationTicket[]`
+ * via the canonical `normalizeObservationTicket` mapper without synthesizing ticket CLV.
+ */
+export function ticketRowsToObservationTickets(
+  customerId: string,
+  tickets: readonly TicketRow[],
+  agentId: string = "",
+): NormalizedObservationTicket[] {
+  const normId = normalizeCustomerId(customerId || "UNKNOWN");
+  return tickets.map((t, idx) => {
+    const rec = t as unknown as Record<string, unknown>;
+    const league = typeof t.league === "string" ? t.league.trim() : "";
+    const market = typeof t.market === "string" ? t.market.trim() : "";
+    const selection = typeof t.selection === "string" ? t.selection.trim() : "";
+    const periodDescription = inferTicketPeriodDescription(market, selection);
+    const wagerType = inferTicketWagerType(market);
+    const rawPriceVsClose =
+      finiteRatingNum(rec["priceVsCloseCents"]) ??
+      finiteRatingNum(rec["price_vs_close_cents"]);
+    const rawMoved = rec["movedInFavor"] ?? rec["moved_in_favor"];
+
+    return normalizeObservationTicket({
+      CustomerID: normId,
+      AgentID: agentId,
+      WagerNumber: t.wager_number ?? idx + 1,
+      SportType: league,
+      SportSubType: league,
+      PeriodDescription: periodDescription,
+      ...(wagerType !== undefined ? { WagerType: wagerType } : {}),
+      ShortDesc: selection || market,
+      Description: [league, market, selection].filter(Boolean).join(" "),
+      AmountWagered: Number(t.risk_usd) || 0,
+      ToWinAmount: Number(t.win_usd) || 0,
+      NetAmount: Number(t.net_usd) || 0,
+      TicketWriter: typeof t.channel === "string" ? t.channel : "",
+      PlacedOn: typeof t.channel === "string" ? t.channel : "",
+      InsertDateTime: typeof t.placed_at === "string" ? t.placed_at : "",
+      ...(rawPriceVsClose !== null
+        ? { priceVsCloseCents: rawPriceVsClose }
+        : {}),
+      ...(typeof rawMoved === "boolean" ? { movedInFavor: rawMoved } : {}),
+    });
+  });
+}
+
+/**
+ * Rates a `CustomerRow` using real ticket signatures, dates, sign-safe player net,
+ * book `clv_bps` / ticket CLV, Bayesian skill, and realistic unit Kelly sizing.
+ */
+export function rateCustomerBookRow(
+  row: CustomerRow,
+  fallbackId?: string,
+  preNormalizedTickets?: readonly NormalizedObservationTicket[],
+): CustomerRatingBookResult {
+  const rec = row as unknown as Record<string, unknown>;
+  const rawId = String(row.customer_id ?? fallbackId ?? "").trim();
+  const normId = normalizeCustomerId(rawId || fallbackId || "UNKNOWN");
+  const rawTickets = Array.isArray(row.recent_tickets)
+    ? row.recent_tickets
+    : [];
+  const obsTickets =
+    preNormalizedTickets ??
+    ticketRowsToObservationTickets(normId, rawTickets, row.agent_id ?? "");
+
+  const pipeline = runCustomerSignaturePipeline(obsTickets);
+  const obsFromPipeline = pipeline.observations.get(normId) ?? null;
+  const signatures = [...(obsFromPipeline?.signatures ?? [])].sort((a, b) =>
+    a.kind.localeCompare(b.kind),
+  );
+
+  const validYmds = obsTickets
+    .map((t) => t.placedAtYmd)
+    .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d !== "1970-01-01")
+    .sort();
+  const rawLastActive =
+    typeof rec["last_active_at"] === "string"
+      ? rec["last_active_at"].slice(0, 10)
+      : "";
+  const fallbackYmd =
+    /^\d{4}-\d{2}-\d{2}$/.test(rawLastActive) && rawLastActive !== "1970-01-01"
+      ? rawLastActive
+      : new Date().toISOString().slice(0, 10);
+  const firstSeen = validYmds[0] ?? fallbackYmd;
+  const lastSeen = validYmds[validYmds.length - 1] ?? firstSeen;
+
+  const rawVolLife = finiteRatingNum(row.lifetime_volume_usd);
+  const rawWagers = finiteRatingNum(rec["total_wagers"]);
+  const nTickets = Math.max(
+    obsFromPipeline?.nTickets ?? 0,
+    rawWagers !== null && rawWagers > 0 ? Math.round(rawWagers) : 0,
+    rawTickets.length,
+  );
+  const activeDays = new Set(validYmds).size || (nTickets > 0 ? 1 : 0);
+  const totalRiskUsd =
+    rawVolLife !== null && rawVolLife > 0
+      ? rawVolLife
+      : (obsFromPipeline?.totalRiskUsd ?? 0);
+
+  // `enriched_customers_full.json` stores `lifetime_net_usd` with desk-net sign matching `hold_pct`.
+  // Only flip to player net when `hold_pct` is explicit, non-zero, and shares the same sign.
+  const rawNetLife = finiteRatingNum(row.lifetime_net_usd);
+  const rawHoldPct = finiteRatingNum(rec["hold_pct"]);
+  const isDeskSignNet =
+    rawNetLife !== null &&
+    rawNetLife !== 0 &&
+    rawHoldPct !== null &&
+    rawHoldPct !== 0 &&
+    Math.sign(rawNetLife) === Math.sign(rawHoldPct);
+  const playerNetUsd =
+    rawNetLife !== null
+      ? isDeskSignNet
+        ? -rawNetLife
+        : rawNetLife
+      : (obsFromPipeline?.netUsd ?? 0);
+
+  const ticketClvCents = obsTickets
+    .map((t) => t.priceVsCloseCents)
+    .filter((c): c is number => typeof c === "number" && Number.isFinite(c));
+  const rowClvBps = finiteRatingNum(row.clv_bps);
+
+  let clvSource: ClvRatingSource = "none";
+  let clvBps: number | null = null;
+  let clvSignificance: ClvStatisticalSignificance | undefined;
+  if (ticketClvCents.length > 0) {
+    clvSource = "ticket_prices";
+    const clvSamples = ticketClvCents.map((c) => c / 100);
+    clvSignificance = computeClvSignificance(clvSamples);
+    const meanDec =
+      clvSamples.reduce((acc, v) => acc + v, 0) / clvSamples.length;
+    clvBps = rowClvBps ?? Math.round(meanDec * 10_000);
+  } else if (rowClvBps !== null) {
+    clvSource = "book_clv_bps";
+    clvBps = rowClvBps;
+    // Single aggregate book CLV: honest sampleCount=1, pValue=1.0, never overstated as n>=2.
+    clvSignificance = computeClvSignificance([rowClvBps / 10_000]);
+  }
+
+  const obs = new CustomerObservations(
+    normId,
+    nTickets,
+    totalRiskUsd,
+    playerNetUsd,
+    signatures,
+    firstSeen,
+    lastSeen,
+    obsFromPipeline?.sportMix,
+    obsFromPipeline?.competitionFamilyMix,
+  );
+  const baseRating = rateCustomerFromObservations(obs, {
+    measuredClvBps: clvBps,
+  });
+
+  const hasPerTicketClvEvidence = obsTickets.some(
+    (t) =>
+      (t.priceVsCloseCents !== null && t.priceVsCloseCents !== undefined) ||
+      t.movedInFavor !== null,
+  );
+  let bayesianSkill: BayesianSkillProfile;
+  if (hasPerTicketClvEvidence) {
+    bayesianSkill = computeBayesianSkillProfile(obsTickets);
+  } else {
+    let settledWins = 0;
+    let settledLosses = 0;
+    for (const ticket of rawTickets) {
+      const res =
+        typeof ticket.result === "string"
+          ? ticket.result.trim().toUpperCase()
+          : "";
+      const net = finiteRatingNum(ticket.net_usd);
+      if (
+        res === "W" ||
+        res === "WIN" ||
+        (res === "" && net !== null && net > 0)
+      ) {
+        settledWins += 1;
+      } else if (
+        res === "L" ||
+        res === "LOSS" ||
+        (res === "" && net !== null && net < 0)
+      ) {
+        settledLosses += 1;
+      }
+    }
+    const settledCount = settledWins + settledLosses;
+    bayesianSkill =
+      settledCount > 0
+        ? buildBetaSkillProfile(settledWins, settledLosses, settledCount)
+        : computeBayesianSkillProfile([]);
+  }
+
+  const rawAvgBet = finiteRatingNum(rec["average_bet_usd"]);
+  const ticketRisks = rawTickets
+    .map((t) => finiteRatingNum(t.risk_usd))
+    .filter((r): r is number => r !== null && r > 0);
+  const meanTicketRisk =
+    ticketRisks.length > 0
+      ? ticketRisks.reduce((a, b) => a + b, 0) / ticketRisks.length
+      : null;
+  const avgUnitRiskUsd =
+    rawAvgBet !== null && rawAvgBet > 0
+      ? rawAvgBet
+      : meanTicketRisk !== null
+        ? meanTicketRisk
+        : rawWagers !== null && rawWagers > 0 && totalRiskUsd > 0
+          ? totalRiskUsd / rawWagers
+          : 100;
+  const bankrollUsd = Math.max(
+    10_000,
+    Math.round(Math.max(avgUnitRiskUsd * 20, totalRiskUsd * 0.1)),
+  );
+  const kellyWinProb =
+    clvSource === "ticket_prices"
+      ? bayesianSkill.posteriorMeanWinRate
+      : clvSource === "book_clv_bps" && clvBps !== null
+        ? clamp(0.52381 + clvBps / 10_000, 0.35, 0.65)
+        : bayesianSkill.posteriorMeanWinRate;
+  const kellyMetrics = computeKellyMetrics(
+    -110,
+    kellyWinProb,
+    avgUnitRiskUsd,
+    bankrollUsd,
+  );
+
+  return {
+    ...baseRating,
+    bayesianSkill,
+    ...(clvSignificance !== undefined ? { clvSignificance } : {}),
+    kellyMetrics,
+    clvBps,
+    clvSource,
+    signatures: signatures.map((s) => s.kind),
+    activeDays,
   };
 }
 

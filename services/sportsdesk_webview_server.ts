@@ -3714,48 +3714,12 @@ export function startServer(options?: ServerOptions) {
           );
         }
 
-        const [
-          { CustomerObservations },
-          {
-            rateCustomerFromObservations,
-            computeBayesianSkillProfile,
-            computeKellyMetrics,
-          },
-          { buildPortfolioRiskForensics },
-        ] = await Promise.all([
-          import("../lib/customer_profile.ts"),
-          import("../lib/customer_rating.ts"),
-          import("../lib/customer_profiling_enhanced.ts"),
-        ]);
-
-        const tickets = Array.isArray(row.recent_tickets)
-          ? (row.recent_tickets as unknown as readonly import("../lib/customer_profile.ts").TicketRow[])
-          : [];
-        const riskForensics = buildPortfolioRiskForensics(
+        const { rateCustomerBookRow } =
+          await import("../lib/customer_rating.ts");
+        const rating = rateCustomerBookRow(
           row as unknown as CustomerBookRow,
-          tickets,
+          id,
         );
-        const obs = new CustomerObservations(
-          String(row.customer_id ?? id),
-          tickets.length,
-          riskForensics.lifetimeVolumeUsd,
-          riskForensics.lifetimeNetUsd,
-          [],
-          "2026-10-01",
-          "2026-11-09",
-        );
-        const baseRating = rateCustomerFromObservations(obs);
-        const bayesianSkill = computeBayesianSkillProfile([]);
-        const kellyMetrics = computeKellyMetrics(
-          -110,
-          bayesianSkill.posteriorMeanWinRate,
-          obs.nTickets > 0 ? obs.totalRiskUsd / obs.nTickets : 100,
-        );
-        const rating = {
-          ...baseRating,
-          bayesianSkill,
-          kellyMetrics,
-        };
 
         return Response.json(
           {
@@ -5014,6 +4978,7 @@ async function findCustomerRow(id: string): Promise<CustomerBookRow | null> {
   // Loaded here (not at the top) so adding the fallback does not shift the cited line anchors for
   // this file; the module is cached after the first lookup.
   const {
+    customerRowFromBacktestEntry,
     customerRowFromHarvestedProfile,
     customerRowFromLiveWagers,
     liveWagerRows,
@@ -5034,7 +4999,31 @@ async function findCustomerRow(id: string): Promise<CustomerBookRow | null> {
         }
       }
     } catch {
-      // signal-honesty: unreadable harvested profiles fall through to the open-wager capture
+      // signal-honesty: unreadable harvested profiles fall through to the backtest / open-wager artifacts
+    }
+  }
+
+  // 3b. 4-week backtest leaderboard (`docs/backtest-4wk-cfb-nba.json`).
+  const backtestFile = Bun.file(
+    resolve(repoRoot, "docs/backtest-4wk-cfb-nba.json"),
+  );
+  if (await backtestFile.exists()) {
+    try {
+      const data = (await backtestFile.json()) as {
+        customerLeaderboard?: Record<string, unknown>[];
+      };
+      if (Array.isArray(data?.customerLeaderboard)) {
+        for (const entry of data.customerLeaderboard) {
+          const row = customerRowFromBacktestEntry(
+            normId,
+            entry,
+            "docs/backtest-4wk-cfb-nba.json",
+          );
+          if (row !== null) return row;
+        }
+      }
+    } catch {
+      // signal-honesty: unreadable backtest leaderboard falls through to the open-wager capture
     }
   }
 

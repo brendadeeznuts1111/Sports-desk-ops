@@ -183,16 +183,43 @@ describe("@sportsdesk-ops/backend workspace services", () => {
       JSON.stringify({ profiles: [{ customerId: "RF2003", tier: "REC" }] }),
     );
 
-    const { findCustomerRow } = createCustomerRowFinder<{
-      customer_id?: string;
-      tier?: string;
-    }>({
+    const backtestPath = path.join(SCRATCH, "backtest-4wk-cfb-nba.json");
+    writeFileSync(
+      backtestPath,
+      JSON.stringify({
+        customerLeaderboard: [
+          {
+            customerId: "BGD101",
+            agentId: "BIGDAD",
+            masterAgent: "BILLY666",
+            contextType: "EXECUTION_SNIPER",
+            totalParlayTickets: 62,
+            totalParlayHandleUsd: 310000,
+            avgClvBps: 295,
+            sharpScore: 91.4,
+            baselineDeskNetUsd: -152600,
+            baselineHoldPct: -49.23,
+            lastActiveAt: "2026-10-31T15:21:10Z",
+          },
+        ],
+      }),
+    );
+
+    const { findCustomerRow } = createCustomerRowFinder<
+      Record<string, unknown> & { customer_id?: string; tier?: string }
+    >({
       enrichedPaths: [enrichedPath],
       profilesPath,
+      backtestPath,
     });
 
     expect((await findCustomerRow(" gp301 "))?.tier).toBe("T1");
     expect((await findCustomerRow("rf2003"))?.tier).toBe("REC");
+    const backtestRow = await findCustomerRow("BGD101");
+    expect(backtestRow).not.toBeNull();
+    expect(backtestRow?.provenance).toBe("backtest-leaderboard");
+    expect(backtestRow?.clv_bps).toBe(295);
+    expect(backtestRow?.average_bet_usd).toBe(5000);
     expect(await findCustomerRow("UNKNOWN")).toBeNull();
 
     const cohorts = computeCustomersCohortPayload({

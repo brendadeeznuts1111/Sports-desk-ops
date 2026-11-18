@@ -5,7 +5,10 @@
  * gets the STALE suffix from the configured budget.
  */
 import { describe, expect, test } from "bun:test";
-import { projectLiveWagerRow } from "../packages/backend/src/wagers.ts";
+import {
+  projectLiveWagerRow,
+  summarizeWagersClv,
+} from "../packages/backend/src/wagers.ts";
 import {
   formatProvenanceBadge,
   normalizeHydratedWagerRow,
@@ -90,5 +93,41 @@ describe("formatProvenanceBadge", () => {
     expect(formatProvenanceBadge(provenance("capture", 900)).badgeText).toBe(
       "● LOCAL CAPTURE",
     );
+  });
+});
+
+describe("customer book CLV separation & summarizeWagersClv", () => {
+  test("customerBookLookup attaches customerClvBps without fabricating ticket clvCents", () => {
+    const projected = projectLiveWagerRow(
+      { WagerNumber: "19", CustomerID: "BGD101", AmountWagered: 5000 },
+      0,
+      {
+        ...deps,
+        customerBookLookup: (cid: string) =>
+          cid === "BGD101" ? { clvBps: 295, sharpScore: 91.4 } : null,
+      } as never,
+    );
+    expect(projected.clvCents).toBeNull();
+    expect(projected.customerClvBps).toBe(295);
+    expect(projected.customerSharpScore).toBe(91.4);
+
+    const noTicketRow = projectLiveWagerRow(
+      { WagerNumber: "20", CustomerID: "SQ200", AmountWagered: 2000 },
+      1,
+      {
+        ...deps,
+        customerBookLookup: (cid: string) =>
+          cid === "SQ200" ? { clvBps: -110, sharpScore: 22 } : null,
+      } as never,
+    );
+    const summary = summarizeWagersClv([projected, noTicketRow]);
+    expect(summary.ticketClvCount).toBe(0);
+    expect(summary.meanTicketClvCents).toBeNull();
+    expect(summary.bookMatchedCount).toBe(2);
+    expect(summary.positiveCustomerClvCount).toBe(1);
+    expect(summary.negativeCustomerClvCount).toBe(1);
+    expect(summary.meanCustomerClvBps).toBe(92.5);
+    expect(summary.totalPositiveClvRiskUsd).toBe(5000);
+    expect(summary.totalNegativeClvRiskUsd).toBe(2000);
   });
 });

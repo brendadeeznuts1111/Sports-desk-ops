@@ -3,6 +3,7 @@ import {
   backtestRowsToProfiles,
   bookRowsToProfiles,
   mergeProfileRows,
+  profileApiPayloadToShowcase,
   selectProfileRows,
 } from "../packages/ui/src/profile_rows.ts";
 
@@ -337,5 +338,64 @@ describe("mergeProfileRows", () => {
       lower ? [lower] : [],
     );
     expect(merged).toHaveLength(1);
+    expect(merged[0]?.clvBps).toBe(40);
+  });
+
+  test("preserves backtest avgClvBps and maps on-demand /api/customer/profile payloads", () => {
+    const [bt] = backtestRowsToProfiles([
+      { customerId: "BGD101", sharpScore: 91.4, avgClvBps: 295 },
+    ]);
+    expect(bt?.clvBps).toBe(295);
+
+    const hydrated = profileApiPayloadToShowcase(
+      {
+        profile: {
+          customerId: "BGD101",
+          agentId: "BIGDAD",
+          masterAgent: "BILLY666",
+          contextType: "EXECUTION_SNIPER",
+          riskForensics: {
+            lifetimeNetUsd: -152600,
+            lifetimeVolumeUsd: 310000,
+            holdPct: -49.2,
+            portfolioVar95Usd: 18500,
+            portfolioCvar95Usd: 24000,
+          },
+          stakeProfile: {
+            sampleCount: 62,
+            meanStakeUsd: 5000,
+            giniCoefficient: 0.12,
+            sizingStrategy: "FLAT_UNIT",
+          },
+        },
+      },
+      {
+        customerId: "BGD101",
+        score: 8.6,
+        tier: "ELITE_SHARP",
+        riskLevel: "CRITICAL",
+        primaryArchetype: "closing_line_sharp",
+        componentScores: {
+          keyNumberScore: 0,
+          clvEdgeScore: 8.7,
+          steamLatencyScore: 0,
+          timingDisciplineScore: 0,
+          derivativeSharpScore: 0,
+        },
+        confidence: 0.9,
+        sampleSize: 62,
+        totalRiskUsd: 310000,
+        netUsd: 152600,
+        recommendedAction: "ALERT_OPERATOR",
+        autoExecute: false,
+        summary: "ok",
+        clvBps: 295,
+        clvSource: "book_clv_bps",
+      },
+    );
+    expect(hydrated?.id).toBe("BGD101");
+    expect(hydrated?.clvBps).toBe(295);
+    expect(hydrated?.source).toBe("book");
+    expect(hydrated?.holdPct).toBe(-49.2);
   });
 });

@@ -49,6 +49,10 @@ export interface HydratedWagerRow {
   readonly toWinUsd: number;
   /** Real CLV in cents, or null when no closing-line comparison exists. */
   readonly clvCents: number | null;
+  /** Customer book-level CLV in basis points (distinct from ticket-level clvCents). */
+  readonly customerClvBps?: number | null;
+  /** Customer composite sharp score from profile/cohort book (0-100). */
+  readonly customerSharpScore?: number | null;
   readonly alertTier: WagerTier;
   readonly alertBadge: string;
   readonly operatorDirective: string;
@@ -99,6 +103,17 @@ export interface WagersWireContractSummary {
   readonly error?: string;
 }
 
+export interface LiveWagersClvSummary {
+  readonly ticketClvCount: number;
+  readonly meanTicketClvCents: number | null;
+  readonly bookMatchedCount: number;
+  readonly meanCustomerClvBps: number | null;
+  readonly positiveCustomerClvCount: number;
+  readonly negativeCustomerClvCount: number;
+  readonly totalPositiveClvRiskUsd: number;
+  readonly totalNegativeClvRiskUsd: number;
+}
+
 export interface LiveWagersApiResponse {
   readonly wagers: ReadonlyArray<HydratedWagerRow | Record<string, unknown>>;
   readonly totalRiskUsd: number;
@@ -118,6 +133,8 @@ export interface LiveWagersApiResponse {
   readonly wire_contract?: WagersWireContractSummary;
   /** Slab policy when the host exposes it. */
   readonly slab_policy?: SlabPolicySummary;
+  /** Aggregated ticket & customer-book CLV summary for the live wagers slice. */
+  readonly clvSummary?: LiveWagersClvSummary;
 }
 
 export interface CustomersCohortsSummary {
@@ -135,7 +152,85 @@ export interface CustomersApiResponse {
   /** Full backtest-cohort list (backtestTop is the leaderboard's first 20). */
   readonly backtestAll: ReadonlyArray<Record<string, unknown>>;
   readonly fixtures: ReadonlyArray<Record<string, unknown>>;
+  /** Real/enriched customer book rows when loaded from profile/book/harvested stores. */
+  readonly book?: ReadonlyArray<Record<string, unknown>>;
   readonly provenance: DashboardSourceProvenance;
+}
+
+export type ClvRatingSource = "ticket_prices" | "book_clv_bps" | "none";
+
+export interface CustomerRatingComponentScores {
+  readonly keyNumberScore: number;
+  readonly clvEdgeScore: number;
+  readonly steamLatencyScore: number;
+  readonly timingDisciplineScore: number;
+  readonly derivativeSharpScore: number;
+}
+
+export interface CustomerRatingClvSignificance {
+  readonly meanClvPercent: number;
+  readonly stdDevClvPercent: number;
+  readonly sampleCount: number;
+  readonly standardError: number;
+  readonly tStatistic: number;
+  readonly pValue: number;
+  readonly isSignificant95: boolean;
+  readonly isSignificant99: boolean;
+}
+
+export interface CustomerRatingBayesianSkill {
+  readonly priorAlpha: number;
+  readonly priorBeta: number;
+  readonly posteriorAlpha: number;
+  readonly posteriorBeta: number;
+  readonly posteriorMeanWinRate: number;
+  readonly variance: number;
+  readonly standardDeviation: number;
+  readonly credibleInterval95: readonly [number, number];
+  readonly status: "PRELIMINARY" | "CONVERGING" | "CONFIRMED";
+}
+
+export interface CustomerRatingKellyMetrics {
+  readonly impliedKellyFraction: number;
+  readonly halfKellyFraction: number;
+  readonly quarterKellyFraction: number;
+  readonly observedUnitFraction: number;
+  readonly kellyDivergence: number;
+  readonly isKellyDisciplined: boolean;
+  readonly growthRate: number;
+}
+
+export interface CustomerRatingApiPayload {
+  readonly customerId: string;
+  readonly score: number;
+  readonly tier: string;
+  readonly riskLevel: string;
+  readonly primaryArchetype: string;
+  readonly componentScores: CustomerRatingComponentScores;
+  readonly confidence: number;
+  readonly sampleSize: number;
+  readonly totalRiskUsd: number;
+  readonly netUsd: number;
+  readonly recommendedAction: string;
+  readonly bayesianSkill?: CustomerRatingBayesianSkill;
+  readonly clvSignificance?: CustomerRatingClvSignificance;
+  readonly kellyMetrics?: CustomerRatingKellyMetrics;
+  readonly autoExecute: false;
+  readonly summary: string;
+  /** Book-level measured CLV in basis points (null when unavailable). */
+  readonly clvBps?: number | null;
+  /** Source used to score CLV edge on this rating. */
+  readonly clvSource?: ClvRatingSource;
+  /** Distinct signature kinds emitted for recent tickets, sorted by kind. */
+  readonly signatures?: ReadonlyArray<string>;
+  /** Distinct active days represented in observed recent tickets. */
+  readonly activeDays?: number;
+}
+
+export interface CustomerRatingApiResponse {
+  readonly success: boolean;
+  readonly rating: CustomerRatingApiPayload;
+  readonly generatedAt: string;
 }
 
 export type DashboardWsEventName =

@@ -768,7 +768,7 @@ Also absent from the spec and documented from source only: `GET /`, `GET /dashbo
 [surfaces.md](./surfaces.md)).
 
 The `/api/desk/*` routes cannot be captured: no implementation exists anywhere in the repo. They need
-implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:3809-3817`).
+implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:3773-3781`).
 
 ## P7 — the customer report surface (7 candidates)
 

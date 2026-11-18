@@ -12,14 +12,17 @@ import { styles } from "./dashboard_styles.ts";
 import { newTicketIds as diffNewTicketIds } from "./live_stream.ts";
 import {
   backtestRowsToProfiles,
-  bookRowsToProfiles,
   mergeMatrixProfileOverlay,
   mergeProfileRows,
+  profileApiPayloadToShowcase,
+  selectProfileRows,
 } from "./profile_rows.ts";
 import {
   fetchRankingsSlice,
   type NormalizedRankingsResult,
+  normalizeCustomerRatingResponse,
   normalizeCustomersCohortResponse,
+  normalizeLiveBetsV2Summary,
   normalizeLiveWagersResponse,
   PENDING_WAGERS_PROVENANCE,
   unavailableProvenance,
@@ -90,6 +93,7 @@ import {
   type AlertToastState,
   type BetTickerApiResponse,
   type BuildMatrixRow,
+  type CustomerRatingApiPayload,
   type CustomersApiResponse,
   type CustomerSortKey,
   type DashboardAlertRecord,
@@ -98,7 +102,9 @@ import {
   type DashboardTabId,
   type DnsData,
   type HealthData,
+  type LiveBetsV2SummarySnapshot,
   type LiveWager,
+  type LiveWagersClvSummary,
   type R2PipelineApiResponse,
   type R2PipelineHistoryApiResponse,
   type RankingsFilter,
@@ -250,6 +256,12 @@ export function App(): React.ReactElement {
   const [copiedCliId, setCopiedCliId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] =
     useState<ShowcaseCustomer | null>(null);
+  const [selectedCustomerRating, setSelectedCustomerRating] =
+    useState<CustomerRatingApiPayload | null>(null);
+  const [selectedCustomerRatingLoading, setSelectedCustomerRatingLoading] =
+    useState<boolean>(false);
+  const [onDemandCustomer, setOnDemandCustomer] =
+    useState<ShowcaseCustomer | null>(null);
   const [customerLookupNotice, setCustomerLookupNotice] = useState<
     string | null
   >(null);
@@ -261,6 +273,10 @@ export function App(): React.ReactElement {
   // Runtime Declarative Wager Tiers + Live API Hydration state
   const [tiersConfig, setTiersConfig] = useState<TierStyleConfig | null>(null);
   const [liveWagers, setLiveWagers] = useState<readonly LiveWager[]>([]);
+  const [wagersClvSummary, setWagersClvSummary] =
+    useState<LiveWagersClvSummary | null>(null);
+  const [liveBetsSnapshot, setLiveBetsSnapshot] =
+    useState<LiveBetsV2SummarySnapshot | null>(null);
   const [wagersProvenance, setWagersProvenance] =
     useState<DashboardSourceProvenance>(PENDING_WAGERS_PROVENANCE);
   const [wagersError, setWagersError] = useState<string | null>(null);
@@ -386,11 +402,12 @@ export function App(): React.ReactElement {
 
   const cohortProfileRows = useMemo<readonly ShowcaseCustomer[]>(() => {
     if (cohortsReport === null) return [];
-    return mergeProfileRows(
-      bookRowsToProfiles(cohortsReport.fixtures, "fixture"),
+    const base = mergeProfileRows(
+      selectProfileRows(cohortsReport),
       backtestRowsToProfiles(cohortsReport.backtestAll),
     );
-  }, [cohortsReport]);
+    return onDemandCustomer ? mergeProfileRows(base, [onDemandCustomer]) : base;
+  }, [cohortsReport, onDemandCustomer]);
 
   const profileCustomers = useMemo<readonly ShowcaseCustomer[]>(() => {
     if (!showBuildMatrix) return cohortProfileRows;
@@ -474,6 +491,7 @@ export function App(): React.ReactElement {
         return;
       }
       setLiveWagers(normalized.wagers);
+      setWagersClvSummary(normalized.clvSummary ?? null);
       setWagersProvenance(normalized.provenance);
       setWireContract(normalized.wireContract);
       setSlabPolicy(normalized.slabPolicy);
@@ -555,6 +573,21 @@ export function App(): React.ReactElement {
       setCohortsError(
         `GET /api/customers failed: ${err instanceof Error ? err.message : String(err)}`,
       );
+    }
+  };
+
+  const fetchLiveBetsSnapshot = async () => {
+    try {
+      const res = await trackedFetch(
+        dashboardApiUrl("/api/v2/live-bets?source=file&fallback=sample"),
+      );
+      if (!res.ok) return;
+      const parsed = normalizeLiveBetsV2Summary(await res.json());
+      if (parsed) {
+        setLiveBetsSnapshot(parsed);
+      }
+    } catch {
+      // Optional enrichment strip: ignore when endpoint unavailable
     }
   };
 
@@ -701,6 +734,7 @@ export function App(): React.ReactElement {
     void fetchTiersConfig();
     void fetchLiveWagers();
     void fetchCustomersCohorts();
+    void fetchLiveBetsSnapshot();
     void fetchRankings();
     void fetchBetTicker();
     // The pipeline probe records the first history sample, so read history after it.
@@ -1368,6 +1402,8 @@ export function App(): React.ReactElement {
 
     if (!matchesSearch) return false;
     if (filterTier === "ALL") return true;
+    if (filterTier === "POSITIVE_CLV")
+      return typeof cust.clvBps === "number" && cust.clvBps > 0;
     if (filterTier === "ELITE")
       return (
         cust.tier === "TIER_1_ELITE_ORIGINATOR" ||
@@ -1400,6 +1436,14 @@ export function App(): React.ReactElement {
 
   const sortedCustomers = useMemo(() => {
     return [...filteredCustomers].sort((a, b) => {
+      if (customerSort.key === "clvBps") {
+        const av = a.clvBps;
+        const bv = b.clvBps;
+        const aHas = typeof av === "number" && Number.isFinite(av);
+        const bHas = typeof bv === "number" && Number.isFinite(bv);
+        if (!aHas || !bHas) return !aHas ? (!bHas ? 0 : 1) : -1;
+        return (av - bv) * customerSort.dir;
+      }
       const v =
         customerSort.key === "id"
           ? a.id.localeCompare(b.id)
@@ -1407,6 +1451,36 @@ export function App(): React.ReactElement {
       return v * customerSort.dir;
     });
   }, [filteredCustomers, customerSort]);
+
+  useEffect(() => {
+    const cid = selectedCustomer?.id?.trim();
+    if (!cid) {
+      setSelectedCustomerRating(null);
+      setSelectedCustomerRatingLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSelectedCustomerRatingLoading(true);
+    void trackedFetch(
+      dashboardApiUrl(`/api/customer/rating?id=${encodeURIComponent(cid)}`),
+    )
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return normalizeCustomerRatingResponse(await res.json());
+      })
+      .then((parsed) => {
+        if (!cancelled) setSelectedCustomerRating(parsed);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedCustomerRating(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSelectedCustomerRatingLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCustomer?.id]);
 
   const handleSelectCustomerById = (customerId: string) => {
     const raw = customerId.trim();
@@ -1418,6 +1492,37 @@ export function App(): React.ReactElement {
     setFilterTier("ALL");
     setCustomerLookupNotice(found ? null : upper);
     setActiveTab("customers");
+
+    if (!found) {
+      const q = encodeURIComponent(upper);
+      setSelectedCustomerRatingLoading(true);
+      void Promise.all([
+        trackedFetch(dashboardApiUrl(`/api/customer/profile?id=${q}`))
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+        trackedFetch(dashboardApiUrl(`/api/customer/rating?id=${q}`))
+          .then(async (r) =>
+            r.ok ? normalizeCustomerRatingResponse(await r.json()) : null,
+          )
+          .catch(() => null),
+      ])
+        .then(([profRaw, ratingParsed]) => {
+          if (!profRaw && !ratingParsed) return;
+          const hydrated = profileApiPayloadToShowcase(
+            profRaw ?? { profile: { customerId: upper } },
+            ratingParsed,
+          );
+          if (hydrated) {
+            setOnDemandCustomer(hydrated);
+            setSelectedCustomer(hydrated);
+            setSelectedCustomerRating(ratingParsed);
+            setCustomerLookupNotice(null);
+          }
+        })
+        .finally(() => {
+          setSelectedCustomerRatingLoading(false);
+        });
+    }
   };
 
   useEffect(() => {
@@ -2376,6 +2481,8 @@ export function App(): React.ReactElement {
             customerSort={customerSort}
             onCustomerSort={onCustomerSort}
             selectedCustomer={selectedCustomer}
+            selectedCustomerRating={selectedCustomerRating}
+            selectedCustomerRatingLoading={selectedCustomerRatingLoading}
             onSelectCustomer={(customer) => {
               setSelectedCustomer(customer);
               setCustomerLookupNotice(null);
@@ -2573,6 +2680,8 @@ export function App(): React.ReactElement {
         ) : (
           <LiveWagersTabPanel
             wagers={liveWagers}
+            clvSummary={wagersClvSummary}
+            liveBetsSnapshot={liveBetsSnapshot}
             provenance={wagersProvenance}
             wagersError={wagersError}
             wagersLastUpdatedAt={wagersUpdatedAt}

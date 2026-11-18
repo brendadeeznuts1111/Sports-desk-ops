@@ -444,3 +444,73 @@ export function customerRowsFromLiveCaptures(
     a.customer_id.localeCompare(b.customer_id),
   );
 }
+
+/**
+ * Maps one `docs/backtest-4wk-cfb-nba.json` `customerLeaderboard` entry to a `CustomerRow`.
+ * Notice `baselineDeskNetUsd` and `baselineHoldPct` follow desk-perspective sign conventions.
+ */
+export function customerRowFromBacktestEntry(
+  id: string,
+  entry: Record<string, unknown>,
+  sourcePath: string = "docs/backtest-4wk-cfb-nba.json",
+): CustomerRow | null {
+  const rec = asRow(entry);
+  if (!rec) return null;
+  const entryIdRaw =
+    text(rec.customerId) ?? text(rec.customer_id) ?? text(rec.id);
+  if (entryIdRaw === null) return null;
+  const entryId = entryIdRaw.toUpperCase();
+  const targetId = id.trim().toUpperCase();
+  const strip = (s: string) => s.replace(/_\d+$/, "");
+  if (entryId !== targetId && strip(entryId) !== strip(targetId)) {
+    return null;
+  }
+
+  const totalWagers =
+    finite(rec.totalParlayTickets) ??
+    finite(rec.totalWagers) ??
+    finite(rec.tickets);
+  const volume =
+    finite(rec.totalParlayHandleUsd) ??
+    finite(rec.totalRiskUsd) ??
+    finite(rec.riskUsd) ??
+    finite(rec.volumeUsd);
+  const net =
+    finite(rec.baselineDeskNetUsd) ?? finite(rec.netUsd) ?? finite(rec.pnlUsd);
+  const hold = finite(rec.baselineHoldPct) ?? finite(rec.holdPct);
+  const clv = finite(rec.avgClvBps) ?? finite(rec.clvBps);
+  const sharp = finite(rec.sharpScore) ?? finite(rec.score);
+  const explicitAvgBet =
+    finite(rec.averageBetUsd) ??
+    finite(rec.avgStakeUsd) ??
+    finite(rec.avgRiskUsd);
+  const avgBet =
+    explicitAvgBet ??
+    (volume !== null && totalWagers !== null && totalWagers > 0
+      ? Math.round((volume / totalWagers) * 100) / 100
+      : null);
+  const agent = text(rec.agentId);
+  const masterAgent = text(rec.masterAgent);
+  const contextType =
+    text(rec.contextType) ?? text(rec.archetype) ?? text(rec.tier);
+  const lastActiveAt = text(rec.lastActiveAt);
+
+  return {
+    customer_id: entryId,
+    provenance: "backtest-leaderboard",
+    status: "Active",
+    ...(agent === null ? {} : { agent_id: agent }),
+    ...(masterAgent === null ? {} : { master_agent: masterAgent }),
+    ...(contextType === null ? {} : { context_type: contextType }),
+    ...(totalWagers === null ? {} : { total_wagers: totalWagers }),
+    ...(volume === null ? {} : { lifetime_volume_usd: volume }),
+    ...(net === null ? {} : { lifetime_net_usd: net }),
+    ...(hold === null ? {} : { hold_pct: hold }),
+    ...(clv === null ? {} : { clv_bps: clv }),
+    ...(sharp === null ? {} : { sharp_score: sharp }),
+    ...(avgBet === null ? {} : { average_bet_usd: avgBet }),
+    ...(lastActiveAt === null ? {} : { last_active_at: lastActiveAt }),
+    recent_tickets: [],
+    backtest_source_path: sourcePath,
+  } as CustomerRow;
+}

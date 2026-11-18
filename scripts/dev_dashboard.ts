@@ -48,7 +48,7 @@ import {
   prefetchSportsDeskEndpoints,
   SPORTSDESK_CORE_HOSTS,
 } from "../lib/bun_dns.ts";
-import type { CustomerRow, TicketRow } from "../lib/customer_profile.ts";
+import type { CustomerRow } from "../lib/customer_profile.ts";
 import {
   handleLogin,
   handleLogout,
@@ -331,11 +331,99 @@ export function startDashboardServer(
         sentinels: SLAB_SERVER.sentinels,
       }),
       loadSharpDeps: async () => {
-        const [{ parseShortDesc: parseDesc }, { KEY_NUMBER_BUYER_PROFILES }] =
-          await Promise.all([
-            import("../lib/live_wagers.ts"),
-            import("../lib/customer_profile.ts"),
-          ]);
+        const [
+          { parseShortDesc: parseDesc },
+          { KEY_NUMBER_BUYER_PROFILES },
+          backtestCached,
+          harvestedCached,
+          profilesCached,
+          localBookCached,
+          fixtureBookCached,
+        ] = await Promise.all([
+          import("../lib/live_wagers.ts"),
+          import("../lib/customer_profile.ts"),
+          jsonReader.readCachedJson<{
+            customerLeaderboard?: Array<Record<string, unknown>>;
+          }>(resolve(cwd, "docs/backtest-4wk-cfb-nba.json")),
+          jsonReader.readCachedJson<{
+            profiles?: Array<Record<string, unknown>>;
+          }>(resolve(cwd, "reports/harvested-live-profiles.json")),
+          jsonReader.readCachedJson<{
+            profiles?: Array<Record<string, unknown>>;
+          }>(resolve(cwd, "data/customer-profiles.json")),
+          jsonReader.readCachedJson<Array<Record<string, unknown>>>(
+            resolve(cwd, "enriched_customers_full.json"),
+          ),
+          jsonReader.readCachedJson<Array<Record<string, unknown>>>(
+            resolve(
+              cwd,
+              "tests/fixtures/backtest/enriched_customers_full.json",
+            ),
+          ),
+        ]);
+
+        const bookMetaMap = new Map<
+          string,
+          { readonly clvBps: number | null; readonly sharpScore: number | null }
+        >();
+        const fin = (v: unknown): number | null =>
+          typeof v === "number" && Number.isFinite(v) ? v : null;
+        const putMeta = (
+          rawId: unknown,
+          clvBps: number | null,
+          sharpScore: number | null,
+        ) => {
+          if (typeof rawId !== "string") return;
+          if (clvBps === null && sharpScore === null) return;
+          const id = rawId.trim().toUpperCase();
+          if (!id) return;
+          bookMetaMap.set(id, { clvBps, sharpScore });
+          const baseId = id.replace(/_\d+$/, "");
+          if (baseId && baseId !== id && !bookMetaMap.has(baseId)) {
+            bookMetaMap.set(baseId, { clvBps, sharpScore });
+          }
+        };
+
+        for (const row of fixtureBookCached?.value ?? []) {
+          putMeta(
+            row.customer_id ?? row.customerId,
+            fin(row.clv_bps),
+            fin(row.sharp_score),
+          );
+        }
+        for (const entry of backtestCached?.value?.customerLeaderboard ?? []) {
+          putMeta(
+            entry.customerId ?? entry.customer_id ?? entry.id,
+            fin(entry.avgClvBps ?? entry.clvBps),
+            fin(entry.sharpScore ?? entry.score),
+          );
+        }
+        for (const profile of harvestedCached?.value?.profiles ?? []) {
+          putMeta(
+            profile.id ?? profile.canonicalId,
+            fin(profile.dodClvBps),
+            fin(profile.dodSharpScore),
+          );
+        }
+        for (const profile of profilesCached?.value?.profiles ?? []) {
+          const book =
+            typeof profile.book === "object" && profile.book !== null
+              ? (profile.book as Record<string, unknown>)
+              : profile;
+          putMeta(
+            profile.customer_id ?? profile.customerId,
+            fin(book.clvBps ?? book.clv_bps),
+            fin(book.sharpScore ?? book.sharp_score),
+          );
+        }
+        for (const row of localBookCached?.value ?? []) {
+          putMeta(
+            row.customer_id ?? row.customerId,
+            fin(row.clv_bps),
+            fin(row.sharp_score),
+          );
+        }
+
         return {
           parseShortDesc: parseDesc,
           sharpCustomerIds: new Set(
@@ -343,6 +431,15 @@ export function startDashboardServer(
               k.trim().toUpperCase(),
             ),
           ),
+          customerBookLookup: (cid: string) => {
+            const norm = cid.trim().toUpperCase();
+            if (!norm) return null;
+            return (
+              bookMetaMap.get(norm) ??
+              bookMetaMap.get(norm.replace(/_\d+$/, "")) ??
+              null
+            );
+          },
         };
       },
     });
@@ -549,44 +646,9 @@ export function startDashboardServer(
         getRating: async (id) => {
           const row = await findCustomerRow(id);
           if (!row) return null;
-          const [
-            { CustomerObservations },
-            {
-              rateCustomerFromObservations,
-              computeBayesianSkillProfile,
-              computeKellyMetrics,
-            },
-            { buildPortfolioRiskForensics },
-          ] = await Promise.all([
-            import("../lib/customer_profile.ts"),
-            import("../lib/customer_rating.ts"),
-            import("../lib/customer_profiling_enhanced.ts"),
-          ]);
-          const tickets = Array.isArray(row.recent_tickets)
-            ? (row.recent_tickets as unknown as readonly TicketRow[])
-            : [];
-          const riskForensics = buildPortfolioRiskForensics(row, tickets);
-          const obs = new CustomerObservations(
-            String(row.customer_id ?? id),
-            tickets.length,
-            riskForensics.lifetimeVolumeUsd,
-            riskForensics.lifetimeNetUsd,
-            [],
-            "2026-10-01",
-            "2026-11-09",
-          );
-          const baseRating = rateCustomerFromObservations(obs);
-          const bayesianSkill = computeBayesianSkillProfile([]);
-          const kellyMetrics = computeKellyMetrics(
-            -110,
-            bayesianSkill.posteriorMeanWinRate,
-            obs.nTickets > 0 ? obs.totalRiskUsd / obs.nTickets : 100,
-          );
-          return {
-            ...baseRating,
-            bayesianSkill,
-            kellyMetrics,
-          };
+          const { rateCustomerBookRow } =
+            await import("../lib/customer_rating.ts");
+          return rateCustomerBookRow(row, id);
         },
       },
       execTerminal: (command, dims) => executeTerminalQuery(command, dims),
@@ -873,8 +935,93 @@ export function startDashboardServer(
           "application/json; charset=utf-8",
         ),
       ),
-    "/api/v2/live-bets": (req: Request) =>
-      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/v2/live-bets": (req: Request) => {
+      const url = new URL(req.url);
+      return proxy4020OrFallback(req, url, async () => {
+        const rawSource = url.searchParams.get("source") ?? "file";
+        const rawFallback = url.searchParams.get("fallback") ?? "sample";
+        const rawPath = url.searchParams.get("path") ?? undefined;
+        const { isLiveBetsFallback, isLiveBetsSource } =
+          await import("../src/contracts/live_bets.v2.ts");
+        if (!isLiveBetsSource(rawSource)) {
+          return Response.json(
+            {
+              success: false,
+              error: `Invalid LiveBetsSource "${rawSource}"; expected db, file, fixture or none`,
+            },
+            { status: 400 },
+          );
+        }
+        if (!isLiveBetsFallback(rawFallback)) {
+          return Response.json(
+            {
+              success: false,
+              error: `Invalid LiveBetsFallback "${rawFallback}"; expected strict or sample`,
+            },
+            { status: 400 },
+          );
+        }
+        const { resolveLiveBets } = await import("../src/live_bets/resolve.ts");
+        const payload = await resolveLiveBets(
+          {
+            source: rawSource,
+            fallback: rawFallback,
+            ...(rawPath ? { path: rawPath } : {}),
+          },
+          { repoRoot: cwd },
+        );
+        return Response.json(payload, {
+          headers: { "Cache-Control": "no-store" },
+        });
+      });
+    },
+    "/api/live-bets/summary": (req: Request) => {
+      const url = new URL(req.url);
+      return proxy4020OrFallback(req, url, async () => {
+        const rawSource = (url.searchParams.get("source") ?? "auto").trim();
+        if (
+          rawSource !== "auto" &&
+          rawSource !== "live" &&
+          rawSource !== "file"
+        ) {
+          return Response.json(
+            { success: false, error: "source must be auto, live or file" },
+            { status: 400 },
+          );
+        }
+        const [{ resolveLiveBets }, { summarizeGames }] = await Promise.all([
+          import("../src/live_bets/resolve.ts"),
+          import("../lib/live_bets.ts"),
+        ]);
+        const v2 = await resolveLiveBets(
+          {
+            source: rawSource === "live" ? "db" : "file",
+            fallback: "sample",
+          },
+          { repoRoot: cwd },
+        );
+        const summary = summarizeGames(
+          v2.games,
+          v2.pendingCount,
+          v2.summary.dataSource,
+          v2.provenance.capturedAt ?? null,
+        );
+        return Response.json(
+          {
+            success: true,
+            games: v2.games,
+            agents: v2.agents,
+            pendingCount: summary.totalPending,
+            summary,
+            scoreboard: v2.scoreboard,
+            sports: v2.sports,
+            provenance: v2.provenance,
+            generatedAt: v2.provenance.generatedAt,
+          },
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      });
+    },
     "/api/agent-tree": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url), () =>
         serveStaticFileResponse(

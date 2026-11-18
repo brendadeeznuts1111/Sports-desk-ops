@@ -527,7 +527,7 @@ export function createDeskStore() {
   const analysisAgent = signal("BILLY666");
   const analysisSport = signal("Baseball");
   const analysisWeek = signal("-1");
-  const customerLookupId = signal("DK121");
+  const customerLookupId = signal("SYNTH_SYN_01");
 
   const agentsSearchSnap = signal<EndpointSnapshot<ParsedAgentsSearchPayload>>({
     status: "loading",
@@ -745,7 +745,7 @@ export function createDeskStore() {
       ),
       requestJsonEndpoint(
         base,
-        `/api/v2/live-bets?source=${src}&fallback=file`,
+        `/api/v2/live-bets?source=${src === "live" ? "db" : "file"}&fallback=sample`,
         parseLiveBetsListPayload,
       ),
       requestJsonEndpoint(
@@ -871,7 +871,7 @@ export function createDeskStore() {
   const lookupCustomerForensics = async () => {
     if (!originInfo.ok) return;
     const base = originInfo.resolved.origin;
-    const id = encodeURIComponent(customerLookupId().trim() || "DK121");
+    const id = encodeURIComponent(customerLookupId().trim() || "SYNTH_SYN_01");
     const [prof, rate] = await Promise.all([
       requestJsonEndpoint(
         base,

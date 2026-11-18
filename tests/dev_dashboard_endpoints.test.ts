@@ -157,10 +157,59 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
       expect(res.status).toBe(200);
       const data = (await res.json()) as {
         success: boolean;
-        rating: { customerId: string };
+        rating: {
+          customerId: string;
+          clvBps?: number | null;
+          clvSource?: string;
+          clvSignificance?: { sampleCount: number; isSignificant95: boolean };
+          kellyMetrics?: { observedUnitFraction: number };
+        };
       };
       expect(data.success).toBe(true);
       expect(data.rating.customerId).toBe("SYNTH_SYN");
+      expect(data.rating.clvBps).toBe(40);
+      expect(data.rating.clvSource).toBe("book_clv_bps");
+      expect(data.rating.clvSignificance?.sampleCount).toBe(1);
+      expect(data.rating.kellyMetrics?.observedUnitFraction).toBeLessThan(0.5);
+    });
+
+    it("resolves backtest leaderboard customer rating (EJ8834) and live-bets v2/summary fallbacks on :4022", async () => {
+      const [ejRes, v2Res, sumRes] = await Promise.all([
+        fetch(`${baseUrl}/api/customer/rating?id=EJ8834`),
+        fetch(`${baseUrl}/api/v2/live-bets?source=fixture&fallback=sample`),
+        fetch(`${baseUrl}/api/live-bets/summary?source=file`),
+      ]);
+      expect(ejRes.status).toBe(200);
+      const ej = (await ejRes.json()) as {
+        success: boolean;
+        rating: {
+          customerId: string;
+          clvBps: number | null;
+          netUsd: number;
+          kellyMetrics: { observedUnitFraction: number };
+        };
+      };
+      expect(ej.success).toBe(true);
+      expect(ej.rating.customerId).toBe("EJ8834");
+      expect(ej.rating.clvBps).toBe(290);
+      expect(ej.rating.netUsd).toBe(114600);
+      expect(ej.rating.kellyMetrics.observedUnitFraction).toBeLessThan(0.2);
+
+      expect(v2Res.status).toBe(200);
+      const v2 = (await v2Res.json()) as {
+        apiVersion: string;
+        summary: { totalGames: number };
+      };
+      expect(v2.apiVersion).toBe("2");
+      expect(v2.summary.totalGames).toBeGreaterThanOrEqual(0);
+
+      expect(sumRes.status).toBe(200);
+      const sumJson = (await sumRes.json()) as {
+        success: boolean;
+        summary: { totalPending: number };
+      };
+      expect(sumJson.success).toBe(true);
+      expect(sumJson.summary.totalPending).toBeGreaterThanOrEqual(0);
     });
   });
 

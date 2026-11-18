@@ -128,19 +128,27 @@ describe("Customer API Endpoints (/api/customer/profile & /api/customer/rating)"
           tier: string;
           riskLevel: string;
           primaryArchetype: string;
+          clvBps?: number | null;
+          clvSource?: string;
+          clvSignificance?: {
+            sampleCount: number;
+            meanClvPercent: number;
+            isSignificant95: boolean;
+          };
           componentScores: {
             keyNumberScore: number;
             clvEdgeScore: number;
             steamLatencyScore: number;
           };
           bayesianSkill: {
-            priorWinRate: number;
             posteriorMeanWinRate: number;
-            tier: string;
+            status: string;
           };
           kellyMetrics: {
-            fractionalKellyFraction: number;
+            halfKellyFraction: number;
+            observedUnitFraction: number;
             impliedKellyFraction: number;
+            growthRate: number;
           };
         };
         generatedAt: string;
@@ -148,13 +156,40 @@ describe("Customer API Endpoints (/api/customer/profile & /api/customer/rating)"
 
       expect(body.success).toBe(true);
       expect(body.rating).toBeDefined();
+      expect(body.rating.customerId).toBe("SYNTH_SYN");
       expect(body.rating.score).toBeGreaterThanOrEqual(0);
       expect(body.rating.tier).toBeDefined();
+      expect(body.rating.clvBps).toBe(40);
+      expect(body.rating.clvSource).toBe("book_clv_bps");
+      expect(body.rating.clvSignificance?.sampleCount).toBe(1);
+      expect(body.rating.clvSignificance?.isSignificant95).toBe(false);
       expect(
         body.rating.bayesianSkill.posteriorMeanWinRate,
       ).toBeGreaterThanOrEqual(0);
       expect(body.rating.kellyMetrics.impliedKellyFraction).toBeDefined();
+      expect(body.rating.kellyMetrics.observedUnitFraction).toBeLessThan(0.5);
       expect(body.generatedAt).toBeDefined();
+    });
+
+    test("resolves backtest leaderboard customer rating (EJ8834) instead of 404", async () => {
+      const res = await fetch(`${baseUrl}/api/customer/rating?id=EJ8834`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        success: boolean;
+        rating: {
+          customerId: string;
+          clvBps: number | null;
+          clvSource: string;
+          netUsd: number;
+          kellyMetrics: { observedUnitFraction: number };
+        };
+      };
+      expect(body.success).toBe(true);
+      expect(body.rating.customerId).toBe("EJ8834");
+      expect(body.rating.clvBps).toBe(290);
+      expect(body.rating.clvSource).toBe("book_clv_bps");
+      expect(body.rating.netUsd).toBe(114600);
+      expect(body.rating.kellyMetrics.observedUnitFraction).toBeLessThan(0.2);
     });
 
     test("rejects unsupported HTTP methods with 404 or 405", async () => {

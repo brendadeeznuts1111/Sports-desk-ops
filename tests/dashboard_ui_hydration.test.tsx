@@ -13,6 +13,9 @@ import {
   formatProvenanceBadge,
   hydrateDashboardFeeds,
   LiveWagersTabPanel,
+  normalizeCustomerRatingResponse,
+  normalizeCustomersCohortResponse,
+  normalizeLiveBetsV2Summary,
   normalizeLiveWagersResponse,
 } from "@sportsdesk-ops/ui";
 import { FIXTURE_PROFILE_CUSTOMERS } from "./fixtures/dashboard_ui_fixtures.ts";
@@ -519,5 +522,100 @@ describe("sport and subsport projection", () => {
     });
     expect(normalized?.wagers[0]?.sport).toBe("BASKETBALL");
     expect(normalized?.wagers[0]?.subSport).toBe("NBA");
+  });
+
+  test("preserves book on /api/customers, clvSummary & customerClvBps on /api/wagers, rating & v2 summary", () => {
+    const custResp = normalizeCustomersCohortResponse({
+      cohorts: {
+        backtestCount: 1,
+        keyNumberSharpsCount: 0,
+        hookSyndicateCount: 0,
+        fixtureCount: 1,
+        fullBookSpecCount: 1,
+        uniqueSurveillanceCount: 1,
+      },
+      backtestTop: [{ customerId: "BGD101" }],
+      fixtures: [{ customer_id: "FIX_1" }],
+      book: [{ customer_id: "SYNTH_SYN_01", clv_bps: 145 }],
+      provenance: {
+        kind: "capture",
+        label: "Book",
+        sourcePath: "enriched_customers_full.json",
+        observedAt: "2026-11-18T00:00:00Z",
+      },
+    });
+    expect(custResp?.book).toHaveLength(1);
+
+    const wagerResp = normalizeLiveWagersResponse({
+      wagers: [
+        {
+          ticketId: "W-CLV-1",
+          clvCents: null,
+          customerClvBps: 295,
+          customerSharpScore: 91.4,
+        },
+      ],
+      clvSummary: {
+        ticketClvCount: 0,
+        meanTicketClvCents: null,
+        bookMatchedCount: 1,
+        meanCustomerClvBps: 295,
+        positiveCustomerClvCount: 1,
+        negativeCustomerClvCount: 0,
+        totalPositiveClvRiskUsd: 500,
+        totalNegativeClvRiskUsd: 0,
+      },
+      provenance: {
+        kind: "capture",
+        label: "Wagers",
+        sourcePath: "data/live-wagers.json",
+        observedAt: "2026-11-18T00:00:00Z",
+      },
+    });
+    expect(wagerResp?.wagers[0]?.clvCents).toBeNull();
+    expect(wagerResp?.wagers[0]?.customerClvBps).toBe(295);
+    expect(wagerResp?.clvSummary?.bookMatchedCount).toBe(1);
+
+    const parsedRating = normalizeCustomerRatingResponse({
+      success: true,
+      rating: {
+        customerId: "SYNTH_SYN",
+        score: 7.4,
+        tier: "SHARP",
+        riskLevel: "HIGH",
+        primaryArchetype: "closing_line_sharp",
+        componentScores: {
+          keyNumberScore: 0,
+          clvEdgeScore: 7.5,
+          steamLatencyScore: 0,
+          timingDisciplineScore: 0,
+          derivativeSharpScore: 0,
+        },
+        clvBps: 200,
+        clvSource: "book_clv_bps",
+        autoExecute: false,
+        summary: "ok",
+      },
+    });
+    expect(parsedRating?.clvBps).toBe(200);
+    expect(parsedRating?.clvSource).toBe("book_clv_bps");
+
+    const v2 = normalizeLiveBetsV2Summary({
+      dataSource: "fixture",
+      fallbackUsed: true,
+      summary: {
+        totalGames: 3,
+        totalPending: 8,
+        totalWagered: 500000,
+        totalToWin: 450000,
+      },
+      provenance: {
+        capturedAt: null,
+        generatedAt: "2026-11-18T00:00:00Z",
+      },
+    });
+    expect(v2?.totalGames).toBe(3);
+    expect(v2?.totalPending).toBe(8);
+    expect(v2?.fallbackUsed).toBe(true);
   });
 });

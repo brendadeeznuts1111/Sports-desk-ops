@@ -1196,7 +1196,7 @@ export const DESK_ENDPOINT_CATALOG: readonly DeskEndpointCatalogEntry[] = [
     plane: "board",
     auth: "loopback",
     autoSweep: true,
-    sweepPath: "/api/v2/live-bets?source=file&fallback=file",
+    sweepPath: "/api/v2/live-bets?source=file&fallback=sample",
     summary: "Provenance-aware v2 live-bets games, agents, and warnings",
   },
   {
@@ -1357,7 +1357,7 @@ export const DESK_ENDPOINT_CATALOG: readonly DeskEndpointCatalogEntry[] = [
     plane: "forensics",
     auth: "loopback",
     autoSweep: true,
-    sweepPath: "/api/customer/profile?id=DK121",
+    sweepPath: "/api/customer/profile?id=SYNTH_SYN_01",
     summary:
       "Offline customer book profile, channel proxy split & sample tickets",
   },
@@ -1369,7 +1369,7 @@ export const DESK_ENDPOINT_CATALOG: readonly DeskEndpointCatalogEntry[] = [
     plane: "forensics",
     auth: "loopback",
     autoSweep: true,
-    sweepPath: "/api/customer/rating?id=DK121",
+    sweepPath: "/api/customer/rating?id=SYNTH_SYN_01",
     summary: "Customer Bayesian skill & Kelly sizing forensics",
   },
   {
@@ -3271,8 +3271,12 @@ export interface ParsedCustomerProfilePayload {
   readonly id: string;
   readonly agentId: string;
   readonly lifetimeNetUsd: number | null;
+  readonly lifetimeVolumeUsd: number | null;
   readonly week7dNetUsd: number | null;
+  readonly holdPct: number | null;
   readonly ticketSampleCount: number;
+  readonly clvBps: number | null;
+  readonly sharpScore: number | null;
   readonly sampleOnly: boolean;
 }
 
@@ -3285,6 +3289,15 @@ export function parseCustomerProfilePayload(
     );
   }
   const prof = isRecord(raw["profile"]) ? raw["profile"] : raw;
+  const risk = isRecord(prof["riskForensics"]) ? prof["riskForensics"] : {};
+  const stake = isRecord(prof["stakeProfile"]) ? prof["stakeProfile"] : {};
+  const ratingObj = isRecord(prof["rating"]) ? prof["rating"] : {};
+  const composite = isRecord(prof["compositeSharpness"])
+    ? prof["compositeSharpness"]
+    : {};
+  const compScores = isRecord(ratingObj["componentScores"])
+    ? ratingObj["componentScores"]
+    : {};
   const lifetime = isRecord(prof["lifetime"]) ? prof["lifetime"] : prof;
   const recent = isRecord(prof["recent7d"]) ? prof["recent7d"] : {};
   const tickets = Array.isArray(prof["tickets"])
@@ -3292,6 +3305,7 @@ export function parseCustomerProfilePayload(
     : Array.isArray(prof["sampleTickets"])
       ? prof["sampleTickets"]
       : [];
+  const stakeSamples = readNum(stake, "sampleCount");
   return {
     id:
       readStr(prof, "customerId") ??
@@ -3300,18 +3314,50 @@ export function parseCustomerProfilePayload(
       "unknown",
     agentId: readStr(prof, "agentId") ?? readStr(prof, "agent") ?? "unassigned",
     lifetimeNetUsd:
-      readNum(lifetime, "netUsd") ?? readNum(prof, "lifetimeNetUsd"),
-    week7dNetUsd: readNum(recent, "netUsd") ?? readNum(prof, "net7dUsd"),
-    ticketSampleCount: tickets.length,
-    sampleOnly: prof["sampleOnly"] !== false,
+      readNum(risk, "lifetimeNetUsd") ??
+      readNum(lifetime, "netUsd") ??
+      readNum(prof, "lifetimeNetUsd"),
+    lifetimeVolumeUsd:
+      readNum(risk, "lifetimeVolumeUsd") ?? readNum(lifetime, "volumeUsd"),
+    week7dNetUsd:
+      readNum(risk, "sevenDayNetUsd") ??
+      readNum(recent, "netUsd") ??
+      readNum(prof, "net7dUsd"),
+    holdPct: readNum(risk, "holdPct") ?? readNum(prof, "holdPct"),
+    ticketSampleCount:
+      stakeSamples !== null && stakeSamples > tickets.length
+        ? stakeSamples
+        : tickets.length,
+    clvBps: readNum(ratingObj, "clvBps") ?? readNum(prof, "clvBps"),
+    sharpScore:
+      readNum(composite, "compositeScore") ??
+      readNum(ratingObj, "score") ??
+      readNum(compScores, "clvEdgeScore"),
+    sampleOnly:
+      prof["sampleOnly"] !== undefined
+        ? prof["sampleOnly"] !== false
+        : !isRecord(prof["riskForensics"]),
   };
 }
 
 export interface ParsedCustomerRatingPayload {
   readonly id: string;
   readonly tier: string;
+  readonly score: number | null;
+  readonly clvEdgeScore: number | null;
+  readonly clvBps: number | null;
+  readonly clvSource: string | null;
+  readonly clvMeanPercent: number | null;
+  readonly clvPValue: number | null;
+  readonly clvSampleCount: number | null;
+  readonly clvSignificant95: boolean;
   readonly bayesianMean: number | null;
+  readonly bayesianStatus: string | null;
   readonly kellyFraction: number | null;
+  readonly impliedKellyFraction: number | null;
+  readonly observedUnitFraction: number | null;
+  readonly kellyDisciplined: boolean | null;
+  readonly recommendedAction: string | null;
   readonly sharpProbability: number | null;
 }
 
@@ -3322,10 +3368,31 @@ export function parseCustomerRatingPayload(
     throw new TypeError("[nsh-desk] /api/customer/rating is not a JSON object");
   }
   const rating = isRecord(raw["rating"]) ? raw["rating"] : raw;
+  const compScores = isRecord(rating["componentScores"])
+    ? rating["componentScores"]
+    : {};
+  const sig = isRecord(rating["clvSignificance"])
+    ? rating["clvSignificance"]
+    : {};
   const bayes = isRecord(rating["bayesianSkill"])
     ? rating["bayesianSkill"]
     : {};
   const kelly = isRecord(rating["kellyMetrics"]) ? rating["kellyMetrics"] : {};
+  const score = readNum(rating, "score");
+  const clvEdgeScore = readNum(compScores, "clvEdgeScore");
+  const bayesianMean =
+    readNum(bayes, "posteriorMeanWinRate") ??
+    readNum(bayes, "posteriorMean") ??
+    readNum(bayes, "mean");
+  const kellyFraction =
+    readNum(kelly, "halfKellyFraction") ??
+    readNum(kelly, "recommendedFraction") ??
+    readNum(kelly, "impliedKellyFraction") ??
+    readNum(kelly, "fullKelly");
+  const sharpProbability =
+    score !== null
+      ? Math.max(0, Math.min(1, score / 10))
+      : (readNum(bayes, "probSkillPositive") ?? readNum(rating, "sharpScore"));
   return {
     id: readStr(rating, "customerId") ?? readStr(rating, "id") ?? "unknown",
     tier:
@@ -3333,11 +3400,25 @@ export function parseCustomerRatingPayload(
       readStr(rating, "classification") ??
       readStr(rating, "label") ??
       "rated",
-    bayesianMean: readNum(bayes, "posteriorMean") ?? readNum(bayes, "mean"),
-    kellyFraction:
-      readNum(kelly, "recommendedFraction") ?? readNum(kelly, "fullKelly"),
-    sharpProbability:
-      readNum(bayes, "probSkillPositive") ?? readNum(rating, "sharpScore"),
+    score,
+    clvEdgeScore,
+    clvBps: readNum(rating, "clvBps"),
+    clvSource: readStr(rating, "clvSource"),
+    clvMeanPercent: readNum(sig, "meanClvPercent"),
+    clvPValue: readNum(sig, "pValue"),
+    clvSampleCount: readNum(sig, "sampleCount"),
+    clvSignificant95: sig["isSignificant95"] === true,
+    bayesianMean,
+    bayesianStatus: readStr(bayes, "status"),
+    kellyFraction,
+    impliedKellyFraction: readNum(kelly, "impliedKellyFraction"),
+    observedUnitFraction: readNum(kelly, "observedUnitFraction"),
+    kellyDisciplined:
+      typeof kelly["isKellyDisciplined"] === "boolean"
+        ? kelly["isKellyDisciplined"]
+        : null,
+    recommendedAction: readStr(rating, "recommendedAction"),
+    sharpProbability,
   };
 }
 
