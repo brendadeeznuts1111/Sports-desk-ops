@@ -250,6 +250,24 @@ export function inferTestsForFiles(
       candidates.push("tests/nsh_desk_contract.test.ts");
     }
 
+    // A `bin` map edit reaches three surfaces that no stem-matching test covers: the root and
+    // workspace bin maps must agree, the generated `cli/README.md` catalog must be regenerated, and
+    // every declared bin must answer `--help`. Without this, #416 added a bin with a stale catalog
+    // and an unmirrored package entry, and `main`'s full chain found it only after merge (10
+    // failures, run 44354504618).
+    if (
+      f === "package.json" ||
+      f === "packages/sportsdesk-ops/package.json" ||
+      f.startsWith("packages/sportsdesk-ops/bin/") ||
+      f === "cli/README.md"
+    ) {
+      candidates.push(
+        "tests/bunx_cli_root_layout.test.ts",
+        "tests/bun_x_catalog_docs.test.ts",
+        "tests/bun_x_cli_help.test.ts",
+      );
+    }
+
     if (f === "config/wager_tiers.toml") {
       candidates.push(
         "tests/wager_tiers_toml.test.ts",
