@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   changedInstallGraph,
+  addedShapeSources,
   dataPathPattern,
   dataReaderTestFiles,
   filterImported,
@@ -387,5 +388,38 @@ describe("install-graph gate", () => {
     expect(changedInstallGraph(["package-lock.json"])).toBe(false);
     // Nested JSON such as a tsconfig is not a manifest.
     expect(changedInstallGraph(["packages/ui/tsconfig.json"])).toBe(false);
+  });
+});
+
+/**
+ * The derived shape catalogue scans `git ls-files`, so a file that is **added to the index**
+ * changes what it sees — a new source with a `Bun.*` call, or a new test that names a shape. CI
+ * catches the resulting staleness in `verify-changed`; the push gate runs typecheck alone, which
+ * cost three round-trips before this gate existed. Untracked files are deliberately excluded: the
+ * generator cannot see them, so checking would fail on work that is not part of the commit yet.
+ */
+describe("shape-source gate", () => {
+  test("a staged production or test file can move the catalogue", () => {
+    expect(addedShapeSources(["lib/token_automation.ts"])).toBe(true);
+    expect(addedShapeSources(["src/preview-server.ts"])).toBe(true);
+    expect(addedShapeSources(["services/sportsdesk_webview_server.ts"])).toBe(
+      true,
+    );
+    expect(addedShapeSources(["tests/token_theme_registry.test.ts"])).toBe(
+      true,
+    );
+    expect(addedShapeSources(["cli/bun_reference_cli.ts"])).toBe(true);
+  });
+
+  test("trees the scan never reads do not trigger it", () => {
+    expect(addedShapeSources([])).toBe(false);
+    expect(addedShapeSources(["docs/runbooks/bun-pm-policy.md"])).toBe(false);
+    expect(addedShapeSources(["verification/manager-boot/probe.ts"])).toBe(
+      false,
+    );
+    expect(addedShapeSources(["scratch/gen_operator_book.ts"])).toBe(false);
+    expect(addedShapeSources(["tests/fixtures/fraud/live-bets.json"])).toBe(
+      false,
+    );
   });
 });

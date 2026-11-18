@@ -738,6 +738,37 @@ function collectChangedFiles(
 }
 
 /**
+ * Code extensions whose content can add a `Bun.*` call site (production) or a shape reference
+ * (test evidence). Changing one means the derived shape catalogue and its runbook may be stale.
+ */
+const SHAPE_SOURCE_RE = /\.(?:ts|tsx|mts|cts|mjs|js|jsx)$/;
+
+/** Trees the shape scan never reads, so a change there cannot move the catalogue. */
+const SHAPE_IGNORED_PREFIXES = [
+  "verification/",
+  "examples/",
+  "scratch/",
+  "Scratch/",
+];
+
+/**
+ * Whether the staged additions can move `lib/bun_shapes.generated.ts` or the runbook that renders
+ * it.
+ *
+ * The generator scans `git ls-files`, so only a file that is **added to the index** changes what
+ * it sees: an untracked file is invisible and a modified file was already counted. That is why
+ * this takes the `--diff-filter=A` set rather than the whole diff — and why the gate is cheap
+ * enough for the inner loop, since it fires only on the commit that introduces a file.
+ */
+export function addedShapeSources(changed: readonly string[]): boolean {
+  return changed.some(
+    (file) =>
+      SHAPE_SOURCE_RE.test(file) &&
+      !SHAPE_IGNORED_PREFIXES.some((prefix) => file.startsWith(prefix)),
+  );
+}
+
+/**
  * Whether the change can move the installed dependency graph.
  *
  * `bun test --changed` follows module imports, so a change confined to a manifest or the lockfile
@@ -980,6 +1011,20 @@ async function main(): Promise<number> {
         ],
         { PRETEST_SKIP: "1" },
       ),
+    );
+  }
+
+  const addedCode = gitAvailable
+    ? gitQuery(["diff", "--cached", "--name-only", "--diff-filter=A"]).lines
+    : [];
+  if (addedShapeSources(addedCode)) {
+    tasks.push(
+      runTask("shape catalog", ["bun", "scripts/bun_shapes_catalog.ts"]),
+      runTask("shape contracts", [
+        "bun",
+        "scripts/bun_shape_contracts.ts",
+        "--check",
+      ]),
     );
   }
 
