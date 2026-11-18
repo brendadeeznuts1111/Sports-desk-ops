@@ -4,6 +4,7 @@
  * content-addressed chunk writer, and governance guards for `sportsdesk-ops-reports`.
  */
 
+import { readStrictUtf8R2Object } from "./r2_text.ts";
 import { R2PreconditionFailedError, R2S3Client } from "./r2_s3_client.ts";
 import { R2_PUBLIC_BASE } from "./r2_staleness.ts";
 
@@ -240,7 +241,7 @@ export async function probeR2ManifestState<T>(
 
   let rawText: string;
   try {
-    rawText = await client.file(manifestKey).text();
+    rawText = await readStrictUtf8R2Object(client.file(manifestKey));
   } catch (cause) {
     throw new R2ManifestCasError(
       "ERR_R2_SINK_BACKPRESSURE",
