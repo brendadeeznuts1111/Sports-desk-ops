@@ -158,15 +158,18 @@ describe("bun:test hooks and controls", () => {
   });
 
   const finished: string[] = [];
-  test("onTestFinished runs after the test body", () => {
+  test("onTestFinished runs after the test body in registration order", () => {
     onTestFinished(() => {
-      finished.push("ran");
+      finished.push("first");
+    });
+    onTestFinished(() => {
+      finished.push("second");
     });
     expect(finished).toEqual([]);
   });
 
-  test("the onTestFinished callback from the previous test ran", () => {
-    expect(finished).toEqual(["ran"]);
+  test("the onTestFinished callbacks from the previous test ran in order", () => {
+    expect(finished).toEqual(["first", "second"]);
   });
 
   test.skipIf(true)("a skipped case does not run", () => {
@@ -178,4 +181,43 @@ describe("bun:test hooks and controls", () => {
   });
 
   test.todo("a todo case is not an assertion");
+});
+
+describe("bun:test advanced cases", () => {
+  test.failing("test.failing accepts an expected failure", () => {
+    throw new Error("this failure is the expected outcome");
+  });
+
+  test.serial("test.serial runs a case", () => {
+    expect(true).toBe(true);
+  });
+
+  test.if(true)("test.if(true) runs a case", () => {
+    expect(true).toBe(true);
+  });
+
+  test("jest.fn records calls and return values", () => {
+    const double = jest.fn((value: number) => value * 2);
+    expect(double(2)).toBe(4);
+    expect(double).toHaveBeenCalledWith(2);
+    expect(double).toHaveBeenCalledTimes(1);
+  });
+
+  test("asymmetric matchers compare values", () => {
+    expect({ value: 3 }).toEqual({ value: expect.any(Number) });
+    expect({ value: 3 }).toEqual({ value: expect.anything() });
+    expect({ value: 0.1 + 0.2 }).toEqual({
+      value: expect.closeTo(0.3, 5),
+    });
+  });
+
+  test("expectTypeOf is a compile-time assertion", () => {
+    expectTypeOf(1).toBeNumber();
+    expectTypeOf<string>().toBeString();
+  });
+
+  test("mock exposes module and restore", () => {
+    expect(typeof mock.module).toBe("function");
+    expect(typeof mock.restore).toBe("function");
+  });
 });

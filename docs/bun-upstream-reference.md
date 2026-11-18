@@ -301,7 +301,9 @@ the live reference section is `reference/bun/test`.
 - The live reference lists `aroundAll` and `aroundEach`; the pinned 1.4.4 runtime does not export
   them, so they are recorded as absent rather than assumed.
 - `tests/bun_test_api.test.ts` re-measures the table, including `describe.each`, `test.each`,
-  `test.skipIf`, `onTestFinished`, `spyOn` and `setSystemTime`.
+  `test.skipIf`, `test.failing` (an expected failure counts as passing), `test.serial`, `test.if`,
+  `jest.fn`, asymmetric matchers (`any`, `anything`, `closeTo`), `spyOn`, `setSystemTime`, and
+  `onTestFinished` (callbacks run after the body, in registration order).
 
 ## Upstream doc commit pins
 
