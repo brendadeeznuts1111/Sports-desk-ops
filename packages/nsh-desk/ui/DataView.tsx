@@ -17,6 +17,13 @@ import {
   Menu as DesktopMenu,
 } from "nsh/desktop";
 import type { ExposurePlotPoint } from "../desk_model";
+import {
+  readXmlOddsRow,
+  xmlOddsFeedCount,
+  xmlOddsFeedSummary,
+  type XmlOddsFeed,
+  type XmlOddsRow,
+} from "../xml_odds_view";
 import { FOCUS_RING_CLASS, SCRIM_BACKDROP_CLASS } from "./tokens";
 
 export type { DataTableColumn, DataTableSort, DockAreaLayout, DockAreaRef };
@@ -87,6 +94,60 @@ export function DeskDataTable<T = Record<string, unknown>>(
       }
     />
   );
+}
+
+export interface DeskXmlOddsTableProps {
+  /** Hot-path SoA columns; `null` while no feed has been hydrated. */
+  feed: XmlOddsFeed | null;
+  /** Bumped when the same columns are refilled in place, so rows re-read. */
+  revision: number;
+  accessibilityLabel?: string;
+  onRowSelect?: (rowIndex: number) => void;
+}
+
+const XML_ODDS_COLUMNS: DataTableColumn[] = [
+  { key: "eventId", title: "Event", width: 96, align: "end" },
+  { key: "comboKey", title: "Combo", width: 88, align: "end" },
+  { key: "line", title: "Line", width: 96, align: "end" },
+];
+
+/**
+ * Renders the XML odds SoA columns as table rows.
+ *
+ * Rows are built by index from the typed arrays while the table is composed, so
+ * the columns stay the only retained storage — the row objects here are the
+ * table's input, not a second currency for the data.
+ */
+export function DeskXmlOddsTable(props: DeskXmlOddsTableProps): JSX.Element {
+  return (
+    <View class="min-h-0 flex-1 flex flex-col">
+      <Text class="px-3 py-1 text-xs text-muted tabular-nums">
+        {`${xmlOddsFeedSummary(props.feed).rows} / ${xmlOddsFeedSummary(props.feed).capacity} rows`}
+      </Text>
+      <DeskDataTable
+        columns={XML_ODDS_COLUMNS}
+        // `props.revision` is read so the effect below re-runs when the same
+        // arrays are filled again; the accessor keeps that dependency visible.
+        data={xmlOddsRows(props.feed, props.revision)}
+        accessibilityLabel={
+          props.accessibilityLabel ?? "XML odds feed (SoA columns)"
+        }
+        onRowSelect={props.onRowSelect}
+      />
+    </View>
+  );
+}
+
+/** Materialises the row views for the table input, in column order. */
+function xmlOddsRows(feed: XmlOddsFeed | null, revision: number): XmlOddsRow[] {
+  void revision;
+  const rows = xmlOddsFeedCount(feed);
+  const out: XmlOddsRow[] = [];
+  if (feed === null) return out;
+  for (let index = 0; index < rows; index++) {
+    out.push(readXmlOddsRow(feed, index));
+  }
+  return out;
 }
 
 export interface DeskExposurePlotProps {
