@@ -474,6 +474,46 @@ describe("3. WCAG 2.1 Contrast & Cross-State Perceptual Gates Against All Surfac
       }
     }
   });
+
+  it("test_adjacent_ingestion_channel_delta_e00_floor", () => {
+    // gates.min_adjacent_channel_delta_e00_milli exists so two sibling channel
+    // badges cannot drift into the same spectral band. The tightest pair is the
+    // documented in-play cyan continuum (CSLEVEL2 -> LIVEBETTINGCWS), which is
+    // why the floor is 10.00 and not 12.00 — see design/tokens.toml.
+    const floor = TOKEN_GATES.minAdjacentChannelDeltaE00Milli / 1000;
+    expect(floor).toBeGreaterThan(0);
+
+    const channels = [...INGESTION_CHANNELS].sort(
+      (a, b) => a.channelId - b.channelId,
+    );
+    expect(channels.length).toBeGreaterThan(1);
+
+    let tightest = Number.POSITIVE_INFINITY;
+    let tightestPair = "";
+    for (let i = 0; i + 1 < channels.length; i++) {
+      const a = channels[i]!;
+      const b = channels[i + 1]!;
+      const deltaE = calculateDeltaE00(
+        rgbToLab(hexToRgb(a.hex)),
+        rgbToLab(hexToRgb(b.hex)),
+      );
+      if (deltaE < tightest) {
+        tightest = deltaE;
+        tightestPair = `${a.channelId} ${a.hex} -> ${b.channelId} ${b.hex}`;
+      }
+      if (deltaE < floor) {
+        throw new Error(
+          `ERR_A11Y_ADJACENT_CHANNEL_DELTA_E00: ${a.channelId} ${a.hex} -> ${b.channelId} ${b.hex} = ${deltaE.toFixed(2)} < ${floor.toFixed(2)}`,
+        );
+      }
+    }
+
+    // Recorded so a palette edit that closes the cyan band names the pair.
+    expect({ tightest: Number(tightest.toFixed(2)), tightestPair }).toEqual({
+      tightest: 10.72,
+      tightestPair: "7 #7dd3fc -> 8 #67e8f9",
+    });
+  });
 });
 
 describe("4. Discriminated Union Type Guardrails & Router Packing Alignment", () => {

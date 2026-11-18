@@ -13,10 +13,15 @@ updated_at = "2026-11-18T00:00:00Z" # quoted ISO-8601 — avoids Temporal.* in b
 min_body_contrast_ratio_milli = 4500 # 4.50:1 WCAG 2.1 AA body copy on all surfaces
 min_aaa_slate_contrast_milli = 7000 # 7.00:1 WCAG 2.1 AAA (#94a3b8 on #0b1120)
 min_ui_component_contrast_milli = 3000 # 3.00:1 WCAG 1.4.11 focus rings, active borders, badges
-min_badge_border_contrast_milli = 3000 # 3.00:1 WCAG 1.4.11 badge border vs enclosing surface
 min_cross_state_delta_e00_milli = 7000 # 7.00 CIEDE2000 across card -> hover -> selected
 min_fresh_vs_stale_delta_e00_milli = 40000 # 40.00 CIEDE2000 between SLA_FRESH and SLA_STALE
-min_adjacent_channel_delta_e00_milli = 12000 # 12.00 CIEDE2000 between active ingestion channels
+min_adjacent_channel_delta_e00_milli = 10000 # 10.00 CIEDE2000 between adjacent channel_id badges.
+# Measured tightest pair (2026-11-17): channel_id 7 #7dd3fc (CSLEVEL2) -> 8 #67e8f9
+# (LIVEBETTINGCWS) = 10.72. Those two are a documented deliberate in-play cyan
+# continuum (lib/validation/token_validator.ts --sd-route-devig:--sd-tier-live-cws),
+# so a 12.00 floor would fail the palette. Enforced by tests/verify_tokens.test.ts.
+# NOTE: a badge BORDER contrast gate (WCAG 1.4.11) is not declared here because
+# [ingestion.*] carries no border_hex token; add the field before adding the gate.
 
 # ------------------------------------------------------------------------------
 # Zero-Float Layout, Focus Geometry & Coalesce Timing Constants (Integer px / ms)

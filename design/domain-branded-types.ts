@@ -665,6 +665,7 @@ export const TOKEN_GATES = {
   minUiComponentContrastMilli: 3000,
   minCrossStateDeltaE00Milli: 7000,
   minFreshVsStaleDeltaE00Milli: 40000,
+  minAdjacentChannelDeltaE00Milli: 10000,
 } as const;
 
 export const SOURCE_BRIDGE_IDS = {

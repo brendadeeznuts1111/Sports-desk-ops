@@ -37,7 +37,6 @@ export type TokensGatesToml = {
   readonly min_body_contrast_ratio_milli: number;
   readonly min_aaa_slate_contrast_milli: number;
   readonly min_ui_component_contrast_milli: number;
-  readonly min_badge_border_contrast_milli?: number;
   readonly min_cross_state_delta_e00_milli: number;
   readonly min_fresh_vs_stale_delta_e00_milli: number;
   readonly min_adjacent_channel_delta_e00_milli?: number;
@@ -412,11 +411,6 @@ function parseGates(raw: unknown): TokensGatesToml {
   if (!isRecord(raw)) {
     throw new Error("[tokens_ssot] gates must be a table");
   }
-  const minBadgeBorder = optPositiveInt(
-    raw,
-    "min_badge_border_contrast_milli",
-    "gates",
-  );
   const minAdjChannel = optPositiveInt(
     raw,
     "min_adjacent_channel_delta_e00_milli",
@@ -438,9 +432,6 @@ function parseGates(raw: unknown): TokensGatesToml {
       "min_ui_component_contrast_milli",
       "gates",
     ),
-    ...(minBadgeBorder !== undefined
-      ? { min_badge_border_contrast_milli: minBadgeBorder }
-      : {}),
     min_cross_state_delta_e00_milli: reqPositiveInt(
       raw,
       "min_cross_state_delta_e00_milli",

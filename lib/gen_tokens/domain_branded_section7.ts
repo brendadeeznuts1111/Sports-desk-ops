@@ -59,7 +59,11 @@ export const TOKEN_GATES = {
   minUiComponentContrastMilli: ${gates.min_ui_component_contrast_milli},
   minCrossStateDeltaE00Milli: ${gates.min_cross_state_delta_e00_milli},
   minFreshVsStaleDeltaE00Milli: ${gates.min_fresh_vs_stale_delta_e00_milli},
-} as const;
+${
+  gates.min_adjacent_channel_delta_e00_milli !== undefined
+    ? `  minAdjacentChannelDeltaE00Milli: ${gates.min_adjacent_channel_delta_e00_milli},\n`
+    : ""
+}} as const;
 
 export const SOURCE_BRIDGE_IDS = {
 `;
