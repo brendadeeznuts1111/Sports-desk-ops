@@ -2,11 +2,11 @@
 /**
  * Read-only Fantasy402 puller.
  *
- *   bun run f402:pull census --agent-id BILLY666
- *   bun run f402:pull contract --agent-id BILLY666 --customer <id>
- *   bun run f402:pull transactions --agent-id BILLY666
- *   bun run f402:pull weblog --agent-id BILLY666 --from 2026-11-01 --to 2026-11-14
- *   bun run f402:pull wagers --agent-id BILLY666 --from 2026-11-01 --to 2026-11-14
+ *   bun run f402:pull census --agent-id <agent-id>
+ *   bun run f402:pull contract --agent-id <agent-id> --customer <id>
+ *   bun run f402:pull transactions --agent-id <agent-id>
+ *   bun run f402:pull weblog --agent-id <agent-id> --from 2026-11-01 --to 2026-11-14
+ *   bun run f402:pull wagers --agent-id <agent-id> --from 2026-11-01 --to 2026-11-14
  *
  * This CLI never places a wager, writes a log, or opens a page module.
  * Sessions are minted only through the existing `session:login` / WebView path.
