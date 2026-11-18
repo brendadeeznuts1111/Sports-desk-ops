@@ -76,6 +76,34 @@ export interface ProbeTlsOptions {
   readonly port?: number;
   readonly timeoutMs?: number;
   readonly servername?: string;
+  readonly alpn?: readonly string[];
+}
+
+/** What a browser offers. Without an offer the server selects nothing and `alpn` reads "". */
+export const PROBE_TLS_DEFAULT_ALPN: readonly string[] = Object.freeze([
+  "h2",
+  "http/1.1",
+]);
+
+/** RFC 7301 wire format: each protocol name prefixed by its length byte. */
+export function alpnWireFormat(protocols: readonly string[]): Uint8Array {
+  const encoder = new TextEncoder();
+  const parts = protocols.map((name) => encoder.encode(name));
+  for (const part of parts) {
+    if (part.length === 0 || part.length > 255) {
+      throw new RangeError(
+        `ALPN protocol names are 1 to 255 bytes, got ${part.length}`,
+      );
+    }
+  }
+  const out = new Uint8Array(parts.reduce((n, p) => n + 1 + p.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    out[offset] = part.length;
+    out.set(part, offset + 1);
+    offset += 1 + part.length;
+  }
+  return out;
 }
 
 export async function probeTls(
@@ -102,7 +130,10 @@ export async function probeTls(
     Bun.connect({
       hostname: host,
       port,
-      tls: { servername: options.servername ?? host },
+      tls: {
+        servername: options.servername ?? host,
+        ALPNProtocols: alpnWireFormat(options.alpn ?? PROBE_TLS_DEFAULT_ALPN),
+      },
       socket: {
         open(socket: RawSocket) {
           if (settled) {
