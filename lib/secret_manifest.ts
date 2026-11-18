@@ -81,6 +81,14 @@ export const SECRET_MANIFEST: readonly SecretDefinition[] = [
       "Pages-scoped token for `wrangler pages deploy` (wrangler fixes the name)",
   },
   {
+    envName: "CLOUDFLARE_AUDIT_TOKEN",
+    keychainName: null,
+    groups: ["deploy"],
+    inject: false,
+    description:
+      "Read-only Cloudflare edge inventory token; environment-only, never auto-injected into deploys",
+  },
+  {
     envName: "BLOB_API_TOKEN",
     keychainName: "BLOB_API_TOKEN",
     groups: ["blob"],
