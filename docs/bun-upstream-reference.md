@@ -55,9 +55,65 @@ Do not hardcode member counts; run `./bin/dx bun --types` (or `./bin/dx bun --js
 - Server & WebView runtime shapes: [`runbooks/bun_server_runtime_shapes_runbook.md`](./runbooks/bun_server_runtime_shapes_runbook.md)
 - Eval one-liner pitfalls: [`bun-eval-pitfalls.md`](./bun-eval-pitfalls.md)
 
+## Hardened `Bun.*` refusals confirmed in v1.4.4 (2026-10-22)
+
+The v1.4.4 Bun APIs changelog confirms the refusal behaviour the Pass-2 sweep targeted. The
+runtime floor is `>=1.4.4`; [`tests/bun_v144_hardened_surfaces.test.ts`](../tests/bun_v144_hardened_surfaces.test.ts)
+and [`tests/bun_runtime_contracts.test.ts`](../tests/bun_runtime_contracts.test.ts) pin it.
+
+| Surface                                                  | Confirmed v1.4.4 behaviour                                                                                                                                    | Refusal class   | Contract                                                                        |
+| :------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------ | :-------------- | :------------------------------------------------------------------------------ |
+| `Bun.hash` / `crypto.hash` / `Bun.SHA*` / `CryptoHasher` | `Bun.file()`, S3 file and build-output blobs now throw; `null`, `undefined` and the no-argument call throw instead of hashing `""` / `"undefined"` / `"null"` | `TypeError`     | `bun_v144_hardened_surfaces`, `bun_runtime_contracts`                           |
+| `Bun.indexOfLine`                                        | Non-buffer first argument throws                                                                                                                              | `TypeError`     | [`bun_index_of_line.test.ts`](../tests/bun_index_of_line.test.ts)               |
+| `Bun.Glob.match`                                         | `**` inside `{...}` matches recursively; patterns with >10 brace groups or nesting depth now work (the old silent `false` threshold was 10/10)                | —               | `bun_v144_hardened_surfaces`                                                    |
+| `Glob.scan` / `scanSync`                                 | Truthy non-`true` options are honoured: `{ dot: 1 }` includes dotfiles, `{ onlyFiles: 1 }` lists files only                                                   | —               | `bun_v144_hardened_surfaces`                                                    |
+| `gzipSync` / `deflateSync`                               | `memLevel` (1..9) and `strategy` (0..4) are honoured; out-of-range values throw                                                                               | `RangeError`    | [`bun_compression_contract.test.ts`](../tests/bun_compression_contract.test.ts) |
+| `dns.prefetch`                                           | A `NaN` port throws                                                                                                                                           | `RangeError`    | [`bun_dns.test.ts`](../tests/bun_dns.test.ts)                                   |
+| `Bun.CSRF.generate` / `verify`                           | `expiresIn: NaN` / `maxAge: NaN` throw; `generate(undefined, options)` keeps the default secret                                                               | `RangeError`    | [`bun_csrf_contract.test.ts`](../tests/bun_csrf_contract.test.ts)               |
+| `Bun.$.escape`                                           | Non-string arguments are coerced: `null` → `"null"`, `true` → `"true"`, boxed strings → contents                                                              | string coercion | `bun_v144_hardened_surfaces`                                                    |
+| `Bun.TOML.parse` / `Bun.YAML.parse`                      | Unhydrated `Bun.file()`/S3 file handles throw instead of returning `{}`/`null`                                                                                | `TypeError`     | `bun_runtime_contracts`                                                         |
+
+### Refusal taxonomy
+
+Do not collapse these into one class:
+
+- **`TypeError`** — the argument is the wrong type (hash inputs, parser inputs, `indexOfLine`).
+- **`RangeError`** — the type is acceptable but the value is out of range or `NaN` (CSRF options, DNS port, compression levels).
+- **String coercion** — `$.escape` guarantees the output is a string; it does **not** validate the input. `$.escape(null)` returns `"null"`, a valid shell token for the wrong value. Validate types first; credentials remain argv-only (`Bun.spawn([argv…])`). The audit emits this taxonomy as `errorClass` on each finding.
+- **`SyntaxError`** — JSON5 invalid-input fixes (e.g. `"1\0 2"`, escaped-colon keys) are parser errors, not refusals.
+
+### Stored-evidence sweeps
+
+Two pre-1.4.4 shapes can poison evidence recorded through the old behaviour:
+
+1. **Blob-input hashes.** A pre-fix blob/S3/build-output hash is the empty-input digest (SHA-256
+   `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`; `Bun.hash("")` for the
+   no-argument form). Re-derive any stored artifact/evidence hash that matches those values; do
+   not treat the digest as proof the blob was read.
+
+   The current repo has three such references: the `getPending` response in
+   `docs/evidence/captures/2026-10-31/getPending.post.json` (`bytes: 0`) and two 500 responses in
+   `docs/evidence/captures/manifest.json` (`responseBytes: 0`). All three are legitimate empty
+   bodies, not blob-handle laundering. The poisoned shape requires a nonzero or unknown byte
+   count, or a producer that hashed a handle. Query the digest **and** the byte length; the digest
+   alone is insufficient.
+
+2. **Deep brace globs.** Pre-fix scans with more than 10 brace groups, or nesting deeper than 10,
+   could miss matches silently. Regenerate machine-generated glob inventories and compare the
+   result; the v1.4.4 matcher now handles them.
+
+### Corrections to the earlier ledger
+
+- `Bun.indexOfLine` has **two distinct fixes**: v1.4.3 fixed missed line breaks in invalid UTF-8;
+  v1.4.4 added the non-buffer `TypeError`. Both are pinned; neither replaces the other.
+- `Bun.JSONL.parseChunk` hardening is **not confirmed** in the v1.4.4 Bun APIs section. The
+  blank-line/stray-delimiter behaviour exercised in `jsonl_stream_replay.test.ts` is measured on
+  the pinned build, but no fix version is recorded. The API surface is documented; the hardening is not.
+- CSRF default `expiresIn` (86,400,000 ms) and `$.escape` prose are doc-cited, not re-measured here.
+
 ## When NOT to migrate to `Bun.JSONL` (2026-11-04 audit)
 
-The repo uses `Bun.JSONL.parse()` / `Bun.JSONL.parseChunk()` by default on JSONL inputs. The six sites below intentionally keep hand-rolled per-line `JSON.parse` loops because they require semantics `Bun.JSONL` does not provide:
+The repo uses `Bun.JSONL.parse()` / `Bun.JSONL.parseChunk()` by default on JSONL inputs. The six sites below intentionally keep hand-rolled per-line `JSON.parse` loops because they require semantics `Bun.JSONL` does not provide. The v1.4.4 Bun APIs section has no JSONL hardening entry; do not attribute the blank-line/stray-delimiter behaviour to a fix version.
 
 | File:line                                        | Pattern                                     | Semantic `Bun.JSONL` does not provide                                                       |
 | :----------------------------------------------- | :------------------------------------------ | :------------------------------------------------------------------------------------------ |
@@ -77,6 +133,9 @@ The repo uses `Bun.JSONL.parse()` / `Bun.JSONL.parseChunk()` by default on JSONL
 | Anything reading/writing a credential, API key, cookie, or session ID | `Bun.spawn([argv…], { env: buildMinimalSpawnEnv() })` | Argv array bypasses the shell parser; minimal env allowlist denies `LD_PRELOAD`-class injection |
 | Static dev/test command with no untrusted interpolation               | `Bun.$\`…\`.text()`                                   | Safe only when no secrets or untrusted inputs are interpolated                                  |
 | Production daemon reading stdout/stderr streams                       | `Bun.spawn(argv, { stdout: "pipe" })`                 | Explicit `proc.exited` / `proc.stdout` / `proc.stderr` lifecycle                                |
+
+`Bun.$.escape()` guarantees a string, not a correct value: `$.escape(null)` is the valid shell
+token `"null"`. Validate the type before escaping, and never use escape as a credential sanitizer.
 
 ## When to use `Bun.allocUnsafe` (and when NOT to) — 2026-11-04 audit
 

@@ -122,6 +122,13 @@ jobs:
           bun fmt --check --changed="origin/${GITHUB_BASE_REF}" || rc=$?
           if [ "$rc" -eq 1 ]; then echo "::error::unformatted files (bun fmt --check)"; exit 1; fi
           if [ "$rc" -ne 0 ]; then echo "::error::bun fmt failed (exit $rc)"; exit "$rc"; fi
+          debug_rc=0
+          bun fmt --debug-check --changed="origin/${GITHUB_BASE_REF}" >/tmp/bun-fmt-debug.log 2>&1 || debug_rc=$?
+          if [ "$debug_rc" -ne 0 ]; then
+            tail -50 /tmp/bun-fmt-debug.log
+            echo "::error::bun fmt --debug-check changed the meaning of a formatted file"
+            exit "$debug_rc"
+          fi
       - name: Install dependencies
         run: bun install --frozen-lockfile --no-env-file
       # SECURITY-ADJACENT SEAL (merge gate): profile insecure-host import allowlist — do not move to a
@@ -327,6 +334,14 @@ jobs:
       - name: Check formatting
         timeout-minutes: 3
         run: bun run format:check
+      - name: Check formatting semantics (bun fmt --debug-check)
+        timeout-minutes: 3
+        run: |
+          bun run format:debug-check >/tmp/bun-fmt-debug.log 2>&1 || {
+            tail -50 /tmp/bun-fmt-debug.log
+            echo "::error::bun fmt --debug-check changed the meaning of a formatted file"
+            exit 1
+          }
       - name: Type check
         timeout-minutes: 3
         run: bun run typecheck

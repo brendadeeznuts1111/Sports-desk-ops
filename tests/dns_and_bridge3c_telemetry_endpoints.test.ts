@@ -30,6 +30,10 @@ describe("Operational Telemetry Endpoints (/api/dns/telemetry & /api/bridge3c/st
           errors: number;
           totalCount: number;
           hitRatePercent: number;
+          cacheHitsTotal: number;
+          classifiedRequests: number;
+          unclassifiedRequests: number;
+          cacheHitRatePercent: number;
           defaultTtlSeconds: number;
         };
         coreHosts: Array<{
@@ -45,6 +49,20 @@ describe("Operational Telemetry Endpoints (/api/dns/telemetry & /api/bridge3c/st
       expect(body.telemetry.size).toBeGreaterThanOrEqual(0);
       expect(body.telemetry.totalCount).toBeGreaterThanOrEqual(0);
       expect(body.telemetry.hitRatePercent).toBeGreaterThanOrEqual(0);
+      expect(body.telemetry.cacheHitsTotal).toBe(
+        body.telemetry.cacheHitsCompleted + body.telemetry.cacheHitsInflight,
+      );
+      expect(body.telemetry.classifiedRequests).toBe(
+        body.telemetry.cacheHitsTotal + body.telemetry.cacheMisses,
+      );
+      expect(body.telemetry.unclassifiedRequests).toBe(
+        Math.max(
+          0,
+          body.telemetry.totalCount - body.telemetry.classifiedRequests,
+        ),
+      );
+      expect(body.telemetry.cacheHitRatePercent).toBeGreaterThanOrEqual(0);
+      expect(body.telemetry.cacheHitRatePercent).toBeLessThanOrEqual(100);
       expect(Array.isArray(body.coreHosts)).toBe(true);
       expect(body.coreHosts.length).toBeGreaterThan(0);
       expect(body.generatedAt).toBeDefined();

@@ -16,11 +16,13 @@ const SLAB = resolve(process.cwd(), "config/slab.toml");
 
 describe("Bun.TOML contract", () => {
   test("a file-backed Blob throws: loaders must pass text, not Bun.file()", async () => {
+    // audit:bun-failclosed-ignore BUN-PARSE-FILE-HANDLE -- intentional negative test
     expect(() => Bun.TOML.parse(Bun.file(SLAB))).toThrow(/File blob/);
 
     const text = await Bun.file(SLAB).text();
     expect(() => Bun.TOML.parse(text)).not.toThrow();
     // A Blob holding bytes is fine; only a file-backed Blob is refused.
+    // audit:bun-failclosed-ignore BUN-PARSE-NON-STRING -- in-memory Blob is accepted
     expect(() => Bun.TOML.parse(new Blob([text]))).not.toThrow();
   });
 
@@ -33,9 +35,11 @@ describe("Bun.TOML contract", () => {
     });
     // The old behaviour was `{}` for TOML / null for YAML, which a loader could
     // mistake for a legitimately empty config. Both now fail like Bun.file().
+    // audit:bun-failclosed-ignore BUN-PARSE-FILE-HANDLE -- intentional negative test
     expect(() => Bun.TOML.parse(s3.file("config/slab.toml"))).toThrow(
       TypeError,
     );
+    // audit:bun-failclosed-ignore BUN-PARSE-FILE-HANDLE -- intentional negative test
     expect(() => Bun.YAML.parse(s3.file("config/slab.yaml"))).toThrow(
       TypeError,
     );

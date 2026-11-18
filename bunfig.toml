@@ -1,4 +1,7 @@
-# Preserve the repository's existing Prettier-compatible formatting.
+# Preserve the repository's existing Prettier-compatible formatting. Where Prettier would
+# change meaning (CSS escapes/selectors, Handlebars doctype/script comments), bun fmt keeps
+# the source; tests/bun_fmt_semantics.test.ts pins those cases, and CI runs
+# `bun fmt --debug-check` on changed files (PRs) and the whole tree (verify).
 # https://bun.com/docs/runtime/bunfig#style-options
 [fmt]
 printWidth = 80

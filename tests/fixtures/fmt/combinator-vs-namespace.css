@@ -1,0 +1,11 @@
+@namespace x url("http://example.com/ns");
+
+/* descendant: b under x, ANY namespace */
+x |b {
+  color: red;
+}
+
+/* namespaced: b IN namespace x */
+x|b {
+  color: blue;
+}

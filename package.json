@@ -135,6 +135,7 @@
     "verify:manifest-consistency": "bun run verification/manager-boot-oracle/run-manifest-consistency.ts",
     "format": "bun fmt",
     "format:check": "bun fmt --check",
+    "format:debug-check": "bun fmt --debug-check",
     "ensure:deep-tsconfig": "bun run scripts/ensure_deep_tsconfig.ts",
     "typecheck:ui": "bun check --no-script -p packages/ui/tsconfig.json && bun check --no-script -p src/dashboard/tsconfig.json",
     "typecheck": "bun run ensure:deep-tsconfig && bun run typecheck:ws && bun check --no-script -p tsconfig.json && bun check --no-script -p src/dashboard/tsconfig.json",
