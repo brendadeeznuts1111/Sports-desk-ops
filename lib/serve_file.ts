@@ -74,6 +74,12 @@ export type RangeParse =
 export const MAX_RANGES = 16;
 
 const DEFAULT_TYPES: Readonly<Record<string, string>> = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+  ".ico": "image/x-icon",
   ".mp4": "video/mp4",
   ".webm": "video/webm",
   ".m4a": "audio/mp4",
