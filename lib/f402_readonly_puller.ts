@@ -64,7 +64,8 @@ import {
 } from "../scripts/capture/allowlist.ts";
 
 export const F402_PULL_DEFAULT_OUT_DIR = "/workspace/f402-pull";
-export const F402_PULL_DEFAULT_BASE_URL = "https://fantasy402.com";
+export const F402_PULL_DEFAULT_BASE_URL = "https://www.fantasy402.com";
+export const F402_PULL_BASE_URL_ENV = "F402_BASE_URL";
 export const F402_PULL_DEFAULT_INTERVAL_MS = 1000;
 export const F402_PULL_DEFAULT_REFRESH_AFTER_MS = 15 * 60_000;
 export const F402_PULL_CHECKPOINT_VERSION = 1 as const;
@@ -400,6 +401,55 @@ export function writeSummaryJson(
   return path;
 }
 
+/**
+ * The portal origin for every puller request. Sessions are minted on
+ * `F402_BASE_URL` (default `https://www.fantasy402.com`, see
+ * `lib/f402_session.ts`), so the puller reads the same variable to keep the
+ * bearer and cookies on the host that issued them. Only a bare `https:`
+ * origin is accepted.
+ */
+export function normalizePullBaseUrl(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    throw new F402PullerError("config", "base-url", "not a valid URL");
+  }
+  if (url.protocol !== "https:") {
+    throw new F402PullerError(
+      "config",
+      "base-url",
+      `must use https:, got ${url.protocol}`,
+    );
+  }
+  if (url.username !== "" || url.password !== "") {
+    throw new F402PullerError(
+      "config",
+      "base-url",
+      "must not carry credentials",
+    );
+  }
+  if (url.pathname !== "/" || url.search !== "" || url.hash !== "") {
+    throw new F402PullerError(
+      "config",
+      "base-url",
+      "must be a bare origin with no path, query or fragment",
+    );
+  }
+  return url.origin;
+}
+
+export function resolvePullBaseUrl(
+  flag: string | undefined,
+  env: Record<string, string | undefined> = Bun.env,
+): string {
+  const fromFlag = flag?.trim();
+  if (fromFlag) return normalizePullBaseUrl(fromFlag);
+  const fromEnv = env[F402_PULL_BASE_URL_ENV]?.trim();
+  if (fromEnv) return normalizePullBaseUrl(fromEnv);
+  return F402_PULL_DEFAULT_BASE_URL;
+}
+
 export interface ManagerPostOptions {
   readonly operation: PullReadOnlyOp;
   readonly fields: Record<string, string>;
@@ -480,9 +530,8 @@ export class F402PullClient {
 
   constructor(options: PullClientOptions) {
     this.session = options.session;
-    this.baseUrl = (options.baseUrl ?? F402_PULL_DEFAULT_BASE_URL).replace(
-      /\/+$/,
-      "",
+    this.baseUrl = normalizePullBaseUrl(
+      options.baseUrl ?? F402_PULL_DEFAULT_BASE_URL,
     );
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.clock = options.clock ?? createPaceClock();

@@ -15,6 +15,8 @@ import {
   parseOpsArgument,
 } from "../scripts/capture/allowlist.ts";
 import {
+  F402_PULL_BASE_URL_ENV,
+  F402_PULL_DEFAULT_BASE_URL,
   F402PullClient,
   F402PullerError,
   RequestPacer,
@@ -26,6 +28,7 @@ import {
   eachUtcDateInclusive,
   emptyCheckpoint,
   loadCheckpoint,
+  normalizePullBaseUrl,
   parseCheckpoint,
   parseHierarchyList,
   redactSecrets,
@@ -34,6 +37,7 @@ import {
   safePathSegment,
   writeRawJson,
   writeSummaryJson,
+  resolvePullBaseUrl,
   resolvePullSession,
   runCensus,
   runContract,
@@ -828,5 +832,92 @@ describe("wagers phase", () => {
     expect(result.gradedSkipped).toBe(1);
     expect(result.figureDateSkipped).toBe(1);
     expect(urls).toEqual([]);
+  });
+});
+
+describe("base URL", () => {
+  function configError(fn: () => unknown): F402PullerError {
+    let caught: unknown;
+    try {
+      fn();
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(F402PullerError);
+    const error = caught as F402PullerError;
+    expect(error.code).toBe("config");
+    expect(error.operation).toBe("base-url");
+    return error;
+  }
+
+  test("defaults to the host sessions are minted on", () => {
+    expect(F402_PULL_DEFAULT_BASE_URL).toBe("https://www.fantasy402.com");
+    expect(F402_PULL_BASE_URL_ENV).toBe("F402_BASE_URL");
+    expect(resolvePullBaseUrl(undefined, {})).toBe(F402_PULL_DEFAULT_BASE_URL);
+    expect(resolvePullBaseUrl("  ", { F402_BASE_URL: " " })).toBe(
+      F402_PULL_DEFAULT_BASE_URL,
+    );
+  });
+
+  test("the env overrides the default and the flag overrides the env", () => {
+    const env = { F402_BASE_URL: "https://portal.example.test/" };
+    expect(resolvePullBaseUrl(undefined, env)).toBe(
+      "https://portal.example.test",
+    );
+    expect(resolvePullBaseUrl("https://flag.example.test:8443", env)).toBe(
+      "https://flag.example.test:8443",
+    );
+  });
+
+  test("accepts only a bare https origin", () => {
+    expect(normalizePullBaseUrl("https://WWW.Fantasy402.com/")).toBe(
+      "https://www.fantasy402.com",
+    );
+    expect(
+      configError(() => normalizePullBaseUrl("http://www.fantasy402.com"))
+        .message,
+    ).toContain("https:");
+    configError(() => normalizePullBaseUrl("www.fantasy402.com"));
+    configError(() => normalizePullBaseUrl(""));
+    configError(() => normalizePullBaseUrl("https://u:p@www.fantasy402.com"));
+    configError(() => normalizePullBaseUrl("https://www.fantasy402.com/cloud"));
+    configError(() => normalizePullBaseUrl("https://www.fantasy402.com/?a=1"));
+    configError(() => normalizePullBaseUrl("https://www.fantasy402.com/#x"));
+    configError(() =>
+      resolvePullBaseUrl(undefined, { F402_BASE_URL: "http://x.test" }),
+    );
+  });
+
+  test("the client refuses a non-https base before any request", () => {
+    const calls: string[] = [];
+    configError(
+      () =>
+        new F402PullClient({
+          session,
+          baseUrl: "http://127.0.0.1:1",
+          intervalMs: 0,
+          fetchImpl: async (url) => {
+            calls.push(url);
+            return Response.json({});
+          },
+        }),
+    );
+    expect(calls).toEqual([]);
+  });
+
+  test("the client posts to the default host when no base is given", async () => {
+    const calls: string[] = [];
+    const client = new F402PullClient({
+      session,
+      intervalMs: 0,
+      fetchImpl: async (url) => {
+        calls.push(url);
+        return Response.json({ LIST: [] });
+      },
+    });
+    await client.post("getPlayers", {});
+    expect(calls[0]).toBe(
+      "https://www.fantasy402.com/cloud/api/Manager/getPlayers",
+    );
   });
 });
