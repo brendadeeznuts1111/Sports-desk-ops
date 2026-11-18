@@ -97,6 +97,8 @@ function seedDependency(dir: string, name: string): Manifest {
 }
 
 // @bun-behavior: install-flags
+// @bun-behavior: package-extensions
+// @bun-behavior: minimum-release-age
 
 describe("Bun 1.4.4 package-manager behaviors", () => {
   test("rejects unknown flags instead of running a mutable install", () => {

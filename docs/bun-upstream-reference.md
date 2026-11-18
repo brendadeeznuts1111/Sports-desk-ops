@@ -198,6 +198,204 @@ empty directory:
   pinned blob to cite for the command page yet.
 - `tests/bun_fmt_contract.test.ts` re-measures the three rows above.
 
+<!-- bun-behavior: publish-recursive -->
+
+## `bun publish --recursive` (measured 2026-11-18)
+
+The pinned [bun-v1.4.4 release](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) adds
+workspace publishing. Measured against a local mock registry (`tests/bun_publish_recursive.test.ts`,
+no network, fake bearer token):
+
+| Claim                                           | Measured                                                    |
+| :---------------------------------------------- | :---------------------------------------------------------- |
+| `--recursive` publishes workspace packages      | public packages uploaded; `private: true` skipped           |
+| `--filter <pattern>` narrows the set            | only matching package names uploaded                        |
+| Versions already on the registry are skipped    | a second run exits 0 and uploads nothing                    |
+| Every package is packed before the first upload | both `prepack` markers existed when the first `PUT` arrived |
+
+- Re-running after a failure is safe for the same reason: already-published versions are skipped,
+  while the remaining ones are retried.
+- In this repo the only publishable workspace is `@sportsdesk-ops/contracts` (`private` unset,
+  `publishConfig.access=public`); the other seven manifests are private and are skipped by
+  `--recursive`. Publishing needs registry auth — without an `.npmrc`/`NPM_TOKEN` the command exits
+  1 with `missing authentication`.
+- The mock registry test is the evidence: it starts `Bun.serve`, spawns the real CLI asynchronously,
+  and records the `PUT` order, so the pack-before-publish claim is checked rather than assumed.
+
+<!-- bun-behavior: link-paths -->
+
+## `link:` paths (measured 2026-11-18)
+
+The pinned [bun-v1.4.4 release](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) makes
+`link:` accept a path. Measured in a fixture whose `package.json` declares
+`"linked": "link:./vendor/linked"`: `bun install` creates
+`node_modules/linked -> ../vendor/linked` (a real symlink; `bun link` is not required first).
+The path is relative to the `package.json` that declares it. `tests/bun_link_paths.test.ts`
+re-measures the symlink target.
+
+<!-- bun-behavior: bunx-cwd-env-file -->
+
+## `bunx --cwd` and `--env-file` (measured 2026-11-18)
+
+The same release adds the package-manager `--env-file` and `bunx` flags. Measured with a local
+`node_modules/.bin/probe-cli` shim, invoked from a different working directory:
+
+```
+bunx --cwd <fixture> --env-file <fixture>/ci.env probe-cli
+→ {"cwd":"<fixture>","token":"abc123"}
+```
+
+So both flags reach the executed tool (`process.cwd()` and the loaded variable), not just the
+installer. `tests/bunx_flags.test.ts` re-measures it without the network.
+
+<!-- bun-behavior: deprecated-packages -->
+
+## Deprecated packages (measured 2026-11-18)
+
+Measured against a mock registry that serves a deprecated `1.0.0` and a clean `1.0.1`:
+
+| Invocation                                | Result                                                                     |
+| :---------------------------------------- | :------------------------------------------------------------------------- |
+| `bun add dep-probe@1.0.0`                 | warns once: `warn: deprecated dep-probe@1.0.0: use 1.0.1`; records `1.0.0` |
+| `bun add dep-probe` (deprecated `latest`) | resolves `^1.0.1` — the deprecated latest is skipped                       |
+
+The release notes also say `--verbose` lists transitive deprecations and that versions already in
+`bun.lock` do not change until `bun update`; those two are not re-measured here.
+`tests/bun_deprecated_add.test.ts` owns the measured rows.
+
+<!-- bun-behavior: package-extensions -->
+
+## `packageExtensions` (measured 2026-11-18)
+
+The repo's existing contract test resolves an undeclared import under `--linker=isolated` by
+declaring it in the root `packageExtensions` block (`tests/bun_pm_behaviors.test.ts`,
+"packageExtensions resolves an undeclared import under isolated installs"). The block uses the
+pnpm/Yarn format; the release notes add that Bun copies it across when migrating a
+`pnpm-lock.yaml` or `yarn.lock` (not re-measured here).
+
+<!-- bun-behavior: minimum-release-age -->
+
+## `minimumReleaseAge` units and exclusions (measured 2026-11-18)
+
+`tests/bun_pm_behaviors.test.ts` accepts the unit forms and the exclusions flag on the pinned
+runtime (`--minimum-release-age`, `--minimum-release-age-excludes`), including a plain number
+interpreted as seconds. The per-version exclusion (`typescript@5.9.3`) and the "security fix
+today, rest of the package waits" semantics are release-note statements, not re-measured here.
+
+<!-- bun-behavior: bun-test-api -->
+
+## `bun:test` API surface (measured 2026-11-18)
+
+The pinned declaration is
+[`packages/bun-types/test.d.ts`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types/test.d.ts);
+the live reference section is `reference/bun/test`.
+
+- Measured exports (`import * as bunTest from "bun:test"`): `afterAll`, `afterEach`, `beforeAll`,
+  `beforeEach`, `default`, `describe`, `expect`, `expectTypeOf`, `it`, `jest`, `mock`,
+  `onTestFinished`, `setDefaultTimeout`, `setSystemTime`, `spyOn`, `test`, `vi`, `xdescribe`,
+  `xit`, `xtest`.
+- `test` statics: `each`, `skipIf`, `todo`, `failing`, `serial`, `only`, `skip`, `if`.
+  `describe` statics: `each`, `skipIf`, `only`, `skip`.
+- `expect` statics measured: `extend`, `assertions`, `hasAssertions`, `any`, `anything`,
+  `closeTo` (`expect.poll` and `expect.soft` are absent on this pin).
+- The live reference lists `aroundAll` and `aroundEach`; the pinned 1.4.4 runtime does not export
+  them, so they are recorded as absent rather than assumed.
+- `tests/bun_test_api.test.ts` re-measures the table, including `describe.each`, `test.each`,
+  `test.skipIf`, `test.failing` (an expected failure counts as passing), `test.serial`, `test.if`,
+  `jest.fn`, asymmetric matchers (`any`, `anything`, `closeTo`), `spyOn`, `setSystemTime`, and
+  `onTestFinished` (callbacks run after the body, in registration order).
+
+<!-- bun-behavior: bun-test-runner -->
+
+## `bun test` runner knobs (measured 2026-11-18)
+
+Measured on the pin with throwaway suites (`tests/bun_test_runner_cli.test.ts`):
+
+| Knob                          | Measured                                                                        |
+| :---------------------------- | :------------------------------------------------------------------------------ |
+| `--test-name-pattern`         | only matching test names run                                                    |
+| `--bail=1`                    | exits after the first failure; the second failing case does not run             |
+| `--retry=1`                   | retries a failed test and passes when the retry succeeds                        |
+| `--rerun-each=2`              | evaluates each file twice                                                       |
+| `--shard=1/2` + `--shard=2/2` | four files split disjointly; rerunning a shard yields the same set              |
+| `--parallel=2 --no-isolate`   | every file runs in worker processes                                             |
+| `--update-timings`            | writes `{version: 1, files: {path: ms}}`; a later run reads it with `--timings` |
+| `--reporter=junit`            | writes `<testsuites>`/`<testcase>` to `--reporter-outfile`                      |
+| `CLAUDECODE=1`                | hides `(pass)`/`(todo)` lines, keeps failure detail and summary counts          |
+
+Not re-measured here: `--randomize`/`--seed`, `--concurrent`, `--max-concurrency`, `--aot`,
+`--check`, coverage, snapshots, and `--environment`/`--globals`.
+
+<!-- bun-behavior: bun-test-writing -->
+
+## Writing tests: timeouts, retries and modifiers (measured 2026-11-18)
+
+Measured with throwaway suites (`tests/bun_test_writing.test.ts`):
+
+| Feature                                          | Measured                                                                                   |
+| :----------------------------------------------- | :----------------------------------------------------------------------------------------- |
+| per-test timeout (third argument)                | a 100 ms test with `10` fails: `this test timed out after 10ms`                            |
+| `--timeout=10`                                   | applies to tests without their own timeout and fails the same way                          |
+| `{ retry: 1 }`                                   | retries the failed test, output `(pass) flaky (attempt 2)`                                 |
+| `{ repeats: 2 }`                                 | runs the test three times, output `(pass) repeat (run 3)`                                  |
+| `done` callback                                  | completing it finishes the async test                                                      |
+| `test.only`                                      | runs only the marked test (no `--only` flag needed on this pin)                            |
+| `test.todo` + `--todo`                           | plain run reports `(todo)`; `--todo` exits 1 with `this test is marked as todo but passes` |
+| `test.todoIf(true)`                              | reported as todo                                                                           |
+| `test.each` object row                           | one object argument; `$a`/`$b`/`$expected` interpolate                                     |
+| `expect.assertions(2)`, `expect.hasAssertions()` | enforce the assertion count                                                                |
+
+The live writing docs also describe `test.fails`, `test.for`, `test.extend`, `test.override`,
+`describe.for`, `expect.soft`, `expect.poll`, `expect.toSatisfy`, `expect.addEqualityTesters`,
+`expect.getState` and `expect.setState`; the pinned 1.4.4 runtime does **not** expose them, and
+the contract asserts their absence. The zombie-process killer and snapshot matchers are not
+re-measured here.
+
+<!-- bun-behavior: bun-test-config -->
+
+## Test configuration: `bunfig.toml [test]` (measured 2026-11-18)
+
+Measured with throwaway projects (`tests/bun_test_config.test.ts`):
+
+| Option                                | Measured                                                                                                     |
+| :------------------------------------ | :----------------------------------------------------------------------------------------------------------- |
+| `root = "src"`                        | only files under `src/` are discovered                                                                       |
+| `preload = ["./preload.ts"]`          | the preload runs before the test file and can set env                                                        |
+| `pathIgnorePatterns = ["ignored/**"]` | matching files are pruned; the CLI `--path-ignore-patterns` **replaces** the config list rather than merging |
+| `retry = 1`                           | retries a flaky test (`attempt 2`); `--retry=0` did **not** disable it on this pin                           |
+| `rerunEach = 2`                       | each file is evaluated twice                                                                                 |
+| `randomize = true` + `seed = 42`      | reruns produce the same file order                                                                           |
+| `[test.reporter] junit = "junit.xml"` | writes the JUnit XML (the parent directory must already exist)                                               |
+| `.env.test`                           | loaded automatically by `bun test`                                                                           |
+
+Not re-measured here: `environment` (jsdom/happy-dom), `globals = "vitest"`, `reactCompiler`,
+`concurrentTestGlob`, `smol`, the mock-cleanup options, coverage options, and `[install]`
+inheritance.
+
+<!-- bun-behavior: bun-test-runtime -->
+
+## Test runtime integration (measured 2026-11-18)
+
+Measured with throwaway suites (`tests/bun_test_runtime.test.ts`):
+
+| Behavior                                | Measured                                                                                                                     |
+| :-------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV` default                      | `"test"`; an explicit `NODE_ENV=development` wins                                                                            |
+| `TZ` default                            | UTC (`getTimezoneOffset() === 0`); `TZ=America/New_York` wins                                                                |
+| `import.meta.env`                       | passes through `process.env` (`NODE_ENV`, `MODE` when set); `DEV`, `PROD`, `SSR` and `BASE_URL` are **undefined** on the pin |
+| per-test timeout `0`                    | disables `--timeout=10`; a 50 ms test passes                                                                                 |
+| unhandled error/rejection between tests | exit 1 with `Unhandled error between tests`; the probe ran 0 tests, not the file's tests                                     |
+| top-level throw                         | the file fails to load and reports `0 pass`                                                                                  |
+| globals                                 | `test`, `describe`, `expect`, `jest`, `vi` are available without imports                                                     |
+| `console.timeStamp`                     | **defined** (a function) on the pin, despite the docs saying tests omit it                                                   |
+| `--define "process.env.X='v'"`          | the constant is substituted in the test file                                                                                 |
+
+Drift: the live runtime docs describe Vite-style `import.meta.env` variables and an undefined
+`console.timeStamp`; the pinned 1.4.4 runtime does neither. The unsettled top-level await guard was
+not encoded: a probe with `await new Promise(() => {})` did not exit within 120 s, so there is no
+bounded failure to assert. Timers, watch/hot mode, signal handling, and the `vitest` unhandled-error
+listener difference are also not re-measured here.
+
 ## Upstream doc commit pins
 
 | Pin                                                                                                                      | Tree                               | Use                                                                       |
