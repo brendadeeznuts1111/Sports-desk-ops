@@ -6,6 +6,7 @@
 import { z } from "zod";
 
 import raw from "../config/blob-live.yaml";
+import { liveStreamIdSchema } from "./r2_chunk_manifest.ts";
 
 export const BLOB_LIVE_CONFIG_PATH = "config/blob-live.yaml";
 
@@ -20,19 +21,12 @@ export const blobLiveConfigSchema = z
   .object({
     port: z.number().int().min(0).max(65535),
     hostname: z.string().min(1),
-    channels: z
-      .array(z.string().regex(/^[a-z0-9-]{1,32}$/, "invalid channel"))
+    streams: z
+      .array(liveStreamIdSchema)
       .min(1)
-      .refine((channels) => new Set(channels).size === channels.length, {
-        message: "duplicate channel",
+      .refine((streams) => new Set(streams).size === streams.length, {
+        message: "duplicate stream_id",
       }),
-    bucket: z.string().min(3),
-    manifest_prefix: z
-      .string()
-      .regex(
-        /^[A-Za-z0-9][A-Za-z0-9_-]*(\/[A-Za-z0-9][A-Za-z0-9_-]*)*$/,
-        "invalid manifest_prefix",
-      ),
   })
   .strict();
 

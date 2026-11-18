@@ -1,19 +1,29 @@
 /**
  * @file lib/r2_chunk_manifest.ts
- * @description YAML manifest written next to each sealed R2 chunk, plus a per-channel latest
- * pointer, behind a small `ManifestStore` so tests never touch R2.
+ * @description YAML manifest written next to each sealed R2 chunk, plus a per-stream latest
+ * pointer promoted with the shared CAS writer in `lib/r2_manifest_cas.ts`.
  *
- * Keys: `<prefix>/<channel>/<slot>/<timestamp_ns>.yaml` and `<prefix>/<channel>/latest.yaml`.
+ * Keys: `manifests/<stream_id>/<slot>/<timestamp_ns>.yaml` (immutable, YAML) and
+ * `manifests/<stream_id>/latest` (CAS pointer, JSON from `promoteCanonicalManifestWithCas`).
+ * Consumers track the last generation they consumed in memory; nothing is written back to R2.
  */
 
-import { join } from "node:path";
 import { z } from "zod";
 
 import {
+  promoteCanonicalManifestWithCas,
   writeContentAddressedChunkWithRetry,
   type CasR2ClientLike,
 } from "./r2_manifest_cas.ts";
+import type { R2GetObjectResult } from "./r2_s3_client.ts";
 import { readStrictUtf8R2Object } from "./r2_text.ts";
+
+/** Stream ids already published to `sportsdesk-ops-reports` (docs/INTEGRATION-SOURCES.md). */
+export const LIVE_STREAM_IDS = ["f402-bet-ticker", "gslive-tally"] as const;
+
+export type LiveStreamId = (typeof LIVE_STREAM_IDS)[number];
+
+export const liveStreamIdSchema = z.enum(LIVE_STREAM_IDS);
 
 export class ManifestInvalid extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -37,13 +47,9 @@ export class ManifestStoreError extends Error {
   }
 }
 
-const CHANNEL_PATTERN = /^[a-z0-9-]{1,32}$/;
 const SLOT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const TIMESTAMP_NS_PATTERN = /^(0|[1-9]\d{0,19})$/;
-const PREFIX_PATTERN =
-  /^[A-Za-z0-9][A-Za-z0-9_-]*(\/[A-Za-z0-9][A-Za-z0-9_-]*)*$/;
 
-const channelSchema = z.string().regex(CHANNEL_PATTERN, "invalid channel");
 const slotSchema = z.string().regex(SLOT_PATTERN, "invalid slot");
 const timestampNsSchema = z
   .string()
@@ -52,7 +58,7 @@ const timestampNsSchema = z
 export const chunkManifestSchema = z
   .object({
     version: z.literal(1),
-    channel: channelSchema,
+    stream_id: liveStreamIdSchema,
     slot: slotSchema,
     timestamp_ns: timestampNsSchema,
     chunk_key: z.string().min(1),
@@ -65,10 +71,10 @@ export const chunkManifestSchema = z
 export const latestPointerSchema = z
   .object({
     version: z.literal(1),
-    channel: channelSchema,
-    slot: slotSchema,
-    timestamp_ns: timestampNsSchema,
+    stream_id: liveStreamIdSchema,
+    generation_u32: z.number().int().min(1).max(0xffff_ffff),
     manifest_key: z.string().min(1),
+    manifest: chunkManifestSchema,
   })
   .strict();
 
@@ -76,7 +82,7 @@ export type ChunkManifest = z.infer<typeof chunkManifestSchema>;
 export type LatestPointer = z.infer<typeof latestPointerSchema>;
 
 export interface SealedChunk {
-  readonly channel: string;
+  readonly stream_id: string;
   readonly slot: string;
   readonly timestamp_ns: bigint | string;
   readonly chunk_key: string;
@@ -85,92 +91,33 @@ export interface SealedChunk {
   readonly wager_count: number;
 }
 
-export interface ManifestStore {
-  put(key: string, yaml: string): Promise<void>;
-  /** `null` when the object does not exist. */
-  get(key: string): Promise<Response | null>;
+export interface ManifestReadOptions {
+  readonly fetchImpl?: typeof fetch;
 }
 
-/** The subset of `Bun.S3Client` the R2 manifest store uses. */
-export interface S3ManifestBackend {
-  write(
-    path: string,
-    data: string,
-    options?: { readonly type?: string },
-  ): Promise<number | undefined>;
-  file(path: string): {
-    exists(): Promise<boolean>;
-    stream(): ReadableStream<Uint8Array>;
-  };
+/** Read side: one GET per pointer read (`R2S3Client.getObject`). */
+export interface ManifestR2Reader {
+  getObject(
+    key: string,
+    options?: ManifestReadOptions,
+  ): Promise<R2GetObjectResult>;
 }
+
+/** Write side: the shared CAS client plus the single-GET reader. */
+export interface ManifestR2Client extends CasR2ClientLike, ManifestR2Reader {}
 
 const YAML_CONTENT_TYPE = "application/yaml";
 
-export class S3ManifestStore implements ManifestStore {
-  constructor(private readonly client: S3ManifestBackend) {}
-
-  async put(key: string, yaml: string): Promise<void> {
-    try {
-      await this.client.write(key, yaml, { type: YAML_CONTENT_TYPE });
-    } catch (cause) {
-      throw new ManifestStoreError("put", key, { cause });
-    }
-  }
-
-  async get(key: string): Promise<Response | null> {
-    try {
-      const file = this.client.file(key);
-      if (!(await file.exists())) return null;
-      return new Response(file.stream(), {
-        headers: { "content-type": YAML_CONTENT_TYPE },
-      });
-    } catch (cause) {
-      throw new ManifestStoreError("get", key, { cause });
-    }
-  }
-}
-
-export class LocalDirManifestStore implements ManifestStore {
-  constructor(readonly root: string) {}
-
-  async put(key: string, yaml: string): Promise<void> {
-    try {
-      await Bun.write(join(this.root, key), yaml);
-    } catch (cause) {
-      throw new ManifestStoreError("put", key, { cause });
-    }
-  }
-
-  async get(key: string): Promise<Response | null> {
-    try {
-      const file = Bun.file(join(this.root, key));
-      if (!(await file.exists())) return null;
-      return new Response(file);
-    } catch (cause) {
-      throw new ManifestStoreError("get", key, { cause });
-    }
-  }
-}
-
-function normalizePrefix(prefix: string): string {
-  const trimmed = prefix.replace(/^\/+|\/+$/g, "");
-  if (!PREFIX_PATTERN.test(trimmed)) {
-    throw new ManifestInvalid(`invalid manifest_prefix: ${prefix}`);
-  }
-  return trimmed;
-}
-
 export function manifestKey(
-  prefix: string,
-  channel: string,
+  streamId: LiveStreamId,
   slot: string,
   timestampNs: string,
 ): string {
-  return `${normalizePrefix(prefix)}/${channel}/${slot}/${timestampNs}.yaml`;
+  return `manifests/${streamId}/${slot}/${timestampNs}.yaml`;
 }
 
-export function latestPointerKey(prefix: string, channel: string): string {
-  return `${normalizePrefix(prefix)}/${channel}/latest.yaml`;
+export function latestPointerKey(streamId: LiveStreamId): string {
+  return `manifests/${streamId}/latest`;
 }
 
 function validate<T>(schema: z.ZodType<T>, value: unknown, label: string): T {
@@ -193,7 +140,7 @@ export function buildChunkManifest(chunk: SealedChunk): ChunkManifest {
     chunkManifestSchema,
     {
       version: 1,
-      channel: chunk.channel,
+      stream_id: chunk.stream_id,
       slot: chunk.slot,
       timestamp_ns: timestampNsString(chunk.timestamp_ns),
       chunk_key: chunk.chunk_key,
@@ -205,27 +152,85 @@ export function buildChunkManifest(chunk: SealedChunk): ChunkManifest {
   );
 }
 
-async function readYaml(
-  store: ManifestStore,
-  key: string,
-): Promise<
+export type PointerRead =
   | { readonly state: "missing" }
-  | { readonly state: "consumed" }
-  | { readonly state: "ok"; readonly value: unknown }
-> {
-  const response = await store.get(key);
-  if (response === null) return { state: "missing" };
-  if (response.bodyUsed) return { state: "consumed" };
-  let text: string;
+  | { readonly state: "corrupt"; readonly error: ManifestInvalid }
+  | {
+      readonly state: "ok";
+      readonly etag: string | null;
+      readonly pointer: LatestPointer;
+    };
+
+async function getOnce(
+  reader: ManifestR2Reader,
+  key: string,
+  options: ManifestReadOptions,
+): Promise<R2GetObjectResult> {
   try {
-    text = await readStrictUtf8R2Object({ bytes: () => response.bytes() });
+    return await reader.getObject(key, options);
   } catch (cause) {
     throw new ManifestStoreError("get", key, { cause });
   }
+}
+
+function parsePointer(
+  streamId: LiveStreamId,
+  key: string,
+  text: string,
+): LatestPointer {
+  let value: unknown;
   try {
-    return { state: "ok", value: Bun.YAML.parse(text) };
+    value = JSON.parse(text);
   } catch (cause) {
-    throw new ManifestInvalid(`${key}: not valid YAML`, { cause });
+    throw new ManifestInvalid(`${key}: not valid JSON`, { cause });
+  }
+  const pointer = validate(latestPointerSchema, value, key);
+  if (
+    pointer.stream_id !== streamId ||
+    pointer.manifest.stream_id !== streamId
+  ) {
+    throw new ManifestInvalid(`${key}: pointer is not for ${streamId}`);
+  }
+  const expectedKey = manifestKey(
+    streamId,
+    pointer.manifest.slot,
+    pointer.manifest.timestamp_ns,
+  );
+  if (pointer.manifest_key !== expectedKey) {
+    throw new ManifestInvalid(
+      `${key}: manifest_key ${pointer.manifest_key} does not match ${expectedKey}`,
+    );
+  }
+  return pointer;
+}
+
+/**
+ * One GET for the latest pointer. A 404 (including a delete that lands before or during the
+ * request) is `missing`; bad bytes, JSON or schema are `corrupt`; backend failures throw.
+ */
+export async function readLatestPointer(
+  reader: ManifestR2Reader,
+  streamId: LiveStreamId,
+  options: ManifestReadOptions = {},
+): Promise<PointerRead> {
+  const key = latestPointerKey(streamId);
+  const read = await getOnce(reader, key, options);
+  if (read.status === 404) return { state: "missing" };
+  try {
+    const text = await readStrictUtf8R2Object({
+      bytes: async () => read.body,
+    });
+    return {
+      state: "ok",
+      etag: read.etag,
+      pointer: parsePointer(streamId, key, text),
+    };
+  } catch (error) {
+    const invalid =
+      error instanceof ManifestInvalid
+        ? error
+        : new ManifestInvalid(`${key}: not valid UTF-8`, { cause: error });
+    return { state: "corrupt", error: invalid };
   }
 }
 
@@ -233,68 +238,112 @@ export interface WrittenManifest {
   readonly manifestKey: string;
   readonly latestKey: string;
   readonly manifest: ChunkManifest;
+  /** Pointer generation after this write; unchanged when `latestAdvanced` is false. */
+  readonly generation_u32: number;
   /** False when an existing pointer is newer, so an out-of-order chunk leaves it alone. */
   readonly latestAdvanced: boolean;
 }
 
+/**
+ * Writes the chunk's YAML manifest, then promotes `manifests/<stream_id>/latest` with
+ * If-Match (If-None-Match:* on first write). A 412 surfaces as `R2ManifestCasError`
+ * (`ERR_R2_MANIFEST_CAS_REJECTED`); there is no silent rebase.
+ */
 export async function writeChunkManifest(
-  store: ManifestStore,
-  prefix: string,
+  client: ManifestR2Client,
   chunk: SealedChunk,
+  options: ManifestReadOptions = {},
 ): Promise<WrittenManifest> {
   const manifest = buildChunkManifest(chunk);
-  const key = manifestKey(
-    prefix,
-    manifest.channel,
-    manifest.slot,
-    manifest.timestamp_ns,
-  );
-  const latestKey = latestPointerKey(prefix, manifest.channel);
-  await store.put(key, Bun.YAML.stringify(manifest, null, 2));
-
-  const current = await readYaml(store, latestKey);
-  if (current.state === "ok") {
-    const pointer = validate(latestPointerSchema, current.value, latestKey);
-    if (BigInt(pointer.timestamp_ns) > BigInt(manifest.timestamp_ns)) {
-      return { manifestKey: key, latestKey, manifest, latestAdvanced: false };
-    }
+  const streamId = manifest.stream_id;
+  const key = manifestKey(streamId, manifest.slot, manifest.timestamp_ns);
+  const latestKey = latestPointerKey(streamId);
+  try {
+    await client.write(key, Bun.YAML.stringify(manifest, null, 2), {
+      type: YAML_CONTENT_TYPE,
+    });
+  } catch (cause) {
+    throw new ManifestStoreError("put", key, { cause });
   }
+
+  const current = await readLatestPointer(client, streamId, options);
+  if (current.state === "corrupt") throw current.error;
+  let prevETag: string | null = null;
+  let generation = 0;
+  if (current.state === "ok") {
+    if (current.etag === null) {
+      throw new ManifestStoreError("get", latestKey, {
+        cause: new Error("pointer has no ETag to CAS against"),
+      });
+    }
+    if (
+      BigInt(current.pointer.manifest.timestamp_ns) >
+      BigInt(manifest.timestamp_ns)
+    ) {
+      return {
+        manifestKey: key,
+        latestKey,
+        manifest,
+        generation_u32: current.pointer.generation_u32,
+        latestAdvanced: false,
+      };
+    }
+    prevETag = current.etag;
+    generation = current.pointer.generation_u32;
+  }
+
   const pointer: LatestPointer = {
     version: 1,
-    channel: manifest.channel,
-    slot: manifest.slot,
-    timestamp_ns: manifest.timestamp_ns,
+    stream_id: streamId,
+    generation_u32: generation + 1,
     manifest_key: key,
+    manifest,
   };
-  await store.put(latestKey, Bun.YAML.stringify(pointer, null, 2));
-  return { manifestKey: key, latestKey, manifest, latestAdvanced: true };
+  await promoteCanonicalManifestWithCas({
+    client,
+    sinkId: streamId,
+    manifestKey: latestKey,
+    prevETag,
+    nextGenerationU32: pointer.generation_u32,
+    merkleRootSha256: manifest.sha256,
+    manifest: pointer,
+    ...(options.fetchImpl === undefined
+      ? {}
+      : { fetchImpl: options.fetchImpl }),
+  });
+  return {
+    manifestKey: key,
+    latestKey,
+    manifest,
+    generation_u32: pointer.generation_u32,
+    latestAdvanced: true,
+  };
 }
 
 export interface ChunkToSeal {
   readonly bytes: Uint8Array;
-  readonly channel: string;
+  readonly stream_id: string;
   readonly slot: string;
   readonly timestamp_ns: bigint | string;
   readonly wager_count: number;
 }
 
-/** Content-addressed chunk upload followed by its manifest and latest pointer. */
+/** Content-addressed chunk upload followed by its manifest and CAS latest pointer. */
 export async function sealChunkWithManifest(
-  client: CasR2ClientLike,
-  store: ManifestStore,
-  prefix: string,
+  client: ManifestR2Client,
   chunk: ChunkToSeal,
-  options?: Parameters<typeof writeContentAddressedChunkWithRetry>[2],
+  options?: Parameters<typeof writeContentAddressedChunkWithRetry>[2] &
+    ManifestReadOptions,
 ): Promise<WrittenManifest> {
   validate(
     chunkManifestSchema.pick({
-      channel: true,
+      stream_id: true,
       slot: true,
       timestamp_ns: true,
       wager_count: true,
     }),
     {
-      channel: chunk.channel,
+      stream_id: chunk.stream_id,
       slot: chunk.slot,
       timestamp_ns: timestampNsString(chunk.timestamp_ns),
       wager_count: chunk.wager_count,
@@ -306,87 +355,100 @@ export async function sealChunkWithManifest(
     chunk.bytes,
     options,
   );
-  return writeChunkManifest(store, prefix, {
-    channel: chunk.channel,
-    slot: chunk.slot,
-    timestamp_ns: chunk.timestamp_ns,
-    chunk_key: written.chunkKey,
-    sha256: written.merkleRootSha256,
-    bytes: written.byteLength,
-    wager_count: chunk.wager_count,
-  });
+  return writeChunkManifest(
+    client,
+    {
+      stream_id: chunk.stream_id,
+      slot: chunk.slot,
+      timestamp_ns: chunk.timestamp_ns,
+      chunk_key: written.chunkKey,
+      sha256: written.merkleRootSha256,
+      bytes: written.byteLength,
+      wager_count: chunk.wager_count,
+    },
+    options?.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl },
+  );
 }
 
 export type StreamState =
-  | { readonly status: "active"; readonly manifest: ChunkManifest }
+  | {
+      readonly status: "active";
+      readonly generation_u32: number;
+      readonly manifest: ChunkManifest;
+    }
   | { readonly status: "missing" }
-  | { readonly status: "body-used" };
+  | { readonly status: "corrupt"; readonly error: ManifestInvalid }
+  | { readonly status: "stale"; readonly generation_u32: number };
 
-export async function readLatestStream(
-  store: ManifestStore,
-  prefix: string,
-  channel: string,
-): Promise<StreamState> {
-  const latestKey = latestPointerKey(
-    prefix,
-    validate(channelSchema, channel, "channel"),
-  );
-  const pointerRead = await readYaml(store, latestKey);
-  if (pointerRead.state === "missing") return { status: "missing" };
-  if (pointerRead.state === "consumed") return { status: "body-used" };
-  const pointer = validate(latestPointerSchema, pointerRead.value, latestKey);
-  if (pointer.channel !== channel) {
-    throw new ManifestInvalid(
-      `${latestKey}: pointer is for channel ${pointer.channel}`,
-    );
+/**
+ * Per-consumer view of the latest pointers. The last consumed generation lives in this
+ * instance only, so one consumer reading a stream never hides it from another.
+ */
+export class LiveStreamConsumer {
+  readonly #lastGeneration = new Map<LiveStreamId, number>();
+
+  constructor(
+    private readonly reader: ManifestR2Reader,
+    private readonly options: ManifestReadOptions = {},
+  ) {}
+
+  lastConsumedGeneration(streamId: LiveStreamId): number | undefined {
+    return this.#lastGeneration.get(streamId);
   }
-  const manifestRead = await readYaml(store, pointer.manifest_key);
-  if (manifestRead.state === "missing") return { status: "missing" };
-  if (manifestRead.state === "consumed") return { status: "body-used" };
-  const manifest = validate(
-    chunkManifestSchema,
-    manifestRead.value,
-    pointer.manifest_key,
-  );
-  if (
-    manifest.channel !== pointer.channel ||
-    manifest.slot !== pointer.slot ||
-    manifest.timestamp_ns !== pointer.timestamp_ns
-  ) {
-    throw new ManifestInvalid(
-      `${pointer.manifest_key}: manifest does not match ${latestKey}`,
-    );
+
+  async poll(streamId: LiveStreamId): Promise<StreamState> {
+    const read = await readLatestPointer(this.reader, streamId, this.options);
+    if (read.state === "missing") return { status: "missing" };
+    if (read.state === "corrupt") {
+      return { status: "corrupt", error: read.error };
+    }
+    const generation = read.pointer.generation_u32;
+    const last = this.#lastGeneration.get(streamId);
+    if (last !== undefined && generation <= last) {
+      return { status: "stale", generation_u32: generation };
+    }
+    this.#lastGeneration.set(streamId, generation);
+    return {
+      status: "active",
+      generation_u32: generation,
+      manifest: read.pointer.manifest,
+    };
   }
-  return { status: "active", manifest };
 }
 
 export const NO_ACTIVE_STREAM = "NO ACTIVE STREAM" as const;
 
 export type StreamTelemetryEntry =
   | {
-      readonly channel: string;
+      readonly stream_id: LiveStreamId;
       readonly status: "ACTIVE";
+      readonly generation_u32: number;
       readonly slot: string;
       readonly timestamp_ns: string;
       readonly wager_count: number;
       readonly bytes: number;
     }
   | {
-      readonly channel: string;
+      readonly stream_id: LiveStreamId;
       readonly status: typeof NO_ACTIVE_STREAM;
-      readonly reason: "missing" | "body-used";
+      readonly reason: "missing" | "corrupt" | "stale";
     };
 
 export function streamTelemetryEntry(
-  channel: string,
+  streamId: LiveStreamId,
   state: StreamState,
 ): StreamTelemetryEntry {
   if (state.status !== "active") {
-    return { channel, status: NO_ACTIVE_STREAM, reason: state.status };
+    return {
+      stream_id: streamId,
+      status: NO_ACTIVE_STREAM,
+      reason: state.status,
+    };
   }
   return {
-    channel,
+    stream_id: streamId,
     status: "ACTIVE",
+    generation_u32: state.generation_u32,
     slot: state.manifest.slot,
     timestamp_ns: state.manifest.timestamp_ns,
     wager_count: state.manifest.wager_count,
@@ -395,16 +457,12 @@ export function streamTelemetryEntry(
 }
 
 export async function loadStreamTelemetry(
-  store: ManifestStore,
-  prefix: string,
-  channels: readonly string[],
+  consumer: LiveStreamConsumer,
+  streamIds: readonly LiveStreamId[],
 ): Promise<readonly StreamTelemetryEntry[]> {
   return Promise.all(
-    channels.map(async (channel) =>
-      streamTelemetryEntry(
-        channel,
-        await readLatestStream(store, prefix, channel),
-      ),
+    streamIds.map(async (streamId) =>
+      streamTelemetryEntry(streamId, await consumer.poll(streamId)),
     ),
   );
 }

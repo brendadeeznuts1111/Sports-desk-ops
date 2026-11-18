@@ -3203,7 +3203,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:571-654"],
+          "sources": ["services/blob_and_live_bets_server.ts:572-655"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3460,7 +3460,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:571-654"],
+          "sources": ["services/blob_and_live_bets_server.ts:572-655"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3593,7 +3593,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:743-761"],
+          "sources": ["services/blob_and_live_bets_server.ts:744-762"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3690,7 +3690,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:486-510"],
+          "sources": ["services/blob_and_live_bets_server.ts:487-511"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3859,7 +3859,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:511-557"],
+          "sources": ["services/blob_and_live_bets_server.ts:512-558"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -4008,7 +4008,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:762-791"],
+          "sources": ["services/blob_and_live_bets_server.ts:763-792"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }

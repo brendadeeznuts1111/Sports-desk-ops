@@ -10,29 +10,35 @@ import {
 } from "../lib/blob_live_config.ts";
 import {
   latestPointerKey,
+  LIVE_STREAM_IDS,
+  LiveStreamConsumer,
   loadStreamTelemetry,
-  LocalDirManifestStore,
   ManifestInvalid,
   manifestKey,
   ManifestStoreError,
   NO_ACTIVE_STREAM,
-  readLatestStream,
-  S3ManifestStore,
+  readLatestPointer,
   sealChunkWithManifest,
   writeChunkManifest,
-  type ManifestStore,
-  type S3ManifestBackend,
+  type ManifestR2Client,
   type SealedChunk,
 } from "../lib/r2_chunk_manifest.ts";
-import type { CasR2ClientLike } from "../lib/r2_manifest_cas.ts";
+import { R2ManifestCasError } from "../lib/r2_manifest_cas.ts";
+import {
+  R2PreconditionFailedError,
+  R2S3Client,
+  type R2GetObjectResult,
+  type R2S3ClientBackend,
+} from "../lib/r2_s3_client.ts";
 import {
   createBlobLiveBetsServer,
   MemoryBlobStore,
 } from "../services/blob_and_live_bets_server.ts";
 
-const PREFIX = "manifests/live-bets";
 const SHA = "a".repeat(64);
 const TS = 1_731_900_000_123_456_789n;
+const TICKER = "f402-bet-ticker" as const;
+const TALLY = "gslive-tally" as const;
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -40,15 +46,9 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
 });
 
-function localStore(): LocalDirManifestStore {
-  const dir = mkdtempSync(join(tmpdir(), "sd-chunk-manifest-"));
-  dirs.push(dir);
-  return new LocalDirManifestStore(dir);
-}
-
 function chunk(overrides: Partial<SealedChunk> = {}): SealedChunk {
   return {
-    channel: "live-bets",
+    stream_id: TICKER,
     slot: "slot-7",
     timestamp_ns: TS,
     chunk_key: `chunks/${SHA}.bin`,
@@ -59,247 +59,287 @@ function chunk(overrides: Partial<SealedChunk> = {}): SealedChunk {
   };
 }
 
-class FakeS3Backend implements S3ManifestBackend {
-  readonly objects = new Map<string, string>();
-  readonly writes: { path: string; type: string | undefined }[] = [];
-  failWrites = false;
+const encoder = new TextEncoder();
 
-  async write(
-    path: string,
-    data: string,
-    options?: { readonly type?: string },
-  ): Promise<number> {
-    if (this.failWrites) throw new Error("S3 503 SlowDown");
-    this.writes.push({ path, type: options?.type });
-    this.objects.set(path, data);
-    return data.length;
+function toBytes(data: Uint8Array | string): Uint8Array {
+  return typeof data === "string" ? encoder.encode(data) : data;
+}
+
+/** In-memory R2 with strong ETags and If-Match / If-None-Match semantics. */
+class FakeR2 implements ManifestR2Client {
+  readonly objects = new Map<
+    string,
+    { body: Uint8Array; etag: string; type: string | undefined }
+  >();
+  readonly gets: string[] = [];
+  readonly casWrites: {
+    key: string;
+    ifMatch?: string;
+    ifNoneMatch?: string;
+  }[] = [];
+  beforeGetResolves: ((key: string) => Promise<void>) | undefined;
+  failGets = false;
+  #nextEtag = 0;
+
+  put(key: string, data: Uint8Array | string, type?: string): void {
+    this.#nextEtag += 1;
+    this.objects.set(key, {
+      body: toBytes(data),
+      etag: `"etag-${this.#nextEtag}"`,
+      type,
+    });
   }
 
-  file(path: string): {
-    exists(): Promise<boolean>;
-    stream(): ReadableStream<Uint8Array>;
+  text(key: string): string | undefined {
+    const object = this.objects.get(key);
+    return object === undefined
+      ? undefined
+      : new TextDecoder().decode(object.body);
+  }
+
+  async headEtag(key: string): Promise<string | null> {
+    return this.objects.get(key)?.etag ?? null;
+  }
+
+  async write(
+    key: string,
+    data: Uint8Array | string,
+    options?: { readonly type?: string },
+  ): Promise<number> {
+    this.put(key, data, options?.type);
+    return toBytes(data).byteLength;
+  }
+
+  async writeWithMetadata(
+    key: string,
+    data: Uint8Array | string,
+    options: {
+      readonly type?: string;
+      readonly ifMatch?: string;
+      readonly ifNoneMatch?: string;
+    } = {},
+  ): Promise<number> {
+    this.casWrites.push({
+      key,
+      ...(options.ifMatch === undefined ? {} : { ifMatch: options.ifMatch }),
+      ...(options.ifNoneMatch === undefined
+        ? {}
+        : { ifNoneMatch: options.ifNoneMatch }),
+    });
+    const current = this.objects.get(key);
+    if (options.ifNoneMatch === "*" && current !== undefined) {
+      throw new R2PreconditionFailedError(key);
+    }
+    if (options.ifMatch !== undefined && current?.etag !== options.ifMatch) {
+      throw new R2PreconditionFailedError(key);
+    }
+    return this.write(key, data, options);
+  }
+
+  file(key: string): {
+    text(): Promise<string>;
+    bytes(): Promise<Uint8Array>;
   } {
     return {
-      exists: async () => this.objects.has(path),
-      stream: () => new Response(this.objects.get(path) ?? "").body!,
+      text: async () => this.text(key) ?? "",
+      bytes: async () => this.objects.get(key)?.body ?? new Uint8Array(0),
     };
+  }
+
+  async stat(key: string): Promise<{ etag?: string; size?: number }> {
+    const object = this.objects.get(key);
+    return object === undefined
+      ? {}
+      : { etag: object.etag, size: object.body.byteLength };
+  }
+
+  async getObject(key: string): Promise<R2GetObjectResult> {
+    this.gets.push(key);
+    if (this.failGets) throw new Error("R2 GET 503 SlowDown");
+    await this.beforeGetResolves?.(key);
+    const object = this.objects.get(key);
+    if (object === undefined) return { status: 404, etag: null, body: null };
+    return { status: 200, etag: object.etag, body: object.body };
   }
 }
 
-describe("chunk manifests", () => {
-  test("round-trip keeps timestamp_ns a string and reports ACTIVE", async () => {
-    const store = localStore();
-    const written = await writeChunkManifest(store, PREFIX, chunk());
+describe("chunk manifests with a CAS latest pointer", () => {
+  test("writes YAML next to the chunk and a JSON pointer at manifests/<stream_id>/latest", async () => {
+    const r2 = new FakeR2();
+    const written = await writeChunkManifest(r2, chunk());
     expect(written.manifestKey).toBe(
-      `${PREFIX}/live-bets/slot-7/${TS.toString()}.yaml`,
+      `manifests/${TICKER}/slot-7/${TS.toString()}.yaml`,
     );
-    expect(written.latestKey).toBe(`${PREFIX}/live-bets/latest.yaml`);
-    expect(written.latestAdvanced).toBe(true);
+    expect(written.latestKey).toBe(`manifests/${TICKER}/latest`);
+    expect(written).toMatchObject({ generation_u32: 1, latestAdvanced: true });
 
-    const raw = await Bun.file(join(store.root, written.manifestKey)).text();
-    const parsed = Bun.YAML.parse(raw) as Record<string, unknown>;
-    expect(parsed.timestamp_ns).toBe(TS.toString());
-    expect(typeof parsed.timestamp_ns).toBe("string");
+    const yaml = Bun.YAML.parse(r2.text(written.manifestKey)!) as Record<
+      string,
+      unknown
+    >;
+    expect(yaml.timestamp_ns).toBe(TS.toString());
+    expect(r2.objects.get(written.manifestKey)?.type).toBe("application/yaml");
 
-    const state = await readLatestStream(store, PREFIX, "live-bets");
-    expect(state).toEqual({ status: "active", manifest: written.manifest });
-    expect(await loadStreamTelemetry(store, PREFIX, ["live-bets"])).toEqual([
-      {
-        channel: "live-bets",
-        status: "ACTIVE",
-        slot: "slot-7",
-        timestamp_ns: TS.toString(),
-        wager_count: 12,
-        bytes: 2048,
-      },
+    const pointer = JSON.parse(r2.text(written.latestKey)!) as Record<
+      string,
+      unknown
+    >;
+    expect(pointer).toEqual({
+      version: 1,
+      stream_id: TICKER,
+      generation_u32: 1,
+      manifest_key: written.manifestKey,
+      manifest: written.manifest,
+    });
+    expect("bodyUsed" in pointer).toBe(false);
+    expect(r2.casWrites).toEqual([
+      { key: written.latestKey, ifNoneMatch: "*" },
     ]);
+    expect(
+      [...r2.objects.keys()].filter((key) =>
+        key.startsWith(`generations/${TICKER}/gen-1-`),
+      ),
+    ).toHaveLength(1);
   });
 
-  test("a missing manifest shows NO ACTIVE STREAM", async () => {
-    const store = localStore();
-    expect(await loadStreamTelemetry(store, PREFIX, ["live-bets"])).toEqual([
-      { channel: "live-bets", status: NO_ACTIVE_STREAM, reason: "missing" },
-    ]);
-
-    const written = await writeChunkManifest(store, PREFIX, chunk());
-    rmSync(join(store.root, written.manifestKey));
-    expect(await readLatestStream(store, PREFIX, "live-bets")).toEqual({
-      status: "missing",
+  test("the next write promotes with If-Match on the prior ETag", async () => {
+    const r2 = new FakeR2();
+    await writeChunkManifest(r2, chunk({ timestamp_ns: "100" }));
+    const firstEtag = r2.objects.get(latestPointerKey(TICKER))!.etag;
+    const second = await writeChunkManifest(
+      r2,
+      chunk({ slot: "slot-8", timestamp_ns: "200" }),
+    );
+    expect(second.generation_u32).toBe(2);
+    expect(r2.casWrites.at(-1)).toEqual({
+      key: latestPointerKey(TICKER),
+      ifMatch: firstEtag,
     });
   });
 
-  test("a body that was already used shows NO ACTIVE STREAM", async () => {
-    const backing = localStore();
-    await writeChunkManifest(backing, PREFIX, chunk());
-    const consumed: ManifestStore = {
-      put: (key, yaml) => backing.put(key, yaml),
-      async get(key) {
-        const response = await backing.get(key);
-        if (response === null) return null;
-        await response.text();
-        return response;
-      },
+  test("a concurrent pointer write gets 412 and fails loudly with the CAS error", async () => {
+    const r2 = new FakeR2();
+    await writeChunkManifest(r2, chunk({ timestamp_ns: "100" }));
+
+    let arrivals = 0;
+    const { promise: bothRead, resolve: releaseReads } =
+      Promise.withResolvers<void>();
+    r2.beforeGetResolves = async () => {
+      arrivals += 1;
+      if (arrivals === 2) releaseReads();
+      await bothRead;
     };
-    expect(await loadStreamTelemetry(consumed, PREFIX, ["live-bets"])).toEqual([
-      { channel: "live-bets", status: NO_ACTIVE_STREAM, reason: "body-used" },
+    const results = await Promise.allSettled([
+      writeChunkManifest(r2, chunk({ slot: "a", timestamp_ns: "200" })),
+      writeChunkManifest(r2, chunk({ slot: "b", timestamp_ns: "300" })),
     ]);
+
+    const fulfilled = results.filter((result) => result.status === "fulfilled");
+    const rejected = results.filter((result) => result.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    const error = (rejected[0] as PromiseRejectedResult).reason;
+    expect(error).toBeInstanceOf(R2ManifestCasError);
+    expect((error as R2ManifestCasError).code).toBe(
+      "ERR_R2_MANIFEST_CAS_REJECTED",
+    );
+    expect((error as R2ManifestCasError).cause).toBeInstanceOf(
+      R2PreconditionFailedError,
+    );
+
+    r2.beforeGetResolves = undefined;
+    const read = await readLatestPointer(r2, TICKER);
+    expect(read.state === "ok" && read.pointer.generation_u32).toBe(2);
   });
 
-  test("channels and slots come from the chunk, one key per chunk", async () => {
-    const store = localStore();
-    const a = await writeChunkManifest(store, PREFIX, chunk());
-    const b = await writeChunkManifest(
-      store,
-      PREFIX,
-      chunk({ channel: "gslive-wagers", slot: "s2", timestamp_ns: "42" }),
-    );
-    const c = await writeChunkManifest(
-      store,
-      PREFIX,
-      chunk({ slot: "slot-8", timestamp_ns: TS + 1n }),
-    );
-    expect([a.manifestKey, b.manifestKey, c.manifestKey]).toEqual([
-      manifestKey(PREFIX, "live-bets", "slot-7", TS.toString()),
-      `${PREFIX}/gslive-wagers/s2/42.yaml`,
-      `${PREFIX}/live-bets/slot-8/${(TS + 1n).toString()}.yaml`,
+  test("two first writers race on If-None-Match:* and one gets 412", async () => {
+    const r2 = new FakeR2();
+    const results = await Promise.allSettled([
+      writeChunkManifest(r2, chunk({ slot: "a" })),
+      writeChunkManifest(r2, chunk({ slot: "b" })),
     ]);
-    expect(latestPointerKey(PREFIX, "gslive-wagers")).toBe(b.latestKey);
-
-    const view = await loadStreamTelemetry(store, PREFIX, [
-      "live-bets",
-      "gslive-wagers",
-      "idle",
-    ]);
-    expect(view.map((entry) => [entry.channel, entry.status])).toEqual([
-      ["live-bets", "ACTIVE"],
-      ["gslive-wagers", "ACTIVE"],
-      ["idle", NO_ACTIVE_STREAM],
-    ]);
-    expect(view[0]).toMatchObject({ slot: "slot-8" });
-    expect(view[1]).toMatchObject({ slot: "s2", timestamp_ns: "42" });
+    const rejected = results.filter((result) => result.status === "rejected");
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({
+      name: "R2ManifestCasError",
+      code: "ERR_R2_MANIFEST_CAS_REJECTED",
+    });
   });
 
   test("an out-of-order chunk does not move the latest pointer back", async () => {
-    const store = localStore();
-    await writeChunkManifest(store, PREFIX, chunk({ timestamp_ns: "200" }));
+    const r2 = new FakeR2();
+    await writeChunkManifest(r2, chunk({ timestamp_ns: "200" }));
     const late = await writeChunkManifest(
-      store,
-      PREFIX,
+      r2,
       chunk({ slot: "old", timestamp_ns: "100" }),
     );
-    expect(late.latestAdvanced).toBe(false);
-    const state = await readLatestStream(store, PREFIX, "live-bets");
-    expect(state.status === "active" && state.manifest.timestamp_ns).toBe(
+    expect(late).toMatchObject({ latestAdvanced: false, generation_u32: 1 });
+    expect(r2.casWrites).toHaveLength(1);
+    expect(r2.objects.has(late.manifestKey)).toBe(true);
+    const read = await readLatestPointer(r2, TICKER);
+    expect(read.state === "ok" && read.pointer.manifest.timestamp_ns).toBe(
       "200",
     );
   });
 
-  test("rejects negative counts, numeric timestamps and bad keys", async () => {
-    const store = localStore();
+  test("stream ids are limited to the existing published streams", async () => {
+    expect(LIVE_STREAM_IDS).toEqual([TICKER, TALLY]);
+    const r2 = new FakeR2();
     for (const bad of [
+      chunk({ stream_id: "live-bets" }),
+      chunk({ stream_id: "Live/Bets" }),
       chunk({ wager_count: -1 }),
       chunk({ bytes: -5 }),
       chunk({ wager_count: 1.5 }),
       chunk({ timestamp_ns: "1.7e18" }),
-      chunk({ channel: "Live/Bets" }),
       chunk({ slot: "../x" }),
       chunk({ sha256: "nothex" }),
     ]) {
-      await expect(
-        writeChunkManifest(store, PREFIX, bad),
-      ).rejects.toBeInstanceOf(ManifestInvalid);
+      await expect(writeChunkManifest(r2, bad)).rejects.toBeInstanceOf(
+        ManifestInvalid,
+      );
     }
-    await expect(
-      writeChunkManifest(store, "../up", chunk()),
-    ).rejects.toBeInstanceOf(ManifestInvalid);
+    expect(r2.objects.size).toBe(0);
+    expect(manifestKey(TALLY, "s2", "42")).toBe(
+      "manifests/gslive-tally/s2/42.yaml",
+    );
   });
 
-  test("a corrupt or mismatched manifest fails loudly", async () => {
-    const store = localStore();
-    const written = await writeChunkManifest(store, PREFIX, chunk());
-    await store.put(written.manifestKey, "version: 1\nwager_count: -3\n");
-    await expect(
-      readLatestStream(store, PREFIX, "live-bets"),
-    ).rejects.toBeInstanceOf(ManifestInvalid);
-    await store.put(written.latestKey, "[unterminated");
-    await expect(
-      readLatestStream(store, PREFIX, "live-bets"),
-    ).rejects.toBeInstanceOf(ManifestInvalid);
-  });
-});
-
-describe("S3ManifestStore over a mocked Bun.S3Client", () => {
-  test("writes YAML objects at the chunk and latest keys and reads them back", async () => {
-    const backend = new FakeS3Backend();
-    const store = new S3ManifestStore(backend);
-    const written = await writeChunkManifest(store, PREFIX, chunk());
-    expect(backend.writes).toEqual([
-      { path: written.manifestKey, type: "application/yaml" },
-      { path: written.latestKey, type: "application/yaml" },
-    ]);
-    expect(Bun.YAML.parse(backend.objects.get(written.latestKey)!)).toEqual({
-      version: 1,
-      channel: "live-bets",
-      slot: "slot-7",
-      timestamp_ns: TS.toString(),
-      manifest_key: written.manifestKey,
-    });
-    expect(await readLatestStream(store, PREFIX, "live-bets")).toEqual({
-      status: "active",
-      manifest: written.manifest,
-    });
-    expect(await store.get("nope.yaml")).toBeNull();
+  test("a corrupt pointer blocks the writer instead of being overwritten", async () => {
+    const r2 = new FakeR2();
+    r2.put(latestPointerKey(TICKER), "{not json");
+    await expect(writeChunkManifest(r2, chunk())).rejects.toBeInstanceOf(
+      ManifestInvalid,
+    );
+    expect(r2.casWrites).toHaveLength(0);
   });
 
   test("backend failures surface as ManifestStoreError", async () => {
-    const backend = new FakeS3Backend();
-    backend.failWrites = true;
-    const error = await writeChunkManifest(
-      new S3ManifestStore(backend),
-      PREFIX,
-      chunk(),
-    ).catch((caught: unknown) => caught);
+    const r2 = new FakeR2();
+    r2.failGets = true;
+    const error = await writeChunkManifest(r2, chunk()).catch(
+      (caught: unknown) => caught,
+    );
     expect(error).toBeInstanceOf(ManifestStoreError);
-    expect((error as ManifestStoreError).operation).toBe("put");
-    expect((error as Error).message).toContain("S3 503 SlowDown");
+    expect((error as ManifestStoreError).operation).toBe("get");
+    expect((error as Error).message).toContain("R2 GET 503 SlowDown");
   });
 
-  test("sealChunkWithManifest uploads the chunk then its manifest", async () => {
-    const chunkObjects = new Map<string, Uint8Array>();
-    const cas: CasR2ClientLike = {
-      headEtag: async (key) => (chunkObjects.has(key) ? '"etag-1"' : null),
-      write: async (key, data) => {
-        const bytes =
-          typeof data === "string" ? new TextEncoder().encode(data) : data;
-        chunkObjects.set(key, bytes);
-        return bytes.byteLength;
-      },
-      writeWithMetadata: async () => 0,
-      file: () => ({
-        text: async () => "",
-        bytes: async () => new Uint8Array(0),
-      }),
-      stat: async () => ({}),
-    };
-    const backend = new FakeS3Backend();
-    const payload = new TextEncoder().encode('{"wager":1}\n{"wager":2}\n');
+  test("sealChunkWithManifest uploads the chunk then its manifest and pointer", async () => {
+    const r2 = new FakeR2();
+    const payload = encoder.encode('{"wager":1}\n{"wager":2}\n');
     const sha = new Bun.CryptoHasher("sha256").update(payload).digest("hex");
-    const written = await sealChunkWithManifest(
-      cas,
-      new S3ManifestStore(backend),
-      PREFIX,
-      {
-        bytes: payload,
-        channel: "gslive-wagers",
-        slot: "s9",
-        timestamp_ns: TS,
-        wager_count: 2,
-      },
-    );
-    expect([...chunkObjects.keys()]).toEqual([`chunks/${sha}.bin`]);
+    const written = await sealChunkWithManifest(r2, {
+      bytes: payload,
+      stream_id: TALLY,
+      slot: "s9",
+      timestamp_ns: TS,
+      wager_count: 2,
+    });
+    expect(r2.objects.has(`chunks/${sha}.bin`)).toBe(true);
     expect(written.manifest).toEqual({
       version: 1,
-      channel: "gslive-wagers",
+      stream_id: TALLY,
       slot: "s9",
       timestamp_ns: TS.toString(),
       chunk_key: `chunks/${sha}.bin`,
@@ -307,28 +347,319 @@ describe("S3ManifestStore over a mocked Bun.S3Client", () => {
       bytes: payload.byteLength,
       wager_count: 2,
     });
+    expect(written.latestKey).toBe("manifests/gslive-tally/latest");
 
+    const before = r2.objects.size;
     await expect(
-      sealChunkWithManifest(cas, new S3ManifestStore(backend), PREFIX, {
+      sealChunkWithManifest(r2, {
         bytes: payload,
-        channel: "gslive-wagers",
+        stream_id: TALLY,
         slot: "s9",
         timestamp_ns: TS,
         wager_count: -1,
       }),
     ).rejects.toBeInstanceOf(ManifestInvalid);
-    expect(chunkObjects.size).toBe(1);
+    expect(r2.objects.size).toBe(before);
+  });
+});
+
+describe("single-GET reads and per-consumer generations", () => {
+  test("a pointer read is one GET with no exists() round trip", async () => {
+    const r2 = new FakeR2();
+    await writeChunkManifest(r2, chunk());
+    r2.gets.length = 0;
+    const consumer = new LiveStreamConsumer(r2);
+    expect(await consumer.poll(TICKER)).toMatchObject({
+      status: "active",
+      generation_u32: 1,
+    });
+    expect(r2.gets).toEqual([latestPointerKey(TICKER)]);
+  });
+
+  test("a delete during the read is NO ACTIVE STREAM (missing), not a thrown error", async () => {
+    const r2 = new FakeR2();
+    await writeChunkManifest(r2, chunk());
+    r2.beforeGetResolves = async (key) => {
+      r2.objects.delete(key);
+    };
+    const consumer = new LiveStreamConsumer(r2);
+    expect(await consumer.poll(TICKER)).toEqual({ status: "missing" });
+    expect(await loadStreamTelemetry(consumer, [TICKER])).toEqual([
+      { stream_id: TICKER, status: NO_ACTIVE_STREAM, reason: "missing" },
+    ]);
+  });
+
+  test("corrupt pointers are NO ACTIVE STREAM (corrupt)", async () => {
+    const r2 = new FakeR2();
+    const consumer = new LiveStreamConsumer(r2);
+    for (const body of [
+      "[unterminated",
+      '{"version":1}',
+      new Uint8Array([0xff, 0xfe, 0x00]),
+    ]) {
+      r2.put(latestPointerKey(TICKER), body);
+      const state = await consumer.poll(TICKER);
+      expect(state.status).toBe("corrupt");
+      expect(state.status === "corrupt" && state.error).toBeInstanceOf(
+        ManifestInvalid,
+      );
+    }
+    const written = await writeChunkManifest(r2, chunk({ stream_id: TALLY }));
+    r2.put(latestPointerKey(TICKER), r2.text(written.latestKey)!);
+    expect((await consumer.poll(TICKER)).status).toBe("corrupt");
+  });
+
+  test("two consumers do not blank each other; each sees stale only for itself", async () => {
+    const r2 = new FakeR2();
+    await writeChunkManifest(r2, chunk({ timestamp_ns: "100" }));
+    const desk = new LiveStreamConsumer(r2);
+    const board = new LiveStreamConsumer(r2);
+
+    expect((await desk.poll(TICKER)).status).toBe("active");
+    expect((await board.poll(TICKER)).status).toBe("active");
+    expect(await desk.poll(TICKER)).toEqual({
+      status: "stale",
+      generation_u32: 1,
+    });
+    expect(await loadStreamTelemetry(desk, [TICKER])).toEqual([
+      { stream_id: TICKER, status: NO_ACTIVE_STREAM, reason: "stale" },
+    ]);
+
+    await writeChunkManifest(
+      r2,
+      chunk({ slot: "slot-8", timestamp_ns: "200" }),
+    );
+    expect(await desk.poll(TICKER)).toMatchObject({
+      status: "active",
+      generation_u32: 2,
+    });
+    expect(board.lastConsumedGeneration(TICKER)).toBe(1);
+    expect(await board.poll(TICKER)).toMatchObject({
+      status: "active",
+      generation_u32: 2,
+    });
+    expect(r2.casWrites.every((write) => write.key.endsWith("/latest"))).toBe(
+      true,
+    );
+    expect(r2.casWrites).toHaveLength(2);
+  });
+
+  test("telemetry reports ACTIVE with the generation and NO ACTIVE STREAM when missing", async () => {
+    const r2 = new FakeR2();
+    await writeChunkManifest(r2, chunk());
+    expect(
+      await loadStreamTelemetry(new LiveStreamConsumer(r2), [TICKER, TALLY]),
+    ).toEqual([
+      {
+        stream_id: TICKER,
+        status: "ACTIVE",
+        generation_u32: 1,
+        slot: "slot-7",
+        timestamp_ns: TS.toString(),
+        wager_count: 12,
+        bytes: 2048,
+      },
+      { stream_id: TALLY, status: NO_ACTIVE_STREAM, reason: "missing" },
+    ]);
+  });
+});
+
+class NoopBackend implements R2S3ClientBackend {
+  readonly writes = new Map<string, Uint8Array>();
+  file(): never {
+    throw new Error("backend file() not used");
+  }
+  async write(path: string, data: Uint8Array | string): Promise<number> {
+    this.writes.set(path, toBytes(data));
+    return toBytes(data).byteLength;
+  }
+  presign(): string {
+    return "";
+  }
+  stat(): never {
+    throw new Error("backend stat() not used");
+  }
+  async exists(): Promise<boolean> {
+    return false;
+  }
+  async size(): Promise<number> {
+    return 0;
+  }
+  list(): never {
+    throw new Error("backend list() not used");
+  }
+  async delete(): Promise<void> {}
+  async unlink(): Promise<void> {}
+}
+
+/** Local fetch stub emulating R2's signed HEAD/GET/PUT with CAS, keyed by URL path. */
+function r2HttpStub() {
+  const objects = new Map<string, { body: Uint8Array; etag: string }>();
+  const requests: { method: string; path: string; signed: boolean }[] = [];
+  let version = 0;
+  let onRequest: ((method: string, path: string) => Promise<void>) | undefined;
+  const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const headers = new Headers(init?.headers);
+    const method = init?.method ?? "GET";
+    requests.push({
+      method,
+      path: url.pathname,
+      signed:
+        headers.get("authorization")?.startsWith("AWS4-HMAC-SHA256") ?? false,
+    });
+    await onRequest?.(method, url.pathname);
+    const current = objects.get(url.pathname);
+    if (method === "PUT") {
+      const ifMatch = headers.get("if-match");
+      const ifNoneMatch = headers.get("if-none-match");
+      if (
+        (ifNoneMatch === "*" && current !== undefined) ||
+        (ifMatch !== null && current?.etag !== ifMatch)
+      ) {
+        return new Response("PreconditionFailed", { status: 412 });
+      }
+      version += 1;
+      objects.set(url.pathname, {
+        body: toBytes(init?.body as Uint8Array),
+        etag: `"v${version}"`,
+      });
+      return new Response(null, { status: 200 });
+    }
+    const object = current;
+    if (object === undefined) {
+      return new Response("<Error><Code>NoSuchKey</Code></Error>", {
+        status: 404,
+      });
+    }
+    return new Response(method === "HEAD" ? null : object.body, {
+      status: 200,
+      headers: { etag: object.etag },
+    });
+  }) as unknown as typeof fetch;
+  return {
+    objects,
+    requests,
+    fetchImpl,
+    setOnRequest(hook: typeof onRequest) {
+      onRequest = hook;
+    },
+  };
+}
+
+function stubbedClient(): R2S3Client {
+  return R2S3Client.fromOptions(
+    {
+      bucket: "bucket",
+      endpoint: "https://r2.test",
+      accessKeyId: "a",
+      secretAccessKey: "s",
+      publicBase: "https://pub.test",
+    },
+    new NoopBackend(),
+  );
+}
+
+describe("R2S3Client.getObject and the CAS path over a local fetch stub", () => {
+  test("getObject is one signed GET returning status, ETag and body", async () => {
+    const stub = r2HttpStub();
+    const client = stubbedClient();
+    expect(
+      await client.getObject("manifests/f402-bet-ticker/latest", {
+        fetchImpl: stub.fetchImpl,
+      }),
+    ).toEqual({ status: 404, etag: null, body: null });
+
+    await client.writeWithMetadata("manifests/f402-bet-ticker/latest", "{}", {
+      type: "application/json",
+      ifNoneMatch: "*",
+      fetchImpl: stub.fetchImpl,
+    });
+    stub.requests.length = 0;
+    const read = await client.getObject("manifests/f402-bet-ticker/latest", {
+      fetchImpl: stub.fetchImpl,
+    });
+    expect(read.status).toBe(200);
+    expect(read.etag).toBe('"v1"');
+    expect(new TextDecoder().decode(read.body!)).toBe("{}");
+    expect(stub.requests).toEqual([
+      {
+        method: "GET",
+        path: "/bucket/manifests/f402-bet-ticker/latest",
+        signed: true,
+      },
+    ]);
+  });
+
+  test("getObject throws on non-404 failures", async () => {
+    const client = stubbedClient();
+    const failing = (async () =>
+      new Response("", { status: 503 })) as unknown as typeof fetch;
+    await expect(client.getObject("k", { fetchImpl: failing })).rejects.toThrow(
+      "R2 GET k failed (503)",
+    );
+  });
+
+  test("a concurrent pointer write returns HTTP 412 and the CAS error", async () => {
+    const stub = r2HttpStub();
+    const client = stubbedClient();
+    const options = { fetchImpl: stub.fetchImpl };
+    await writeChunkManifest(client, chunk({ timestamp_ns: "100" }), options);
+
+    const arrived = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    stub.setOnRequest(async (method, path) => {
+      if (method !== "PUT" || !path.endsWith("/latest")) return;
+      stub.setOnRequest(undefined);
+      arrived.resolve();
+      await release.promise;
+    });
+    const slow = writeChunkManifest(
+      client,
+      chunk({ slot: "b", timestamp_ns: "300" }),
+      options,
+    );
+    await arrived.promise;
+    const fast = await writeChunkManifest(
+      client,
+      chunk({ slot: "a", timestamp_ns: "200" }),
+      options,
+    );
+    expect(fast.generation_u32).toBe(2);
+    release.resolve();
+
+    const error = await slow.catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(R2ManifestCasError);
+    expect((error as R2ManifestCasError).code).toBe(
+      "ERR_R2_MANIFEST_CAS_REJECTED",
+    );
+    const pointerPuts = stub.requests.filter(
+      (request) => request.method === "PUT" && request.path.endsWith("/latest"),
+    );
+    expect(pointerPuts).toHaveLength(3);
+    const read = await readLatestPointer(client, TICKER, options);
+    expect(read.state === "ok" && read.pointer.manifest.slot).toBe("a");
+  });
+
+  test("a delete while the GET is in flight reads as missing", async () => {
+    const stub = r2HttpStub();
+    const client = stubbedClient();
+    const options = { fetchImpl: stub.fetchImpl };
+    await writeChunkManifest(client, chunk(), options);
+    stub.setOnRequest(async (method, path) => {
+      if (method === "GET") stub.objects.delete(path);
+    });
+    const consumer = new LiveStreamConsumer(client, options);
+    expect(await consumer.poll(TICKER)).toEqual({ status: "missing" });
   });
 });
 
 describe("config/blob-live.yaml", () => {
   test("the committed config loads through the yaml import", () => {
     const config = loadBlobLiveConfig();
-    expect(config.channels.length).toBeGreaterThan(0);
+    expect(config.streams).toEqual([TICKER, TALLY]);
     expect(config.hostname).toBe("127.0.0.1");
     expect(typeof config.port).toBe("number");
-    expect(config.bucket.length).toBeGreaterThan(0);
-    expect(config.manifest_prefix.length).toBeGreaterThan(0);
   });
 
   test("loadBlobLiveConfig works when cwd is not the repo root", () => {
@@ -353,40 +684,35 @@ process.stdout.write(JSON.stringify(loadBlobLiveConfig()));`,
     const config = JSON.parse(proc.stdout.toString()) as {
       hostname: string;
       port: number;
-      channels: string[];
-      bucket: string;
-      manifest_prefix: string;
+      streams: string[];
     };
     expect(config.hostname).toBe("127.0.0.1");
     expect(typeof config.port).toBe("number");
-    expect(config.channels.length).toBeGreaterThan(0);
-    expect(config.bucket.length).toBeGreaterThan(0);
-    expect(config.manifest_prefix.length).toBeGreaterThan(0);
+    expect(config.streams).toEqual([TICKER, TALLY]);
   });
 
   test("invalid config is rejected by name", () => {
     expect(() => parseBlobLiveConfig("port: [")).toThrow(BlobLiveConfigInvalid);
-    expect(() =>
-      parseBlobLiveConfig(
-        "port: 1\nhostname: h\nchannels: []\nbucket: bkt\nmanifest_prefix: p\n",
-      ),
-    ).toThrow(BlobLiveConfigInvalid);
-    expect(() =>
-      parseBlobLiveConfig(
-        "port: 1\nhostname: h\nchannels: [a]\nbucket: bkt\nmanifest_prefix: p\nsecret: x\n",
-      ),
-    ).toThrow(BlobLiveConfigInvalid);
+    for (const text of [
+      "port: 1\nhostname: h\nstreams: []\n",
+      "port: 1\nhostname: h\nstreams: [live-bets]\n",
+      "port: 1\nhostname: h\nstreams: [gslive-tally, gslive-tally]\n",
+      "port: 1\nhostname: h\nstreams: [gslive-tally]\nsecret: x\n",
+      "port: 1\nhostname: h\nstreams: [gslive-tally]\nbucket: b\n",
+    ]) {
+      expect(() => parseBlobLiveConfig(text)).toThrow(BlobLiveConfigInvalid);
+    }
   });
 });
 
 describe("/health streams telemetry", () => {
-  test("reports NO ACTIVE STREAM per channel without a manifest", async () => {
-    const store = localStore();
-    await writeChunkManifest(store, PREFIX, chunk());
-    const streamTelemetry = await loadStreamTelemetry(store, PREFIX, [
-      "live-bets",
-      "gslive-wagers",
-    ]);
+  test("reports NO ACTIVE STREAM per stream without a pointer", async () => {
+    const r2 = new FakeR2();
+    await writeChunkManifest(r2, chunk());
+    const streamTelemetry = await loadStreamTelemetry(
+      new LiveStreamConsumer(r2),
+      [TICKER, TALLY],
+    );
     const { server, close } = createBlobLiveBetsServer({
       blobs: new MemoryBlobStore(),
       apiToken: "t",
@@ -398,11 +724,13 @@ describe("/health streams telemetry", () => {
     try {
       const response = await fetch(`http://127.0.0.1:${server.port}/health`);
       const body = (await response.json()) as {
-        streams: { channel: string; status: string }[];
+        streams: { stream_id: string; status: string }[];
       };
-      expect(body.streams.map((entry) => entry.status)).toEqual([
-        "ACTIVE",
-        NO_ACTIVE_STREAM,
+      expect(
+        body.streams.map((entry) => [entry.stream_id, entry.status]),
+      ).toEqual([
+        [TICKER, "ACTIVE"],
+        [TALLY, NO_ACTIVE_STREAM],
       ]);
     } finally {
       close(true);

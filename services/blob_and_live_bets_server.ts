@@ -34,10 +34,11 @@ import {
 } from "../lib/r2_s3_client.ts";
 import { loadBlobLiveConfig } from "../lib/blob_live_config.ts";
 import {
+  LiveStreamConsumer,
   loadStreamTelemetry,
-  S3ManifestStore,
   type StreamTelemetryEntry,
 } from "../lib/r2_chunk_manifest.ts";
+import { createScopedR2S3Client } from "../lib/r2_manifest_cas.ts";
 import {
   sendFrameOrClose,
   WS_BACKPRESSURE_OPTIONS,
@@ -953,19 +954,11 @@ if (import.meta.main) {
         "R2 credentials are unavailable in env or Bun.secrets service com.bookdeskops.sportsdesk",
       );
     }
-    const config = await loadBlobLiveConfig();
-    const manifests = new S3ManifestStore(
-      new Bun.S3Client({
-        accessKeyId: resolved.accessKeyId,
-        secretAccessKey: resolved.secretAccessKey,
-        endpoint: resolved.endpoint,
-        bucket: config.bucket,
-      }),
-    );
+    const config = loadBlobLiveConfig();
+    const secretEnv = await resolveSecretBackedEnv();
     const streamTelemetry = await loadStreamTelemetry(
-      manifests,
-      config.manifest_prefix,
-      config.channels,
+      new LiveStreamConsumer(createScopedR2S3Client(secretEnv)),
+      config.streams,
     );
     const blobs = createS3BlobStore({
       accessKeyId: resolved.accessKeyId,
@@ -973,7 +966,6 @@ if (import.meta.main) {
       bucket: resolved.bucket,
       endpoint: resolved.endpoint,
     });
-    const secretEnv = await resolveSecretBackedEnv();
     const apiToken = secretEnv.BLOB_API_TOKEN ?? "";
     const ticketSecret = secretEnv.BLOB_TICKET_SECRET ?? "";
     if (apiToken.trim() === "" || ticketSecret.trim() === "") {
