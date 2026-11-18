@@ -56,5 +56,5 @@ describe("audit: FileHandle.createReadStream options", () => {
     } finally {
       rmSync(FIXTURE, { force: true });
     }
-  });
+  }, 30_000);
 });

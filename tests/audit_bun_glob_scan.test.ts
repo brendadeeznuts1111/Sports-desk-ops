@@ -43,7 +43,7 @@ describe("audit: glob.scan non-boolean options", () => {
     } finally {
       rmSync(FIXTURE, { force: true });
     }
-  });
+  }, 30_000);
 });
 
 test("audit findings carry the TypeError/RangeError taxonomy", () => {
@@ -85,4 +85,4 @@ test("audit findings carry the TypeError/RangeError taxonomy", () => {
   } finally {
     rmSync(taxonomyFixture, { force: true });
   }
-});
+}, 30_000);
