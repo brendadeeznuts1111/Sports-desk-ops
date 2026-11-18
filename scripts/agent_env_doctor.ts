@@ -232,30 +232,14 @@ export function mainCheckoutRoot(root: string): string | null {
   return parent === root ? null : parent;
 }
 
-function playwrightHeadlessShell(): string | null {
-  const base = Bun.env.PLAYWRIGHT_BROWSERS_PATH
-    ? path.resolve(Bun.env.PLAYWRIGHT_BROWSERS_PATH)
-    : path.join(os.homedir(), "Library/Caches/ms-playwright");
-  let entries: string[] = [];
-  try {
-    entries = fs.readdirSync(base);
-  } catch {
-    return null;
-  }
-  const candidates = [
-    "chrome-headless-shell-mac-arm64/chrome-headless-shell",
-    "chrome-headless-shell-mac-x64/chrome-headless-shell",
-    "chrome-headless-shell-linux64/chrome-headless-shell",
-  ];
-  for (const entry of entries.sort().reverse()) {
-    if (!entry.startsWith("chromium_headless_shell-")) continue;
-    for (const suffix of candidates) {
-      const candidate = path.join(base, entry, suffix);
-      if (exists(candidate)) return candidate;
-    }
-  }
-  return null;
-}
+/**
+ * `Bun.WebView` is the capture path this repo uses (`./bin/dx shot`,
+ * scripts/capture/webview.ts), and it needs no external browser. The previous
+ * Playwright-cache probe predates that and told operators to install Chromium for
+ * a job WebView already does — a stale pointer, not a real gap.
+ */
+const webViewAvailable = (): boolean =>
+  typeof (Bun as unknown as { WebView?: unknown }).WebView === "function";
 
 async function probe(url: string): Promise<boolean> {
   try {
@@ -490,23 +474,22 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
     fix: "brew install graphviz  # the dot-render test needs it",
   });
 
-  const shell = playwrightHeadlessShell();
+  const webView = webViewAvailable();
   const cdpUp = await probe("http://127.0.0.1:9222/json/version");
   checks.push({
     id: "browser",
-    status: cdpUp || shell !== null ? "ok" : "warn",
-    title: cdpUp
-      ? "browser CDP reachable on :9222"
-      : shell !== null
-        ? "Playwright headless shell available (stock Chrome is blocked by the sandbox)"
-        : "no headless browser found",
-    detail: cdpUp
-      ? ""
-      : (shell ?? "stock Chrome cannot initialize its own sandbox here"),
-    fix:
-      shell === null
-        ? "bunx playwright install chromium"
-        : `"${shell}" --no-sandbox --remote-debugging-port=9222 about:blank   # or: ./bin/dx shot <url>`,
+    status: webView ? "ok" : "warn",
+    title: webView
+      ? `Bun.WebView available (${Bun.version})`
+      : "Bun.WebView is missing from this runtime",
+    detail: webView
+      ? cdpUp
+        ? "a CDP endpoint is also reachable on :9222"
+        : "capture needs no external browser"
+      : "stock Chrome cannot initialize its own sandbox here",
+    fix: webView
+      ? "./bin/dx shot <url> --out scratch/shots/x.png   # WebKit via Bun.WebView"
+      : "reinstall the pinned Bun (/ .bun-version) — Bun.WebView is built in",
   });
 
   const sportsdeskPort = resolveSportsdeskDaemonPort(Bun.env, 4020);
