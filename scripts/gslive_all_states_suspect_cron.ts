@@ -354,7 +354,11 @@ export async function readTickerBetsJsonl(
     buf: Uint8Array,
     from: number,
   ): Uint8Array<ArrayBufferLike> | null => {
-    const nl = buf.indexOf(10, from);
+    // `read` stops at the terminator of the last good record; skip that
+    // terminator before looking for the poison line's own newline.
+    let at = from;
+    while (at < buf.length && (buf[at] === 0x0a || buf[at] === 0x0d)) at += 1;
+    const nl = buf.indexOf(10, at);
     return nl === -1 ? null : buf.subarray(nl + 1);
   };
 

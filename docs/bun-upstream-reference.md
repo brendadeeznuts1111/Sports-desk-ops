@@ -80,7 +80,8 @@ Do not collapse these into one class:
 - **`TypeError`** — the argument is the wrong type (hash inputs, parser inputs, `indexOfLine`).
 - **`RangeError`** — the type is acceptable but the value is out of range or `NaN` (CSRF options, DNS port, compression levels).
 - **String coercion** — `$.escape` guarantees the output is a string; it does **not** validate the input. `$.escape(null)` returns `"null"`, a valid shell token for the wrong value. Validate types first; credentials remain argv-only (`Bun.spawn([argv…])`). The audit emits this taxonomy as `errorClass` on each finding.
-- **`SyntaxError`** — JSON5 invalid-input fixes (e.g. `"1\0 2"`, escaped-colon keys) are parser errors, not refusals.
+- **`SyntaxError`** — JSON5 invalid-input fixes (e.g. `"1\0 2"`, escaped-colon keys) are parser errors, not refusals. `Bun.JSONL.parseChunk().error` is also a `SyntaxError`.
+- **`SystemError`** — a failed system call (`errno`, `code`, `path`, `syscall`); an I/O failure, not a refusal. Never let `errorMode: "skip"` swallow it; rethrow it unchanged so its metadata survives.
 
 ### Stored-evidence sweeps
 

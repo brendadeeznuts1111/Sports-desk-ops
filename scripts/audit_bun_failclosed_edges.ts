@@ -11,7 +11,8 @@ const enum Severity {
   WARN = "WARN", // Needs runtime range/NaN guard or behavior changed in v1.4.4+
 }
 
-type RefusalClass = "TypeError" | "RangeError" | "coercion" | null;
+type RefusalClass =
+  "TypeError" | "RangeError" | "coercion" | "SystemError" | null;
 
 interface Finding {
   readonly ruleId: string;
