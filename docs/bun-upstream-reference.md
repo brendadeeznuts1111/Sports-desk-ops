@@ -372,6 +372,30 @@ Not re-measured here: `environment` (jsdom/happy-dom), `globals = "vitest"`, `re
 `concurrentTestGlob`, `smol`, the mock-cleanup options, coverage options, and `[install]`
 inheritance.
 
+<!-- bun-behavior: bun-test-runtime -->
+
+## Test runtime integration (measured 2026-11-18)
+
+Measured with throwaway suites (`tests/bun_test_runtime.test.ts`):
+
+| Behavior                                | Measured                                                                                                                     |
+| :-------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV` default                      | `"test"`; an explicit `NODE_ENV=development` wins                                                                            |
+| `TZ` default                            | UTC (`getTimezoneOffset() === 0`); `TZ=America/New_York` wins                                                                |
+| `import.meta.env`                       | passes through `process.env` (`NODE_ENV`, `MODE` when set); `DEV`, `PROD`, `SSR` and `BASE_URL` are **undefined** on the pin |
+| per-test timeout `0`                    | disables `--timeout=10`; a 50 ms test passes                                                                                 |
+| unhandled error/rejection between tests | exit 1 with `Unhandled error between tests`; the probe ran 0 tests, not the file's tests                                     |
+| top-level throw                         | the file fails to load and reports `0 pass`                                                                                  |
+| globals                                 | `test`, `describe`, `expect`, `jest`, `vi` are available without imports                                                     |
+| `console.timeStamp`                     | **defined** (a function) on the pin, despite the docs saying tests omit it                                                   |
+| `--define "process.env.X='v'"`          | the constant is substituted in the test file                                                                                 |
+
+Drift: the live runtime docs describe Vite-style `import.meta.env` variables and an undefined
+`console.timeStamp`; the pinned 1.4.4 runtime does neither. The unsettled top-level await guard was
+not encoded: a probe with `await new Promise(() => {})` did not exit within 120 s, so there is no
+bounded failure to assert. Timers, watch/hot mode, signal handling, and the `vitest` unhandled-error
+listener difference are also not re-measured here.
+
 ## Upstream doc commit pins
 
 | Pin                                                                                                                      | Tree                               | Use                                                                       |
