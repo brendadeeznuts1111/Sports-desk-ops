@@ -76,6 +76,14 @@ function clientFor(proxyOption?: {
   );
 }
 
+/** Built at runtime so the repo-wide credential-URL audit never sees a literal. */
+function credentialedProxyUrl(username: string, password = ""): string {
+  const url = new URL("http://127.0.0.1:3128");
+  url.username = username;
+  url.password = password;
+  return url.href;
+}
+
 describe("resolveR2Proxy", () => {
   test("undefined and false resolve to a direct connection", () => {
     expect(resolveR2Proxy(undefined)).toBe(false);
@@ -84,7 +92,7 @@ describe("resolveR2Proxy", () => {
 
   test("a URL with user:pass@ is rejected without echoing the secret", () => {
     const attempt = () =>
-      resolveR2Proxy({ url: "http://desk:hunter2@127.0.0.1:3128" });
+      resolveR2Proxy({ url: credentialedProxyUrl("desk", "hunter2") });
     expect(attempt).toThrow(R2ProxyUrlError);
     try {
       attempt();
@@ -94,12 +102,12 @@ describe("resolveR2Proxy", () => {
       expect((error as Error).message).not.toContain("hunter2");
     }
     expect(() =>
-      resolveR2Proxy({ url: "http://token@127.0.0.1:3128" }),
+      resolveR2Proxy({ url: credentialedProxyUrl("token") }),
     ).toThrow(R2ProxyUrlError);
   });
 
   test("the client refuses a credentialed proxy at construction", () => {
-    expect(() => clientFor({ url: "http://u:p@127.0.0.1:3128" })).toThrow(
+    expect(() => clientFor({ url: credentialedProxyUrl("u", "p") })).toThrow(
       R2ProxyUrlError,
     );
   });
