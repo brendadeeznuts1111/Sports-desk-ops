@@ -120,6 +120,13 @@ with `bun run audit:tool-calls`.
   they do not identify one site.
 - **Evidence labelling:** any claim in docs or commits states what was measured and when. The docs
   gates exist because fabricated contracts shipped before.
+- **A gate verdict belongs to the tree it ran in.** `bun fmt`, `bun check` and `oxlint` read
+  `bunfig.toml` and `tsconfig.json` from the working tree, so another session's uncommitted config
+  decides the answer. 2026-11-18: `bun fmt --check` failed on a committed file only while an
+  uncommitted `[[fmt.overrides]]` block was present; that file passes under every committed
+  `bunfig.toml` (pre- and post-#384). The same checkout also loses work when the other session
+  switches branches, which is why a claim about `main` gets verified in a clean worktree
+  (`git worktree add --detach`) rather than in the shared one.
 
 **Bun toolchain**
 
