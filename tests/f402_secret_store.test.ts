@@ -18,6 +18,7 @@ import {
 } from "../lib/f402_secret_store.ts";
 import {
   F402_SESSION_SECRET_NAME,
+  F402SessionStoreConfigError,
   flushF402SessionWrites,
   loadF402Session,
   readF402Session,
@@ -213,7 +214,7 @@ describe("writeF402Secret / migrateLegacyF402Secrets", () => {
       { adapter: store },
     );
     expect(results).toEqual([
-      { name: F402_KEYCHAIN_NAMES.agentId, outcome: "canonical-present" },
+      { name: F402_KEYCHAIN_NAMES.agentId, outcome: "canonical-kept" },
       { name: F402_KEYCHAIN_NAMES.password, outcome: "copied" },
       { name: "f402-player-id", outcome: "absent" },
     ]);
@@ -246,9 +247,9 @@ describe("session store", () => {
     expect(resolveF402SessionStore({ F402_SESSION_STORE: "KEYCHAIN" })).toBe(
       "keychain",
     );
-    expect(resolveF402SessionStore({ F402_SESSION_STORE: "other" })).toBe(
-      "file",
-    );
+    expect(() =>
+      resolveF402SessionStore({ F402_SESSION_STORE: "other" }),
+    ).toThrow(F402SessionStoreConfigError);
   });
 
   test("keychain: save → load round trip; sync read answers only after load; no file written", async () => {

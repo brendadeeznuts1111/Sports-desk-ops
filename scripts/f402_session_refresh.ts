@@ -27,8 +27,14 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import { F402KeychainUnavailable } from "../lib/f402_secret_store.ts";
-import { loadF402Session } from "../lib/f402_session.ts";
+import {
+  F402KeychainUnavailable,
+  F402SecretError,
+} from "../lib/f402_secret_store.ts";
+import {
+  F402SessionStoreConfigError,
+  loadF402Session,
+} from "../lib/f402_session.ts";
 import {
   DEFAULT_REFRESH_GRACE_MS,
   DEFAULT_REFRESH_TTL_MINUTES,
@@ -139,14 +145,21 @@ async function main(): Promise<RefreshExit> {
     // File store: the 0600 file. F402_SESSION_STORE=keychain: the Bun.secrets entry.
     session = await loadF402Session();
   } catch (error) {
-    // No usable keychain is a runner fault (minting would fail at save too): name it, exit 1.
-    if (error instanceof F402KeychainUnavailable) {
+    // No usable keychain, or an invalid F402_SESSION_STORE, is a runner fault: name it, exit 1.
+    if (
+      error instanceof F402KeychainUnavailable ||
+      error instanceof F402SessionStoreConfigError
+    ) {
       process.stderr.write(
         `[f402-session-refresh] ${error.name}: ${error.message}\n`,
       );
       return REFRESH_EXIT.runnerError;
     }
-    // Any other read failure: fall through with `session = null` so the decider says "missing".
+    // The store answered but refused this read: report it, then treat the session as missing.
+    if (!(error instanceof F402SecretError)) throw error;
+    process.stderr.write(
+      `[f402-session-refresh] ${error.name}: ${error.message}\n`,
+    );
   }
 
   const decision = decideRefresh(session, nowMs, options.graceMs);
@@ -180,7 +193,13 @@ async function main(): Promise<RefreshExit> {
 
   const mint = await spawnMint(options.ttlMinutes);
   // The mint ran in a child process, so re-load from the store rather than this process's copy.
-  const postRead = await loadF402Session().catch(() => null);
+  const postRead = await loadF402Session().catch((error: unknown) => {
+    if (!(error instanceof F402SecretError)) throw error;
+    process.stderr.write(
+      `[f402-session-refresh] post-mint read: ${error.name}: ${error.message}\n`,
+    );
+    return null;
+  });
   const postDecision = decideRefresh(postRead, Date.now(), options.graceMs);
   const postWindow = tokenWindowFromSession(postRead);
 

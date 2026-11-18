@@ -10,9 +10,11 @@
  * - `file` (default): the 0600 JSON file at `F402_SESSION_FILE` / `~/.cache/sportsdesk/f402-session.json`.
  * - `keychain`: one Bun.secrets entry, service `com.bookdeskops.sportsdesk`, name `f402-session`
  *   (legacy `sportsdesk-ops` is a read-only fallback). No session file is read or written.
- *   Bun.secrets is async only, so a process loads the entry once with `await loadF402Session()`
- *   and the synchronous `readF402Session()` then answers from that in-process copy. A process that
- *   never loads it sees no session in keychain mode (it does not fall back to the file).
+ *   Bun.secrets is async only, so a process loads the entry with `await primeF402Session()` (or
+ *   `loadF402Session()`) and the synchronous `readF402Session()` then answers from that
+ *   in-process copy. A process that never loads it sees no session in keychain mode (it does not
+ *   fall back to the file).
+ * - Any other value throws `F402SessionStoreConfigError`.
  */
 
 import {
@@ -30,6 +32,8 @@ import { dirname, join } from "node:path";
 
 import {
   F402_READ_SERVICES,
+  F402KeychainUnavailable,
+  F402SecretError,
   readF402SecretStrict,
   writeF402Secret,
   deleteF402Secret,
@@ -60,16 +64,49 @@ export interface F402SessionFileOptions {
 
 export type F402SessionStoreKind = "file" | "keychain";
 
-/** Bun.secrets entry name for the session in keychain mode. */
 export const F402_SESSION_SECRET_NAME = "f402-session";
 
-/** `F402_SESSION_STORE=keychain` opts in; anything else (or unset) keeps the file store. */
+export const F402_SESSION_STORE_VALUES: readonly F402SessionStoreKind[] = [
+  "file",
+  "keychain",
+];
+
+/** `F402_SESSION_STORE` holds something other than `file` or `keychain`. */
+export class F402SessionStoreConfigError extends Error {
+  readonly value: string;
+  constructor(value: string) {
+    super(
+      `F402_SESSION_STORE=${JSON.stringify(value.slice(0, 64))} is not valid; use "file" (default) or "keychain"`,
+    );
+    this.name = "F402SessionStoreConfigError";
+    this.value = value;
+  }
+}
+
+/**
+ * Exit code for a session-store failure, shared by the session CLIs and `secrets:f402`:
+ * 2 invalid F402_SESSION_STORE, 3 F402KeychainUnavailable, 4 any other F402SecretError,
+ * 1 anything else.
+ */
+export function f402SessionStoreExitCode(error: unknown): 1 | 2 | 3 | 4 {
+  if (error instanceof F402SessionStoreConfigError) return 2;
+  if (error instanceof F402KeychainUnavailable) return 3;
+  if (error instanceof F402SecretError) return 4;
+  return 1;
+}
+
+/**
+ * Unset or blank means `file`. `file` and `keychain` are accepted case-insensitively; any other
+ * value throws {@link F402SessionStoreConfigError} so a typo cannot silently fall back to the file.
+ */
 export function resolveF402SessionStore(
   env: Readonly<Record<string, string | undefined>> = Bun.env,
 ): F402SessionStoreKind {
-  return env["F402_SESSION_STORE"]?.trim().toLowerCase() === "keychain"
-    ? "keychain"
-    : "file";
+  const raw = env["F402_SESSION_STORE"];
+  const normalized = raw?.trim().toLowerCase() ?? "";
+  if (normalized === "") return "file";
+  if (normalized === "file" || normalized === "keychain") return normalized;
+  throw new F402SessionStoreConfigError(raw ?? "");
 }
 
 function storeFor(options?: F402SessionFileOptions): F402SessionStoreKind {
@@ -194,7 +231,7 @@ export function readF402Session(
       if (!warnedUnloaded) {
         warnedUnloaded = true;
         console.warn(
-          "[f402-session] F402_SESSION_STORE=keychain but this process has not loaded the session; call `await loadF402Session()` first",
+          "[f402-session] F402_SESSION_STORE=keychain but this process has not loaded the session; call `await primeF402Session()` (or `loadF402Session()`) first",
         );
       }
       return null;
@@ -303,6 +340,17 @@ export async function loadF402Session(
   }
   keychainSessionCache = { raw };
   return parseF402SessionValue(raw, options?.now ?? Date.now());
+}
+
+/**
+ * Keychain store: load the session into this process so the synchronous
+ * {@link readF402Session} answers from a fresh copy. File store: no-op. Call it before a sync
+ * read in an async path; it throws the named store errors from {@link loadF402Session}.
+ */
+export async function primeF402Session(
+  options?: F402SessionFileOptions & { readonly adapter?: SecretsAdapter },
+): Promise<void> {
+  if (storeFor(options) === "keychain") await loadF402Session(options);
 }
 
 /** Async save that resolves only once the session is stored. Returns the location label. */

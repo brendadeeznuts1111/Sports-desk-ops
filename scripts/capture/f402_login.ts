@@ -75,15 +75,15 @@ export async function loadF402PlayerCredentials(
 ): Promise<F402LoginIdentity> {
   const read = async (name: string): Promise<string> => {
     if (secrets === null) return "";
-    for (const service of PLAYER_SECRET_SERVICES) {
-      try {
-        const value = (await secrets.get({ service, name }))?.trim() ?? "";
-        if (value !== "") return value;
-      } catch {
-        // Locked/unavailable store: try the next service, then fall through to "missing".
-      }
-    }
-    return "";
+    const { readF402SecretStrict } =
+      await import("../../lib/f402_secret_store.ts");
+    // A store that answers "absent" falls through to MissingF402CredentialsError; a store that
+    // fails throws its named error (F402KeychainUnavailable, F402SecretAccessDenied, ...).
+    const found = await readF402SecretStrict(name, {
+      adapter: secrets,
+      services: PLAYER_SECRET_SERVICES,
+    });
+    return found?.value ?? "";
   };
   const envId = env["F402_PLAYER_ID"]?.trim() ?? "";
   const envPass = env["F402_PLAYER_PASSWORD"]?.trim() ?? "";

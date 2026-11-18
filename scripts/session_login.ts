@@ -50,6 +50,7 @@ import {
 import {
   describeF402Session,
   F402_SESSION_SECRET_NAME,
+  f402SessionStoreExitCode,
   f402SessionTtlMinutesFromEnv,
   loadF402Session,
   refreshF402Session,
@@ -196,7 +197,7 @@ interface SessionStatusReport {
   readonly profileNote: string | null;
 }
 
-/** Persist through the configured store; a named store error exits 3 with no value printed. */
+/** Persist through the configured store; a store error exits per `f402SessionStoreExitCode`. */
 async function saveSessionOrExit(
   session: F402Session,
   options: { readonly path: string } | undefined,
@@ -208,7 +209,7 @@ async function saveSessionOrExit(
     console.error(
       `session:login: could not store the session: ${named.name ?? "Error"}: ${named.message ?? ""}`,
     );
-    process.exit(3);
+    process.exit(f402SessionStoreExitCode(error));
   }
 }
 
@@ -249,7 +250,7 @@ async function main(): Promise<void> {
       console.error(
         `session:status: ${named.name ?? "Error"}: ${named.message ?? "session store unreadable"}`,
       );
-      process.exit(3);
+      process.exit(f402SessionStoreExitCode(error));
     }
     const report: SessionStatusReport = {
       sessionPath:

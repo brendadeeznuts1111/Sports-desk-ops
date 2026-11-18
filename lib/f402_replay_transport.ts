@@ -8,9 +8,10 @@
 import { join } from "node:path";
 
 import {
+  primeF402Session,
   readF402Session,
   refreshF402Session,
-  writeF402Session,
+  saveF402Session,
 } from "./f402_session.ts";
 
 export const DEPRECATED_F402_COOKIE_ENV = "F402_COOKIE";
@@ -45,7 +46,7 @@ export interface F402ReplayTransportOptions {
   readonly env?: NodeJS.ProcessEnv;
   /** Test seam: replace the Bun FetchSession wire call. */
   readonly fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
-  /** Test seam: replace 401 re-mint (default: `refreshF402Session` + `writeF402Session`). */
+  /** Test seam: replace 401 re-mint (default: `refreshF402Session` + `saveF402Session`). */
   readonly refreshSession?: () => Promise<void>;
   readonly readSession?: () => ReturnType<typeof readF402Session>;
 }
@@ -83,6 +84,7 @@ export async function createF402ReplayTransport(
     tls: { rejectUnauthorized: true },
   });
 
+  if (options?.readSession === undefined) await primeF402Session();
   const readSession = options?.readSession ?? (() => readF402Session());
   const initial = readSession();
   const deprecatedCookie = env[DEPRECATED_F402_COOKIE_ENV]?.trim() ?? "";
@@ -114,7 +116,7 @@ export async function createF402ReplayTransport(
       return;
     }
     const fresh = await refreshF402Session({ env });
-    writeF402Session(fresh);
+    await saveF402Session(fresh);
   }
 
   return {
