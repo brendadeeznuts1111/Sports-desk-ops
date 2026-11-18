@@ -47,16 +47,24 @@ export function renderOpsMarkdownAnsi(
 
 /**
  * Formats a channel badge matching `AnsiTheme.colors` (`false` -> pure ASCII `[GSLIVE]`).
+ *
+ * The id must be a real index. `>>> 0` used to coerce it, which made `NaN`,
+ * `Infinity` and `2**32` all land on channel `0` and `1.9` land on channel `1` —
+ * a silent alias onto a real channel. Non-integers and out-of-range values now
+ * report `[UNKNOWN]` instead.
  */
 export function formatChannelBadge(
   channelId4: number,
   theme: Readonly<Bun.markdown.AnsiTheme>,
 ): string {
-  const idx = channelId4 >>> 0;
-  if (idx >= CHANNEL_BADGE_ASCII_LUT.length) {
+  const useAscii = theme.colors === false;
+  const lut = useAscii ? CHANNEL_BADGE_ASCII_LUT : CHANNEL_BADGE_ANSI_LUT;
+  if (
+    !Number.isInteger(channelId4) ||
+    channelId4 < 0 ||
+    channelId4 >= lut.length
+  ) {
     return "[UNKNOWN]";
   }
-  return theme.colors === false
-    ? CHANNEL_BADGE_ASCII_LUT[idx]!
-    : CHANNEL_BADGE_ANSI_LUT[idx]!;
+  return lut[channelId4]!;
 }
