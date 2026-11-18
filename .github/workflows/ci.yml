@@ -424,7 +424,7 @@ jobs:
           bun run test:market-index
       - name: Execute Full Verification Test Suite
         timeout-minutes: 5
-        run: bun test tests/ --parallel --reporter=junit --reporter-outfile=junit-report.xml
+        run: bun test tests/ --parallel --reporter=junit --reporter-outfile=junit-report.xml --timings=config/test-timings.json
       - name: "PostgreSQL Integration Test Suite (test:db)"
         timeout-minutes: 3
         env:

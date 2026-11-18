@@ -137,7 +137,92 @@ export function parseBlockedInstallScripts(
   return blocked;
 }
 
-/** The main checkout when `root` is a linked worktree; null for a normal checkout. */
+/** One installed dependency whose node_modules copy does not match the bun.lock resolution. */
+export interface DependencyDrift {
+  readonly packageName: string;
+  readonly installed: string;
+  readonly locked: string;
+}
+
+/**
+ * Registry versions from a Bun text lockfile. bun.lock v2 is a bespoke text format (not JSON -
+ * JSON.parse rejects it), so this reads the packages map in the shape the file uses:
+ * "name": ["name@version", "", {}, "sha512-..."]. Workspace and git resolutions do not start with
+ * a digit and are skipped: they have no installable registry version to compare.
+ */
+export function lockedRegistryVersions(lockText: string): Map<string, string> {
+  const locked = new Map<string, string>();
+  const start = lockText.indexOf(
+    String.fromCharCode(34) + "packages" + String.fromCharCode(34) + ": {",
+  );
+  if (start === -1) return locked;
+  const entry =
+    /^\s*"((?:@[^"/]+\/)?[^"/]+)": \["(?:[^"\\]|\\.)*?@([0-9][^"+]*?)"/gm;
+  for (const match of lockText.slice(start).matchAll(entry)) {
+    const name = match[1];
+    const version = match[2];
+    if (name !== undefined && version !== undefined && !locked.has(name)) {
+      locked.set(name, version);
+    }
+  }
+  return locked;
+}
+
+function readPackageVersion(dir: string): string | null {
+  const manifest = record(readJson(path.join(dir, "package.json")));
+  const version = manifest?.version;
+  return typeof version === "string" ? version : null;
+}
+
+/**
+ * Top-level node_modules entries whose installed version differs from bun.lock.
+ *
+ * Catches the failure `bun install --frozen-lockfile` reported as "no changes" on 2026-11-17:
+ * the lock pinned @types/node@26.6.6 while node_modules/@types/node still linked 22.15.3, so
+ * `bun check` typechecked against stale Node globals and every typecheck gate went red. Only
+ * top-level entries are compared; nested store links are the package manager's business.
+ */
+export function findDependencyDrift(root: string): DependencyDrift[] {
+  const nodeModules = path.join(root, "node_modules");
+  if (!exists(nodeModules)) return [];
+  let lockText: string;
+  try {
+    lockText = fs.readFileSync(path.join(root, "bun.lock"), "utf8");
+  } catch {
+    return [];
+  }
+  const locked = lockedRegistryVersions(lockText);
+  const drifts: DependencyDrift[] = [];
+
+  const check = (pkgDir: string, packageName: string): void => {
+    const wanted = locked.get(packageName);
+    if (wanted === undefined || !/^\d+\.\d+\.\d+/.test(wanted)) return;
+    const installed = readPackageVersion(pkgDir);
+    if (installed === null || installed === wanted) return;
+    drifts.push({ packageName, installed, locked: wanted });
+  };
+
+  for (const entry of fs.readdirSync(nodeModules)) {
+    if (entry.startsWith(".")) continue;
+    if (entry.startsWith("@")) {
+      const scopedDir = path.join(nodeModules, entry);
+      let scoped: string[];
+      try {
+        scoped = fs.readdirSync(scopedDir);
+      } catch {
+        continue;
+      }
+      for (const name of scoped) {
+        check(path.join(scopedDir, name), entry + "/" + name);
+      }
+    } else {
+      check(path.join(nodeModules, entry), entry);
+    }
+  }
+  return drifts.sort((a, b) => a.packageName.localeCompare(b.packageName));
+}
+
+/** The main checkout when root is a linked worktree; null for a normal checkout. */
 export function mainCheckoutRoot(root: string): string | null {
   const common = spawnText(["git", "rev-parse", "--git-common-dir"], root);
   if (common === null || common === "") return null;
@@ -239,6 +324,36 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
       status: "fail",
       title: "node_modules missing",
       fix: "bun install --frozen-lockfile",
+    });
+  }
+
+  if (exists(nodeModules)) {
+    const drift = findDependencyDrift(root);
+    checks.push({
+      id: "deps-drift",
+      status: drift.length === 0 ? "ok" : "warn",
+      title:
+        drift.length === 0
+          ? "installed packages match bun.lock"
+          : drift.length + " installed package(s) drift from bun.lock",
+      ...(drift.length === 0
+        ? {}
+        : {
+            detail:
+              drift
+                .slice(0, 5)
+                .map(
+                  (entry) =>
+                    entry.packageName +
+                    ": installed " +
+                    entry.installed +
+                    ", lock " +
+                    entry.locked,
+                )
+                .join(" | ") +
+              (drift.length > 5 ? " | +" + (drift.length - 5) + " more" : ""),
+            fix: "bun install --frozen-lockfile   # if it reports no changes, delete the stale node_modules entry and reinstall",
+          }),
     });
   }
 
