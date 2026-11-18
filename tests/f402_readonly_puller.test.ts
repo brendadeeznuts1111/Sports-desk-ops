@@ -34,6 +34,7 @@ import {
   redactSecrets,
   REDACTED,
   redactSecretsAndIps,
+  SAFE_PATH_SEGMENT_MAX_LENGTH,
   safePathSegment,
   writeRawJson,
   writeSummaryJson,
@@ -294,6 +295,69 @@ describe("raw file path safety", () => {
       }
       expect(caught).toBeInstanceOf(F402PullerError);
       expect((caught as F402PullerError).code).toBe("unsafe-path");
+    }
+  });
+
+  test("safePathSegment refuses every dot form, odd characters and over-long ids", () => {
+    const max = "a".repeat(SAFE_PATH_SEGMENT_MAX_LENGTH);
+    expect(safePathSegment(max, "test")).toBe(max);
+    for (const id of [
+      ".",
+      "...",
+      ".hidden",
+      ".CUST1",
+      "CUST1.",
+      "CUST1.json",
+      "CUST1/.",
+      "CUST1\0",
+      "CUST 1",
+      "CUST1\n",
+      "ÇUST1",
+      "a".repeat(SAFE_PATH_SEGMENT_MAX_LENGTH + 1),
+    ]) {
+      let caught: unknown;
+      try {
+        safePathSegment(id, "test");
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(F402PullerError);
+      expect((caught as F402PullerError).code).toBe("unsafe-path");
+      expect((caught as F402PullerError).operation).toBe("test");
+    }
+  });
+
+  test("writeRawJson refuses dot, empty and hidden segments inside raw/", () => {
+    const dir = mkdtempSync(join(tmpdir(), "f402-raw-dots-"));
+    try {
+      for (const rel of [
+        ".hidden.json",
+        "contract/.CUST1.json",
+        "contract/./CUST1.json",
+        "contract//CUST1.json",
+        "contract/CUST1..json",
+        "contract/a/../CUST1.json",
+        "contract/",
+        "contract\\CUST1.json",
+      ]) {
+        let caught: unknown;
+        try {
+          writeRawJson(dir, rel, {});
+        } catch (error) {
+          caught = error;
+        }
+        expect(caught).toBeInstanceOf(F402PullerError);
+        expect((caught as F402PullerError).code).toBe("unsafe-path");
+      }
+      for (const rel of [
+        "census/getHeriarchy.json",
+        "contract/CUST1.empty-start.json",
+        "wagers/figure-date/CUST1/2026-11-01.json",
+      ]) {
+        expect(writeRawJson(dir, rel, {})).toBe(join(dir, "raw", rel));
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 
@@ -558,6 +622,47 @@ describe("phases with synthetic fixtures", () => {
     expect(summary.customerIds).toBeUndefined();
     const checkpoint = loadCheckpoint(outDir);
     expect(checkpoint?.customerIds).toEqual(["CUST1", "CUST2"]);
+  });
+
+  test("census refuses an unsafe downline agent id before any child request", async () => {
+    const outDir = tempOut();
+    dirs.push(outDir);
+    const childCalls: string[] = [];
+    const client = new F402PullClient({
+      session,
+      intervalMs: 0,
+      fetchImpl: async (_url, init) => {
+        const form = formOf(init);
+        const op = form.get("operation");
+        if (op === "getHeriarchy") {
+          return Response.json(loadFixture("hierarchy.json"));
+        }
+        if (form.get("agentID") !== "ROOT1") {
+          childCalls.push(String(form.get("agentID")));
+        }
+        return Response.json({
+          GENERAL: [
+            { AgentID: "ROOT1", Login: "ROOT1", Level: 0, AgentType: "M" },
+            { AgentID: "SUB1", Login: "SUB1", Level: 1, AgentType: "A" },
+            { AgentID: "../SUB2", Login: "x", Level: 1, AgentType: "A" },
+          ],
+          PLAYERS: [],
+        });
+      },
+    });
+    await expect(
+      runCensus(
+        {
+          client,
+          outDir,
+          agentId: "ROOT1",
+          agentOwner: "ROOT1",
+          agentType: "M",
+        },
+        { recurseDownline: true },
+      ),
+    ).rejects.toMatchObject({ code: "unsafe-path", operation: "census" });
+    expect(childCalls).toEqual([]);
   });
 
   test("contract hits dated start, empty start, and deleted history", async () => {

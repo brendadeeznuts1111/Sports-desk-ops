@@ -342,10 +342,13 @@ export function saveCheckpoint(
 }
 
 const SAFE_PATH_SEGMENT = /^[A-Za-z0-9_-]+$/;
+export const SAFE_PATH_SEGMENT_MAX_LENGTH = 128;
 
 /**
- * API-supplied ids become file names under `raw/`. Only `[A-Za-z0-9_-]` is
- * accepted, which rules out `..`, `/`, `\`, absolute paths and empty ids.
+ * API-supplied ids become file names under `raw/`. Only `[A-Za-z0-9_-]`, at
+ * most `SAFE_PATH_SEGMENT_MAX_LENGTH` characters, is accepted. No dot is
+ * allowed anywhere, so `.`, `..`, hidden names and ids that would add their
+ * own extension are all refused, as are separators and empty ids.
  */
 export function safePathSegment(value: string, operation: string): string {
   if (!SAFE_PATH_SEGMENT.test(value)) {
@@ -355,7 +358,29 @@ export function safePathSegment(value: string, operation: string): string {
       "refusing an id that is not a plain [A-Za-z0-9_-] path segment",
     );
   }
+  if (value.length > SAFE_PATH_SEGMENT_MAX_LENGTH) {
+    throw new F402PullerError(
+      "unsafe-path",
+      operation,
+      `refusing an id longer than ${SAFE_PATH_SEGMENT_MAX_LENGTH} characters`,
+    );
+  }
   return value;
+}
+
+const SAFE_RAW_FILE_SEGMENT = /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/;
+
+function assertSafeRawRelativePath(relativePath: string): void {
+  const segments = relativePath.split("/");
+  for (const segment of segments) {
+    if (!SAFE_RAW_FILE_SEGMENT.test(segment) || segment.includes("..")) {
+      throw new F402PullerError(
+        "unsafe-path",
+        "raw",
+        "refusing a raw path segment that is empty, starts with a dot, contains .. or a character outside [A-Za-z0-9_.-]",
+      );
+    }
+  }
 }
 
 export function writeRawJson(
@@ -378,6 +403,7 @@ export function writeRawJson(
       "refusing to write a raw file outside the raw directory",
     );
   }
+  assertSafeRawRelativePath(relativePath);
   const path = join(outDir, "raw", relativePath);
   writePrivateJson(path, redactSecrets(value));
   return path;
@@ -938,6 +964,7 @@ export async function runCensus(
       const allow = new Set(options.agents.map((id) => id.toLowerCase()));
       targets = targets.filter((id) => allow.has(id.toLowerCase()));
     }
+    for (const agentId of targets) safePathSegment(agentId, "census");
     for (const agentId of targets) {
       const row = general.find((item) => item.agentId === agentId);
       const childRaw = await ctx.client.post("getListAgenstByAgent", {
