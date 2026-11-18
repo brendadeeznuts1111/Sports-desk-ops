@@ -282,6 +282,27 @@ runtime (`--minimum-release-age`, `--minimum-release-age-excludes`), including a
 interpreted as seconds. The per-version exclusion (`typescript@5.9.3`) and the "security fix
 today, rest of the package waits" semantics are release-note statements, not re-measured here.
 
+<!-- bun-behavior: bun-test-api -->
+
+## `bun:test` API surface (measured 2026-11-18)
+
+The pinned declaration is
+[`packages/bun-types/test.d.ts`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types/test.d.ts);
+the live reference section is `reference/bun/test`.
+
+- Measured exports (`import * as bunTest from "bun:test"`): `afterAll`, `afterEach`, `beforeAll`,
+  `beforeEach`, `default`, `describe`, `expect`, `expectTypeOf`, `it`, `jest`, `mock`,
+  `onTestFinished`, `setDefaultTimeout`, `setSystemTime`, `spyOn`, `test`, `vi`, `xdescribe`,
+  `xit`, `xtest`.
+- `test` statics: `each`, `skipIf`, `todo`, `failing`, `serial`, `only`, `skip`, `if`.
+  `describe` statics: `each`, `skipIf`, `only`, `skip`.
+- `expect` statics measured: `extend`, `assertions`, `hasAssertions`, `any`, `anything`,
+  `closeTo` (`expect.poll` and `expect.soft` are absent on this pin).
+- The live reference lists `aroundAll` and `aroundEach`; the pinned 1.4.4 runtime does not export
+  them, so they are recorded as absent rather than assumed.
+- `tests/bun_test_api.test.ts` re-measures the table, including `describe.each`, `test.each`,
+  `test.skipIf`, `onTestFinished`, `spyOn` and `setSystemTime`.
+
 ## Upstream doc commit pins
 
 | Pin                                                                                                                      | Tree                               | Use                                                                       |

@@ -67,6 +67,11 @@ const BEHAVIOR_METADATA: Readonly<Record<string, BehaviorMetadata>> = {
     docsPage: "/guides/format/migrate-from-oxfmt",
     shapes: [],
   },
+  "bun-test-api": {
+    title: "bun:test API surface",
+    docsPage: "/reference/bun/test",
+    shapes: [],
+  },
   "publish-recursive": {
     title: "bun publish --recursive workspace publishing",
     docsPage: "/docs/cli/publish",
