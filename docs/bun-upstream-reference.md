@@ -396,6 +396,32 @@ not encoded: a probe with `await new Promise(() => {})` did not exit within 120 
 bounded failure to assert. Timers, watch/hot mode, signal handling, and the `vitest` unhandled-error
 listener difference are also not re-measured here.
 
+<!-- bun-behavior: bunx-minimum-release-age -->
+
+## `bunx --minimum-release-age` (measured 2026-11-18)
+
+Measured against a mock registry whose only version is brand new:
+
+```
+bunx --minimum-release-age 3600 age-probe
+→ error: Package "age-probe" with tag "latest" not found
+  (all versions blocked by minimum-release-age: 3600 seconds), exit 1
+bunx --minimum-release-age 0 age-probe
+→ runs the bin, exit 0
+```
+
+So the flag applies to packages `bunx` downloads, not just `bun install` resolution.
+`tests/bunx_download_flags.test.ts` owns both rows.
+
+<!-- bun-behavior: bunx-trust -->
+
+## `bunx --trust` (measured 2026-11-18)
+
+Measured with a package whose `postinstall` writes a marker file: without `--trust` the bin still
+runs but the marker is absent; with `--trust` the marker is written. The release note extends the
+trust to the package's dependencies; only the package's own lifecycle script is re-measured here.
+`tests/bunx_download_flags.test.ts` owns both runs.
+
 ## Upstream doc commit pins
 
 | Pin                                                                                                                      | Tree                               | Use                                                                       |
