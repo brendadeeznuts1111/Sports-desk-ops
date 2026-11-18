@@ -163,8 +163,9 @@ with `bun run audit:tool-calls`.
 **Environment and tooling**
 
 - **Stock Chrome does not start under the sandbox.** Verify pages with
-  `./bin/dx shot <url> --out scratch/shots/x.png` (WebKit) or the Playwright headless shell with
-  `--no-sandbox`; `agent:doctor` prints the available binary.
+  `./bin/dx shot <url> --out scratch/shots/x.png` — WebKit through `Bun.WebView`, in-process and
+  zero-dependency; `agent:doctor` reports it as `OK Bun.WebView available`. The `chrome` backend
+  (Linux/Windows) needs a system Chrome, Chromium, Edge or Brave, not a downloaded browser.
 - **Deploy credentials** come from `./cloudflare.env` or `$XDG_CONFIG_HOME/cloudflare/pages.env`.
   Never source `.env` — it is a 1Password FIFO carrying R2/F402 secrets that shadow the Pages token.
 - **Feed-only refresh:** `graph_feed_poller_daemon.ts --once --live --no-backtest-artifact` (under

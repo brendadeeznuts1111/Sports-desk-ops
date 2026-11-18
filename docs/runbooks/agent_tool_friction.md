@@ -98,8 +98,8 @@ before a read.
 5. **Environment gaps discovered one failure at a time.** `bun run agent:doctor` reports them in
    one call (see §4).
 6. **Browser verification.** Stock Chrome cannot initialize its own sandbox inside DSH. Use
-   `./bin/dx shot <url> --out scratch/shots/x.png` (WebKit backend, zero deps), or the Playwright
-   headless shell with `--no-sandbox`; do not retry stock Chrome.
+   `./bin/dx shot <url> --out scratch/shots/x.png` — WebKit through `Bun.WebView`, in-process and
+   zero-dependency; do not retry stock Chrome and do not install an external browser for it.
 7. **Deploy credentials.** Pages deploy needs a Pages-scoped `CLOUDFLARE_API_TOKEN` +
    `CLOUDFLARE_ACCOUNT_ID` from `./cloudflare.env` or `$XDG_CONFIG_HOME/cloudflare/pages.env`.
    Never source `.env`: it is a 1Password FIFO and carries the R2/F402 secrets that would shadow
@@ -138,8 +138,8 @@ guard. File references are to the DSH checkout.
    with line numbers turns a blind retry into a correct anchor.
    Path: `packages/fs/tool-str-replace-editor/src/index.ts`.
 4. **Browser/CDP failures should name the working fallback.** The current text says Chrome is
-   unavailable; the measured workaround (Playwright headless shell with `--no-sandbox`, or
-   `./bin/dx shot`) is what actually succeeds in this environment.
+   unavailable; the measured workaround (`./bin/dx shot`, WebKit through `Bun.WebView`) is what
+   actually succeeds in this environment.
 5. **The inspector timeout should say “reconnect and retry” once.** 5 of 97 errors were
    `Slots.listSubTree` timeouts; the message already hints at the Harness page, but a single
    automatic retry after the page reconnects would remove the manual step.
