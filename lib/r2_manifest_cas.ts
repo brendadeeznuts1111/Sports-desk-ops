@@ -6,9 +6,12 @@
 
 import { readStrictUtf8R2Object } from "./r2_text.ts";
 import {
+  assertStrongETag,
+  R2EncodedETagError,
   R2PreconditionFailedError,
   R2S3Client,
   R2TimeoutError,
+  R2WeakETagError,
   type R2WriteResult,
 } from "./r2_s3_client.ts";
 import { R2_PUBLIC_BASE } from "./r2_staleness.ts";
@@ -226,12 +229,14 @@ export type R2ManifestProbeResult<T> =
       readonly payload: T;
     };
 
+/**
+ * Trimmed ETag or null. `W/` is kept: a weak ETag must never be replayed as a strong
+ * If-Match, so the CAS refuses it with `R2WeakETagError` instead of stripping it.
+ */
 export function normalizeStrongETag(etag: string | null): string | null {
   if (etag === null) return null;
   const trimmed = etag.trim();
-  if (trimmed.length === 0) return null;
-  const normalized = trimmed.replace(/^W\//i, "").trim();
-  return normalized.length === 0 ? null : normalized;
+  return trimmed.length === 0 ? null : trimmed;
 }
 
 export async function probeR2ManifestState<T>(
@@ -246,6 +251,7 @@ export async function probeR2ManifestState<T>(
       options?.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl },
     );
   } catch (cause) {
+    if (cause instanceof R2EncodedETagError) throw cause;
     throw new R2ManifestCasError(
       "ERR_R2_SINK_BACKPRESSURE",
       `ERR_R2_SINK_BACKPRESSURE: HEAD ${manifestKey} failed: ${
@@ -421,6 +427,8 @@ export async function promoteCanonicalManifestWithCas<TManifest>(params: {
       `ERR_R2_MANIFEST_CAS_REJECTED: empty prevETag for ${manifestKey}`,
       74,
     );
+  } else {
+    assertStrongETag(manifestKey, normalizedPrevETag);
   }
 
   const serialized = JSON.stringify(params.manifest);
@@ -462,6 +470,12 @@ export async function promoteCanonicalManifestWithCas<TManifest>(params: {
       );
     }
   } catch (error) {
+    if (
+      error instanceof R2EncodedETagError ||
+      error instanceof R2WeakETagError
+    ) {
+      throw error;
+    }
     if (error instanceof R2TimeoutError) {
       const landedETag = await resolveTimedOutCasPut({
         client: params.client,

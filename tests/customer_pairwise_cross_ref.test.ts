@@ -1252,8 +1252,8 @@ describe("sportsdesk-fraud cross-ref governance & R2 lineage envelope", () => {
       ifMatch: gen1.newETag!,
     });
 
-    // Weak R2 ETag prefixes (W/"...") normalize to strong ETag comparison
-    expect(normalizeStrongETag('W/"abc123"')).toBe('"abc123"');
+    // Weak R2 ETags keep W/ so the CAS refuses them instead of replaying them as strong
+    expect(normalizeStrongETag('W/"abc123"')).toBe('W/"abc123"');
     expect(normalizeStrongETag("   ")).toBeNull();
 
     // Zero rebases on HTTP 412 -> ERR_R2_MANIFEST_CAS_REJECTED (exit 74)

@@ -278,7 +278,7 @@ function byteLength(data: Uint8Array | string): number {
     : data.byteLength;
 }
 
-type R2S3Auth = Pick<
+export type R2S3Auth = Pick<
   R2S3Options,
   "endpoint" | "accessKeyId" | "secretAccessKey" | "sessionToken" | "region"
 >;
@@ -343,7 +343,90 @@ export const R2_TRANSIENT_NETWORK_CODES = [
   "EAI_AGAIN",
 ] as const;
 
-export type R2SignedMethod = "PUT" | "HEAD";
+export type R2SignedMethod = "PUT" | "HEAD" | "GET";
+
+/**
+ * Sent and signed on every signed R2 request, with `decompress: false`, so no hop may
+ * answer with a compressed representation whose ETag differs from the stored object's.
+ */
+export const R2_IDENTITY_ENCODING_HEADERS = {
+  "accept-encoding": "identity",
+} as const;
+
+/**
+ * Headers Bun's fetch appends on its own after ours. They stay out of SignedHeaders
+ * (SigV4 tolerates unsigned extras); every header this module sets is signed.
+ */
+export const R2_BUN_ADDED_UNSIGNED_HEADERS = [
+  "connection",
+  "user-agent",
+  "accept",
+] as const;
+
+export class R2WeakETagError extends Error {
+  readonly code = "ERR_R2_WEAK_ETAG" as const;
+  readonly exitCode = 74 as const;
+  readonly key: string;
+  readonly etag: string;
+  constructor(key: string, etag: string) {
+    super(
+      `ERR_R2_WEAK_ETAG: ${etag} for ${key} is weak; If-Match compares strong ETags only`,
+    );
+    this.name = "R2WeakETagError";
+    this.key = key;
+    this.etag = etag;
+  }
+}
+
+export class R2EncodedETagError extends Error {
+  readonly code = "ERR_R2_ENCODED_ETAG" as const;
+  readonly exitCode = 74 as const;
+  readonly key: string;
+  readonly method: R2SignedMethod;
+  readonly etag: string;
+  constructor(key: string, method: R2SignedMethod, etag: string) {
+    super(
+      `ERR_R2_ENCODED_ETAG: R2 ${method} ${key} returned ETag ${etag} for a content-encoded representation, not the stored object`,
+    );
+    this.name = "R2EncodedETagError";
+    this.key = key;
+    this.method = method;
+    this.etag = etag;
+  }
+}
+
+const WEAK_ETAG_PREFIX = /^W\//i;
+const ENCODED_ETAG_SUFFIX = /[-+;](?:x-)?(?:gzip|br|deflate|zstd|compress)"?$/i;
+
+export function isWeakETag(etag: string): boolean {
+  return WEAK_ETAG_PREFIX.test(etag.trim());
+}
+
+/** The trimmed ETag, or {@link R2WeakETagError} when it is weak and so unusable for If-Match. */
+export function assertStrongETag(key: string, etag: string): string {
+  const trimmed = etag.trim();
+  if (isWeakETag(trimmed)) throw new R2WeakETagError(key, trimmed);
+  return trimmed;
+}
+
+/**
+ * A response ETag, trimmed, or null when absent. A content-coding tag such as
+ * `"…-gzip"` / `"…+gzip"` names a transformed body; feeding it to If-Match would 412
+ * forever, so it is refused with {@link R2EncodedETagError}. Weak ETags pass through
+ * and are refused where they would be used for CAS.
+ */
+export function parseR2ETag(
+  raw: string | null | undefined,
+  key: string,
+  method: R2SignedMethod,
+): string | null {
+  const etag = raw?.trim() ?? "";
+  if (etag === "") return null;
+  if (ENCODED_ETAG_SUFFIX.test(etag)) {
+    throw new R2EncodedETagError(key, method, etag);
+  }
+  return etag;
+}
 
 export class R2TimeoutError extends Error {
   readonly code = "ERR_R2_TIMEOUT" as const;
@@ -435,7 +518,7 @@ export async function fetchSignedR2(
     return await fetchWithProxyPolicy(
       options.fetchImpl,
       options.url,
-      { ...options.init, signal },
+      { ...options.init, decompress: false, signal },
       options.proxy,
     );
   } catch (error) {
@@ -562,7 +645,7 @@ async function putObjectWithMetadata(
   }
   const endpoint = new URL(auth.endpoint);
   const host = endpoint.host;
-  const path = `/${encodeBucket(bucket)}/${key.split("/").map(encodeRfc3986).join("/")}`;
+  const path = r2ObjectPath(bucket, key);
   const payloadHash = new Bun.CryptoHasher("sha256")
     .update(payload)
     .digest("hex");
@@ -576,6 +659,10 @@ async function putObjectWithMetadata(
   const doFetch = retryOptions.fetchImpl ?? fetch;
   resolveR2Proxy(retryOptions.proxy);
   const timeoutMs = resolveR2TimeoutMs(retryOptions.timeoutMs);
+  const ifMatch =
+    retryOptions.ifMatch === undefined
+      ? undefined
+      : assertStrongETag(key, retryOptions.ifMatch.replace(/[\r\n]+/g, " "));
   const conditional =
     retryOptions.ifMatch !== undefined ||
     retryOptions.ifNoneMatch !== undefined;
@@ -586,14 +673,11 @@ async function putObjectWithMetadata(
       await Bun.sleep(baseDelayMs * attempt);
     }
     const headers: Record<string, string> = {
+      ...R2_IDENTITY_ENCODING_HEADERS,
       "content-length": String(payload.byteLength),
       "content-type": type,
     };
-    if (retryOptions.ifMatch !== undefined) {
-      headers["if-match"] = retryOptions.ifMatch
-        .replace(/[\r\n]+/g, " ")
-        .trim();
-    }
+    if (ifMatch !== undefined) headers["if-match"] = ifMatch;
     if (retryOptions.ifNoneMatch !== undefined) {
       headers["if-none-match"] = retryOptions.ifNoneMatch
         .replace(/[\r\n]+/g, " ")
@@ -636,10 +720,8 @@ async function putObjectWithMetadata(
       }
       throw lastError;
     }
-    if (response.ok) {
-      const etag = response.headers.get("etag")?.trim() ?? "";
-      return etag === "" ? null : etag;
-    }
+    if (response.ok)
+      return parseR2ETag(response.headers.get("etag"), key, "PUT");
     if (response.status === 412) {
       throw new R2PreconditionFailedError(key);
     }
@@ -683,6 +765,57 @@ export interface R2WriteResult {
 
 function encodeBucket(bucket: string): string {
   return encodeRfc3986(bucket);
+}
+
+function r2ObjectPath(bucket: string, key: string): string {
+  return `/${encodeBucket(bucket)}/${key.split("/").map(encodeRfc3986).join("/")}`;
+}
+
+export interface R2SignedReadOptions {
+  readonly auth: R2S3Auth;
+  readonly bucket: string;
+  readonly key: string;
+  readonly method: "GET" | "HEAD";
+  readonly fetchImpl?: typeof fetch;
+  readonly proxy?: R2Proxy;
+  readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * The one signed GET/HEAD path: signs {@link R2_IDENTITY_ENCODING_HEADERS}, sends
+ * `decompress: false`, and refuses a content-encoded ETag before the caller sees it.
+ */
+export async function fetchSignedR2Read(
+  options: R2SignedReadOptions,
+): Promise<Response> {
+  const endpoint = new URL(options.auth.endpoint);
+  const path = r2ObjectPath(options.bucket, options.key);
+  const headers = await buildSignedR2Headers({
+    auth: options.auth,
+    method: options.method,
+    path,
+    host: endpoint.host,
+    payloadHash: EMPTY_SHA256,
+    headers: R2_IDENTITY_ENCODING_HEADERS,
+  });
+  const response = await fetchSignedR2({
+    fetchImpl: options.fetchImpl ?? fetch,
+    url: `${endpoint.origin}${path}`,
+    init: { method: options.method, headers },
+    proxy: options.proxy ?? false,
+    key: options.key,
+    method: options.method,
+    timeoutMs: resolveR2TimeoutMs(options.timeoutMs),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+  });
+  try {
+    parseR2ETag(response.headers.get("etag"), options.key, options.method);
+  } catch (error) {
+    await response.body?.cancel();
+    throw error;
+  }
+  return response;
 }
 
 export class R2S3Client {
@@ -849,9 +982,9 @@ export class R2S3Client {
   }
 
   /**
-   * Read object ETag (returns null if the key does not exist). The HEAD signs
-   * `accept-encoding: identity` and skips decompression so the ETag is the stored
-   * object's, never a transfer-encoded variant such as `"…+gzip"`.
+   * Read object ETag (returns null if the key does not exist) through
+   * {@link fetchSignedR2Read}, so it is the stored object's; a content-encoded ETag
+   * such as `"…+gzip"` throws {@link R2EncodedETagError}.
    */
   async headEtag(
     key: string,
@@ -864,35 +997,25 @@ export class R2S3Client {
     if (this.auth === undefined) {
       if (!(await this.client.exists(key))) return null;
       const stat = await this.client.stat(key);
-      const etag = stat.etag.trim();
-      return etag === "" ? null : etag;
+      return parseR2ETag(stat.etag, key, "HEAD");
     }
-    const endpoint = new URL(this.auth.endpoint);
-    const path = `/${encodeBucket(this.bucket)}/${key.split("/").map(encodeRfc3986).join("/")}`;
-    const requestHeaders = await buildSignedR2Headers({
+    const response = await fetchSignedR2Read({
       auth: this.auth,
-      method: "HEAD",
-      path,
-      host: endpoint.host,
-      payloadHash: EMPTY_SHA256,
-      headers: { "accept-encoding": "identity" },
-    });
-    const response = await fetchSignedR2({
-      fetchImpl: options.fetchImpl ?? fetch,
-      url: `${endpoint.origin}${path}`,
-      init: { method: "HEAD", headers: requestHeaders, decompress: false },
-      proxy: this.proxy,
+      bucket: this.bucket,
       key,
       method: "HEAD",
-      timeoutMs: resolveR2TimeoutMs(options.timeoutMs ?? this.timeoutMs),
+      proxy: this.proxy,
+      timeoutMs: options.timeoutMs ?? this.timeoutMs,
+      ...(options.fetchImpl === undefined
+        ? {}
+        : { fetchImpl: options.fetchImpl }),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
     if (response.status === 404) return null;
     if (!response.ok) {
       throw new Error(`R2 HEAD ${key} failed (${response.status})`);
     }
-    const etag = response.headers.get("etag")?.trim() ?? "";
-    return etag === "" ? null : etag;
+    return parseR2ETag(response.headers.get("etag"), key, "HEAD");
   }
 
   /** Back-compat alias for callers written before the writeWithMetadata rename. */
