@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-18T04:42:30.255Z",
+  "generatedAt": "2026-11-18T21:56:06.521Z",
   "runtime": "Bun 1.4.4",
   "shapes": {
     "$": {
@@ -38,6 +38,10 @@
     "color": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/color#format-colors-as-css"
+    },
+    "ColorInput": {
+      "documented": false,
+      "link": null
     },
     "concatArrayBuffers": {
       "documented": true,
@@ -311,6 +315,10 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-resolvesync"
     },
+    "ResourceUsage": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/child-process#resource-usage"
+    },
     "revision": {
       "documented": true,
       "link": "https://bun.com/guides/util/version"
@@ -411,6 +419,10 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/child-process"
     },
+    "SpawnOptions": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/child-process#reference"
+    },
     "spawnSync": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/child-process#blocking-api-bun-spawnsync"
@@ -443,9 +455,17 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-stripansi"
     },
+    "Subprocess": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/child-process#spawn-a-process-bun-spawn"
+    },
     "Terminal": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/child-process#reusable-terminal"
+    },
+    "TerminalOptions": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/child-process#reference"
     },
     "TOML": {
       "documented": true,

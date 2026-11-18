@@ -63,8 +63,9 @@ files = [
 ]
 options = { sortImports = true }
 
-# Install keys (linker, globalStore, cache.dir, frozenLockfile, minimumReleaseAge) are owned by the
-# machine config at ~/.bunfig.toml. Setting them here would override that SSOT, so they stay out:
+# Install keys (linker, globalStore, cache.dir, frozenLockfile, minimumReleaseAge,
+# minimumReleaseAgeExcludes) are owned by the machine config at ~/.bunfig.toml. Setting one here
+# would override that SSOT, so they stay out:
 # `pm:doctor` fails the "project bunfig" check when one is present (`lib/pm_policy.ts`
 # MACHINE_OWNED_INSTALL_KEYS). Non-machine keys are safe and are pinned here.
 #
@@ -79,9 +80,9 @@ ignoreScripts = true
 # Native Bun lint config. Only the native linter reads it. That linter exists on the 1.4.5
 # canary (`bun lint --no-script`), which the CI `lint-native` job runs, and is expected in
 # Bun 1.5+; it is not on the pinned 1.4.4, which parses this section without error but has
-# no command that uses it. The enforced local gate remains
-# `bun run lint:check` (oxlint 1.90 + oxlint-tsgolint). Keep this block aligned with
-# .oxlintrc.json.
+# no command that uses it. The local gate is `bun run lint:check`, which resolves a native
+# binary and exits 2 without one; CI's required lint-native job supplies the canary runtime.
+# Keep this block aligned with .oxlintrc.json (auto-discovered by the native linter).
 #
 # `typeAware` stays off deliberately: the full type-aware pass currently reports 605
 # warnings (166 no-floating-promises), and `bun check` has 11 unrelated errors.

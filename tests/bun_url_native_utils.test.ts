@@ -21,6 +21,7 @@ import {
   openSourceLocationUrl,
 } from "../src/lib/source_location_url.ts";
 import {
+  fitAnsiCols,
   htmlAnchorLink,
   osc8Link,
   renderWrappedLinkCell,
@@ -57,6 +58,18 @@ describe("terminal_links (OSC-8, wrapAnsi, stringWidth, escapeHTML)", () => {
       expect(visibleLinkWidth(line)).toBeLessThanOrEqual(12);
     }
     expect(Bun.stripANSI(wrapped).replace(/\n/g, " ")).toContain("wrapAnsi");
+  });
+
+  test("fitAnsiCols clips and pads to exact visible columns", () => {
+    const red = "\u001b[31mhello world\u001b[0m";
+    const clipped = fitAnsiCols(red, 5);
+    expect(Bun.stripANSI(clipped)).toBe("hell…");
+    expect(Bun.stringWidth(clipped)).toBe(5);
+    expect(fitAnsiCols("ok", 5)).toBe("ok   ");
+    expect(fitAnsiCols(red, 0)).toBe("");
+    expect(fitAnsiCols(red, 1)).toBe("…");
+    const linked = osc8Link(new URL("https://example.com/x"), "label");
+    expect(Bun.stringWidth(fitAnsiCols(linked, 3))).toBe(3);
   });
 
   test("htmlAnchorLink escapes href query & label XSS payloads via Bun.escapeHTML", () => {

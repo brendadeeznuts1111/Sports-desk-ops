@@ -1,4 +1,4 @@
-# Bun shape contracts — the 129 shapes this repository calls
+# Bun shape contracts — the 134 shapes this repository calls
 
 The single source of truth is layered, and nothing here restates upstream text: **declarations** come from `bun-types@1.4.4` (the surface the reference site renders), **behaviour** from probes against the local `Bun 1.4.4` binary (`tests/bun_baseline.json`), **property attributes** from the pinned Bun commit `38afee6c84`. When they disagree: declarations win on names and signatures, the Bun source wins on attributes, and the measured binary wins on behaviour.
 
@@ -49,7 +49,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** type-only: declared, no runtime value
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Here:** no call site
-- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_file_blob_contract.test.ts`, `test:tests/bun_shapes_manifest.test.ts`
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_file_blob_contract.test.ts`, `test:tests/bun_globals_map_summaries.test.ts`, `test:tests/bun_shapes_manifest.test.ts`
 
 #### Bun.embeddedFiles
 
@@ -71,7 +71,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/FileSink)
 - **Shape:** type-only: declared, no runtime value
 - **Here:** `lib/f402_hierarchy_redact_log.ts`
-- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_shapes_types.test-d.ts`, `test:tests/f402_hierarchy_redact_log.test.ts`
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_globals_map.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_shapes_types.test-d.ts`
 
 #### Bun.fileURLToPath
 
@@ -185,8 +185,15 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/resolveSync)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `packages/sportsdesk-ops/src/lib/bun_surface_dts_inventory.ts`, `lib/f402_agent_graph_layouts.ts`
-- **Evidence:** `test:tests/bun_shapes_coverage.test.ts`, `probe:proc.paths`
+- **Here:** `lib/bun_globals_map_summaries.ts`, `packages/sportsdesk-ops/src/lib/bun_surface_dts_inventory.ts`
+- **Evidence:** `test:tests/bun_shapes_coverage.test.ts`, `test:tests/peer_satisfaction.test.ts`, `test:tests/react_element_version.test.ts`, `probe:proc.paths`
+
+#### Bun.ResourceUsage (type)
+
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/child-process#resource-usage))
+- **Shape:** type-only: declared, no runtime value
+- **Here:** `lib/bun_terminal.ts`
+- **Evidence:** `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_shapes_types.test-d.ts`
 
 #### Bun.sleep
 
@@ -208,6 +215,13 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `cli/sportsdesk_cli.ts`, `lib/bun_terminal.ts`
 - **Evidence:** `surface:spawn`, `test:lib/bun_terminal.test.ts`, `test:scripts/r2_manifest_cas_promote.test.ts`, `test:scripts/wagers_by_state_history.test.ts`
+
+#### Bun.SpawnOptions (type)
+
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/child-process#reference))
+- **Shape:** type-only: declared, no runtime value
+- **Here:** `lib/bun_terminal.ts`
+- **Evidence:** `test:tests/bun_globals_map_summaries.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_shapes_types.test-d.ts`
 
 #### Bun.spawnSync
 
@@ -236,15 +250,29 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/stdout)
 - **Shape:** value: `object` · writable true · enumerable true
-- **Here:** `cli/sportsdesk_replay_cli.ts`, `scripts/capture/f402_hierarchy_probe.ts`
+- **Here:** `cli/sportsdesk_replay_cli.ts`, `src/pty-session.ts`
 - **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/subprocess_deadlock.test.ts`, `probe:proc.stdio`
+
+#### Bun.Subprocess (type)
+
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/child-process#spawn-a-process-bun-spawn))
+- **Shape:** type-only: declared, no runtime value
+- **Here:** `lib/bun_terminal.ts`, `src/pty-session.ts`
+- **Evidence:** `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bundle_runtime.test.ts`, `test:tests/dev_dashboard_endpoints.test.ts`, `test:tests/pty_feature_flags.test.ts`
 
 #### Bun.Terminal
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/Terminal)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/bun_terminal.ts`, `bin/bun_surface.ts`
-- **Evidence:** `surface:Terminal`, `test:tests/bun_urls.test.ts`, `test:tests/pty_feature_flags.test.ts`, `test:tests/pty_injection.test.ts`
+- **Evidence:** `surface:Terminal`, `test:tests/bun_aspects_contract.test.ts`, `test:tests/bun_urls.test.ts`, `test:tests/pty_feature_flags.test.ts`
+
+#### Bun.TerminalOptions (type)
+
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/child-process#reference))
+- **Shape:** type-only: declared, no runtime value
+- **Here:** `lib/bun_terminal.ts`
+- **Evidence:** `test:tests/bun_aspects_contract.test.ts`, `test:tests/bun_reference_symbols.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_urls.test.ts`
 
 #### Bun.unsafe
 
@@ -268,7 +296,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** type-only: declared, no runtime value
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Here:** no call site
-- **Evidence:** `test:tests/agent_diagnostics.test.ts`, `test:tests/auth_and_rate_limit.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_manifest.test.ts`
+- **Evidence:** `test:tests/agent_diagnostics.test.ts`, `test:tests/auth_and_rate_limit.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_globals_map_summaries.test.ts`
 
 #### Bun.write
 
@@ -287,8 +315,15 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/color)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `cli/sportsdesk_cli.ts`, `packages/contracts/src/wager_tokens.ts`
-- **Evidence:** `test:tests/verify_tokens.test.ts`, `probe:text.ansi`
+- **Here:** `lib/token_automation.ts`, `cli/sportsdesk_cli.ts`
+- **Evidence:** `test:tests/token_automation.test.ts`, `test:tests/token_theme_registry.test.ts`, `test:tests/verify_tokens.test.ts`, `probe:text.ansi`
+
+#### Bun.ColorInput (type)
+
+- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
+- **Shape:** type-only: declared, no runtime value
+- **Here:** `lib/bun_profiled_terminal.ts`, `lib/token_automation.ts`
+- **Evidence:** `test:tests/bun_profiled_terminal.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_shapes_types.test-d.ts`, `test:tests/token_automation.test.ts`
 
 #### Bun.enableANSIColors
 
@@ -317,21 +352,21 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/markdown)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (4):** `ansi`, `html`, `react`, `render`
-- **Here:** `lib/cli_markdown_renderer.ts`, `lib/dashboard_render.ts`
-- **Evidence:** `surface:markdown`, `test:tests/ansi_markdown_theme.test.ts`, `test:tests/bun_markdown_ansi_example.test.ts`, `test:tests/bun_urls.test.ts` · deep dive: [§12](./bun_server_runtime_shapes_runbook.md)
+- **Here:** `lib/token_automation.ts`, `lib/cli_markdown_renderer.ts`
+- **Evidence:** `surface:markdown`, `test:scripts/diff-bun-docs-vs-types.test.ts`, `test:tests/ansi_markdown_theme.test.ts`, `test:tests/bun_aspects_contract.test.ts` · deep dive: [§12](./bun_server_runtime_shapes_runbook.md)
 
 #### Bun.sliceAnsi
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/sliceAnsi)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `bin/bun_surface.ts`
+- **Here:** `bin/bun_surface.ts`, `lib/token_watch_native.ts`
 - **Evidence:** `surface:sliceAnsi`, `test:tests/bun_builtin_replacements.test.ts`
 
 #### Bun.stringWidth
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/stringWidth)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/wagers_report.ts`, `lib/cli_inspect.ts`
+- **Here:** `lib/wagers_report.ts`, `src/lib/terminal_links.ts`
 - **Evidence:** `test:scripts/gslive_wagers_by_state.test.ts`, `test:tests/ansi_markdown_theme.test.ts`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_url_native_utils.test.ts`
 
 #### Bun.stripANSI
@@ -339,13 +374,13 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/stripANSI)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/bun_cli_flags.ts`, `bin/bun_surface.ts`
-- **Evidence:** `surface:stripANSI`, `test:lib/wagers_capture_config.test.ts`, `test:scripts/gslive_wagers_by_state.test.ts`, `test:tests/bun_cli_flags.test.ts`
+- **Evidence:** `surface:stripANSI`, `test:lib/wagers_capture_config.test.ts`, `test:scripts/gslive_wagers_by_state.test.ts`, `test:tests/ansi_markdown_theme.test.ts`
 
 #### Bun.wrapAnsi
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/wrapAnsi)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/render_docs.ts`, `scripts/gslive_wagers_by_state.ts`
+- **Here:** `scripts/render_docs.ts`, `lib/token_watch_native.ts`
 - **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_url_native_utils.test.ts`, `test:tests/bun_v140_primitives.test.ts`, `test:tests/dashboard_build_and_markdown.test.ts`
 
 ## Data formats and parsing
@@ -369,7 +404,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/CookieMap)
 - **Shape:** value: `function` · writable false · enumerable true
 - **Here:** `lib/cookie_jar.ts`, `bin/bun_surface.ts`
-- **Evidence:** `surface:CookieMap`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_request_contract.test.ts`, `test:tests/cookie_jar.test.ts`
+- **Evidence:** `surface:CookieMap`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_request_contract.test.ts`, `test:tests/bun_urls.test.ts`
 
 #### Bun.deepEquals
 
@@ -428,7 +463,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (1):** `parse`
 - **Here:** `lib/pm_policy.ts`, `scripts/bun_native_rules.ts`
-- **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_radix_literal_rounding.test.ts`, `probe:data.json`
+- **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_radix_literal_rounding.test.ts`, `test:tests/react_version_pairing.test.ts`, `probe:data.json`
 
 #### Bun.JSONL
 
@@ -436,7 +471,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable false · enumerable true
 - **Members (2):** `parse`, `parseChunk`
 - **Here:** `lib/cron_journal.ts`, `bin/bun_surface.ts`
-- **Evidence:** `test:scripts/gslive_all_states_suspect_cron.test.ts`, `test:scripts/wagers_by_state_history.test.ts`, `test:tests/bridge_3c_system_error.test.ts`, `test:tests/bun_builtin_replacements.test.ts` · deep dive: [§8.4](./bun_server_runtime_shapes_runbook.md)
+- **Evidence:** `test:scripts/gslive_all_states_suspect_cron.test.ts`, `test:scripts/wagers_by_state_history.test.ts`, `test:tests/bridge_3c_system_error.test.ts`, `test:tests/bun_aspects_contract.test.ts` · deep dive: [§8.4](./bun_server_runtime_shapes_runbook.md)
 
 #### Bun.semver
 
@@ -467,7 +502,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `parse`, `stringify`
 - **Here:** `lib/customer_profile.ts`, `lib/bun_xml_golden_ast.ts`
-- **Evidence:** `surface:XML`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_loaders_and_import_attributes.test.ts`, `test:tests/bun_upstream_reference.test.ts`
+- **Evidence:** `surface:XML`, `test:tests/bun_aspects_contract.test.ts`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_loaders_and_import_attributes.test.ts`
 
 #### Bun.YAML
 
@@ -497,14 +532,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (2):** `parse`, `remove`
 - **Here:** `lib/bun_cron.ts`, `bin/bun_surface.ts`
-- **Evidence:** `surface:cron`, `test:lib/bun_cron.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/dashboard_metrics.test.ts`
+- **Evidence:** `surface:cron`, `test:lib/bun_cron.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_urls.test.ts`
 
 #### Bun.CronController (type)
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/CronController)
 - **Shape:** type-only: declared, no runtime value
 - **Here:** `scripts/wagers_by_state_capture.ts`, `lib/bun_cron.ts`
-- **Evidence:** `test:lib/bun_cron.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_shapes_types.test-d.ts`
+- **Evidence:** `test:lib/bun_cron.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_reference_symbols.test.ts`, `test:tests/bun_shapes_manifest.test.ts`
 
 #### Bun.redis
 
@@ -520,7 +555,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/RedisClient)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`
-- **Evidence:** `surface:RedisClient`, `test:tests/bun_capabilities.test.ts`
+- **Evidence:** `surface:RedisClient`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_urls.test.ts`
 
 #### Bun.s3
 
@@ -586,7 +621,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (3):** `delete`, `get`, `set`
 - **Here:** `scripts/secrets_r2.ts`, `scripts/verify-gslive-tickets.ts`
-- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_eval_patterns.test.ts`, `test:tests/r2_s3_client.test.ts`, `test:tests/supervisor.test.ts`
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_eval_patterns.test.ts`, `test:tests/bun_urls.test.ts`, `test:tests/r2_s3_client.test.ts`
 
 #### Bun.sql
 
@@ -602,7 +637,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (13):** snapshot in tests/bun_shape_members.json
 - **Here:** `bin/sql-query.ts`, `lib/customer_index.ts`
-- **Evidence:** `surface:SQL`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_eval_patterns.test.ts`, `test:tests/sql_query_cli.test.ts`
+- **Evidence:** `surface:SQL`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_eval_patterns.test.ts`, `test:tests/bun_urls.test.ts`
 
 ## Crypto, hashing and compression
 
@@ -872,7 +907,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/connect)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`, `lib/tls_provenance.ts`
-- **Evidence:** `surface:connect`, `test:lib/f402_bet_ticker_config.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_socket_contract.test.ts` · deep dive: [§8.2](./bun_server_runtime_shapes_runbook.md)
+- **Evidence:** `surface:connect`, `test:lib/f402_bet_ticker_config.test.ts`, `test:tests/bun_aspects_contract.test.ts`, `test:tests/bun_capabilities.test.ts` · deep dive: [§8.2](./bun_server_runtime_shapes_runbook.md)
 
 #### Bun.dns
 
@@ -888,7 +923,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** type-only: declared, no runtime value
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Here:** no call site
-- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_manifest.test.ts`
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_globals_map_summaries.test.ts`, `test:tests/bun_shapes_manifest.test.ts`
 
 #### Bun.fetch
 
@@ -910,14 +945,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/FetchSession)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `services/sportsdesk_telegram_bot.ts`, `bin/bun_surface.ts`
-- **Evidence:** `surface:FetchSession`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_types.test-d.ts`, `test:tests/fetch_session_contract.test.ts` · deep dive: [§7.3](./bun_server_runtime_shapes_runbook.md)
+- **Evidence:** `surface:FetchSession`, `test:tests/bun_aspects_contract.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_types.test-d.ts` · deep dive: [§7.3](./bun_server_runtime_shapes_runbook.md)
 
 #### Bun.FetchSessionInit (type)
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/FetchSessionInit)
 - **Shape:** type-only: declared, no runtime value
 - **Here:** `services/sportsdesk_telegram_bot.ts`
-- **Evidence:** `test:tests/bun_shape_contracts_links.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_shapes_types.test-d.ts`, `test:tests/fetch_session_contract.test.ts` · deep dive: [§7.3](./bun_server_runtime_shapes_runbook.md)
+- **Evidence:** `test:tests/bun_reference_symbols.test.ts`, `test:tests/bun_shape_contracts_links.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_shapes_types.test-d.ts` · deep dive: [§7.3](./bun_server_runtime_shapes_runbook.md)
 
 #### Bun.FileSystemRouter
 
@@ -939,7 +974,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/blog/bun-v0.5.5#changelog))
 - **Shape:** type-only: declared, no runtime value
 - **Here:** `lib/inspect_diagnostics.ts`
-- **Evidence:** `test:tests/bun_shapes_manifest.test.ts`, `test:tests/inspect_ansi_diagnostics.test.ts`
+- **Evidence:** `test:tests/bun_reference_symbols.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_urls.test.ts`, `test:tests/inspect_ansi_diagnostics.test.ts`
 
 #### Bun.serve
 
@@ -975,7 +1010,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** type-only: declared, no runtime value
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Here:** no call site
-- **Evidence:** `test:tests/blob_and_live_bets_server.test.ts`, `test:tests/blob_live_bets_trace.test.ts`, `test:tests/bun_141_runtime.test.ts`, `test:tests/bun_capabilities.test.ts`
+- **Evidence:** `test:tests/blob_and_live_bets_server.test.ts`, `test:tests/blob_live_bets_trace.test.ts`, `test:tests/bun_141_runtime.test.ts`, `test:tests/bun_aspects_contract.test.ts`
 
 ## Image and WebView
 
@@ -995,7 +1030,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable false · enumerable true
 - **Members (1):** `closeAll`
 - **Here:** `scripts/capture/webview.ts`, `bin/bun_surface.ts`
-- **Evidence:** `surface:WebView`, `test:scripts/bun_docs_mcp.test.ts`, `test:tests/bun_surface_cli.test.ts`, `test:tests/bun_webview_chrome.test.ts` · deep dive: [§9](./bun_server_runtime_shapes_runbook.md)
+- **Evidence:** `surface:WebView`, `test:scripts/bun_docs_mcp.test.ts`, `test:tests/bun_surface_cli.test.ts`, `test:tests/bun_urls.test.ts` · deep dive: [§9](./bun_server_runtime_shapes_runbook.md)
 
 ## Runtime metadata and environment
 
@@ -1014,14 +1049,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/Env)
 - **Shape:** type-only: declared, no runtime value
 - **Here:** `lib/db.ts`, `lib/secret_manifest.ts`
-- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_registry_config.test.ts`, `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bun_shapes_types.test-d.ts`
+- **Evidence:** `test:tests/bun_aspects_contract.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_registry_config.test.ts`, `test:tests/bun_shapes_manifest.test.ts`
 
 #### Bun.revision
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/revision)
 - **Shape:** value: `string` · writable false · enumerable true
 - **Here:** `lib/bun_runtime.ts`, `packages/sportsdesk-ops/src/bin/bun-surface.ts`
-- **Evidence:** `test:lib/f402_portal_runtime_pin.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_runtime.test.ts`, `test:tests/bun_surface_snapshot.test.ts`
+- **Evidence:** `test:lib/f402_portal_runtime_pin.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_reference_cli.test.ts`, `test:tests/bun_runtime.test.ts`
 
 #### Bun.version
 
@@ -1041,7 +1076,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 Non-test production imports from `bun:sqlite`, `bun:jsc`, and `bun:bundle` are inventoried alongside `MODULE "bun"` / `globalThis.Bun` (`BUN_SUBMODULE_SHAPES` in `lib/bun_shapes.ts`).
 
-- **`bun:bundle` → `feature`** (bundler macro) — here: `packages/ui/src/runtime_flags.ts` · evidence: `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bundle_runtime.test.ts`, `test:tests/bundle_types.test-d.ts`, `test:tests/pty_feature_flags.test.ts`
+- **`bun:bundle` → `feature`** (bundler macro) — here: `lib/bun_reference_probe.ts`, `packages/ui/src/runtime_flags.ts` · evidence: `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bundle_runtime.test.ts`, `test:tests/bundle_types.test-d.ts`, `test:tests/pty_feature_flags.test.ts`
 - **`bun:jsc` → `estimateShallowMemoryUsageOf`** (runtime export) — here: `bin/bun_surface.ts`, `lib/f402_hierarchy_memory.ts` · evidence: `surface:bun:jsc.estimateShallowMemoryUsageOf`
 - **`bun:jsc` → `heapStats`** (runtime export) — here: `bin/bun_surface.ts`, `scripts/bench_bridge3a_workload.ts` · evidence: `surface:bun:jsc.heapStats`, `test:tests/f402_bet_ticker_delta.test.ts`
 - **`bun:sqlite` → `constants`** (runtime export) — here: `bin/bun_surface.ts`, `lib/sportsdesk_sqlite.ts` · evidence: `surface:bun:sqlite.constants`

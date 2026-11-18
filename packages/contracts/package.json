@@ -77,7 +77,7 @@
   ],
   "scripts": {
     "typecheck": "bun check --no-script -p tsconfig.json",
-    "lint": "bun x --cwd ../.. oxlint -c .oxlintrc.json --deny-warnings packages/contracts/src",
+    "lint": "bun run --cwd ../.. lint:canary -- packages/contracts/src",
     "test": "bun test --no-script --cwd ../.. tests/slice_metrics.test.ts tests/wager_tiers_toml.test.ts tests/dashboard_ui_hydration.test.tsx tests/workspace_packs.test.ts",
     "build": "bun scripts/build.ts",
     "prepack": "bun run build"

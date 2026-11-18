@@ -83,26 +83,41 @@ describe("bun:test exports", () => {
 
 describe("bun:test statics", () => {
   test("test and describe expose the table and filter statics", () => {
+    // Reading `.only` throws when CI is truthy (CI=true/1) so a CI run cannot accidentally
+    // skip tests; CI=false, CI=0 and unset expose the filter again (measured on 1.4.4).
+    const ciGuard = Bun.env.CI === "true" || Bun.env.CI === "1";
+    const staticType = (target: unknown, name: string): string => {
+      try {
+        return typeof (target as Record<string, unknown>)[name];
+      } catch (error) {
+        return `throws: ${(error as Error).message}`;
+      }
+    };
+
     for (const name of [
       "each",
       "skipIf",
       "todo",
       "failing",
       "serial",
-      "only",
       "skip",
       "if",
     ]) {
-      expect(
-        typeof (test as unknown as Record<string, unknown>)[name],
-        name,
-      ).toBe("function");
+      expect(staticType(test, name), name).toBe("function");
     }
-    for (const name of ["each", "skipIf", "only", "skip"]) {
-      expect(
-        typeof (describe as unknown as Record<string, unknown>)[name],
-        name,
-      ).toBe("function");
+    for (const [target, label] of [
+      [test, "test"],
+      [describe, "describe"],
+    ] as const) {
+      const only = staticType(target, "only");
+      if (ciGuard) {
+        expect(only, label).toContain("disabled in CI environments");
+      } else {
+        expect(only, label).toBe("function");
+      }
+    }
+    for (const name of ["each", "skipIf", "skip"]) {
+      expect(staticType(describe, name), name).toBe("function");
     }
     for (const name of [
       "extend",

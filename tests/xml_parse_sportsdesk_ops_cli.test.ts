@@ -18,6 +18,20 @@ const FEED_XML = `<?xml version="1.0" encoding="UTF-8"?>
   <event id="43" sport="BASKETBALL" subSport="NBA" line="-110" wagerType="2" period="0" marketKind="0"/>
 </feed>`;
 
+const PREFIXED_FEED_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<m:feed xmlns:m="urn:sportsdesk:xml">
+  <m:event id="42" sport="FOOTBALL" subSport="NFL" line="3.5" wagerType="1" period="2" marketKind="1"/>
+  <m:event id="43" sport="BASKETBALL" subSport="NBA" line="-110" wagerType="2" period="0" marketKind="0"/>
+</m:feed>`;
+
+const EMPTY_FEED_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<feed></feed>`;
+
+const MISSING_ROOT_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<odds><event id="42"/></odds>`;
+
+const TRUNCATED_FEED_XML = `<feed><event id="42"`;
+
 const TAXONOMY_MANIFEST = {
   generation_u32: 7,
   entries: [
@@ -284,7 +298,7 @@ describe("xml-parse · live runtime preflight", () => {
 });
 
 describe("xml-parse · canonical SoA serialization", () => {
-  test("writes row attributes and watermark lineage", () => {
+  test("writes row attributes, the tri-state line, and watermark lineage", () => {
     const store = createXmlOddsFeedColumnStore(4);
     hydrateXmlOddsFeedIntoSoA(
       new TextEncoder().encode(FEED_XML),
@@ -298,19 +312,29 @@ describe("xml-parse · canonical SoA serialization", () => {
     );
     const text = new TextDecoder().decode(bytes);
     expect(text).toContain(
-      '<sportsdeskXmlFeed watermarkCursor="wm-1:2" dataWindowMaxEpochMs="1762000000000" rowCount="2">',
+      '<sportsdeskXmlFeed watermarkCursor="wm-1:2" dataWindowMaxEpochMs="1762000000000" rowCount="2" lineUnknownCount="1">',
     );
     const parsed = Bun.XML.parse(bytes) as {
       sportsdeskXmlFeed: {
         "@rowCount": string;
+        "@lineUnknownCount": string;
         event: Array<Record<string, string>>;
       };
     };
     expect(parsed.sportsdeskXmlFeed["@rowCount"]).toBe("2");
+    expect(parsed.sportsdeskXmlFeed["@lineUnknownCount"]).toBe("1");
+    // Row 0 is a KNOWN decimal line: lineHundredths, no lineUnknown.
     expect(parsed.sportsdeskXmlFeed.event[0]?.["@id"]).toBe("42");
     expect(parsed.sportsdeskXmlFeed.event[0]?.["@subSportCode6"]).toBe("1");
     expect(parsed.sportsdeskXmlFeed.event[0]?.["@lineHundredths"]).toBe("350");
+    expect(parsed.sportsdeskXmlFeed.event[0]?.["@lineUnknown"]).toBeUndefined();
+    // Row 1 is UNKNOWN (`-110`): explicit flag, no fabricated hundredths.
     expect(parsed.sportsdeskXmlFeed.event[1]?.["@subSportCode6"]).toBe("3");
+    expect(
+      parsed.sportsdeskXmlFeed.event[1]?.["@lineHundredths"],
+    ).toBeUndefined();
+    expect(parsed.sportsdeskXmlFeed.event[1]?.["@lineUnknown"]).toBe("1");
+    expect(text).not.toContain("-11000");
   });
 });
 
@@ -360,6 +384,17 @@ describe("xml-parse · unmapped quarantine ring", () => {
   });
 });
 
+describe("xml-parse · help contract", () => {
+  test("--help documents the publisher and the line-unknown snapshot fields", async () => {
+    const result = await runCli(["--help"], baseEnv(null));
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("xml-parse — canonical XML ingest");
+    expect(result.stdout).toContain("--dry-run");
+    expect(result.stdout).toContain("line_unknown_count");
+    expect(result.stdout).toContain('lineUnknown="1"');
+  });
+});
+
 describe("xml-parse · end-to-end against a mock R2 + live feed", () => {
   test("dry-run hydrates and plans without snapshot writes", async () => {
     const s3 = startMockS3();
@@ -369,6 +404,8 @@ describe("xml-parse · end-to-end against a mock R2 + live feed", () => {
     const summary = JSON.parse(result.stdout) as {
       dry_run: boolean;
       hydrated_rows: number;
+      row_count: number;
+      line_unknown_count: number;
       generation_u32: number;
       r2_published_at_epoch_ms: number;
       merkle_root_sha256: string;
@@ -376,6 +413,8 @@ describe("xml-parse · end-to-end against a mock R2 + live feed", () => {
     };
     expect(summary.dry_run).toBe(true);
     expect(summary.hydrated_rows).toBe(2);
+    expect(summary.row_count).toBe(2);
+    expect(summary.line_unknown_count).toBe(1);
     expect(summary.generation_u32).toBe(42);
     expect(summary.merkle_root_sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(summary.r2_published_at_epoch_ms).toBe(0);
@@ -396,10 +435,14 @@ describe("xml-parse · end-to-end against a mock R2 + live feed", () => {
       merkle_root_sha256: string;
       watermark_cursor: string;
       hydrated_rows: number;
+      row_count: number;
+      line_unknown_count: number;
       dry_run: boolean;
     };
     expect(summary.dry_run).toBe(false);
     expect(summary.hydrated_rows).toBe(2);
+    expect(summary.row_count).toBe(2);
+    expect(summary.line_unknown_count).toBe(1);
     expect(summary.generation_u32).toBe(42);
     expect(summary.watermark_cursor).toBe("wm-99");
 
@@ -424,7 +467,161 @@ describe("xml-parse · end-to-end against a mock R2 + live feed", () => {
     expect(manifest["chunk_key"]).toBe(chunkKey);
     expect(manifest["watermark_cursor"]).toBe("wm-99");
     expect(manifest["r2_bucket"]).toBe("sportsdesk-ops-reports");
+    expect(manifest["row_count"]).toBe(2);
+    expect(manifest["line_unknown_count"]).toBe(1);
     expect(manifest["circuit_state"]).toBe("CLOSED");
+    // Shipped-path body contract: the parsed manifest that production publishes must
+    // keep the sink-key and zero-reconciliation fields the inline body used to own.
+    expect(manifest["r2_manifest_key"]).toBe("manifests/xml-ingest/latest");
+    expect(manifest["unresolved_gap_cents"]).toBe("0");
+
+    // The chunk carries the explicit unknown-line state, never a scaled price.
+    const chunk = s3.objects.get(chunkKey);
+    expect(chunk).toBeDefined();
+    const chunkXml = new TextDecoder().decode(chunk!.body);
+    expect(chunkXml).toContain('lineUnknownCount="1"');
+    expect(chunkXml).toContain('lineUnknown="1"');
+    expect(chunkXml).toContain('lineHundredths="350"');
+    expect(chunkXml).not.toContain("-11000");
+
+    // The generation object carries the identical body: one construction, not two.
+    const generationPut = s3.puts.find((put) =>
+      put.key.startsWith("generations/xml-ingest/gen-42-"),
+    );
+    expect(generationPut).toBeDefined();
+    const generationObject = s3.objects.get(generationPut!.key);
+    expect(generationObject).toBeDefined();
+    const generationBody = JSON.parse(
+      new TextDecoder().decode(generationObject!.body),
+    ) as Record<string, unknown>;
+    expect(generationBody).toEqual(manifest);
+  });
+
+  test("a namespace-prefixed feed root hydrates the same rows", async () => {
+    const s3 = startMockS3();
+    const result = await runCli(
+      ["--url", startFeed(PREFIXED_FEED_XML), "--capacity", "64"],
+      baseEnv(s3),
+    );
+    expect(result.exitCode, result.stderr).toBe(0);
+    const summary = JSON.parse(result.stdout) as {
+      merkle_root_sha256: string;
+      hydrated_rows: number;
+      row_count: number;
+      line_unknown_count: number;
+    };
+    expect(summary.hydrated_rows).toBe(2);
+    expect(summary.row_count).toBe(2);
+    expect(summary.line_unknown_count).toBe(1);
+
+    const chunkKey = `chunks/${summary.merkle_root_sha256}.bin`;
+    expect(s3.puts.map((put) => put.key)).toContain(chunkKey);
+    const chunk = s3.objects.get(chunkKey);
+    expect(chunk).toBeDefined();
+    const chunkXml = new TextDecoder().decode(chunk!.body);
+    expect(chunkXml).toContain('rowCount="2"');
+    expect(chunkXml).toContain('id="42"');
+    expect(chunkXml).toContain('id="43"');
+    expect(chunkXml).toContain('lineUnknownCount="1"');
+  });
+
+  test("an empty feed fails closed with ERR_XML_FEED_EMPTY and no R2 writes", async () => {
+    const s3 = startMockS3();
+    const result = await runCli(
+      ["--url", startFeed(EMPTY_FEED_XML)],
+      baseEnv(s3),
+    );
+    expect(result.exitCode).toBe(65);
+    expect(result.stderr).toContain("ERR_XML_FEED_EMPTY");
+    expect(s3.puts).toHaveLength(0);
+    expect(
+      [...s3.objects.keys()].some((key) => key.startsWith("chunks/")),
+    ).toBe(false);
+    expect(
+      [...s3.objects.keys()].some((key) => key.startsWith("generations/")),
+    ).toBe(false);
+    expect(s3.objects.get("manifests/xml-ingest/latest")?.etag).toBe(
+      '"xml-41"',
+    );
+  });
+
+  test("an empty feed is refused on --dry-run too", async () => {
+    const s3 = startMockS3();
+    const result = await runCli(
+      ["--url", startFeed(EMPTY_FEED_XML), "--dry-run"],
+      baseEnv(s3),
+    );
+    expect(result.exitCode).toBe(65);
+    expect(result.stderr).toContain("ERR_XML_FEED_EMPTY");
+    expect(s3.puts).toHaveLength(0);
+  });
+
+  test("--allow-empty publishes a deliberate zero-row generation", async () => {
+    const s3 = startMockS3();
+    const result = await runCli(
+      ["--url", startFeed(EMPTY_FEED_XML), "--allow-empty"],
+      baseEnv(s3),
+    );
+    expect(result.exitCode, result.stderr).toBe(0);
+    const summary = JSON.parse(result.stdout) as {
+      generation_u32: number;
+      merkle_root_sha256: string;
+      hydrated_rows: number;
+      row_count: number;
+      line_unknown_count: number;
+      dry_run: boolean;
+    };
+    expect(summary.dry_run).toBe(false);
+    expect(summary.hydrated_rows).toBe(0);
+    expect(summary.row_count).toBe(0);
+    expect(summary.line_unknown_count).toBe(0);
+    expect(summary.generation_u32).toBe(42);
+
+    const chunkKey = `chunks/${summary.merkle_root_sha256}.bin`;
+    const putKeys = s3.puts.map((put) => put.key);
+    expect(putKeys).toContain(chunkKey);
+    expect(
+      putKeys.some((key) => key.startsWith("generations/xml-ingest/gen-42-")),
+    ).toBe(true);
+
+    const stored = s3.objects.get("manifests/xml-ingest/latest");
+    expect(stored).toBeDefined();
+    const manifest = JSON.parse(
+      new TextDecoder().decode(stored!.body),
+    ) as Record<string, unknown>;
+    expect(manifest["generation_u32"]).toBe(42);
+    expect(manifest["row_count"]).toBe(0);
+    expect(manifest["line_unknown_count"]).toBe(0);
+    expect(manifest["chunk_key"]).toBe(chunkKey);
+
+    const chunk = s3.objects.get(chunkKey);
+    expect(chunk).toBeDefined();
+    const chunkXml = new TextDecoder().decode(chunk!.body);
+    expect(chunkXml).toContain('rowCount="0"');
+    expect(chunkXml).toContain('lineUnknownCount="0"');
+  });
+
+  test("a document with no feed root fails closed with ERR_XML_FEED_ROOT_MISSING", async () => {
+    const s3 = startMockS3();
+    const result = await runCli(
+      ["--url", startFeed(MISSING_ROOT_XML)],
+      baseEnv(s3),
+    );
+    expect(result.exitCode).toBe(65);
+    expect(result.stderr).toContain("ERR_XML_FEED_ROOT_MISSING");
+    expect(s3.puts).toHaveLength(0);
+  });
+
+  test("a truncated feed fails with ERR_XML_PARSE_FAILED, not an entity bomb", async () => {
+    const s3 = startMockS3();
+    const result = await runCli(
+      ["--url", startFeed(TRUNCATED_FEED_XML)],
+      baseEnv(s3),
+    );
+    expect(result.exitCode).toBe(65);
+    expect(result.stderr).toContain("ERR_XML_PARSE_FAILED");
+    expect(result.stderr).not.toContain("ERR_XML_ENTITY_BOMB");
+    expect(s3.puts).toHaveLength(0);
   });
 
   test("HTTP 412 exits 74 with ERR_R2_MANIFEST_CAS_REJECTED", async () => {
@@ -440,7 +637,7 @@ describe("xml-parse · end-to-end against a mock R2 + live feed", () => {
     );
   });
 
-  test("unmapped taxonomy is quarantined and reported", async () => {
+  test("unmapped taxonomy is counted but never written on --dry-run", async () => {
     const s3 = startMockS3();
     const feed = startFeed(
       FEED_XML.replace('subSport="NBA"', 'subSport="XYZ"'),
@@ -450,16 +647,15 @@ describe("xml-parse · end-to-end against a mock R2 + live feed", () => {
     const summary = JSON.parse(result.stdout) as {
       unmapped_taxonomy_quarantined: number;
       quarantine_key: string | null;
+      dry_run: boolean;
     };
+    expect(summary.dry_run).toBe(true);
+    // The count is measured, but `--dry-run` must not mutate the bucket: the quarantine
+    // object is a write like any other. The non-dry-run write is covered by the ring's own
+    // describe block above.
     expect(summary.unmapped_taxonomy_quarantined).toBe(1);
-    expect(summary.quarantine_key).toMatch(
-      /^quarantine\/portal-taxonomy\/unmapped\/\d+-[0-9a-f]{16}\.json$/,
-    );
-    expect(
-      s3.puts
-        .map((put) => put.key)
-        .some((key) => key.startsWith("quarantine/portal-taxonomy/unmapped/")),
-    ).toBe(true);
+    expect(summary.quarantine_key).toBeNull();
+    expect(s3.puts).toHaveLength(0);
   });
 
   test("fails before network on retired env keys (exit 78)", async () => {
@@ -512,5 +708,7 @@ describe("xml-parse · end-to-end against a mock R2 + live feed", () => {
     );
     expect(result.exitCode).toBe(70);
     expect(result.stderr).toContain("ERR_DOD_CSR_CONSERVATION_BREACH");
+    // The whole frame is rejected before any row or snapshot is written.
+    expect(s3.puts).toHaveLength(0);
   });
 });

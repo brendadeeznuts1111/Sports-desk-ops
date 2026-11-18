@@ -44,7 +44,7 @@ Bun flags fall into three clear positional tiers (derived from Bun `v1.4.x` gram
 
 1. **Top-level Bun flags** (place immediately after `bun`, before the subcommand or entrypoint):
    - `bun --watch run dev` or `bun --watch index.tsx` ✔️ (runtime watcher active; canonical documented form)
-   - `bun --check run script.ts` or `bun --check index.tsx` ✔️ (compile-time type gate enforced; halts with exit 1 on error)
+   - `bun --check run script.ts` or `bun --check scripts/foo.ts` ✔️ (type-checks, then **runs** the target when it type-checks — a gate before execution, not a check-only mode; `bun check <files…>` is the check-only form, and `bun --check a.ts b.ts` checks only `a.ts` and passes `b.ts` to it as argv)
    - `bun --smol run dev` or `bun --smol index.tsx` ✔️ (runs GC more often to keep memory low; `smol = true` in `bunfig.toml`)
    - `bun --console-depth=5 run dev` or `bun --console-depth=5 index.tsx` ✔️ (sets `console.log` object depth to 5)
    - `bun --cpu-prof run dev` or `bun --cpu-prof index.tsx` ✔️ (writes CPU profile to disk on exit)
@@ -104,7 +104,7 @@ When executing `package.json` scripts (`bun run <script>`):
   - **Concurrency controls**: `--parallel` runs targets concurrently; `--sequential` (default) runs in dependency topological order; `--no-exit-on-error` keeps executing remaining packages if one fails; `--if-present` gracefully skips matching packages that do not declare the requested script.
 - **Executing from STDIN (`bun run -` / `bun -`)**: Passing `-` directs Bun to read and evaluate code streamed from standard input:
   - Supports JS, TS, and JSX/TSX without temporary files: `echo "const x: string = 'Hello'; console.log(x)" | bun run -`
-  - Fully compatible with `--check`: `echo "const x: number = 'err';" | bun --check run -` performs compile-time static type analysis on `[stdin]` and halts on errors.
+  - `--check` gates execution rather than replacing it: `echo "const x: number = 'err';" | bun --check run -` halts on the type error, and a clean script is then **run**. For analysis only there is no stdin form — `bun check -` answers `error: Unknown flag "-"`.
   - **Extension-independent parsing via redirection**: Running `bun file.js` enforces standard JavaScript parser rules (rejecting TS syntax like `as any` or `!`). Redirecting through `bun run - < file.js` defaults `[stdin]` to the universal TypeScript/TSX loader, running `.js` files containing TypeScript seamlessly.
 
 ## Testing upstream Bun releases & PRs (`./bin/dx pr`)

@@ -34,65 +34,31 @@ import { resolveLiveBets } from "../src/live_bets/resolve.ts";
 
 const REPO_ROOT = resolve(import.meta.dir, "..");
 
-const SHORT_BUN_FLAGS_WITH_VALUE = new Set([
-  "-F",
-  "-r",
-  "-e",
-  "-p",
-  "-d",
-  "-l",
-  "-c",
-]);
-const SHORT_BUN_SWITCH_FLAGS = new Set(["-b", "-i"]);
+/** Derive short switch, short value-bearing, and long value-bearing flag sets from live `bun run --help`. */
+function deriveBunFlagSets(surface: BunRunCliSurface): {
+  readonly shortWithValue: ReadonlySet<string>;
+  readonly shortSwitch: ReadonlySet<string>;
+  readonly longWithValue: ReadonlySet<string>;
+} {
+  const shortWithValue = new Set<string>();
+  const shortSwitch = new Set<string>();
+  const longWithValue = new Set<string>();
 
-const VALUE_BEARING_LONG_BUN_FLAGS = new Set([
-  "--elide-lines",
-  "--filter",
-  "--shell",
-  "--watch-kill-signal",
-  "--preload",
-  "--require",
-  "--import",
-  "--inspect",
-  "--inspect-wait",
-  "--inspect-brk",
-  "--cpu-prof-name",
-  "--cpu-prof-dir",
-  "--cpu-prof-interval",
-  "--heap-prof-name",
-  "--heap-prof-dir",
-  "--heap-prof-interval",
-  "--install",
-  "--eval",
-  "--print",
-  "--port",
-  "--conditions",
-  "--fetch-preconnect",
-  "--max-http-header-size",
-  "--dns-result-order",
-  "--redirect-warnings",
-  "--disable-warning",
-  "--title",
-  "--unhandled-rejections",
-  "--console-depth",
-  "--user-agent",
-  "--cron-title",
-  "--cron-period",
-  "--main-fields",
-  "--extension-order",
-  "--tsconfig-override",
-  "--define",
-  "--drop",
-  "--feature",
-  "--loader",
-  "--jsx-factory",
-  "--jsx-fragment",
-  "--jsx-import-source",
-  "--jsx-runtime",
-  "--env-file",
-  "--cwd",
-  "--config",
-]);
+  for (const entry of surface.entries) {
+    if (entry.valueHint !== null) {
+      if (entry.name.startsWith("--")) {
+        longWithValue.add(entry.name);
+      }
+      if (entry.short !== null) {
+        shortWithValue.add(entry.short);
+      }
+    } else if (entry.short !== null && entry.short !== "-h") {
+      shortSwitch.add(entry.short);
+    }
+  }
+
+  return { shortWithValue, shortSwitch, longWithValue };
+}
 
 export interface ActiveSecretCheck {
   readonly blocked: boolean;
@@ -205,6 +171,8 @@ export function buildDxRunPlan(
   let dryRun = false;
   let json = false;
 
+  const { shortWithValue, shortSwitch, longWithValue } =
+    deriveBunFlagSets(surface);
   const explicitBunFlags: string[] = [];
   let target: string | null = null;
   const targetArgs: string[] = [];
@@ -312,7 +280,7 @@ export function buildDxRunPlan(
       explicitBunFlags.push(token);
       if (
         !token.includes("=") &&
-        VALUE_BEARING_LONG_BUN_FLAGS.has(flagName) &&
+        longWithValue.has(flagName) &&
         combined[i + 1] !== undefined &&
         !combined[i + 1]!.startsWith("-")
       ) {
@@ -323,11 +291,11 @@ export function buildDxRunPlan(
     }
 
     if (token.startsWith("-") && token.length === 2) {
-      if (SHORT_BUN_SWITCH_FLAGS.has(token)) {
+      if (shortSwitch.has(token)) {
         explicitBunFlags.push(token);
         continue;
       }
-      if (SHORT_BUN_FLAGS_WITH_VALUE.has(token)) {
+      if (shortWithValue.has(token)) {
         const val = combined[i + 1];
         if (val === undefined) {
           throw new Error(`dx run: short Bun flag "${token}" requires a value`);

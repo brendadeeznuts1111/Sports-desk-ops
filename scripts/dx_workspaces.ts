@@ -1244,7 +1244,7 @@ Examples:
   ./bin/dx workspaces run --filter '@sportsdesk-ops/*' --dry-run verify
   ./bin/dx workspaces add ba-example zod --dry-run
   ./bin/dx workspaces publish --dry-run
-  ./bin/dx workspaces x ui oxlint --dry-run
+  ./bin/dx workspaces x --dry-run ui tsc --version
   ./bin/dx workspaces link ba-example @sportsdesk-ops/nsh-desk --dry-run
 `;
 

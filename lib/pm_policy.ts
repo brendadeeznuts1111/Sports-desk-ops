@@ -29,6 +29,8 @@ export const MACHINE_OWNED_INSTALL_KEYS = [
   "cache",
   "frozenLockfile",
   "minimumReleaseAge",
+  // The exemption list is the other half of the age gate: a project copy would override the
+  // machine's vetted exemptions, so it stays machine-owned for the same reason.
   "minimumReleaseAgeExcludes",
 ] as const;
 
@@ -50,6 +52,40 @@ export const FOREIGN_LOCKFILES = [
   "pnpm-lock.yaml",
   "bun.lockb",
 ] as const;
+
+/**
+ * `minimumReleaseAgeExcludes` entries Bun would ignore.
+ *
+ * The age gate accepts a bare package name (exempts every version, including future ones)
+ * or `name@<exact version>`, with `||` between several exact versions. Anything else —
+ * `typescript@^5`, `typescript@latest`, `typescript@` — is dropped **with a warning only**,
+ * so the package stays gated while the config looks like it exempts it. Dotfiles owns the
+ * list; this is what `pm:doctor` reads to keep that silent-drop out of the machine policy.
+ * @param raw - the parsed `minimumReleaseAgeExcludes` value, if any.
+ * @returns the offending entries; empty when every entry is a bare name or exact version.
+ * @see https://bun.com/docs/pm/cli/install#minimum-release-age
+ */
+export function invalidReleaseAgeExcludes(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const exactVersion =
+    /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+  const invalid: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "string") {
+      invalid.push(String(entry));
+      continue;
+    }
+    // lastIndexOf: a scoped name starts with `@`, and only a trailing `@` introduces versions.
+    const at = entry.lastIndexOf("@");
+    if (at <= 0) continue;
+    const versions = entry
+      .slice(at + 1)
+      .split("||")
+      .map((part) => part.trim());
+    if (versions.some((part) => !exactVersion.test(part))) invalid.push(entry);
+  }
+  return invalid;
+}
 
 /**
  * Lifecycle trust policy: root `trustedDependencies` must be exactly `[]`, matching `bun.lock`.

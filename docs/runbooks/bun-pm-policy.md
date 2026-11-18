@@ -74,7 +74,7 @@ flowchart LR
 Maintainer machine config lives in **`~/dotfiles/bun/bunfig.toml`** (symlinked to the live global path). Typical shape beyond the table:
 
 - `globalStore = true` with **isolated** linker → installs symlink through `node_modules/.bun` into the shared store ([global store](https://bun.com/docs/pm/global-store)).
-- `minimumReleaseAgeExcludes` — package names (or exact versions) that **skip** the age gate; dotfiles keeps Bun/types tooling on a faster cadence than arbitrary npm packages.
+- `minimumReleaseAgeExcludes` — package names (or exact versions) that **skip** the age gate; dotfiles keeps Bun/types tooling on a faster cadence than arbitrary npm packages. Only two forms count: a bare name (every version, including future ones) or `name@<exact version>` (`esbuild@0.21.4 || 0.21.5`). `pkg@^5`, `pkg@latest` and `pkg@` are ignored **with a warning only**, so the package stays gated while the entry looks like an exemption — `pm:doctor` reports those as `release age excludes`.
 - `[install.cache] dir` — **absolute** path under `$HOME/.bun/install/cache` (unexpanded `~` in bunfig is a known footgun).
 
 Also avoid duplicating scoped registries in bunfig; Bun reads **`~/.npmrc`** for `@scope:registry` and tokens.
@@ -100,7 +100,7 @@ Also avoid duplicating scoped registries in bunfig; Bun reads **`~/.npmrc`** for
 | **Explicit array**                           | **Only** listed names; default list ignored                                                                                                    |
 | **`[]` (this repo)**                         | **No** dependency lifecycle scripts, including none from the default list                                                                      |
 
-Root `package.json` `{pre|post}install` / `{pre|post}prepare` still run on install unless `--ignore-scripts`. This repo pins `trustedDependencies` to `[]` and mirrors it in `bun.lock` so lockfile-only drift is visible. **Oxlint** ships platform `@oxlint/binding-*` optional packages as prebuilt tarballs (lockfile lists `os` / `cpu` / `libc`); there are no `patchedDependencies` / `overrides` on the root manifest today.
+Root `package.json` `{pre|post}install` / `{pre|post}prepare` still run on install unless `--ignore-scripts`. This repo defines **no** root or workspace lifecycle scripts, so an install runs no project code at all; `bun pm untrusted` reports 0 packages with scripts, so `[]` blocks nothing that would otherwise run. That combination is what makes `bun ci --production` on the VPS execute only resolution and linking — adding a root `postinstall` would make it run repository code on the server, which is a deliberate decision, not a convenience. This repo pins `trustedDependencies` to `[]` and mirrors it in `bun.lock` so lockfile-only drift is visible. **Oxlint** ships platform `@oxlint/binding-*` optional packages as prebuilt tarballs (lockfile lists `os` / `cpu` / `libc`); there are no `patchedDependencies` / `overrides` on the root manifest today.
 
 ### `bun.lock` shape here
 
@@ -143,29 +143,30 @@ Drift lines look like `packages/foo: lock 1.0.0 vs 1.0.1` (`scripts/pm_doctor.ts
 
 Implementation: `scripts/pm_doctor.ts`. Exit **1** if any selected check has status `fail`; `warn` does not fail. `--only <substring>` filters check **names** (comma-separated); `--only lock` stays offline (skips registry `fetch` unless filter matches `registry`, `token`, or `@…`).
 
-| Check                      | Fail / warn | What it proves                                                        |
-| -------------------------- | ----------- | --------------------------------------------------------------------- |
-| `runtime pin`              | fail        | `Bun.version`, `engines.bun`, and `packageManager` agree on **1.4.4** |
-| `lifecycle scripts`        | fail        | `trustedDependencies` is exactly `[]`                                 |
-| `global bunfig`            | fail        | Live global config file exists (`globalBunfigPath`)                   |
-| `inert bunfig`             | warn        | A second `~/.bunfig.toml` path exists but is not the live file        |
-| `frozen lockfile`          | fail        | Global `install.frozenLockfile === true`                              |
-| `isolated linker`          | fail        | Global `install.linker === "isolated"`                                |
-| `release age gate`         | fail        | Global `minimumReleaseAge` is set and non-zero                        |
-| `project bunfig`           | fail        | Repo `bunfig.toml` does not set machine-owned install keys            |
-| `lockfile`                 | fail        | `bun.lock` present; none of `FOREIGN_LOCKFILES`                       |
-| `lock workspaces`          | fail        | Workspace path → **name** matches lock                                |
-| `lock versions`            | fail        | Each `packages/*` **version** matches lock                            |
-| `patches`                  | fail        | `patchedDependencies` manifest = lock and patch files exist           |
-| `nameless workspace`       | warn        | Matched `package.json` without `"name"` (Bun skips)                   |
-| `root private`             | fail        | Root `package.json` sets `"private": true` (prevents npm publish)     |
-| `workspace dirs`           | fail        | Every non-empty directory under `packages/*` has a `package.json`     |
-| `workspace graph`          | fail        | Valid `workspace:*` / `catalog:` edges, acyclic waves, lock dep sync  |
-| `self-contained packages`  | fail        | `Bun.Transpiler` scan finds zero undeclared bare imports in packages  |
-| `installed tree`           | warn        | Missing `node_modules`, or hoisted layout without `node_modules/.bun` |
-| `bun-deps command`         | fail        | `bun-deps` on `PATH`                                                  |
-| `deps override`            | fail        | `unfrozen.bunfig.toml` exists; only `frozenLockfile = false`          |
-| `@… registry` / `@… token` | warn / ok   | `.npmrc` scoped registry reachable; token env set when declared       |
+| Check                      | Fail / warn | What it proves                                                                    |
+| -------------------------- | ----------- | --------------------------------------------------------------------------------- |
+| `runtime pin`              | fail        | `Bun.version`, `engines.bun`, and `packageManager` agree on **1.4.4**             |
+| `lifecycle scripts`        | fail        | `trustedDependencies` is exactly `[]`                                             |
+| `global bunfig`            | fail        | Live global config file exists (`globalBunfigPath`)                               |
+| `inert bunfig`             | warn        | A second `~/.bunfig.toml` path exists but is not the live file                    |
+| `frozen lockfile`          | fail        | Global `install.frozenLockfile === true`                                          |
+| `isolated linker`          | fail        | Global `install.linker === "isolated"`                                            |
+| `release age gate`         | fail        | Global `minimumReleaseAge` is set and non-zero                                    |
+| `release age excludes`     | fail        | No `minimumReleaseAgeExcludes` entry Bun would ignore (bare name or `name@x.y.z`) |
+| `project bunfig`           | fail        | Repo `bunfig.toml` does not set machine-owned install keys                        |
+| `lockfile`                 | fail        | `bun.lock` present; none of `FOREIGN_LOCKFILES`                                   |
+| `lock workspaces`          | fail        | Workspace path → **name** matches lock                                            |
+| `lock versions`            | fail        | Each `packages/*` **version** matches lock                                        |
+| `patches`                  | fail        | `patchedDependencies` manifest = lock and patch files exist                       |
+| `nameless workspace`       | warn        | Matched `package.json` without `"name"` (Bun skips)                               |
+| `root private`             | fail        | Root `package.json` sets `"private": true` (prevents npm publish)                 |
+| `workspace dirs`           | fail        | Every non-empty directory under `packages/*` has a `package.json`                 |
+| `workspace graph`          | fail        | Valid `workspace:*` / `catalog:` edges, acyclic waves, lock dep sync              |
+| `self-contained packages`  | fail        | `Bun.Transpiler` scan finds zero undeclared bare imports in packages              |
+| `installed tree`           | warn        | Missing `node_modules`, or hoisted layout without `node_modules/.bun`             |
+| `bun-deps command`         | fail        | `bun-deps` on `PATH`                                                              |
+| `deps override`            | fail        | `unfrozen.bunfig.toml` exists; only `frozenLockfile = false`                      |
+| `@… registry` / `@… token` | warn / ok   | `.npmrc` scoped registry reachable; token env set when declared                   |
 
 ### Verification layers (who catches drift)
 
@@ -312,6 +313,20 @@ Root manifest: `"private": true` and `"workspaces": ["packages/*"]` ([workspaces
 | `packages/sportsdesk-ops` | `sportsdesk-ops`           | Zero-spawn CLI `bin` symlink package (`bun x sportsdesk`, `bun x dx`, `bun x nsh-desk`) |
 | `packages/nsh-desk`       | `@sportsdesk-ops/nsh-desk` | Native Shell (NSH) multi-plane terminal workspace (`version` locked to `nsh.json`)      |
 | `packages/ba-example`     | `ba-example`               | Doc-style reference workspace for `bun run --filter`                                    |
+
+`ba-example` declares a single `schema` script, so it also pins what a filtered run does when a
+matched package lacks the requested script:
+
+```sh
+bun run --filter 'ba*' schema                   # runs only ba-example; output is prefixed `ba-example schema:`
+bun run --filter 'ba*' --if-present typecheck   # exit 0, nothing to run
+```
+
+`--filter` matches package **names**, not directory paths (`--filter 'packages/ba*'` matches
+nothing — exit 1, `No workspace packages matched the filter`). A matched package without the
+script fails the whole run — `error: Script "typecheck" not found in package "ba-example"`, exit 1
+— so add `--if-present` when the glob can include a package that does not declare it. Measured on
+Bun 1.4.4, 2026-11-18.
 
 **Workspace Dev Control CLI (`scripts/dx_workspaces.ts` / `./bin/dx workspaces`):**
 
@@ -485,17 +500,17 @@ What CI and tests enforce without a maintainer machine bunfig.
 
 ### `tests/bun_config_policy.test.ts`
 
-| Test                                                   | Asserts                                                                                                            |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| project bunfig does not set machine-owned install keys | No `linker`, `globalStore`, `cache`, `frozenLockfile`, `minimumReleaseAge` under `[install]` in repo `bunfig.toml` |
-| lifecycle scripts are not trusted implicitly           | `trustedDependencies === []`                                                                                       |
-| package manager and engine match the runtime           | `packageManager === bun@${engines.bun}` and semver satisfies                                                       |
-| lockfile is text format and only one                   | `bun.lock` exists; no `FOREIGN_LOCKFILES`                                                                          |
-| lockfile workspaces match package.json                 | `lockWorkspaceNames` parity                                                                                        |
-| lockfile workspace versions match                      | `lockWorkspaceVersions` parity (excludes root `""` version)                                                        |
-| every declared patch in lock and on disk               | `patchState` declared = locked, files exist                                                                        |
-| global bunfig path XDG rule                            | `globalBunfigPath()` unit cases                                                                                    |
-| no committed loopback registry or token                | `.npmrc` (if present) and root `publishConfig` reject `127.0.0.1` / `localhost` and `_authToken`                   |
+| Test                                                   | Asserts                                                                                                                                         |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| project bunfig does not set machine-owned install keys | No `linker`, `globalStore`, `cache`, `frozenLockfile`, `minimumReleaseAge`, `minimumReleaseAgeExcludes` under `[install]` in repo `bunfig.toml` |
+| lifecycle scripts are not trusted implicitly           | `trustedDependencies === []`                                                                                                                    |
+| package manager and engine match the runtime           | `packageManager === bun@${engines.bun}` and semver satisfies                                                                                    |
+| lockfile is text format and only one                   | `bun.lock` exists; no `FOREIGN_LOCKFILES`                                                                                                       |
+| lockfile workspaces match package.json                 | `lockWorkspaceNames` parity                                                                                                                     |
+| lockfile workspace versions match                      | `lockWorkspaceVersions` parity (excludes root `""` version)                                                                                     |
+| every declared patch in lock and on disk               | `patchState` declared = locked, files exist                                                                                                     |
+| global bunfig path XDG rule                            | `globalBunfigPath()` unit cases                                                                                                                 |
+| no committed loopback registry or token                | `.npmrc` (if present) and root `publishConfig` reject `127.0.0.1` / `localhost` and `_authToken`                                                |
 
 ### `tests/pm_policy_workspaces.test.ts`
 

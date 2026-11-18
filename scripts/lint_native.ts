@@ -70,7 +70,7 @@ if (import.meta.main) {
   const bin = resolveNativeBunLintBin();
   if (bin === null) {
     console.error(
-      `lint:native unavailable on Bun ${Bun.version} (no native \`bun lint\` binary found; set BUN_LINT_BIN or use \`bun run lint:check\`).`,
+      `lint:native unavailable on Bun ${Bun.version} (no native \`bun lint\` binary found; requires Bun canary / 1.4.5+ or BUN_LINT_BIN).`,
     );
     process.exit(2);
   }

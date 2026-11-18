@@ -3,38 +3,58 @@ import type { Subprocess } from "bun";
 
 describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
   let proc: Subprocess;
-  const PORT = 4055;
-  const baseUrl = `http://127.0.0.1:${PORT}`;
+  let baseUrl: string;
 
-  beforeAll(async () => {
-    proc = Bun.spawn(["bun", "run", "scripts/dev_dashboard.ts"], {
-      env: {
-        ...process.env,
-        PORT: String(PORT),
-        SPORTSDESK_AUTH_DISABLED: "1",
-        SPORTSDESK_LIVE_WAGERS_JSON: "tests/fixtures/live-wagers.partial.json",
-      },
-      stdout: "pipe",
-      stderr: "pipe",
+  /** Bind an ephemeral port, read it, release it for the subprocess. */
+  function reservePort(): number {
+    const probe = Bun.serve({
+      port: 0,
+      fetch: () => new Response(null, { status: 204 }),
     });
+    const port = probe.port;
+    probe.stop(true);
+    if (port === undefined) {
+      throw new Error(
+        "ERR_DEV_DASHBOARD_NO_PORT: could not reserve an ephemeral port",
+      );
+    }
+    return port;
+  }
 
+  async function waitForHealth(url: string): Promise<boolean> {
     const start = Date.now();
-    let ready = false;
     while (Date.now() - start < 6000) {
       try {
-        const res = await fetch(`${baseUrl}/health`);
-        if (res.ok) {
-          ready = true;
-          break;
-        }
+        if ((await fetch(`${url}/health`)).ok) return true;
       } catch {
         await Bun.sleep(100);
       }
     }
-    if (!ready) {
+    return false;
+  }
+
+  beforeAll(async () => {
+    // Parallel test workers share the OS network namespace, so a fixed port lets two
+    // copies of this file talk to each other's server (observed: one copy fails while
+    // the other holds 4055). Reserve an ephemeral port and retry if it is taken.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const port = reservePort();
+      baseUrl = `http://127.0.0.1:${port}`;
+      proc = Bun.spawn(["bun", "run", "scripts/dev_dashboard.ts"], {
+        env: {
+          ...process.env,
+          PORT: String(port),
+          SPORTSDESK_AUTH_DISABLED: "1",
+          SPORTSDESK_LIVE_WAGERS_JSON:
+            "tests/fixtures/live-wagers.partial.json",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      if (await waitForHealth(baseUrl)) return;
       proc.kill();
-      throw new Error("Dev dashboard failed to start within timeout");
     }
+    throw new Error("Dev dashboard failed to start within timeout");
   });
 
   afterAll(() => {
@@ -42,11 +62,34 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
   });
 
   describe("Static directory routes", () => {
-    it("serves /static/* through Bun's native directory route", async () => {
+    it("serves /static/* through the range-aware handler, not the native dir mount", async () => {
       const res = await fetch(`${baseUrl}/static/live-bets.html`);
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
       expect(await res.text()).toContain("Live");
+      // A strong validator: the native `{ dir }` route answers `W/"1000-…"`, so this also proves
+      // the mount is the handler and not the directory route.
+      const etag = res.headers.get("etag") ?? "";
+      expect(etag).toMatch(/^"[0-9a-f]+-[0-9a-f]+"$/);
+      expect(res.headers.get("accept-ranges")).toBe("bytes");
+    });
+
+    it("answers a byte range on a static page", async () => {
+      const res = await fetch(`${baseUrl}/static/live-bets.html`, {
+        headers: { Range: "bytes=0-9" },
+      });
+      expect(res.status).toBe(206);
+      expect(res.headers.get("content-range")).toMatch(/^bytes 0-9\/\d+$/);
+      expect((await res.arrayBuffer()).byteLength).toBe(10);
+    });
+
+    it("revalidates a static page with its ETag", async () => {
+      const first = await fetch(`${baseUrl}/static/live-bets.html`);
+      const etag = first.headers.get("etag") ?? "";
+      const cached = await fetch(`${baseUrl}/static/live-bets.html`, {
+        headers: { "If-None-Match": etag },
+      });
+      expect(cached.status).toBe(304);
     });
 
     it("does not escape the static directory", async () => {
@@ -267,6 +310,8 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
       expect(custRes.headers.get("location")).toBe(
         "/?tab=customers&search=GP301",
       );
-    });
+      // Three concurrent fetches against a subprocess server: 5s (the default) is
+      // not enough headroom when the file runs inside a saturated --parallel pool.
+    }, 15_000);
   });
 });

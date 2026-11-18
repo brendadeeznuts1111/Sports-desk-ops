@@ -9,6 +9,7 @@ import {
   globalBunfigPath,
   inspectWorkspaceInstallLayout,
   inspectWorkspaces,
+  invalidReleaseAgeExcludes,
   lockWorkspaceDependencies,
   lockWorkspaceNames,
   lockWorkspaceVersions,
@@ -58,6 +59,12 @@ describe("package manager policy", () => {
     const config = bunfig as { install?: Record<string, unknown> };
     expect(config.install).toEqual({ exact: true, ignoreScripts: true });
     expect(machineOwnedInstallOverrides(config.install)).toEqual([]);
+  });
+
+  test("the age-gate exemption list is machine-owned too", () => {
+    // `minimumReleaseAgeExcludes` is the other half of the gate: a project copy would override the
+    // machine's vetted exemptions, so it cannot be a project key.
+    expect(MACHINE_OWNED_INSTALL_KEYS).toContain("minimumReleaseAgeExcludes");
   });
 
   test("lifecycle scripts are not trusted implicitly", () => {
@@ -192,5 +199,46 @@ describe("package manager policy", () => {
 
     const layout = await inspectWorkspaceInstallLayout(".");
     expect(layout.nshVersionDrift).toEqual([]);
+  });
+});
+
+/**
+ * `minimumReleaseAgeExcludes` grammar: a bare name exempts every version, `name@x.y.z`
+ * exempts only that release, and Bun drops anything else **with a warning only** — the
+ * package stays gated while the config reads as if it were exempt. `pm:doctor` exposes
+ * that silent drop as `release age excludes`.
+ */
+describe("minimumReleaseAgeExcludes", () => {
+  test("accepts the bare-name and exact-version forms Bun honours", () => {
+    expect(invalidReleaseAgeExcludes([])).toEqual([]);
+    expect(
+      invalidReleaseAgeExcludes(["typescript", "@types/node", "bun-types"]),
+    ).toEqual([]);
+    expect(
+      invalidReleaseAgeExcludes(["typescript@5.4.5", "@types/node@20.11.0"]),
+    ).toEqual([]);
+    expect(invalidReleaseAgeExcludes(["esbuild@0.21.4 || 0.21.5"])).toEqual([]);
+    expect(
+      invalidReleaseAgeExcludes(["pkg@1.2.3-rc.1", "pkg@1.2.3+build.5"]),
+    ).toEqual([]);
+  });
+
+  test("reports the entries Bun would ignore", () => {
+    expect(
+      invalidReleaseAgeExcludes([
+        "typescript@^5",
+        "typescript@latest",
+        "typescript@",
+      ]),
+    ).toEqual(["typescript@^5", "typescript@latest", "typescript@"]);
+    expect(invalidReleaseAgeExcludes(["ok", "pkg@1.2.3 || latest"])).toEqual([
+      "pkg@1.2.3 || latest",
+    ]);
+  });
+
+  test("treats a non-list value as no exclusions rather than a config error", () => {
+    expect(invalidReleaseAgeExcludes(undefined)).toEqual([]);
+    expect(invalidReleaseAgeExcludes("typescript")).toEqual([]);
+    expect(invalidReleaseAgeExcludes({})).toEqual([]);
   });
 });

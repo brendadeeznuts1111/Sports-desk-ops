@@ -6,13 +6,16 @@ import {
   HALF_POINT_HOOK_SYNDICATE_PROFILES,
   KEY_NUMBER_BUYER_PROFILES,
   SIGNATURE_SPECS,
+  buildCustomerProfile,
   buildCustomerProfiles,
+  deriveLiveContext,
   enrichTicketWithBuyPoints,
   evaluateTicketForProfileAlert,
   fmtCents,
   fmtInt,
   fmtUsd,
   isKeyNumberBuy,
+  isSyntheticCustomerId,
   normalizeCustomerId,
   normalizeObservationTicket,
   parseBuyPointsFromDesc,
@@ -1102,3 +1105,142 @@ describe.skipIf(book === null || book.length !== 220)(
     });
   },
 );
+
+describe("live-derived context labels", () => {
+  test("SYNTH_ ids are recognised as fixtures, case-insensitively", () => {
+    expect(isSyntheticCustomerId("SYNTH_SYN_01")).toBe(true);
+    expect(isSyntheticCustomerId(" synth_rec_03 ")).toBe(true);
+    expect(isSyntheticCustomerId("PTA101")).toBe(false);
+  });
+
+  const liveRow = (over: Partial<CustomerRow> = {}): CustomerRow => ({
+    customer_id: "LIVE1",
+    provenance: "live-wagers",
+    agent_id: "AGENT",
+    ...over,
+  });
+
+  test("high observed risk wins over every other rule", () => {
+    const derived = deriveLiveContext(
+      liveRow({
+        recent_tickets: [
+          {
+            risk_usd: 12_000,
+            market: "SPREAD",
+            placed_at: "2026-11-18 10:00:00",
+          },
+        ],
+      }),
+    );
+    expect(derived?.contextType).toBe("HIGH_LIMIT_CONDUIT");
+    expect(derived?.reason).toContain("$12,000 risk");
+  });
+
+  test("three placements in one window label a velocity sniper", () => {
+    const derived = deriveLiveContext(
+      liveRow({
+        open_positions: [
+          { risk_usd: 100, market: "ML", placed_at: "2026-11-18 10:00:00" },
+          { risk_usd: 100, market: "ML", placed_at: "2026-11-18 10:06:00" },
+          { risk_usd: 100, market: "ML", placed_at: "2026-11-18 10:12:00" },
+        ],
+      }),
+    );
+    expect(derived?.contextType).toBe("VELOCITY_SNIPER");
+  });
+
+  test("multi-leg positions label a parlay specialist", () => {
+    const derived = deriveLiveContext(
+      liveRow({
+        open_positions: [
+          { risk_usd: 200, market: "M", legs: 3 },
+          { risk_usd: 200, market: "M", legs: 4 },
+        ],
+      }),
+    );
+    expect(derived?.contextType).toBe("PARLAY_SPECIALIST");
+  });
+
+  test("a concentrated low-risk sample labels a market specialist, then a casual staker", () => {
+    const concentrated = deriveLiveContext(
+      liveRow({
+        recent_tickets: [
+          { risk_usd: 600, market: "TOTAL" },
+          { risk_usd: 200, market: "TOTAL" },
+          { risk_usd: 100, market: "SPREAD" },
+        ],
+      }),
+    );
+    expect(concentrated?.contextType).toBe("MARKET_SPECIALIST");
+    expect(concentrated?.reason).toContain("in TOTAL");
+    // A two-row concentration is not enough for a "specialist" claim.
+    expect(
+      deriveLiveContext(
+        liveRow({
+          recent_tickets: [
+            { risk_usd: 600, market: "TOTAL" },
+            { risk_usd: 200, market: "TOTAL" },
+          ],
+        }),
+      )?.contextType,
+    ).toBe("ACTIVE_MIXED_PLAYER");
+
+    const casual = deriveLiveContext(
+      liveRow({
+        recent_tickets: [
+          { risk_usd: 40, market: "SPREAD" },
+          { risk_usd: 60, market: "TOTAL" },
+        ],
+      }),
+    );
+    expect(casual?.contextType).toBe("CASUAL_SMALL_STAKER");
+  });
+
+  test("an empty live sample is labelled insufficient, not guessed", () => {
+    expect(deriveLiveContext(liveRow())?.contextType).toBe(
+      "INSUFFICIENT_SAMPLE",
+    );
+  });
+
+  test("book rows and rows with a context keep their label and gain no model flag", () => {
+    expect(deriveLiveContext({ customer_id: "BOOK" })).toBeNull();
+    expect(
+      deriveLiveContext(liveRow({ context_type: "STEAM_CHASER" })),
+    ).toBeNull();
+
+    const book = buildCustomerProfile(
+      { customer_id: "BOOK", context_type: "STEAM_CHASER" },
+      tree,
+    );
+    expect(book.contextType).toBe("STEAM_CHASER");
+    expect(book.flags.some((flag) => flag.startsWith("CONTEXT_MODEL:"))).toBe(
+      false,
+    );
+
+    const live = buildCustomerProfile(
+      liveRow({ open_positions: [{ risk_usd: 2_000, market: "ML" }] }),
+      tree,
+    );
+    expect(live.contextType).not.toBe("");
+    expect(live.flags.some((flag) => flag.startsWith("CONTEXT_MODEL:"))).toBe(
+      true,
+    );
+  });
+
+  test("measured live writer evidence is carried onto the profile", () => {
+    const evidence = { Internet: { n: 3, riskUsd: 1_500 } };
+    const withEvidence = buildCustomerProfile(
+      {
+        customer_id: "LIVE2",
+        provenance: "live-wagers",
+        channel_evidence: evidence,
+      },
+      tree,
+    );
+    expect(withEvidence.channelEvidence).toEqual(evidence);
+    // A book row without live wagers must not gain an empty evidence object.
+    expect(
+      buildCustomerProfile({ customer_id: "BOOK2" }, tree).channelEvidence,
+    ).toBeUndefined();
+  });
+});

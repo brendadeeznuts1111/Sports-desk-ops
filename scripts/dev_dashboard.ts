@@ -39,10 +39,7 @@ import {
   retryAlert,
 } from "../lib/alerts.ts";
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
-import {
-  createBunImageAssetSnapshotSource,
-  type BunImageAssetSnapshotSource,
-} from "../lib/bun_image_asset_snapshot.ts";
+import { bunImageAssetSnapshot } from "../lib/bun_image_asset_snapshot.ts";
 import { buildAutomationsSnapshot } from "../lib/automations_status.ts";
 import {
   benchmarkResolverLatency,
@@ -63,6 +60,7 @@ import { encodedResponse } from "../lib/http_compression.ts";
 import { readImageProvenance } from "../lib/image_provenance.ts";
 import { parseShortDesc } from "../lib/live_wagers.ts";
 import { isSentinelTickerWriter } from "@sportsdesk-ops/backend";
+import { createServeFile } from "../lib/serve_file.ts";
 import { SLAB_SERVER } from "../lib/slab_config.ts";
 import {
   inventoryStaticDirectory,
@@ -691,12 +689,28 @@ export function startDashboardServer(
     { clients },
   );
 
+  const serveStaticAsset = createServeFile({
+    root: resolve(cwd, "static"),
+    cacheControl: "public, max-age=60",
+  });
+
   const uiRoutes = {
     "/": indexHtml,
     "/dashboard": indexHtml,
-    // Bun's native directory route: zero-JS static dispatch with range/ETag
-    // handling and symlink clamping; files live under repo `static/`.
-    "/static/*": { dir: resolve(cwd, "static") },
+    // `/static/*` through the range-aware handler, not Bun's native `{ dir }` mount. The mount
+    // was chosen for its "symlink clamping", which it does not do: measured on 1.4.4, a symlink
+    // inside `static/` pointing at a file outside it was served with that file's content
+    // (`/static/escape.txt` → 200 with the outside bytes). `containedAssetPath`, which the handler
+    // uses, resolves the real path and refuses it. The same swap also replaces the directory
+    // route's weak `W/"…"` validator with a strong one, and adds `If-Range` and multi-range.
+    // `static/` is flat — no `index.html`, no subdirectories — so nothing relied on directory
+    // index or the 301 for a missing trailing slash.
+    "/static/*": (req: Request): Response | Promise<Response> => {
+      const url = new URL(req.url);
+      const stripped = url.pathname.slice("/static".length);
+      url.pathname = stripped === "" ? "/" : stripped;
+      return serveStaticAsset(req, url);
+    },
     "/index.js": {
       GET: async (req: Request): Promise<Response> => {
         const bundle = await ensureLegacyBundle();
@@ -851,12 +865,6 @@ export function startDashboardServer(
     );
   }
 
-  /** One snapshot cache per requested limit, so repeated tab opens do not rescan the directory. */
-  const imageAssetSnapshotSources = new Map<
-    number,
-    BunImageAssetSnapshotSource
-  >();
-
   const companionApiRoutes = {
     "/api/live-bets": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url), () =>
@@ -905,19 +913,12 @@ export function startDashboardServer(
       const limit = Number.isInteger(requested)
         ? Math.min(Math.max(requested, 1), 100)
         : 24;
-      let source = imageAssetSnapshotSources.get(limit);
-      if (source === undefined) {
-        source = createBunImageAssetSnapshotSource(
-          resolve(cwd, "docs/assets"),
-          {
-            limit,
-            visibility: "RISK_MANAGER",
-            displayRoot: "docs/assets",
-            ttlMs: 5_000,
-          },
-        );
-        imageAssetSnapshotSources.set(limit, source);
-      }
+      const source = bunImageAssetSnapshot(resolve(cwd, "docs/assets"), {
+        limit,
+        visibility: "RISK_MANAGER",
+        displayRoot: "docs/assets",
+        ttlMs: 5_000,
+      });
       const snapshot = await source.snapshot();
       const headers = {
         ETag: snapshot.etag,

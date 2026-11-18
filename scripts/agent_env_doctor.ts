@@ -370,7 +370,7 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
     });
   }
 
-  const requiredBins = ["dx", "sportsdesk", "wrangler", "nsh-desk", "oxlint"];
+  const requiredBins = ["dx", "sportsdesk", "wrangler", "nsh-desk"];
   const binDir = path.join(nodeModules, ".bin");
   const binStates = requiredBins.map(
     (name) => [name, binLinkState(path.join(binDir, name))] as const,
@@ -393,7 +393,7 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
       : {
           detail:
             danglingBins.length === 0
-              ? "bun x <cli> and oxlint gates expect packages/sportsdesk-ops linked"
+              ? "bun x <cli> expects packages/sportsdesk-ops linked"
               : `${danglingBins.join(", ")} exist as links whose target is gone — the workspace package is not linked, so the install is stale or incomplete`,
           fix: "./bin/dx exec bun-deps install   # or: bun install --frozen-lockfile",
         }),

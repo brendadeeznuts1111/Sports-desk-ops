@@ -18,19 +18,32 @@ export function assertXmlIngestBytesNotHtmlOn200(rawBytes: Uint8Array): void {
   }
 }
 
-const ENTITY_BOMB_SYNTAX = /call stack|too deeply|entity|SyntaxError/i;
+/**
+ * Entity-shaped parse failures (Bun 1.4.4 measured):
+ * `Entity expansion exceeds the amplification limit` (exponential expansion),
+ * `Entity '<name>' refers to itself` (recursive entity), and undeclared-entity
+ * references. Deep recursion builds surface as "call stack" / "too deeply".
+ */
+const ENTITY_BOMB_SYNTAX = /entity|amplification limit|call stack|too deeply/i;
 
 /**
- * Parse XML after preflight. Maps exponential entity expansion to a stable ops error code.
+ * Parse XML after preflight. Entity-bomb failures map to their own stable ops
+ * error code; every other syntax failure maps to `ERR_XML_PARSE_FAILED` so a
+ * truncated tag is not misreported as an entity bomb.
  */
-export function parseXmlCompactDocument(rawBytes: Uint8Array): unknown {
+export function parseXmlCompactDocument(
+  rawBytes: Uint8Array,
+): Bun.XML.Document {
   assertXmlIngestBytesNotHtmlOn200(rawBytes);
   try {
     return Bun.XML.parse(rawBytes);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (err instanceof SyntaxError || ENTITY_BOMB_SYNTAX.test(message)) {
+    if (ENTITY_BOMB_SYNTAX.test(message)) {
       throw new Error(`ERR_XML_ENTITY_BOMB: ${message}`, { cause: err });
+    }
+    if (err instanceof SyntaxError) {
+      throw new Error(`ERR_XML_PARSE_FAILED: ${message}`, { cause: err });
     }
     throw err;
   }

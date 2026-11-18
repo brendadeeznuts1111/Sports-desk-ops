@@ -57,6 +57,14 @@ export const BUN_ANSI_THEME_REFERENCE_URL = bunReferenceUrl(
   "bun/markdown/AnsiTheme",
 );
 
+/**
+ * Canonical reference URL for Bun's Markdown parser options (`Bun.markdown.Options`).
+ * @see https://bun.com/reference/bun/markdown/Options
+ */
+export const BUN_MARKDOWN_OPTIONS_REFERENCE_URL = bunReferenceUrl(
+  "bun/markdown/Options",
+);
+
 export interface BunReferenceSymbol {
   readonly canonicalUrl: BunUrl;
   readonly symbolPath: string;
@@ -125,35 +133,338 @@ export function matchBunReferenceSymbol(
 }
 
 /**
+ * Verified top-level `bun` reference symbol inventory from `https://bun.com/reference/bun.props.json`
+ * (functions, classes, interfaces, variables, and namespaces).
+ */
+export const BUN_ROOT_REFERENCE_SYMBOLS = [
+  "$",
+  "AbstractWorker",
+  "AbstractWorkerEventMap",
+  "AddEventListenerOptions",
+  "Archive",
+  "ArchiveExtractOptions",
+  "ArchiveOptions",
+  "ArrayBufferSink",
+  "BinaryTypeList",
+  "BuildArtifact",
+  "BuildConfig",
+  "BuildMetafile",
+  "BuildOutput",
+  "BunFile",
+  "BunInspectOptions",
+  "BunMessageEvent",
+  "BunPlugin",
+  "BunRegisterPlugin",
+  "BunRequest",
+  "CSRF",
+  "CSRFGenerateOptions",
+  "CSRFVerifyOptions",
+  "CloseEventInit",
+  "CompileBuildOptions",
+  "Cookie",
+  "CookieInit",
+  "CookieMap",
+  "CookieStoreDeleteOptions",
+  "CookieStoreGetOptions",
+  "CronController",
+  "CronJob",
+  "CronOptions",
+  "CryptoHashInterface",
+  "CryptoHasher",
+  "CustomEventInit",
+  "DNSLookup",
+  "DirectUnderlyingSource",
+  "EditorOptions",
+  "Env",
+  "ErrorEventInit",
+  "ErrorLike",
+  "EventInit",
+  "EventListener",
+  "EventListenerObject",
+  "EventListenerOptions",
+  "EventMap",
+  "EventSource",
+  "EventSourceEventMap",
+  "FdSocketOptions",
+  "FetchEvent",
+  "FetchSession",
+  "FetchSessionInit",
+  "FileBlob",
+  "FileSink",
+  "FileSystemRouter",
+  "FileSystemRouterOptions",
+  "GenericTransformStream",
+  "Glob",
+  "GlobScanOptions",
+  "HTMLBundle",
+  "Hash",
+  "HeapSnapshot",
+  "Image",
+  "Import",
+  "ImportMetaGlobOptions",
+  "JSON5",
+  "JSONC",
+  "JSONL",
+  "LibdeflateCompressionOptions",
+  "MD4",
+  "MD5",
+  "MMapOptions",
+  "MatchedRoute",
+  "MessageEventInit",
+  "ModuleGraph",
+  "ModuleGraphOptions",
+  "NetworkSink",
+  "OnLoadArgs",
+  "OnLoadResultObject",
+  "OnLoadResultSourceCode",
+  "OnResolveArgs",
+  "OnResolveResult",
+  "PluginBuilder",
+  "PluginConstraints",
+  "ReadableStreamDefaultReadManyResult",
+  "RedisClient",
+  "RedisOptions",
+  "ReservedSQL",
+  "ResourceUsage",
+  "S3Client",
+  "S3File",
+  "S3FilePresignOptions",
+  "S3ListObjectsOptions",
+  "S3ListObjectsResponse",
+  "S3Options",
+  "S3Stats",
+  "SHA1",
+  "SHA224",
+  "SHA256",
+  "SHA384",
+  "SHA512",
+  "SHA512_256",
+  "SQL",
+  "SQLArrayParameter",
+  "SQLJSONParameter",
+  "SavepointSQL",
+  "Server",
+  "ServerWebSocket",
+  "SliceAnsiOptions",
+  "Socket",
+  "SocketAddress",
+  "SocketHandler",
+  "SocketListener",
+  "SocketOptions",
+  "StringWidthOptions",
+  "StructuredSerializeOptions",
+  "Subprocess",
+  "SyncSubprocess",
+  "SystemError",
+  "TCPSocket",
+  "TCPSocketConnectOptions",
+  "TCPSocketListenOptions",
+  "TCPSocketListener",
+  "TLSOptions",
+  "TLSSocket",
+  "TLSUpgradeOptions",
+  "TOML",
+  "TSConfig",
+  "Terminal",
+  "TerminalOptions",
+  "TransactionSQL",
+  "TransformerFlushCallback",
+  "TransformerStartCallback",
+  "TransformerTransformCallback",
+  "Transpiler",
+  "TranspilerOptions",
+  "TrimOptions",
+  "UnderlyingSink",
+  "UnderlyingSinkAbortCallback",
+  "UnderlyingSinkCloseCallback",
+  "UnderlyingSinkStartCallback",
+  "UnderlyingSinkWriteCallback",
+  "UnderlyingSource",
+  "UnderlyingSourceCancelCallback",
+  "UnderlyingSourcePullCallback",
+  "UnderlyingSourceStartCallback",
+  "UnixSocketListener",
+  "UnixSocketOptions",
+  "WebSocket",
+  "WebSocketEventMap",
+  "WebSocketHandler",
+  "WebView",
+  "WhichOptions",
+  "Worker",
+  "WorkerEventMap",
+  "WorkerOptions",
+  "WrapAnsiOptions",
+  "XML",
+  "YAML",
+  "ZlibCompressionOptions",
+  "allocUnsafe",
+  "argv",
+  "build",
+  "color",
+  "concatArrayBuffers",
+  "connect",
+  "cron",
+  "deepEquals",
+  "deepMatch",
+  "deflateSync",
+  "dns",
+  "embeddedFiles",
+  "enableANSIColors",
+  "env",
+  "escapeHTML",
+  "fetch",
+  "file",
+  "fileURLToPath",
+  "gc",
+  "generateHeapSnapshot",
+  "gunzipSync",
+  "gzipSync",
+  "hash",
+  "indexOfLine",
+  "inflateSync",
+  "inspect",
+  "isMainThread",
+  "isStandaloneExecutable",
+  "listen",
+  "main",
+  "markdown",
+  "mmap",
+  "nanoseconds",
+  "openInEditor",
+  "password",
+  "pathToFileURL",
+  "peek",
+  "plugin",
+  "randomUUIDv5",
+  "randomUUIDv7",
+  "readableStreamToArray",
+  "readableStreamToArrayBuffer",
+  "readableStreamToFormData",
+  "redis",
+  "resolve",
+  "resolveSync",
+  "revision",
+  "s3",
+  "secrets",
+  "semver",
+  "serve",
+  "sha",
+  "sleep",
+  "sleepSync",
+  "sliceAnsi",
+  "spawn",
+  "spawnSync",
+  "sql",
+  "stderr",
+  "stdin",
+  "stdout",
+  "stringWidth",
+  "stripANSI",
+  "udpSocket",
+  "unsafe",
+  "version",
+  "version_with_sha",
+  "which",
+  "wrapAnsi",
+  "write",
+  "zstdCompress",
+  "zstdCompressSync",
+  "zstdDecompress",
+  "zstdDecompressSync",
+] as const;
+
+const BUN_NESTED_AND_ALIAS_REFERENCE_SYMBOLS: Readonly<Record<string, string>> =
+  {
+    AnsiTheme: "bun/markdown/AnsiTheme",
+    "Bun.markdown.AnsiTheme": "bun/markdown/AnsiTheme",
+    "Bun.markdown.Options": "bun/markdown/Options",
+    "Bun.markdown.ReactOptions": "bun/markdown/ReactOptions",
+    "Bun.markdown.RenderCallbacks": "bun/markdown/RenderCallbacks",
+    "Bun.markdown.ComponentOverrides": "bun/markdown/ComponentOverrides",
+    "Bun.markdown.Component": "bun/markdown/Component",
+    "Bun.markdown.HeadingMeta": "bun/markdown/HeadingMeta",
+    "Bun.markdown.CodeBlockMeta": "bun/markdown/CodeBlockMeta",
+    "Bun.markdown.ListMeta": "bun/markdown/ListMeta",
+    "Bun.markdown.ListItemMeta": "bun/markdown/ListItemMeta",
+    "Bun.markdown.CellMeta": "bun/markdown/CellMeta",
+    "Bun.markdown.LinkMeta": "bun/markdown/LinkMeta",
+    "Bun.markdown.ImageMeta": "bun/markdown/ImageMeta",
+    "Bun.markdown.ChildrenProps": "bun/markdown/ChildrenProps",
+    "Bun.markdown.HeadingProps": "bun/markdown/HeadingProps",
+    "Bun.markdown.OrderedListProps": "bun/markdown/OrderedListProps",
+    "Bun.markdown.ListItemProps": "bun/markdown/ListItemProps",
+    "Bun.markdown.CodeBlockProps": "bun/markdown/CodeBlockProps",
+    "Bun.markdown.CellProps": "bun/markdown/CellProps",
+    "Bun.markdown.LinkProps": "bun/markdown/LinkProps",
+    "Bun.markdown.ImageProps": "bun/markdown/ImageProps",
+    "Bun.markdown.html": "bun/markdown/html",
+    "Bun.markdown.ansi": "bun/markdown/ansi",
+    "Bun.markdown.render": "bun/markdown/render",
+    "Bun.markdown.react": "bun/markdown/react",
+    "Bun.inspect.custom": "bun/inspect",
+    "Bun.inspect.table": "bun/inspect",
+    "Bun.Archive.blob": "bun/Archive/blob",
+    "Bun.Archive.bytes": "bun/Archive/bytes",
+    "Bun.Archive.extract": "bun/Archive/extract",
+    "Bun.Archive.files": "bun/Archive/files",
+    "Bun.Archive.write": "bun/Archive/write",
+    ArchiveExtractOptions: "bun/ArchiveExtractOptions",
+    ArchiveInput: "bun/ArchiveInput",
+    "Bun.ArchiveInput": "bun/ArchiveInput",
+    ArchiveOptions: "bun/ArchiveOptions",
+    "Bun.TOML.parse": "bun/TOML/parse",
+    "Bun.TOML.stringify": "bun/TOML/stringify",
+    "dns.lookup": "bun/dns/lookup",
+    "dns.prefetch": "bun/dns/prefetch",
+    "dns.getCacheStats": "bun/dns/getCacheStats",
+    ImportKind: "bun/ImportKind",
+    "bun:bundle": "bun/bundle",
+    "bun:ffi": "bun/ffi",
+    "bun:jsc": "bun/jsc",
+    "bun:sqlite": "bun/sqlite",
+    "bun:test": "bun/test",
+  };
+
+/**
  * Known Bun reference symbols and their canonical symbol paths under `/reference/`.
  */
 export const BUN_KNOWN_REFERENCE_SYMBOLS: Readonly<Record<string, string>> = {
-  AnsiTheme: "bun/markdown/AnsiTheme",
-  "Bun.markdown.AnsiTheme": "bun/markdown/AnsiTheme",
-  "Bun.markdown.ansi": "bun/markdown/ansi",
-  "Bun.markdown": "bun/markdown",
-  "Bun.inspect.custom": "bun/inspect",
-  "Bun.inspect.table": "bun/inspect",
-  "Bun.inspect": "bun/inspect",
-  "Bun.serve": "bun/serve",
-  "Bun.connect": "bun/connect",
-  "Bun.concatArrayBuffers": "bun/concatArrayBuffers",
-  "Bun.readableStreamToArrayBuffer": "bun/readableStreamToArrayBuffer",
-  "Bun.Terminal": "bun/Terminal",
-  "Bun.file": "bun/file",
-  "Bun.write": "bun/write",
-  "Bun.spawn": "bun/spawn",
-  "Bun.indexOfLine": "bun/indexOfLine",
-  "Bun.TOML": "bun/TOML",
-  "Bun.TOML.parse": "bun/TOML/parse",
-  "Bun.TOML.stringify": "bun/TOML/stringify",
-  "Bun.Transpiler": "bun/Transpiler",
-  "Bun.dns": "bun/dns",
-  "dns.lookup": "bun/dns/lookup",
-  "dns.prefetch": "bun/dns/prefetch",
-  "dns.getCacheStats": "bun/dns/getCacheStats",
-  ImportKind: "bun/ImportKind",
+  ...BUN_NESTED_AND_ALIAS_REFERENCE_SYMBOLS,
+  ...Object.fromEntries(
+    BUN_ROOT_REFERENCE_SYMBOLS.map((sym) => [`Bun.${sym}`, `bun/${sym}`]),
+  ),
 };
+
+const REFERENCE_SYMBOL_EXACT = new Map<string, string>(
+  Object.entries(BUN_KNOWN_REFERENCE_SYMBOLS),
+);
+
+const REFERENCE_SYMBOL_LOWER = new Map<string, string>();
+for (const [key, path] of Object.entries(BUN_KNOWN_REFERENCE_SYMBOLS)) {
+  const lower = key.toLowerCase();
+  if (!REFERENCE_SYMBOL_LOWER.has(lower)) {
+    REFERENCE_SYMBOL_LOWER.set(lower, path);
+  }
+}
+
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const REFERENCE_SYMBOL_ALTERNATION = Object.keys(BUN_KNOWN_REFERENCE_SYMBOLS)
+  .sort((a, b) => b.length - a.length)
+  .map(escapeRegExp)
+  .join("|");
+
+const FIND_REFERENCE_SYMBOLS_REGEX = new RegExp(
+  `(?<=^|[^a-zA-Z0-9_.])\`?(${REFERENCE_SYMBOL_ALTERNATION})\`?(?=[^a-zA-Z0-9_.]|$)`,
+  "g",
+);
+
+const LINKIFY_REFERENCE_SYMBOLS_REGEX = new RegExp(
+  `(?<!\\[)\`(${REFERENCE_SYMBOL_ALTERNATION})\`(?!\\]|\\()`,
+  "g",
+);
 
 /**
  * Resolves a Bun symbol name (e.g. `"AnsiTheme"`, `"Bun.markdown.ansi"`, `"bun/markdown/AnsiTheme"`,
@@ -165,17 +476,15 @@ export function resolveBunSymbolReferenceUrl(symbol: string): BunUrl | null {
   if (!trimmed) return null;
 
   // Direct match in known symbols catalog
-  if (trimmed in BUN_KNOWN_REFERENCE_SYMBOLS) {
-    const symbolPath = BUN_KNOWN_REFERENCE_SYMBOLS[trimmed]!;
-    return bunReferenceUrl(symbolPath);
+  const exactPath = REFERENCE_SYMBOL_EXACT.get(trimmed);
+  if (exactPath !== undefined) {
+    return bunReferenceUrl(exactPath);
   }
 
   // Case-insensitive match in known symbols catalog
-  const lower = trimmed.toLowerCase();
-  for (const [key, path] of Object.entries(BUN_KNOWN_REFERENCE_SYMBOLS)) {
-    if (key.toLowerCase() === lower) {
-      return bunReferenceUrl(path);
-    }
+  const lowerPath = REFERENCE_SYMBOL_LOWER.get(trimmed.toLowerCase());
+  if (lowerPath !== undefined) {
+    return bunReferenceUrl(lowerPath);
   }
 
   // Full Bun reference URL (e.g. https://bun.com/reference/bun/markdown/AnsiTheme)
@@ -218,20 +527,15 @@ export function findBunReferenceSymbolsInText(
   const results: BunReferenceSymbol[] = [];
   const seen = new Set<string>();
 
-  for (const [symbolName, symbolPath] of Object.entries(
-    BUN_KNOWN_REFERENCE_SYMBOLS,
-  )) {
-    // Match word boundaries or backticked symbols
-    const escaped = symbolName.replace(/\./g, "\\.");
-    const regex = new RegExp(
-      `(?<=^|[^a-zA-Z0-9_.])\`?${escaped}\`?(?=[^a-zA-Z0-9_.]|$)`,
-      "g",
-    );
-    if (regex.test(text) && !seen.has(symbolPath)) {
-      seen.add(symbolPath);
-      const parsed = parseBunReferenceUrl(bunReferenceUrl(symbolPath));
-      if (parsed) results.push(parsed);
-    }
+  FIND_REFERENCE_SYMBOLS_REGEX.lastIndex = 0;
+  for (const match of text.matchAll(FIND_REFERENCE_SYMBOLS_REGEX)) {
+    const symbolName = match[1];
+    if (!symbolName) continue;
+    const symbolPath = REFERENCE_SYMBOL_EXACT.get(symbolName);
+    if (!symbolPath || seen.has(symbolPath)) continue;
+    seen.add(symbolPath);
+    const parsed = parseBunReferenceUrl(bunReferenceUrl(symbolPath));
+    if (parsed) results.push(parsed);
   }
 
   return results;
@@ -242,19 +546,15 @@ export function findBunReferenceSymbolsInText(
  * canonical OSC 8 Markdown hyperlinks pointing to Bun's official documentation.
  */
 export function linkifyBunSymbolsInMarkdown(markdown: string): string {
-  let output = markdown;
-  for (const [symbolName, symbolPath] of Object.entries(
-    BUN_KNOWN_REFERENCE_SYMBOLS,
-  )) {
-    const targetUrl = bunReferenceUrl(symbolPath);
-    // Replace backticked `Symbol` not already inside a markdown link
-    const backtickedRegex = new RegExp(
-      `(?<!\\[)\`(${symbolName.replace(/\./g, "\\.")})\`(?!\\]|\\()`,
-      "g",
-    );
-    output = output.replace(backtickedRegex, `[\`$1\`](${targetUrl})`);
-  }
-  return output;
+  LINKIFY_REFERENCE_SYMBOLS_REGEX.lastIndex = 0;
+  return markdown.replace(
+    LINKIFY_REFERENCE_SYMBOLS_REGEX,
+    (full, symbolName: string) => {
+      const symbolPath = REFERENCE_SYMBOL_EXACT.get(symbolName);
+      if (!symbolPath) return full;
+      return `[\`${symbolName}\`](${bunReferenceUrl(symbolPath)})`;
+    },
+  );
 }
 
 export interface TextDirective {

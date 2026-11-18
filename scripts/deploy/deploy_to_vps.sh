@@ -110,7 +110,7 @@ cp -f "${REPO_ROOT}/bun.lock" "${REPO_ROOT}/.bun-version" "${APP_DIR}/"
 # Native resolution is right here (the VPS installs for itself), so no --os/--cpu/--libc. The
 # workspace packages/ are not shipped; Bun notes the two missing ones and skips them.
 echo -e "      Installing locked production dependencies..."
-(cd "$APP_DIR" && "$BUN_BIN" ci --production)
+(cd "$APP_DIR" && "$BUN_BIN" ci --production --no-env-file)
 
 # Prepare Production .env
 if [ -f "${REPO_ROOT}/.env" ]; then

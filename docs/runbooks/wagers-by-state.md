@@ -87,6 +87,6 @@ the same symbol as Node's `util.inspect.custom`, so `console.log`,
 
 ```bash
 bun test tests/wagers_report.test.ts tests/manager_fetch.test.ts tests/fetch_config.test.ts
-bun --check lib/wagers_report.ts lib/wagers_config.ts lib/manager_fetch.ts scripts/wagers_by_state_last14.ts scripts/wagers_by_state_live.ts
+bun check lib/wagers_report.ts lib/wagers_config.ts lib/manager_fetch.ts scripts/wagers_by_state_last14.ts scripts/wagers_by_state_live.ts
 ./bin/dx wagers-by-state -- --from=10/18/2026 --to=10/24/2026 --state=cancel
 ```

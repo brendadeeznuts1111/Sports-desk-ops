@@ -32,7 +32,7 @@
   ],
   "scripts": {
     "typecheck": "bun check --no-script -p tsconfig.json",
-    "lint": "bun x --cwd ../.. oxlint -c .oxlintrc.json --deny-warnings packages/ui/src",
+    "lint": "bun run --cwd ../.. lint:canary -- packages/ui/src",
     "test": "bun test --no-script --cwd ../.. tests/dashboard_ui_panels.test.tsx tests/dashboard_ui_hydration.test.tsx tests/dashboard_shadow_panel.test.tsx tests/dashboard_build_and_markdown.test.ts tests/workspace_packs.test.ts",
     "build": "bun --cwd ../.. scripts/build_dashboard.ts"
   },

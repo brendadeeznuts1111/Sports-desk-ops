@@ -54,10 +54,45 @@ proc.terminal.write("echo Hello from PTY!\\n");` as const;
 export const BUN_TERMINAL_SPAWN_PTY_WRITE_PAYLOAD =
   "echo Hello from PTY!\n" as const;
 
+type SpawnBaseOptions = Bun.SpawnOptions.BaseOptions<
+  "ignore",
+  "pipe",
+  "inherit"
+>;
+
+export type TermiosFlags = Pick<
+  Bun.Terminal,
+  "inputFlags" | "outputFlags" | "localFlags" | "controlFlags"
+>;
+
+export type NativeSpawnPassThrough = Pick<
+  SpawnBaseOptions,
+  | "cwd"
+  | "argv0"
+  | "cgroup"
+  | "ipc"
+  | "serialization"
+  | "killSignal"
+  | "windowsHide"
+  | "windowsVerbatimArguments"
+  | "signal"
+>;
+
+/** Probe eager `new Bun.Terminal(...)` allocation synchronously (no child process spawned). */
+export function canAllocatePty(): boolean {
+  try {
+    const probe = new Bun.Terminal({ cols: 80, rows: 24 });
+    probe.close();
+    return probe.closed;
+  } catch {
+    return false;
+  }
+}
+
 export interface SpawnInPtyOptions {
-  readonly cwd?: string;
-  readonly cols?: number;
-  readonly rows?: number;
+  readonly cwd?: SpawnBaseOptions["cwd"];
+  readonly cols?: Bun.TerminalOptions["cols"];
+  readonly rows?: Bun.TerminalOptions["rows"];
 }
 
 export interface PtyRunResult {
@@ -301,23 +336,25 @@ export type TerminalAuditEvent =
     };
 
 /** Options for configuring a TerminalSession instance. */
-export interface TerminalSessionOptions {
+export interface TerminalSessionOptions extends NativeSpawnPassThrough {
   /** Initial columns (default: 80). */
-  readonly cols?: number;
+  readonly cols?: Bun.TerminalOptions["cols"];
   /** Initial rows (default: 24). */
-  readonly rows?: number;
-  /** Working directory (default: process.cwd()). */
-  readonly cwd?: string;
-  /** Environment variables. TERM defaults to "xterm-256color". */
-  readonly env?: Record<string, string | undefined>;
+  readonly rows?: Bun.TerminalOptions["rows"];
+  /** Terminal type name for PTY configuration (default: "xterm-256color"). */
+  readonly name?: Bun.TerminalOptions["name"];
+  /** Environment variables. TERM defaults to `name ?? "xterm-256color"`. */
+  readonly env?: SpawnBaseOptions["env"];
   /** Overall session timeout in milliseconds (0 or undefined for no timeout). */
-  readonly timeoutMs?: number;
+  readonly timeoutMs?: SpawnBaseOptions["timeout"];
   /** Compile-time feature flags to forward when executing bun. */
   readonly features?: readonly Feature[];
   /** Compile-time build target to forward when executing bun. */
   readonly target?: BuildTarget;
   /** Callback fired on data received from PTY (multiplexed stdout and stderr). */
   readonly onData?: (chunk: string, rawBytes: Uint8Array) => void;
+  /** Callback fired when the PTY write buffer finishes flushing. */
+  readonly onDrain?: Bun.TerminalOptions["drain"];
   /** Callback fired when the PTY stream closes (ptyCode: 0 for EOF, 1 for error). */
   readonly onPtyClose?: (ptyCode: number, signal: string | null) => void;
   /** Authorization hook before process starts. Return false or throw to abort. */
@@ -344,6 +381,10 @@ export class TerminalSession implements AsyncDisposable {
   private readonly _decoder = new TextDecoder();
   private _exitCode: number | null = null;
   private _ptyExitCode: number | null = null;
+  private _signalCode: Bun.Subprocess["signalCode"] = null;
+  private _resourceUsage: Bun.ResourceUsage | undefined = undefined;
+  private _spawnError: Error | undefined = undefined;
+  private _termiosBeforeClose: TermiosFlags | null = null;
   private _startedAt: number = 0;
   private _exitedAt: number = 0;
   private _cmd: readonly string[] = [];
@@ -410,9 +451,11 @@ export class TerminalSession implements AsyncDisposable {
       this._resolvePtyClosed = resolve;
     });
 
-    const term = new Bun.Terminal({
+    const terminalName = this._options.name ?? "xterm-256color";
+    const terminalOptions: Bun.TerminalOptions = {
       cols: this._options.cols ?? 80,
       rows: this._options.rows ?? 24,
+      name: terminalName,
       data: (_terminal, chunk) => {
         const text = this._decoder.decode(chunk, { stream: true });
         this._raw += text;
@@ -432,19 +475,61 @@ export class TerminalSession implements AsyncDisposable {
           timestamp: Date.now(),
         });
       },
-    });
+    };
+    if (this._options.onDrain !== undefined) {
+      terminalOptions.drain = this._options.onDrain;
+    }
+    const term = new Bun.Terminal(terminalOptions);
 
     const env = {
       ...Bun.env,
-      TERM: "xterm-256color",
+      TERM: terminalName,
       ...this._options.env,
     };
 
-    const proc = Bun.spawn([...cmd], {
+    const spawnOptions: Bun.SpawnOptions.SpawnOptions<
+      "ignore",
+      "pipe",
+      "inherit"
+    > = {
       cwd: this._options.cwd ?? process.cwd(),
       env,
+      killSignal: this._options.killSignal ?? "SIGTERM",
       terminal: term,
-    });
+      onExit: (_subproc, _code, _sig, err) => {
+        if (err) {
+          this._spawnError =
+            err instanceof Error ? err : new Error(String(err));
+        }
+      },
+    };
+    if (this._options.argv0 !== undefined) {
+      spawnOptions.argv0 = this._options.argv0;
+    }
+    if (this._options.cgroup !== undefined) {
+      spawnOptions.cgroup = this._options.cgroup;
+    }
+    if (this._options.ipc !== undefined) {
+      spawnOptions.ipc = this._options.ipc;
+    }
+    if (this._options.serialization !== undefined) {
+      spawnOptions.serialization = this._options.serialization;
+    }
+    if (this._options.windowsHide !== undefined) {
+      spawnOptions.windowsHide = this._options.windowsHide;
+    }
+    if (this._options.windowsVerbatimArguments !== undefined) {
+      spawnOptions.windowsVerbatimArguments =
+        this._options.windowsVerbatimArguments;
+    }
+    if (this._options.signal !== undefined) {
+      spawnOptions.signal = this._options.signal;
+    }
+    if (this._options.timeoutMs && this._options.timeoutMs > 0) {
+      spawnOptions.timeout = this._options.timeoutMs;
+    }
+
+    const proc = Bun.spawn([...cmd], spawnOptions);
 
     this._proc = proc;
     this._term = term;
@@ -459,6 +544,8 @@ export class TerminalSession implements AsyncDisposable {
     proc.exited.then((code) => {
       this._cleanupTimeout();
       this._exitCode = code;
+      this._signalCode = proc.signalCode;
+      this._resourceUsage = proc.resourceUsage();
       this._exitedAt = Date.now();
       const final = this._decoder.decode();
       if (final) {
@@ -657,10 +744,16 @@ export class TerminalSession implements AsyncDisposable {
     }
   }
 
-  /** Closes the PTY descriptor. */
+  /** Snapshot termios flags while the PTY fd is still open, then close the PTY. */
   close(): void {
     this._cleanupTimeout();
     if (this._term && !this._term.closed) {
+      this._termiosBeforeClose = {
+        inputFlags: this._term.inputFlags,
+        outputFlags: this._term.outputFlags,
+        localFlags: this._term.localFlags,
+        controlFlags: this._term.controlFlags,
+      };
       this._term.close();
     }
   }
@@ -713,6 +806,34 @@ export class TerminalSession implements AsyncDisposable {
   /** PTY lifecycle exit code (0 for clean EOF, 1 for read error), NOT the subprocess exit code. */
   get ptyExitCode(): number | null {
     return this._ptyExitCode;
+  }
+
+  /** Signal that terminated the subprocess (`NodeJS.Signals | number | null`). */
+  get signalCode(): Bun.Subprocess["signalCode"] {
+    return this._signalCode;
+  }
+
+  /** Kernel resource usage captured on subprocess exit (`cpuTime` fields are `bigint`). */
+  get resourceUsage(): Bun.ResourceUsage | undefined {
+    return this._resourceUsage;
+  }
+
+  /** Async OS/spawn error reported via `Bun.spawn({ onExit })`, if any. */
+  get spawnError(): Error | undefined {
+    return this._spawnError;
+  }
+
+  /** Termios bitmasks live from the open PTY, or the pre-close snapshot once closed. */
+  get termios(): TermiosFlags | null {
+    if (this._term && !this._term.closed) {
+      return {
+        inputFlags: this._term.inputFlags,
+        outputFlags: this._term.outputFlags,
+        localFlags: this._term.localFlags,
+        controlFlags: this._term.controlFlags,
+      };
+    }
+    return this._termiosBeforeClose;
   }
 
   /** Whether the subprocess is currently running. */

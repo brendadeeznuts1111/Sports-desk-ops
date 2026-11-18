@@ -313,6 +313,12 @@ export interface PositionRow {
 export type CustomerRowProvenance =
   "harvested-live-profiles" | "live-wagers" | "live-bets";
 
+/** Measured per-writer counts from the live wager capture, not from the five-ticket sample. */
+export interface ChannelEvidenceBucket {
+  readonly n: number;
+  readonly riskUsd: number;
+}
+
 export interface CustomerRow {
   readonly customer_id: string;
   /** Set when this row was synthesized from a live artifact rather than the customer book. */
@@ -320,6 +326,8 @@ export interface CustomerRow {
   readonly agent_id?: string;
   readonly master_agent?: string;
   readonly context_type?: string;
+  /** Per-writer distribution measured from live wager rows; absent for book-only rows. */
+  readonly channel_evidence?: Readonly<Record<string, ChannelEvidenceBucket>>;
   readonly status?: string;
   readonly wager_limit_usd?: number;
   readonly delay_seconds?: number;
@@ -377,6 +385,8 @@ export interface CustomerProfile {
   readonly masterAgent: string;
   readonly status: string;
   readonly contextType: string;
+  /** Measured writer distribution from live wagers; `tickets.byChannel` may be all unknown. */
+  readonly channelEvidence?: Readonly<Record<string, ChannelEvidenceBucket>>;
   readonly book: {
     readonly lifetimeVolumeUsd: number;
     readonly lifetimeNetUsd: number;
@@ -421,6 +431,14 @@ export interface CustomerProfile {
   };
   /** Data-quality notes that change how a number should be read. */
   readonly flags: readonly string[];
+}
+
+/** The same `SYNTH_` sentinel convention `lib/profile_query_tools.ts` uses for fixture profiles. */
+export const SYNTHETIC_CUSTOMER_PREFIX = "SYNTH_";
+
+/** A book row with this id is a demo fixture, not an observed customer. */
+export function isSyntheticCustomerId(customerId: string): boolean {
+  return customerId.trim().toUpperCase().startsWith(SYNTHETIC_CUSTOMER_PREFIX);
 }
 
 const num = (value: unknown): number =>
@@ -530,6 +548,114 @@ export function placementOf(login: string, tree: TreeIndex): Placement {
   };
 }
 
+/**
+ * A live-derived context label. These are model outputs from a short ticket/position sample,
+ * never a book assignment — every profile that gets one also gets a `CONTEXT_MODEL:` flag.
+ */
+export type LiveContextLabel =
+  | "INSUFFICIENT_SAMPLE"
+  | "HIGH_LIMIT_CONDUIT"
+  | "VELOCITY_SNIPER"
+  | "PARLAY_SPECIALIST"
+  | "MARKET_SPECIALIST"
+  | "CASUAL_SMALL_STAKER"
+  | "ACTIVE_MIXED_PLAYER";
+
+export interface DerivedLiveContext {
+  readonly contextType: LiveContextLabel;
+  /** The measured signals that produced the label, quoted into the provenance flag. */
+  readonly reason: string;
+}
+
+const LIVE_CONTEXT_HIGH_LIMIT_USD = 10_000;
+const LIVE_CONTEXT_CASUAL_USD = 500;
+const LIVE_CONTEXT_VELOCITY_COUNT = 3;
+const LIVE_CONTEXT_VELOCITY_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * Classify a live-derived row from its observed sample. Rules are ordered, deterministic and
+ * measured-only: no lifetime/book field is consulted, and a row with no sample is labelled as
+ * such rather than being given a guess. Returns `null` for book rows (which carry their own
+ * `context_type`) and for rows with a non-empty context.
+ */
+export function deriveLiveContext(row: CustomerRow): DerivedLiveContext | null {
+  if (text(row.context_type) !== "" || row.provenance === undefined)
+    return null;
+
+  const tickets = row.recent_tickets ?? [];
+  const positions = row.open_positions ?? [];
+  const sampleCount = tickets.length + positions.length;
+  if (sampleCount === 0) {
+    return {
+      contextType: "INSUFFICIENT_SAMPLE",
+      reason: "no live ticket or position sample",
+    };
+  }
+
+  let riskUsd = 0;
+  const marketRisk = new Map<string, number>();
+  let multiLeg = 0;
+  for (const ticket of tickets) {
+    const risk = Math.max(0, num(ticket.risk_usd));
+    riskUsd += risk;
+    const market = key(ticket.market) || "UNKNOWN";
+    marketRisk.set(market, (marketRisk.get(market) ?? 0) + risk);
+    if (market === "PARLAY") multiLeg++;
+  }
+  for (const position of positions) {
+    const risk = Math.max(0, num(position.risk_usd));
+    riskUsd += risk;
+    const market = key(position.market) || "UNKNOWN";
+    marketRisk.set(market, (marketRisk.get(market) ?? 0) + risk);
+    if (num(position.legs) >= 2) multiLeg++;
+  }
+
+  const reason = `$${Math.round(riskUsd).toLocaleString("en-US")} risk over ${tickets.length} ticket(s) + ${positions.length} position(s), ${multiLeg}/${sampleCount} multi-leg`;
+
+  if (riskUsd >= LIVE_CONTEXT_HIGH_LIMIT_USD) {
+    return { contextType: "HIGH_LIMIT_CONDUIT", reason };
+  }
+
+  // Naive timestamps are compared only to each other, so no timezone is assumed.
+  const placed = [...tickets, ...positions]
+    .map((sample) => Date.parse(text(sample.placed_at).replace(" ", "T")))
+    .filter((ms) => Number.isFinite(ms))
+    .sort((a, b) => a - b);
+  let velocity = false;
+  for (let i = 0; i + LIVE_CONTEXT_VELOCITY_COUNT - 1 < placed.length; i++) {
+    if (
+      placed[i + LIVE_CONTEXT_VELOCITY_COUNT - 1]! - placed[i]! <=
+      LIVE_CONTEXT_VELOCITY_WINDOW_MS
+    ) {
+      velocity = true;
+      break;
+    }
+  }
+  if (velocity) return { contextType: "VELOCITY_SNIPER", reason };
+
+  // Two multi-leg rows before calling someone a parlay specialist: one parlay is an event,
+  // not a behaviour. The quoted reason carries the counts either way.
+  if (multiLeg >= 2 && multiLeg * 2 >= sampleCount) {
+    return { contextType: "PARLAY_SPECIALIST", reason };
+  }
+
+  const [topMarket, topRisk] = [...marketRisk].sort(
+    (a, b) => b[1] - a[1],
+  )[0] ?? ["UNKNOWN", 0];
+  // Three rows before a concentration claim: 100% of one ticket is not a specialisation.
+  if (sampleCount >= 3 && riskUsd > 0 && topRisk / riskUsd >= 0.8) {
+    return {
+      contextType: "MARKET_SPECIALIST",
+      reason: `${reason}; ${Math.round((topRisk / riskUsd) * 100)}% in ${topMarket}`,
+    };
+  }
+
+  if (riskUsd < LIVE_CONTEXT_CASUAL_USD) {
+    return { contextType: "CASUAL_SMALL_STAKER", reason };
+  }
+  return { contextType: "ACTIVE_MIXED_PLAYER", reason };
+}
+
 export function buildCustomerProfile(
   row: CustomerRow,
   tree: TreeIndex,
@@ -537,7 +663,13 @@ export function buildCustomerProfile(
   const tickets = summarizeTickets(row.recent_tickets ?? []);
   const agentId = text(row.agent_id);
   const placement = placementOf(agentId, tree);
+  const derivedContext = deriveLiveContext(row);
   const flags: string[] = [];
+  if (derivedContext !== null) {
+    flags.push(
+      `CONTEXT_MODEL:derived-from-live-sample (${derivedContext.contextType}; ${derivedContext.reason})`,
+    );
+  }
 
   if (!placement.inTree) {
     flags.push(`agent ${agentId || "(none)"} is not in the tree`);
@@ -562,7 +694,10 @@ export function buildCustomerProfile(
     agentId,
     masterAgent: text(row.master_agent),
     status: text(row.status),
-    contextType: text(row.context_type),
+    contextType: derivedContext?.contextType ?? text(row.context_type),
+    ...(row.channel_evidence === undefined
+      ? {}
+      : { channelEvidence: row.channel_evidence }),
     book: {
       lifetimeVolumeUsd: num(row.lifetime_volume_usd),
       lifetimeNetUsd: lifetime,

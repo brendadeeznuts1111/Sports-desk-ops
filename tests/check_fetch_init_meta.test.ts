@@ -89,6 +89,55 @@ export async function violateFetchInvariants() {
     }
   });
 
+  test("a result object with a `body` field in a request-building file is not a request body", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "check-fetch-init-"));
+    try {
+      await Bun.write(
+        path.join(root, "services/handler.ts"),
+        `export interface Result {
+  readonly status: number;
+  readonly body: Record<string, unknown>;
+}
+
+export async function readFromUpstream(url: string): Promise<Response> {
+  return fetch(url);
+}
+
+export function httpResult(ok: boolean): Result {
+  if (!ok) {
+    return {
+      status: 502,
+      body: { success: false, error: "unavailable" },
+    };
+  }
+  return { status: 200, body: { success: true } };
+}
+`,
+      );
+      const proc = Bun.spawn(
+        [
+          process.execPath,
+          path.join(import.meta.dir, "../bin/check-fetch-init.ts"),
+          root,
+        ],
+        {
+          stdout: "pipe",
+          stderr: "pipe",
+          env: { PATH: Bun.env.PATH ?? "", HOME: Bun.env.HOME ?? "" },
+          signal: AbortSignal.timeout(15_000),
+        },
+      );
+      const [stdout, exitCode] = await Promise.all([
+        proc.stdout.text(),
+        proc.exited,
+      ]);
+      expect(stdout).not.toContain("Plain object literal passed to body");
+      expect(exitCode).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("a `body` option spec in a file that builds no request is not a request body", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "check-fetch-init-"));
     try {
