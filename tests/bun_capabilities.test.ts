@@ -1036,15 +1036,24 @@ describe("Bun capabilities used by the ops tooling", () => {
   });
 
   test("Bun.escapeHTML replaces the five HTML characters and stringifies values", () => {
+    // bun.com/reference/bun/escapeHTML: input is string | number | boolean | object;
+    // only the five characters are escaped, and every non-string is converted first.
     expect(Bun.escapeHTML("<script>alert('Hello World!')</script>")).toBe(
       "&lt;script&gt;alert(&#x27;Hello World!&#x27;)&lt;/script&gt;",
     );
     expect(Bun.escapeHTML("a & b < c > d \" e ' f")).toBe(
       "a &amp; b &lt; c &gt; d &quot; e &#x27; f",
     );
-    // Non-strings are converted before escaping.
+    // Non-strings are converted before escaping. The documented signature is
+    // string | number | boolean | object; null/undefined are outside that type
+    // but are measured here because the runtime still stringifies them.
     expect(Bun.escapeHTML(42)).toBe("42");
     expect(Bun.escapeHTML(true)).toBe("true");
+    expect(Bun.escapeHTML({ a: 1 })).toBe("[object Object]");
+    expect(Bun.escapeHTML([1, 2])).toBe("1,2");
+    expect(Bun.escapeHTML(new String("x"))).toBe("x");
+    expect(Bun.escapeHTML(null as never)).toBe("null");
+    expect(Bun.escapeHTML(undefined as never)).toBe("undefined");
   });
 
   test("Bun.allocUnsafe returns a Uint8Array of the requested length (unzeroed)", () => {
