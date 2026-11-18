@@ -10,6 +10,7 @@ import {
   type SecretsProvider,
 } from "../lib/secrets.ts";
 import { resolveLoginCredentials } from "../scripts/session_login.ts";
+import { F402SecretBackendError } from "../lib/f402_secret_store.ts";
 
 /**
  * `resolveLoginCredentials` is the pure half of `session:login --from-keychain`: it decides the
@@ -159,15 +160,45 @@ describe("resolveLoginCredentials", () => {
     expect(resolved.message).not.toContain("keychain-password");
   });
 
-  test("a throwing provider and blank values are treated as missing", async () => {
+  test("a refusing keychain throws its named error instead of reading as missing", async () => {
+    // Was "treated as missing" (catch-all in readSecretOrNull); Q001 maps the error explicitly.
     setSecretsProviderForTests(keychain({}, { throwOnRead: true }).provider);
     const thrown = await resolveLoginCredentials({
       env: GATED_ENV,
       fromKeychain: true,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(thrown).toBeInstanceOf(F402SecretBackendError);
+    expect(thrown).toMatchObject({
+      name: "F402SecretBackendError",
+      kind: "uncoded",
+      service: CANONICAL_SECRETS_SERVICE,
+      secretName: F402_KEYCHAIN_NAMES.agentId,
+      op: "get",
     });
-    expect(thrown.ok).toBe(false);
-    if (!thrown.ok && thrown.reason === "missing-keychain-credentials") {
-      expect(thrown.missing).toEqual([
+  });
+
+  test("no usable keychain (unavailable) and blank values are treated as missing", async () => {
+    setSecretsProviderForTests({
+      async get() {
+        throw Object.assign(
+          new Error("Cannot autolaunch D-Bus without X11 $DISPLAY"),
+          { code: "ERR_SECRETS_PLATFORM_ERROR" },
+        );
+      },
+    });
+    const unavailable = await resolveLoginCredentials({
+      env: GATED_ENV,
+      fromKeychain: true,
+    });
+    expect(unavailable.ok).toBe(false);
+    if (
+      !unavailable.ok &&
+      unavailable.reason === "missing-keychain-credentials"
+    ) {
+      expect(unavailable.missing).toEqual([
         F402_KEYCHAIN_NAMES.agentId,
         F402_KEYCHAIN_NAMES.password,
       ]);

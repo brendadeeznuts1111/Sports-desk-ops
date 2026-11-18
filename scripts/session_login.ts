@@ -99,6 +99,8 @@ export interface ResolveLoginCredentialsOptions {
  *
  * Precedence: `F402_LIVE_LOGIN=1` gate → both env values → both keychain values (canonical then
  * legacy). Env is all-or-nothing: a single env value does not mix with one keychain value.
+ * A keychain that refuses the read (anything but "no usable keychain") throws its named error
+ * (see `readSecretOrNull` in lib/secrets.ts) instead of being reported as missing credentials.
  */
 export async function resolveLoginCredentials(
   options: ResolveLoginCredentialsOptions,
@@ -323,10 +325,19 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const resolved = await resolveLoginCredentials({
-    env,
-    fromKeychain: values["from-keychain"],
-  });
+  let resolved: Awaited<ReturnType<typeof resolveLoginCredentials>>;
+  try {
+    resolved = await resolveLoginCredentials({
+      env,
+      fromKeychain: values["from-keychain"],
+    });
+  } catch (error) {
+    const named = error as { name?: string; message?: string };
+    console.error(
+      `session:login: could not read the keychain credentials: ${named.name ?? "Error"}: ${named.message ?? ""}`,
+    );
+    process.exit(f402SessionStoreExitCode(error));
+  }
   if (!resolved.ok) {
     if (resolved.reason === "live-login-disabled") {
       console.error(liveLoginGateMessage());
