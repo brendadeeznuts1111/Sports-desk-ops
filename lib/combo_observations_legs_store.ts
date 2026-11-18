@@ -326,24 +326,37 @@ export class ComboObservationsLegsStore {
     return row.clv === null ? null : Number(row.clv);
   }
 
-  /** Max drawdown of cumulative P&L across the account's tickets in `pnlCentsByTicket`, by placement time. */
+  /**
+   * Max drawdown of cumulative P&L across the account's tickets, by placement time. P&L is keyed
+   * by venue then ticket, since ticket ids are only unique within a venue.
+   */
   maxDrawdownCents(
     account: string,
-    pnlCentsByTicket: ReadonlyMap<string, number>,
+    pnlCentsByVenueTicket: ReadonlyMap<
+      FlatLegRecord["sourceVenue"],
+      ReadonlyMap<string, number>
+    >,
   ): number {
+    const pnlJson = JSON.stringify(
+      Object.fromEntries(
+        Array.from(pnlCentsByVenueTicket, ([venue, byTicket]) => [
+          venue,
+          Object.fromEntries(byTicket),
+        ]),
+      ),
+    );
     const row = this.db
       .query(
         `SELECT desk_max_drawdown(order_key, pnl) AS drawdown FROM (
           SELECT printf('%s|%012d', MIN(l.placed_at), MIN(l.id)) AS order_key, c.value AS pnl
           FROM combo_observations_legs l
-          JOIN json_each(?2) c ON c.key = l.source_ticket
+          JOIN json_each(?2) v ON v.key = l.source_venue
+          JOIN json_each(v.value) c ON c.key = l.source_ticket
           WHERE UPPER(l.wallet_or_account) = UPPER(?1)
           GROUP BY l.source_venue, l.source_ticket
         )`,
       )
-      .get(account, JSON.stringify(Object.fromEntries(pnlCentsByTicket))) as {
-      drawdown: number | bigint;
-    };
+      .get(account, pnlJson) as { drawdown: number | bigint };
     return Number(row.drawdown);
   }
 

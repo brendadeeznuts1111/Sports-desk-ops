@@ -371,13 +371,49 @@ describe("ComboObservationsLegsStore desk aggregates", () => {
     const { store } = seeded();
     expect(store.maxDrawdownCents("CUST1", new Map())).toBe(0);
     const pnl = new Map([
-      ["T3", -500],
-      ["T1", 2400],
-      ["T2", -1000],
+      [
+        "f402" as const,
+        new Map([
+          ["T3", -500],
+          ["T1", 2400],
+          ["T2", -1000],
+        ]),
+      ],
     ]);
     expect(store.maxDrawdownCents("CUST1", pnl)).toBe(1500);
-    expect(store.maxDrawdownCents("CUST1", new Map([["T2", -1000]]))).toBe(
-      1000,
+    expect(
+      store.maxDrawdownCents(
+        "CUST1",
+        new Map([["f402" as const, new Map([["T2", -1000]])]]),
+      ),
+    ).toBe(1000);
+  });
+
+  it("keys drawdown P&L by venue and ticket, not ticket alone", () => {
+    const { store } = seeded();
+    store.insertFlatLeg(
+      leg({
+        sourceVenue: "polymarket",
+        sourceTicket: "T2",
+        placedAt: "2026-11-02T12:00:00Z",
+      }),
     );
+    const pnl = new Map<"f402" | "polymarket", ReadonlyMap<string, number>>([
+      [
+        "f402",
+        new Map([
+          ["T1", 2400],
+          ["T2", -1000],
+        ]),
+      ],
+      ["polymarket", new Map([["T2", 300]])],
+    ]);
+    expect(store.maxDrawdownCents("CUST1", pnl)).toBe(1000);
+    expect(
+      store.maxDrawdownCents(
+        "CUST1",
+        new Map([["polymarket" as const, new Map([["T2", -700]])]]),
+      ),
+    ).toBe(700);
   });
 });
