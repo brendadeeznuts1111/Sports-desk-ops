@@ -37,10 +37,15 @@ import {
   type BunShape,
   type ShapeSubsystem,
 } from "../lib/bun_shapes.ts";
-import { SHAPE_OVERLAY } from "../lib/bun_shapes_overlay.ts";
+import {
+  SHAPE_EVIDENCE_FALLBACK,
+  SHAPE_SUBSYSTEMS_BY_NAME,
+} from "../lib/bun_shapes_overlay.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const OUTPUT = "lib/bun_shapes.generated.ts";
+/** Evidence refs are a proof sample, not a coverage report; keep the row readable. */
+const EVIDENCE_CAP = 4;
 
 function subsystemRank(subsystem: ShapeSubsystem): number {
   const index = SHAPE_SUBSYSTEMS.indexOf(subsystem);
@@ -60,6 +65,53 @@ export async function renderBunShapeCatalog(
   }
   const usage = collectBunShapeUsage(sources);
 
+  // Evidence is discovered, not typed: `surface:<name>` when the surface probe
+  // covers it, `test:<path>` for every tracked test file that names `Bun.<name>`.
+  // Only the fallback map (probe-only shapes) stays hand-written.
+  const surfaceSource = await Bun.file(`${root}/bin/bun_surface.ts`).text();
+  const surfaceNames = new Set(
+    [...surfaceSource.matchAll(/name:\s*"([^"]+)"/g)].map(
+      (m) => m[1] as string,
+    ),
+  );
+  // Tracked tests only: a scratch or vendored file is not evidence the gate can
+  // resolve in CI, and a ref to one would be a broken citation.
+  const tracked = Bun.spawnSync(
+    ["git", "-C", root, "ls-files", "-z", "*.test.ts", "*.test-d.ts"],
+    { stdout: "pipe", stderr: "ignore" },
+  );
+  const testFiles = tracked.stdout
+    .toString()
+    .split("\0")
+    .filter(
+      (file) =>
+        file.length > 0 &&
+        !file.startsWith("Scratch/") &&
+        !file.startsWith("node_modules/"),
+    );
+  const testSources = new Map<string, string>();
+  for (const file of testFiles) {
+    testSources.set(file, await Bun.file(`${root}/${file}`).text());
+  }
+
+  const evidenceFor = (name: string, isType: boolean): string[] => {
+    // Type-only shapes are exercised through `import type { X } from "bun"`, so a
+    // bare-name scan finds them where `Bun.X` never appears.
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = isType
+      ? new RegExp(`\\b${escaped}\\b`)
+      : new RegExp(`Bun\\.${escaped}\\b`);
+    const refs = [
+      ...(surfaceNames.has(name) ? [`surface:${name}`] : []),
+      ...[...testSources]
+        .filter(([, text]) => pattern.test(text))
+        .map(([file]) => `test:${file}`)
+        .sort(),
+      ...(SHAPE_EVIDENCE_FALLBACK[name] ?? []),
+    ];
+    return [...new Set(refs)].slice(0, EVIDENCE_CAP);
+  };
+
   const drift = await declarationDrift([], root);
   if (drift.error !== null) {
     throw new Error(`ERR_SHAPE_DECLARATIONS_UNREADABLE: ${drift.error}`);
@@ -69,25 +121,34 @@ export async function renderBunShapeCatalog(
   // Membership is the union of what the repo calls and what the overlay tracks
   // on purpose; an overlay row the scan does not use becomes `declared-only`.
   const names = [
-    ...new Set([...usage.used.keys(), ...Object.keys(SHAPE_OVERLAY)]),
+    ...new Set([
+      ...usage.used.keys(),
+      ...Object.keys(SHAPE_SUBSYSTEMS_BY_NAME),
+    ]),
   ].sort();
 
   const shapes: BunShape[] = names.map((name) => {
-    const overlay = SHAPE_OVERLAY[name];
-    if (overlay === undefined) {
+    const subsystem = SHAPE_SUBSYSTEMS_BY_NAME[name];
+    if (subsystem === undefined) {
       throw new Error(
-        `ERR_SHAPE_OVERLAY_MISSING: ${name} is used but has no subsystem/evidence in lib/bun_shapes_overlay.ts`,
+        `ERR_SHAPE_SUBSYSTEM_MISSING: ${name} is used but has no subsystem in lib/bun_shapes_overlay.ts`,
       );
     }
     const kind = declaredTypes.has(name) ? "type" : "value";
+    const evidence = evidenceFor(name, kind === "type");
+    if (evidence.length === 0) {
+      throw new Error(
+        `ERR_SHAPE_NO_EVIDENCE: ${name} has no test, surface or fallback evidence`,
+      );
+    }
     const used = usage.used.has(name);
     return {
       name,
       kind,
-      subsystem: overlay.subsystem,
+      subsystem,
       heading: kind === "type" ? `Bun.${name} (type)` : `Bun.${name}`,
       ...(used ? {} : { status: "declared-only" as const }),
-      evidence: overlay.evidence,
+      evidence,
     };
   });
 
