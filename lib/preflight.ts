@@ -26,11 +26,19 @@ export interface PreflightResult {
   readonly dnsCacheStats?: Record<string, number>;
 }
 
-/** Pre-warm Bun's DNS cache before WebView navigate / fetch (see bun.com/docs/runtime/networking/dns). */
+/**
+ * Pre-warm Bun's DNS cache before WebView navigate / fetch (see bun.com/docs/runtime/networking/dns).
+ *
+ * `Bun.dns.prefetch` throws `RangeError` for a non-integer or out-of-range port
+ * (measured on Bun 1.4.4: `443.5`, `65536`, `-1`, `NaN`, `Infinity` throw; `0`,
+ * `1` and `65535` are accepted). Prefetching is best-effort, so an unusable port
+ * is skipped rather than propagated — port `0` is accepted by Bun but means
+ * nothing to a prefetch, so it is skipped too.
+ */
 export function prefetchDns(host: string, port = 443): void {
   const trimmed = host.trim();
   if (trimmed === "") return;
-  if (!Number.isFinite(port) || port <= 0) return;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return;
   Bun.dns.prefetch(trimmed, port);
 }
 

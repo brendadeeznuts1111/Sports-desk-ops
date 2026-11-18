@@ -88,9 +88,20 @@ in a child process when anything else may write the file.
 
 ## archive-files
 
-`new Bun.Archive(bytes)` needs bytes (`await Bun.file(p).bytes()`); a `BunFile` is "Unrecognized
-archive format". `.files()` is the in-memory listing (`Map<path, Blob>`); `.extract(dir)` writes to
-disk and requires the path.
+`new Bun.Archive(bytes)` needs bytes (`await Bun.file(p).bytes()`). Passing the
+handle itself is _type-correct_ — `Blob` is a legal `ArchiveInput`, and `S3File`
+extends `Blob` — but the runtime then splits by method (measured 2026-11-17 on
+1.4.4, pinned in `tests/bun_runtime_contracts.test.ts`):
+
+- `.bytes()` / `.blob()` re-serialise the member set: **0 bytes, no error**
+- `.files()` throws `Unrecognized archive format`; `.extract(dir)` throws too
+
+So a forgotten `await` is silent only if the caller never parses. `.files()` is
+the in-memory listing (`Map<path, File>`, regular files only); `.extract(dir)`
+writes to disk and returns the entry count. Also: `{ compress: "gzip" }` is
+honoured by `bytes()` / `blob()` / static `write()`, but **not** by
+`Bun.write(destination, archiveInstance)`, which writes an uncompressed tar —
+see `lib/eod_archive.ts` and #353.
 
 ## sql-sqlite-url
 
