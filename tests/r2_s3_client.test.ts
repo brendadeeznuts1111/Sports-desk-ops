@@ -304,7 +304,11 @@ describe("R2S3Client uploads", () => {
     let attempts = 0;
     const flakyFetch = (async () => {
       attempts += 1;
-      if (attempts === 1) throw new Error("socket hang up");
+      if (attempts === 1) {
+        throw Object.assign(new TypeError("socket hang up"), {
+          code: "ECONNRESET",
+        });
+      }
       if (attempts === 2) return new Response("", { status: 503 });
       return new Response("", { status: 200 });
     }) as unknown as typeof fetch;

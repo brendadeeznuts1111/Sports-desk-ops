@@ -5,7 +5,12 @@
  */
 
 import { readStrictUtf8R2Object } from "./r2_text.ts";
-import { R2PreconditionFailedError, R2S3Client } from "./r2_s3_client.ts";
+import {
+  R2PreconditionFailedError,
+  R2S3Client,
+  R2TimeoutError,
+  type R2WriteResult,
+} from "./r2_s3_client.ts";
 import { R2_PUBLIC_BASE } from "./r2_staleness.ts";
 
 export const R2_BUCKET = "sportsdesk-ops-reports" as const;
@@ -61,6 +66,9 @@ export function mapR2ErrorExitCode(err: unknown): number {
   }
   if (message.includes("ERR_CF_TOKEN_BLEED_10000")) {
     return 77;
+  }
+  if (message.includes("ERR_R2_MANIFEST_CAS_TIMEOUT")) {
+    return 75;
   }
   if (
     message.includes("ERR_R2_MANIFEST_CAS_REJECTED") ||
@@ -183,6 +191,19 @@ export interface CasR2ClientLike {
       readonly fetchImpl?: typeof fetch;
     },
   ): Promise<number>;
+  /** When present, the CAS promote takes the new ETag from the PUT response. */
+  writeWithMetadataResult?(
+    key: string,
+    data: Uint8Array | string,
+    options?: {
+      readonly type?: string;
+      readonly metadata?: Readonly<Record<string, string>>;
+      readonly ifMatch?: string;
+      readonly ifNoneMatch?: string;
+      readonly retry?: number;
+      readonly fetchImpl?: typeof fetch;
+    },
+  ): Promise<R2WriteResult>;
   file(key: string): {
     text(): Promise<string>;
     bytes(): Promise<Uint8Array>;
@@ -414,17 +435,46 @@ export async function promoteCanonicalManifestWithCas<TManifest>(params: {
       ? { ifNoneMatch: "*" }
       : { ifMatch: normalizedPrevETag };
 
+  const putOptions = {
+    type: "application/json",
+    retry: 0,
+    ...casHeaders,
+    ...(params.metadata === undefined ? {} : { metadata: params.metadata }),
+    ...(params.fetchImpl === undefined ? {} : { fetchImpl: params.fetchImpl }),
+  };
+  let putETag: string | null = null;
   try {
-    await params.client.writeWithMetadata(manifestKey, serialized, {
-      type: "application/json",
-      retry: 0,
-      ...casHeaders,
-      ...(params.metadata === undefined ? {} : { metadata: params.metadata }),
-      ...(params.fetchImpl === undefined
-        ? {}
-        : { fetchImpl: params.fetchImpl }),
-    });
+    if (params.client.writeWithMetadataResult === undefined) {
+      await params.client.writeWithMetadata(
+        manifestKey,
+        serialized,
+        putOptions,
+      );
+    } else {
+      putETag = normalizeStrongETag(
+        (
+          await params.client.writeWithMetadataResult(
+            manifestKey,
+            serialized,
+            putOptions,
+          )
+        ).etag,
+      );
+    }
   } catch (error) {
+    if (error instanceof R2TimeoutError) {
+      const landedETag = await resolveTimedOutCasPut({
+        client: params.client,
+        manifestKey,
+        serialized,
+        prevETag: normalizedPrevETag,
+        timeout: error,
+        ...(params.fetchImpl === undefined
+          ? {}
+          : { fetchImpl: params.fetchImpl }),
+      });
+      return { manifestKey, generationKey, newETag: landedETag };
+    }
     const status =
       typeof error === "object" && error !== null && "status" in error
         ? (error as { readonly status?: unknown }).status
@@ -450,6 +500,7 @@ export async function promoteCanonicalManifestWithCas<TManifest>(params: {
     );
   }
 
+  if (putETag !== null) return { manifestKey, generationKey, newETag: putETag };
   const rawNewETag = await params.client.headEtag(
     manifestKey,
     params.fetchImpl === undefined ? {} : { fetchImpl: params.fetchImpl },
@@ -459,6 +510,62 @@ export async function promoteCanonicalManifestWithCas<TManifest>(params: {
     generationKey,
     newETag: normalizeStrongETag(rawNewETag),
   };
+}
+
+/**
+ * A timed-out CAS PUT is never retried blindly: re-read the pointer. Unchanged means
+ * the PUT did not land (ERR_R2_MANIFEST_CAS_TIMEOUT, safe to retry with the same
+ * prevETag); our exact body means it landed (returns its ETag); anything else means
+ * another writer moved the generation (ERR_R2_MANIFEST_CAS_REJECTED).
+ */
+async function resolveTimedOutCasPut(options: {
+  readonly client: CasR2ClientLike;
+  readonly manifestKey: string;
+  readonly serialized: string;
+  readonly prevETag: string | null;
+  readonly timeout: R2TimeoutError;
+  readonly fetchImpl?: typeof fetch;
+}): Promise<string> {
+  const { manifestKey, timeout } = options;
+  let currentETag: string | null;
+  let currentText: string | null = null;
+  try {
+    currentETag = normalizeStrongETag(
+      await options.client.headEtag(
+        manifestKey,
+        options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl },
+      ),
+    );
+    if (currentETag !== null && currentETag !== options.prevETag) {
+      currentText = await readStrictUtf8R2Object(
+        options.client.file(manifestKey),
+      );
+    }
+  } catch (cause) {
+    throw new R2ManifestCasError(
+      "ERR_R2_MANIFEST_CAS_TIMEOUT",
+      `ERR_R2_MANIFEST_CAS_TIMEOUT: PUT ${manifestKey} timed out after ${timeout.ms}ms and the re-read failed; outcome unknown`,
+      75,
+      new AggregateError([timeout, cause]),
+    );
+  }
+  if (currentETag === options.prevETag) {
+    throw new R2ManifestCasError(
+      "ERR_R2_MANIFEST_CAS_TIMEOUT",
+      `ERR_R2_MANIFEST_CAS_TIMEOUT: PUT ${manifestKey} timed out after ${timeout.ms}ms; generation unchanged`,
+      75,
+      timeout,
+    );
+  }
+  if (currentETag !== null && currentText === options.serialized) {
+    return currentETag;
+  }
+  throw new R2ManifestCasError(
+    "ERR_R2_MANIFEST_CAS_REJECTED",
+    `ERR_R2_MANIFEST_CAS_REJECTED: PUT ${manifestKey} timed out after ${timeout.ms}ms and another writer moved the generation`,
+    74,
+    timeout,
+  );
 }
 
 export type CanonicalR2SinkId =

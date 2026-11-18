@@ -67,6 +67,8 @@ export interface R2S3Options {
   readonly publicBase: string;
   /** Proxy for the signed PUT/HEAD fetches; caller-supplied only, default direct. */
   readonly proxy?: R2Proxy;
+  /** Per-request timeout for the signed PUT/HEAD fetches (default {@link DEFAULT_R2_FETCH_TIMEOUT_MS}). */
+  readonly timeoutMs?: number;
 }
 
 /** The subset of Bun.S3Client this adapter delegates to (fake-able in tests). */
@@ -330,6 +332,125 @@ async function signingKey(
  */
 export const DEFAULT_METADATA_PUT_RETRIES = 3;
 export const DEFAULT_METADATA_PUT_RETRY_DELAY_MS = 150;
+export const DEFAULT_R2_FETCH_TIMEOUT_MS = 30_000;
+
+/** Connect-failure `.code`s on Bun's fetch `TypeError` that a PUT may retry. */
+export const R2_TRANSIENT_NETWORK_CODES = [
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "EPIPE",
+  "ECONNABORTED",
+  "EAI_AGAIN",
+] as const;
+
+export type R2SignedMethod = "PUT" | "HEAD";
+
+export class R2TimeoutError extends Error {
+  readonly code = "ERR_R2_TIMEOUT" as const;
+  readonly key: string;
+  readonly method: R2SignedMethod;
+  readonly ms: number;
+  constructor(
+    key: string,
+    method: R2SignedMethod,
+    ms: number,
+    options: { readonly cause: unknown },
+  ) {
+    super(`R2 ${method} ${key} timed out after ${ms}ms`, {
+      cause: options.cause,
+    });
+    this.name = "R2TimeoutError";
+    this.key = key;
+    this.method = method;
+    this.ms = ms;
+  }
+}
+
+export class R2NetworkError extends Error {
+  readonly key: string;
+  readonly method: R2SignedMethod;
+  /** The fetch error's `.code` (e.g. `ECONNREFUSED`), or null when it had none. */
+  readonly code: string | null;
+  readonly transient: boolean;
+  constructor(
+    key: string,
+    method: R2SignedMethod,
+    code: string | null,
+    options: { readonly cause: unknown },
+  ) {
+    super(`R2 ${method} ${key} network error (${code ?? "no code"})`, {
+      cause: options.cause,
+    });
+    this.name = "R2NetworkError";
+    this.key = key;
+    this.method = method;
+    this.code = code;
+    this.transient =
+      code !== null &&
+      (R2_TRANSIENT_NETWORK_CODES as readonly string[]).includes(code);
+  }
+}
+
+export function resolveR2TimeoutMs(timeoutMs: number | undefined): number {
+  if (timeoutMs === undefined) return DEFAULT_R2_FETCH_TIMEOUT_MS;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new RangeError("R2 timeoutMs must be a positive finite number");
+  }
+  return Math.ceil(timeoutMs);
+}
+
+function errorCode(error: unknown): string | null {
+  const code =
+    typeof error === "object" && error !== null
+      ? (error as { readonly code?: unknown }).code
+      : undefined;
+  return typeof code === "string" && code !== "" ? code : null;
+}
+
+export interface R2SignedFetchOptions {
+  readonly fetchImpl: typeof fetch;
+  readonly url: string;
+  readonly init: BunFetchRequestInit;
+  readonly proxy: R2Proxy | undefined;
+  readonly key: string;
+  readonly method: R2SignedMethod;
+  readonly timeoutMs: number;
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * One signed fetch under the proxy policy with `AbortSignal.any([timeout, caller])`.
+ * Rejects with {@link R2TimeoutError} on our timeout, the caller's abort reason on
+ * theirs, {@link R2ProxyTunnelError} on a refused tunnel, else {@link R2NetworkError}.
+ */
+export async function fetchSignedR2(
+  options: R2SignedFetchOptions,
+): Promise<Response> {
+  const timeout = AbortSignal.timeout(options.timeoutMs);
+  const signal =
+    options.signal === undefined
+      ? timeout
+      : AbortSignal.any([timeout, options.signal]);
+  try {
+    return await fetchWithProxyPolicy(
+      options.fetchImpl,
+      options.url,
+      { ...options.init, signal },
+      options.proxy,
+    );
+  } catch (error) {
+    if (options.signal?.aborted === true) throw error;
+    if (timeout.aborted) {
+      throw new R2TimeoutError(options.key, options.method, options.timeoutMs, {
+        cause: error,
+      });
+    }
+    if (error instanceof R2ProxyTunnelError) throw error;
+    throw new R2NetworkError(options.key, options.method, errorCode(error), {
+      cause: error,
+    });
+  }
+}
 
 function isTransientPutStatus(status: number): boolean {
   return (
@@ -357,7 +478,7 @@ export class R2PreconditionFailedError extends Error {
 
 async function buildSignedR2Headers(options: {
   readonly auth: R2S3Auth;
-  readonly method: "PUT" | "HEAD";
+  readonly method: R2SignedMethod;
   readonly path: string;
   readonly host: string;
   readonly payloadHash: string;
@@ -429,8 +550,10 @@ async function putObjectWithMetadata(
     readonly retryDelayMs?: number;
     readonly fetchImpl?: typeof fetch;
     readonly proxy?: R2Proxy;
+    readonly timeoutMs?: number;
+    readonly signal?: AbortSignal;
   } = {},
-): Promise<void> {
+): Promise<string | null> {
   if (
     retryOptions.ifMatch !== undefined &&
     retryOptions.ifNoneMatch !== undefined
@@ -452,6 +575,10 @@ async function putObjectWithMetadata(
   );
   const doFetch = retryOptions.fetchImpl ?? fetch;
   resolveR2Proxy(retryOptions.proxy);
+  const timeoutMs = resolveR2TimeoutMs(retryOptions.timeoutMs);
+  const conditional =
+    retryOptions.ifMatch !== undefined ||
+    retryOptions.ifNoneMatch !== undefined;
 
   let lastError: Error | undefined;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -487,21 +614,32 @@ async function putObjectWithMetadata(
     });
     let response: Response;
     try {
-      response = await fetchWithProxyPolicy(
-        doFetch,
-        `${endpoint.origin}${path}`,
-        { method: "PUT", headers: requestHeaders, body: payload },
-        retryOptions.proxy,
-      );
+      response = await fetchSignedR2({
+        fetchImpl: doFetch,
+        url: `${endpoint.origin}${path}`,
+        init: { method: "PUT", headers: requestHeaders, body: payload },
+        proxy: retryOptions.proxy,
+        key,
+        method: "PUT",
+        timeoutMs,
+        ...(retryOptions.signal === undefined
+          ? {}
+          : { signal: retryOptions.signal }),
+      });
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      if (lastError instanceof R2ProxyTunnelError && lastError.status === 407) {
-        throw lastError;
+      if (
+        attempt < maxRetries &&
+        isRetryablePutFailure(lastError, conditional)
+      ) {
+        continue;
       }
-      if (attempt < maxRetries) continue;
       throw lastError;
     }
-    if (response.ok) return;
+    if (response.ok) {
+      const etag = response.headers.get("etag")?.trim() ?? "";
+      return etag === "" ? null : etag;
+    }
     if (response.status === 412) {
       throw new R2PreconditionFailedError(key);
     }
@@ -511,6 +649,36 @@ async function putObjectWithMetadata(
     }
   }
   throw lastError ?? new Error(`R2 PUT ${key} failed`);
+}
+
+/**
+ * A conditional (If-Match / If-None-Match) PUT never retries a timeout or connect
+ * failure: the write may have landed, so the caller re-reads the generation instead.
+ */
+function isRetryablePutFailure(error: Error, conditional: boolean): boolean {
+  if (error instanceof R2ProxyTunnelError) {
+    return error.status !== null && isTransientPutStatus(error.status);
+  }
+  if (conditional) return false;
+  if (error instanceof R2TimeoutError) return true;
+  return error instanceof R2NetworkError && error.transient;
+}
+
+export interface R2WriteWithMetadataOptions {
+  readonly type?: string;
+  readonly metadata?: Readonly<Record<string, string>>;
+  readonly ifMatch?: string;
+  readonly ifNoneMatch?: string;
+  readonly retry?: number;
+  readonly retryDelayMs?: number;
+  readonly fetchImpl?: typeof fetch;
+  readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
+}
+
+export interface R2WriteResult {
+  readonly bytes: number;
+  readonly etag: string | null;
 }
 
 function encodeBucket(bucket: string): string {
@@ -524,8 +692,10 @@ export class R2S3Client {
     readonly publicBase: string,
     private readonly auth?: R2S3Auth,
     private readonly proxy: R2Proxy = false,
+    private readonly timeoutMs: number = DEFAULT_R2_FETCH_TIMEOUT_MS,
   ) {
     resolveR2Proxy(proxy);
+    resolveR2TimeoutMs(timeoutMs);
   }
 
   static fromOptions(
@@ -549,6 +719,7 @@ export class R2S3Client {
       options.publicBase,
       options,
       options.proxy ?? false,
+      resolveR2TimeoutMs(options.timeoutMs),
     );
   }
 
@@ -620,16 +791,21 @@ export class R2S3Client {
   async writeWithMetadata(
     key: string,
     data: Uint8Array | string,
-    options: {
-      readonly type?: string;
-      readonly metadata?: Readonly<Record<string, string>>;
-      readonly ifMatch?: string;
-      readonly ifNoneMatch?: string;
-      readonly retry?: number;
-      readonly retryDelayMs?: number;
-      readonly fetchImpl?: typeof fetch;
-    } = {},
+    options: R2WriteWithMetadataOptions = {},
   ): Promise<number> {
+    return (await this.writeWithMetadataResult(key, data, options)).bytes;
+  }
+
+  /**
+   * {@link writeWithMetadata} plus the ETag from the PUT response, so a caller never
+   * needs a follow-up HEAD that a racing writer could answer. `etag` is null when the
+   * write went through `Bun.S3Client.write` or the response carried no ETag.
+   */
+  async writeWithMetadataResult(
+    key: string,
+    data: Uint8Array | string,
+    options: R2WriteWithMetadataOptions = {},
+  ): Promise<R2WriteResult> {
     const type = options.type ?? "application/octet-stream";
     const metadata = options.metadata ?? {};
     if (
@@ -639,13 +815,13 @@ export class R2S3Client {
       options.retry === undefined &&
       options.fetchImpl === undefined
     ) {
-      return this.write(key, data, { type });
+      return { bytes: await this.write(key, data, { type }), etag: null };
     }
     if (this.auth === undefined) {
       throw new Error("R2S3Client: metadata upload requires auth options");
     }
     const payload = typeof data === "string" ? textEncoder.encode(data) : data;
-    await putObjectWithMetadata(
+    const etag = await putObjectWithMetadata(
       this.auth,
       this.bucket,
       key,
@@ -664,16 +840,26 @@ export class R2S3Client {
         ...(options.fetchImpl === undefined
           ? {}
           : { fetchImpl: options.fetchImpl }),
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
         proxy: this.proxy,
+        timeoutMs: options.timeoutMs ?? this.timeoutMs,
       },
     );
-    return byteLength(data);
+    return { bytes: byteLength(data), etag };
   }
 
-  /** Read object ETag (returns null if the key does not exist). */
+  /**
+   * Read object ETag (returns null if the key does not exist). The HEAD signs
+   * `accept-encoding: identity` and skips decompression so the ETag is the stored
+   * object's, never a transfer-encoded variant such as `"…+gzip"`.
+   */
   async headEtag(
     key: string,
-    options: { readonly fetchImpl?: typeof fetch } = {},
+    options: {
+      readonly fetchImpl?: typeof fetch;
+      readonly timeoutMs?: number;
+      readonly signal?: AbortSignal;
+    } = {},
   ): Promise<string | null> {
     if (this.auth === undefined) {
       if (!(await this.client.exists(key))) return null;
@@ -689,15 +875,18 @@ export class R2S3Client {
       path,
       host: endpoint.host,
       payloadHash: EMPTY_SHA256,
-      headers: {},
+      headers: { "accept-encoding": "identity" },
     });
-    const doFetch = options.fetchImpl ?? fetch;
-    const response = await fetchWithProxyPolicy(
-      doFetch,
-      `${endpoint.origin}${path}`,
-      { method: "HEAD", headers: requestHeaders },
-      this.proxy,
-    );
+    const response = await fetchSignedR2({
+      fetchImpl: options.fetchImpl ?? fetch,
+      url: `${endpoint.origin}${path}`,
+      init: { method: "HEAD", headers: requestHeaders, decompress: false },
+      proxy: this.proxy,
+      key,
+      method: "HEAD",
+      timeoutMs: resolveR2TimeoutMs(options.timeoutMs ?? this.timeoutMs),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
     if (response.status === 404) return null;
     if (!response.ok) {
       throw new Error(`R2 HEAD ${key} failed (${response.status})`);
