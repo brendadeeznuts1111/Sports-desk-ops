@@ -293,7 +293,8 @@ export class ComboObservationsLegsStore {
 
   /**
    * Stake-weighted CLV in basis points over the account's latest `lastN` priced legs that have a
-   * closing decimal price in `closingDecimalByLegId`; `null` when none qualify.
+   * closing decimal price in `closingDecimalByLegId`; `null` when none qualify. Each leg weighs
+   * stake / legs-per-ticket, so an N-leg parlay carries its stake once, not N times.
    */
   rollingClvBps(
     account: string,
@@ -308,12 +309,16 @@ export class ComboObservationsLegsStore {
     }
     const row = this.db
       .query(
-        `SELECT desk_clv_bps(stake_cents, desk_decimal_odds(odds_american), close) AS clv FROM (
-          SELECT l.stake_cents, l.odds_american, c.value AS close
-          FROM combo_observations_legs l
+        `SELECT desk_clv_bps(stake_cents * 1.0 / ticket_legs, desk_decimal_odds(odds_american), close) AS clv FROM (
+          SELECT l.stake_cents, l.ticket_legs, l.odds_american, c.value AS close
+          FROM (
+            SELECT id, placed_at, stake_cents, odds_american,
+              COUNT(*) OVER (PARTITION BY source_venue, source_ticket) AS ticket_legs
+            FROM combo_observations_legs
+            WHERE UPPER(wallet_or_account) = UPPER(?1)
+          ) l
           JOIN json_each(?2) c ON c.key = CAST(l.id AS TEXT)
-          WHERE UPPER(l.wallet_or_account) = UPPER(?1)
-            AND l.odds_american IS NOT NULL
+          WHERE l.odds_american IS NOT NULL
           ORDER BY l.placed_at DESC, l.id DESC
           LIMIT ?3
         )`,

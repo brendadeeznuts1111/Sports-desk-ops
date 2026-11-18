@@ -367,6 +367,45 @@ describe("ComboObservationsLegsStore desk aggregates", () => {
     ).toThrow(NonFiniteInputError);
   });
 
+  it("weights a 4-leg parlay and a single equally at equal stake", () => {
+    const store = createComboObservationsLegsStore();
+    const single = store.insertFlatLeg(
+      leg({
+        sourceTicket: "S1",
+        placedAt: "2026-11-01T10:00:00Z",
+        stakeCents: 4000,
+        oddsAmerican: 150,
+      }),
+    );
+    const parlay = ["TEAM_A", "TEAM_B", "TEAM_C", "TEAM_D"].map((subject) =>
+      store.insertFlatLeg(
+        leg({
+          sourceTicket: "P4",
+          placedAt: "2026-11-02T10:00:00Z",
+          productClass: "parlay",
+          stakeCents: 4000,
+          oddsAmerican: -110,
+          subject,
+        }),
+      ),
+    );
+    const parlayCloses = [1.95, 1.9, 1.85, 2.0];
+    const closes = new Map<number, number>([
+      [single, 2.4],
+      ...parlay.map((id, i): [number, number] => [id, parlayCloses[i]!]),
+    ]);
+    const singleClv = clvBps(2.5, 2.4);
+    const parlayClv =
+      parlayCloses
+        .map((close) => clvBps(americanToDecimalOdds(-110), close))
+        .reduce((a, b) => a + b, 0) / parlayCloses.length;
+    expect(store.rollingClvBps("CUST1", 5, closes)).toBeCloseTo(
+      (singleClv + parlayClv) / 2,
+      9,
+    );
+    expect(store.rollingClvBps("CUST1", 4, closes)).toBeCloseTo(parlayClv, 9);
+  });
+
   it("computes ticket-level max drawdown with recovery", () => {
     const { store } = seeded();
     expect(store.maxDrawdownCents("CUST1", new Map())).toBe(0);
