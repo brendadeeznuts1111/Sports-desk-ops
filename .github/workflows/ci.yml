@@ -333,7 +333,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e
         env:
           POSTGRES_USER: sportsdesk_ci
           POSTGRES_PASSWORD: ci_test_password

@@ -12,8 +12,13 @@ interface WorkflowStep {
   readonly with?: Readonly<Record<string, unknown>>;
 }
 
+interface WorkflowService {
+  readonly image?: string;
+}
+
 interface WorkflowJob {
   readonly "timeout-minutes"?: number;
+  readonly services?: Readonly<Record<string, WorkflowService>>;
   readonly steps?: readonly WorkflowStep[];
 }
 
@@ -47,6 +52,13 @@ describe("GitHub workflow hardening", () => {
           job["timeout-minutes"],
           `${file} job ${name} needs a timeout`,
         ).toBeNumber();
+        for (const [service, spec] of Object.entries(job.services ?? {})) {
+          if (spec.image === undefined) continue;
+          expect(
+            spec.image,
+            `${file} service ${name}/${service} must be digest-pinned`,
+          ).toMatch(/@sha256:[0-9a-f]{64}$/);
+        }
         for (const step of job.steps ?? []) {
           if (step.uses === undefined) continue;
           expect(step.uses, `${file} step must be SHA-pinned`).toMatch(
