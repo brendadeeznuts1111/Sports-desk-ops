@@ -217,6 +217,11 @@ jobs:
         timeout-minutes: 2
         run: bun run verify:docs
 
+      # `bun test --changed` follows module imports, so a change confined to package.json or bun.lock
+      # selects zero tests. These suites read the installed graph, which no module imports.
+      - name: Install-graph gates (React pairing, peer ranges)
+        timeout-minutes: 2
+        run: bun test tests/react_version_pairing.test.ts tests/peer_satisfaction.test.ts
       - name: Bun test changed files
         run: bun run test:changed
       - name: PM contract suite

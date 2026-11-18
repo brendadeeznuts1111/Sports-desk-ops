@@ -453,6 +453,22 @@ function collectChangedFiles(
   });
 }
 
+/**
+ * Whether the change can move the installed dependency graph.
+ *
+ * `bun test --changed` follows module imports, so a change confined to a manifest or the lockfile
+ * selects no tests at all — nothing imports them (measured 2026-11-18, recorded in AGENTS.md). The
+ * install-graph suites read those files, so they are triggered from here instead.
+ */
+export function changedInstallGraph(changed: readonly string[]): boolean {
+  return changed.some(
+    (file) =>
+      file === "bun.lock" ||
+      file === "package.json" ||
+      file.endsWith("/package.json"),
+  );
+}
+
 interface TaskResult {
   name: string;
   ok: boolean;
@@ -674,6 +690,21 @@ async function main(): Promise<number> {
   ) {
     tasks.push(
       runTask("audit:secrets", ["bun", "run", "scripts/audit_secrets.ts"]),
+    );
+  }
+
+  if (changedInstallGraph(changed)) {
+    tasks.push(
+      runTask(
+        "install-graph (react pairing, peer ranges)",
+        [
+          "bun",
+          "test",
+          "tests/react_version_pairing.test.ts",
+          "tests/peer_satisfaction.test.ts",
+        ],
+        { PRETEST_SKIP: "1" },
+      ),
     );
   }
 
