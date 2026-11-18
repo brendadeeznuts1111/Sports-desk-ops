@@ -18,6 +18,14 @@
  *      bun run xml:status            bun run xml:ingest -- --dry-run
  */
 import { join } from "node:path";
+import { R2S3Client } from "../lib/r2_s3_client.ts";
+import {
+  PORTAL_TAXONOMY_MANIFEST_KEY,
+  createPortalTaxonomyR2Client,
+  publishPortalTaxonomyToR2,
+} from "../src/lib/portal_taxonomy_r2_publish.ts";
+import type { PortalTaxonomyEntry } from "../src/lib/portal_taxonomy_normalizer.ts";
+import { XML_INGEST_SINK } from "../src/lib/xml_ingest_r2_publish.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const PUBLISHER = "packages/sportsdesk-ops/src/bin/xml-parse.ts";
@@ -40,6 +48,10 @@ Usage:
                                         --capacity <n>   SoA capacity (default 65536)
                                         --allow-empty    accept a zero-row frame
                                       A successful publish prints the same status afterwards.
+  ./bin/dx xml taxonomy <table.json> [--dry-run]
+                                      Publish the portal-taxonomy manifest that xml:ingest reads.
+                                      The table is [{sport, subSport, denseCode6, aliases?}];
+                                      codes come from the portal and are validated 1..63.
   ./bin/dx xml parse <file|-> [--tree|--xml] [--indent N]
                                       Parse XML locally as JSON or round-trip XML.
   ./bin/dx xml help                   This text.
@@ -278,6 +290,111 @@ export async function statusCommand(options: StatusOptions): Promise<number> {
   return artifact.ok && probe.kind === "serving" ? 0 : 1;
 }
 
+/**
+ * Publish the portal-taxonomy manifest from a JSON table.
+ *
+ * The dense codes come from the portal, so this command cannot derive them — it reads the table
+ * (`[{sport, subSport, denseCode6, aliases?}]` or `{entries: [...]}`), validates it against the
+ * 6-bit field, and CAS-publishes it to the key `xml:ingest` reads.
+ */
+export async function taxonomyCommand(
+  filePath: string,
+  options: { readonly dryRun: boolean } = { dryRun: false },
+): Promise<number> {
+  const raw = (await Bun.file(filePath).json()) as unknown;
+  const entries = Array.isArray(raw)
+    ? (raw as PortalTaxonomyEntry[])
+    : Array.isArray((raw as { entries?: unknown })?.entries)
+      ? (raw as { entries: PortalTaxonomyEntry[] }).entries
+      : null;
+  if (entries === null) {
+    process.stderr.write(
+      `xml taxonomy: ${filePath} must be an array of entries or {"entries": [...]}\n`,
+    );
+    return 2;
+  }
+
+  // A dry run needs no credentials: it validates and prints the plan.
+  if (options.dryRun) {
+    const plan = await publishPortalTaxonomyToR2({
+      client: {
+        write: async () => undefined,
+        fetch: async () => new Response(null, { status: 200 }),
+      },
+      entries,
+      prevManifestETag: "",
+      nextGenerationU32: 1,
+      dryRun: true,
+    });
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          dry_run: true,
+          entries: plan.entryCount,
+          merkle_root_sha256: plan.merkleRootSha256,
+          manifest_key: PORTAL_TAXONOMY_MANIFEST_KEY,
+          generation_key: plan.generationKey,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return 0;
+  }
+
+  const accessKeyId = Bun.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = Bun.env.R2_SECRET_ACCESS_KEY;
+  const endpoint = Bun.env.R2_ENDPOINT;
+  if (!accessKeyId || !secretAccessKey || !endpoint) {
+    process.stderr.write("ERR_CF_R2_CREDENTIALS_MISSING\n");
+    return 65;
+  }
+  const s3 = R2S3Client.fromOptions({
+    bucket: XML_INGEST_SINK.r2Bucket,
+    endpoint,
+    accessKeyId,
+    secretAccessKey,
+    publicBase: endpoint,
+  });
+
+  let prevManifestETag = "";
+  let nextGenerationU32 = 1;
+  try {
+    const etag = await s3.headEtag(PORTAL_TAXONOMY_MANIFEST_KEY);
+    if (etag !== null && etag.trim() !== "") {
+      prevManifestETag = etag;
+      const current = JSON.parse(
+        await s3.file(PORTAL_TAXONOMY_MANIFEST_KEY).text(),
+      ) as { generation_u32?: number };
+      nextGenerationU32 = ((current.generation_u32 ?? 0) >>> 0) + 1;
+    }
+  } catch {
+    // Absent manifest: first publish, generation 1, If-None-Match: *.
+  }
+
+  const published = await publishPortalTaxonomyToR2({
+    client: createPortalTaxonomyR2Client(s3),
+    entries,
+    prevManifestETag,
+    nextGenerationU32,
+  });
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        published: PORTAL_TAXONOMY_MANIFEST_KEY,
+        entries: published.entryCount,
+        generation_u32: nextGenerationU32,
+        merkle_root_sha256: published.merkleRootSha256,
+        r2_published_at_epoch_ms: published.r2PublishedAtEpochMs,
+        generation_key: published.generationKey,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  return 0;
+}
+
 async function main(argv: readonly string[]): Promise<number> {
   const [sub, ...rest] = argv;
   switch (sub) {
@@ -327,6 +444,19 @@ async function main(argv: readonly string[]): Promise<number> {
         await statusCommand({ json: false });
       }
       return code;
+    }
+    case "taxonomy": {
+      const file = rest.find((a) => !a.startsWith("--"));
+      const unknown = rest.filter(
+        (a) => a.startsWith("--") && a !== "--dry-run",
+      );
+      if (file === undefined || unknown.length > 0) {
+        process.stderr.write(
+          `${unknown.length > 0 ? `xml taxonomy: unknown flag ${unknown[0]}\n` : "xml taxonomy: needs a table file\n"}${USAGE}\n`,
+        );
+        return 2;
+      }
+      return taxonomyCommand(file, { dryRun: rest.includes("--dry-run") });
     }
     case "parse":
       return forward(PARSER, rest);

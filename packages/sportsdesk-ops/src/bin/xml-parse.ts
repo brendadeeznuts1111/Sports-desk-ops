@@ -429,10 +429,27 @@ export async function run(): Promise<void> {
   assertLiveRuntimePreflight(Bun.env, feedUrl, capacity);
   const s3 = createR2Client(Bun.env);
 
-  const [taxonomyState, currentManifestState] = await Promise.all([
-    fetchManifestWithETag<PortalTaxonomyManifest>(s3, TAXONOMY_MANIFEST_KEY),
-    fetchManifestWithETag<XmlIngestManifest>(s3, XML_INGEST_SINK.manifestKey),
-  ]);
+  const taxonomyState = await fetchManifestWithETag<PortalTaxonomyManifest>(
+    s3,
+    TAXONOMY_MANIFEST_KEY,
+  ).catch((error: unknown) => {
+    // The taxonomy table is an input, not something this CLI can derive, and it is published
+    // separately. Say which command produces it instead of surfacing a sink-backpressure error.
+    throw new Error(
+      `ERR_PORTAL_TAXONOMY_MISSING: ${TAXONOMY_MANIFEST_KEY} is absent or unreadable; publish the desk's table with \`bun run xml:taxonomy <table.json>\` first (${
+        error instanceof Error ? error.message : String(error)
+      })`,
+      { cause: error },
+    );
+  });
+  const currentManifestState = await fetchManifestWithETag<XmlIngestManifest>(
+    s3,
+    XML_INGEST_SINK.manifestKey,
+  ).catch(() => ({
+    // First ingest: no previous manifest, so generation 1 with an empty CAS ETag.
+    etag: "",
+    payload: { generation_u32: 0 } as XmlIngestManifest,
+  }));
 
   const taxonomyTable = new DenseSubSportLookupTable(
     taxonomyState.payload.entries,

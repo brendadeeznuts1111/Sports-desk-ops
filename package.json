@@ -349,6 +349,7 @@
     "xml:parse": "bun run bin/xml-parse.ts",
     "xml:status": "bun run scripts/xml_ingest_cli.ts status",
     "xml:ingest": "bun run scripts/xml_ingest_cli.ts ingest",
+    "xml:taxonomy": "bun run scripts/xml_ingest_cli.ts taxonomy",
     "bun:surface": "bun run bin/bun_surface.ts",
     "bun:pr": "bun run bin/bun_pr_cli.ts",
     "sql:query": "bun run bin/sql-query.ts",

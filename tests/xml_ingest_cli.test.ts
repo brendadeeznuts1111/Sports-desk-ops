@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   describeProbe,
   endpointUrl,
+  taxonomyCommand,
   describeStatus,
   probeDaemonEndpoint,
   statusCommand,
@@ -228,5 +231,60 @@ describe("probeDaemonEndpoint with a URL base", () => {
     );
     expect(seen).toEqual(["http://h:1/desk/api/xml-odds/soa"]);
     expect(probe).toMatchObject({ origin: "http://h:1", kind: "serving" });
+  });
+});
+
+/**
+ * `dx xml taxonomy` publishes the table `xml:ingest` reads. The dense codes come from the portal,
+ * so the command takes them as input; `--dry-run` validates and plans without credentials.
+ */
+describe("xml taxonomy", () => {
+  function withTempTable(name: string, content: string): string {
+    const dir = mkdtempSync(join(tmpdir(), "xml-taxonomy-"));
+    const path = join(dir, name);
+    writeFileSync(path, content);
+    return path;
+  }
+
+  const TABLE = JSON.stringify([
+    { sport: "FOOTBALL", subSport: "NFL", denseCode6: 1, aliases: ["NFL"] },
+    { sport: "BASKETBALL", subSport: "NBA", denseCode6: 3 },
+  ]);
+
+  test("--dry-run prints the plan and writes nothing", async () => {
+    const path = withTempTable("table.json", TABLE);
+    const chunks: string[] = [];
+    const write = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string) => {
+      chunks.push(chunk);
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      expect(await taxonomyCommand(path, { dryRun: true })).toBe(0);
+    } finally {
+      process.stdout.write = write;
+    }
+    const plan = JSON.parse(chunks.join("")) as Record<string, unknown>;
+    expect(plan.dry_run).toBe(true);
+    expect(plan.entries).toBe(2);
+    expect(plan.manifest_key).toBe("manifests/portal-taxonomy/latest");
+    expect(String(plan.generation_key)).toMatch(
+      /^generations\/portal-taxonomy\/gen-1-/,
+    );
+  });
+
+  test("an invalid table is rejected before any write", async () => {
+    const path = withTempTable(
+      "bad.json",
+      JSON.stringify([{ sport: "FOOTBALL", subSport: "NFL", denseCode6: 64 }]),
+    );
+    await expect(taxonomyCommand(path, { dryRun: true })).rejects.toThrow(
+      "ERR_PORTAL_TAXONOMY_INVALID",
+    );
+  });
+
+  test("a file that is neither an array nor {entries} is a usage error", async () => {
+    const path = withTempTable("shape.json", JSON.stringify({ nope: true }));
+    expect(await taxonomyCommand(path, { dryRun: true })).toBe(2);
   });
 });
