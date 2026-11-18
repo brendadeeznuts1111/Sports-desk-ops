@@ -4,6 +4,12 @@
 
 import { join } from "node:path";
 
+import {
+  fetchWithDeskPolicy,
+  type DeskFetchPolicyOptions,
+  type ProxyAwareFetch,
+} from "./desk_fetch_proxy.ts";
+
 export interface PinnedManifest {
   readonly schemaVersion: number;
   readonly host: string;
@@ -45,12 +51,29 @@ async function sha256HexFileBytes(
   return Buffer.from(digest).toString("hex");
 }
 
+export type PortalFetchOptions = DeskFetchPolicyOptions & {
+  readonly fetchImpl?: ProxyAwareFetch;
+};
+
+function portalFetch(
+  url: string,
+  options?: PortalFetchOptions,
+): Promise<Response> {
+  return fetchWithDeskPolicy(
+    options?.fetchImpl ?? (fetch as ProxyAwareFetch),
+    url,
+    {},
+    options,
+  );
+}
+
 export async function fetchLiveVersionJs(
   baseUrl: string,
   bust = "1.0.280",
+  options?: PortalFetchOptions,
 ): Promise<{ text: string; sha256: string }> {
   const url = `${baseUrl.replace(/\/$/, "")}/app/setting/version.js?bust=${bust}`;
-  const res = await fetch(url);
+  const res = await portalFetch(url, options);
   if (!res.ok) throw new Error(`version.js fetch ${res.status}`);
   const text = await res.text();
   const sha256 = await sha256HexText(text);
@@ -59,6 +82,7 @@ export async function fetchLiveVersionJs(
 
 export async function checkPinnedVersionDrift(
   baseUrl: string,
+  options?: PortalFetchOptions,
 ): Promise<{ ok: boolean; pinned: string; live: string; artifact: string }> {
   const manifest = await loadPinnedManifest();
   const artifact = "app/setting/version.js";
@@ -66,7 +90,7 @@ export async function checkPinnedVersionDrift(
   if (pinned === undefined) {
     throw new Error(`manifest missing ${artifact}`);
   }
-  const live = await fetchLiveVersionJs(baseUrl);
+  const live = await fetchLiveVersionJs(baseUrl, "1.0.280", options);
   return {
     ok: live.sha256 === pinned,
     pinned,
@@ -78,12 +102,13 @@ export async function checkPinnedVersionDrift(
 export async function checkPinnedManagerDrift(
   baseUrl: string,
   bust = "1.0.280",
+  options?: PortalFetchOptions,
 ): Promise<{ ok: boolean; pinned: string; live: string }> {
   const manifest = await loadPinnedManifest();
   const pinned = manifest.artifacts["app/manager/manager.js"]?.sha256;
   if (pinned === undefined) throw new Error("manifest missing manager.js");
   const url = `${baseUrl.replace(/\/$/, "")}/app/manager/manager.js?bust=${bust}`;
-  const res = await fetch(url);
+  const res = await portalFetch(url, options);
   if (!res.ok) throw new Error(`manager.js fetch ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
   const live = await sha256HexFileBytes(bytes);

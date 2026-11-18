@@ -8,8 +8,14 @@
  * zod parsing once at the boundary in the caller, and atomic `Bun.write`.
  */
 
-import type { BunRequestInit, BunResponse } from "../types/bun-api";
+import type { BunResponse } from "../types/bun-api";
 import type { RetryPolicy } from "../types/wagers";
+
+import {
+  fetchWithDeskPolicy,
+  type ProxyAwareFetch,
+  type R2Proxy,
+} from "./desk_fetch_proxy.ts";
 
 export const MANAGER_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36";
@@ -77,23 +83,63 @@ export function assertJsonResponse(response: BunResponse, tool: string): void {
   }
 }
 
+export type ManagerFetchOptions = BunFetchRequestInit & {
+  readonly proxy?: R2Proxy;
+  readonly timeoutMs?: number;
+  readonly fetchImpl?: ProxyAwareFetch;
+};
+
+function managerDeskFetch(
+  url: string,
+  init: ManagerFetchOptions | undefined,
+  headers: Record<string, string>,
+  extra?: BunFetchRequestInit,
+): Promise<Response> {
+  const {
+    proxy,
+    timeoutMs,
+    fetchImpl,
+    signal,
+    headers: headerOverrides,
+    ...rest
+  } = init ?? {};
+  return fetchWithDeskPolicy(
+    fetchImpl ?? (fetch as ProxyAwareFetch),
+    url,
+    {
+      ...rest,
+      ...extra,
+      headers: {
+        ...headers,
+        ...headerOverrides,
+      },
+      ...(signal == null ? {} : { signal }),
+    },
+    {
+      ...(proxy === undefined ? {} : { proxy }),
+      ...(timeoutMs === undefined ? {} : { timeoutMs }),
+      ...(signal == null ? {} : { signal }),
+    },
+  );
+}
+
 /** GET JSON with the standard Manager Tools headers. Caller zod-parses. */
 export async function fetchManagerJson(
   url: string,
   cookie: string,
-  init?: BunRequestInit,
+  init?: ManagerFetchOptions,
 ): Promise<BunResponse> {
-  return await fetch(url, {
-    ...init,
-    headers: {
+  return await managerDeskFetch(
+    url,
+    init,
+    {
       accept: "application/json",
       cookie,
       referer: MANAGER_REFERER,
       "user-agent": MANAGER_USER_AGENT,
-      ...init?.headers,
     },
-    redirect: "manual",
-  });
+    { redirect: "manual" },
+  );
 }
 
 /** POST JSON with the standard Manager Tools headers. Caller zod-parses. */
@@ -101,23 +147,21 @@ export async function postManagerJson(
   url: string,
   cookie: string,
   body: unknown,
-  init?: BunRequestInit,
+  init?: ManagerFetchOptions,
 ): Promise<BunResponse> {
-  return await fetch(url, {
-    ...init,
-    method: "POST",
-    headers: {
+  return await managerDeskFetch(
+    url,
+    init,
+    {
       accept: "application/json",
       "content-type": "application/json",
       cookie,
       origin: "https://plive.sportswidgets.pro",
       referer: MANAGER_REFERER,
       "user-agent": MANAGER_USER_AGENT,
-      ...init?.headers,
     },
-    body: JSON.stringify(body),
-    redirect: "manual",
-  });
+    { method: "POST", body: JSON.stringify(body), redirect: "manual" },
+  );
 }
 
 /** Atomically write pretty JSON; returns the pretty string for stdout. */

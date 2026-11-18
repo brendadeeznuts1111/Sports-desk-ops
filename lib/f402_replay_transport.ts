@@ -8,6 +8,11 @@
 import { join } from "node:path";
 
 import {
+  fetchWithDeskPolicy,
+  type DeskFetchPolicyOptions,
+  type ProxyAwareFetch,
+} from "./desk_fetch_proxy.ts";
+import {
   readF402Session,
   refreshF402Session,
   writeF402Session,
@@ -40,7 +45,8 @@ export interface F402ReplayTransport {
   close(): Promise<void>;
 }
 
-export interface F402ReplayTransportOptions {
+/** `proxy` is the fetch CONNECT proxy (default false), distinct from `proxyUrl` / F402_REPLAY_PROXY_URL. */
+export interface F402ReplayTransportOptions extends DeskFetchPolicyOptions {
   readonly proxyUrl?: string | undefined;
   readonly env?: NodeJS.ProcessEnv;
   /** Test seam: replace the Bun FetchSession wire call. */
@@ -55,6 +61,22 @@ export async function createF402ReplayTransport(
 ): Promise<F402ReplayTransport> {
   const env = options?.env ?? Bun.env;
   warnIfDeprecatedCookieEnv(env);
+  const policy: DeskFetchPolicyOptions = {
+    ...(options?.proxy === undefined ? {} : { proxy: options.proxy }),
+    ...(options?.timeoutMs === undefined
+      ? {}
+      : { timeoutMs: options.timeoutMs }),
+  };
+
+  const policyFetch = (
+    fetchImpl: ProxyAwareFetch,
+    url: string,
+    init: RequestInit,
+  ): Promise<Response> =>
+    fetchWithDeskPolicy(fetchImpl, url, init, {
+      ...policy,
+      ...(init.signal == null ? {} : { signal: init.signal }),
+    });
 
   const proxy = (
     options?.proxyUrl ??
@@ -67,7 +89,7 @@ export async function createF402ReplayTransport(
       async fetch(url: string, init: RequestInit): Promise<Response> {
         const target = new URL(url);
         const proxyUrl = `${proxy}${target.pathname}${target.search}`;
-        return fetch(proxyUrl, {
+        return policyFetch(fetch as ProxyAwareFetch, proxyUrl, {
           ...init,
           headers: {
             ...init.headers,
@@ -105,7 +127,10 @@ export async function createF402ReplayTransport(
     } else if (deprecatedCookie !== "" && !headers.has("cookie")) {
       headers.set("cookie", deprecatedCookie);
     }
-    return wireFetch(url, { ...init, headers });
+    return policyFetch(wireFetch as ProxyAwareFetch, url, {
+      ...init,
+      headers,
+    });
   }
 
   async function remintAfterUnauthorized(): Promise<void> {
