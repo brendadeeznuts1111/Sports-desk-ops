@@ -174,6 +174,15 @@ with `bun run audit:tool-calls`.
     bypassing Bun's runtime controls completely.
   - **Profiling flags:** Bun's native profiler flags are `--cpu-prof` (with `--cpu-prof-md` for LLM analysis),
     `--cpu-prof-name`, `--cpu-prof-dir`, and `--heap-prof` — never `--profile-cpu`.
+- **`bun --check` type-checks and then _runs_ the target; `bun check` only checks.** Measured on
+  1.4.4: `bun --check src/dashboard/index.tsx` type-checked clean and executed the browser entry
+  (`ReferenceError: document is not defined`), and `bun --check a.ts b.ts` checked only `a.ts`,
+  ran it with `b.ts` as argv, and never reported `b.ts`'s type error. `bun check a.ts b.ts`
+  reported both and followed the import graph (57 files for the schema set). So use
+  `bun check <files…>` for a gate — `schema:typecheck` used `bun --check` with 43 paths, which
+  checked one file and executed it — and reserve `--check` for entrypoints where running on
+  success is intended. For stdin there is no check-only form: `bun check -` answers
+  `error: Unknown flag "-"`, and `… | bun --check run -` executes the input once it type-checks.
 
 **Environment and tooling**
 
