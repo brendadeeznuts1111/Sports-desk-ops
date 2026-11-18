@@ -1,0 +1,27 @@
+# Keep the two supply-chain surfaces that CI depends on current: the GitHub Actions we pin and
+# the Bun lockfile. Dependabot supports the `bun` ecosystem for version updates (>=v1.1.39) but not
+# security updates, so `bun audit` remains the security gate (`bun run audit:deps` in CI).
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      production:
+        dependency-type: "production"
+      development:
+        dependency-type: "development"

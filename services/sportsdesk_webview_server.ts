@@ -116,6 +116,7 @@ import {
 } from "./sportsdesk_telegram_bot.ts";
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
 import { cachedJsonFile, readFileBytes } from "../lib/artifact_cache.ts";
+import { bunImageAssetSnapshot } from "../lib/bun_image_asset_snapshot.ts";
 import {
   buildStatusTelemetry,
   graphFingerprint,
@@ -3366,6 +3367,36 @@ export function startServer(options?: ServerOptions) {
           produce: () => new TextEncoder().encode(JSON.stringify(body)),
           headers: { ...cors, "Cache-Control": "no-store" },
         });
+      }
+
+      if (pathname === "/api/diagnostics/image-assets") {
+        if (req.method !== "GET" && req.method !== "HEAD") {
+          return new Response("method not allowed", {
+            status: 405,
+            headers: { ...cors, Allow: "GET, HEAD" },
+          });
+        }
+        const requested = Number(url.searchParams.get("limit") ?? "24");
+        const limit = Number.isInteger(requested)
+          ? Math.min(Math.max(requested, 1), 100)
+          : 24;
+        // Same shared source the dev dashboard uses, so both endpoints answer from one cache.
+        const source = bunImageAssetSnapshot(resolve(repoRoot, "docs/assets"), {
+          limit,
+          visibility: "RISK_MANAGER",
+          displayRoot: "docs/assets",
+          ttlMs: 5_000,
+        });
+        const snapshot = await source.snapshot();
+        const headers = {
+          ...cors,
+          ETag: snapshot.etag,
+          "Cache-Control": "no-cache",
+        };
+        if (req.headers.get("if-none-match") === snapshot.etag) {
+          return new Response(null, { status: 304, headers });
+        }
+        return Response.json(snapshot, { headers });
       }
 
       if (pathname.startsWith("/assets/")) {
