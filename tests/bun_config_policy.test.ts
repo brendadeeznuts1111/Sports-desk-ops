@@ -13,6 +13,7 @@ import {
   lockWorkspaceNames,
   lockWorkspaceVersions,
   MACHINE_OWNED_INSTALL_KEYS,
+  machineOwnedInstallOverrides,
   auditTrustedDependencies,
   evaluateTrustedDependenciesPolicy,
   patchState,
@@ -42,6 +43,21 @@ describe("package manager policy", () => {
     for (const key of MACHINE_OWNED_INSTALL_KEYS) {
       expect(config.install?.[key]).toBeUndefined();
     }
+  });
+
+  test("minimumReleaseAgeExcludes in a project bunfig is rejected", () => {
+    const project = Bun.TOML.parse(
+      '[install]\nexact = true\nminimumReleaseAgeExcludes = ["@types/bun", "typescript@5.4.5"]\n',
+    ) as { install?: Record<string, unknown> };
+    expect(machineOwnedInstallOverrides(project.install)).toEqual([
+      "minimumReleaseAgeExcludes",
+    ]);
+  });
+
+  test("the root bunfig [install] holds only exact and ignoreScripts", () => {
+    const config = bunfig as { install?: Record<string, unknown> };
+    expect(config.install).toEqual({ exact: true, ignoreScripts: true });
+    expect(machineOwnedInstallOverrides(config.install)).toEqual([]);
   });
 
   test("lifecycle scripts are not trusted implicitly", () => {

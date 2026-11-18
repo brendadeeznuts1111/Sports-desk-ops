@@ -1,10 +1,11 @@
 /**
  * @file src/telemetry/runtime-preflight.ts
  * @description Startup preflight for the Bun-native pipeline: binding checks, Cloudflare token
- * isolation, DNS cache error ratio, and a redaction canary. Depends only on Bun globals and
- * `lib/bun_dns.ts`; no contracts or CLI code.
+ * isolation, DNS cache error ratio, a redaction canary, and the AEAD-only TLS 1.2 cipher pin.
+ * Depends only on Bun globals, `node:tls`, and `lib/bun_dns.ts`; no contracts or CLI code.
  */
 
+import tls from "node:tls";
 import { inspect as nodeInspect } from "node:util";
 import { getDnsTelemetry, type DnsCacheTelemetry } from "../../lib/bun_dns.ts";
 import {
@@ -45,6 +46,38 @@ export function assertCloudflareTokenIsolation(): void {
   }
 }
 
+/**
+ * TLS 1.2 suites left after the pin: ECDHE key exchange with GCM or ChaCha20-Poly1305 only.
+ * TLS 1.3 suites are configured separately and stay on. Measured 2026-11-18 on 1.4.4 against a
+ * local TLS 1.2 server: both `fetch` and `Bun.S3Client` read `tls.DEFAULT_CIPHERS`
+ * (tests/runtime_preflight_tls_ciphers.test.ts).
+ */
+export const AEAD_TLS12_CIPHERS = [
+  "ECDHE-ECDSA-AES128-GCM-SHA256",
+  "ECDHE-RSA-AES128-GCM-SHA256",
+  "ECDHE-ECDSA-AES256-GCM-SHA384",
+  "ECDHE-RSA-AES256-GCM-SHA384",
+  "ECDHE-ECDSA-CHACHA20-POLY1305",
+  "ECDHE-RSA-CHACHA20-POLY1305",
+].join(":");
+
+/**
+ * Sets the process-wide TLS 1.2 cipher list for every later `fetch` and `Bun.S3Client` call and
+ * returns the TLS 1.2 part read back. The getter always prepends the `TLS_*` (1.3) suites.
+ */
+export function pinAeadTls12Ciphers(): string {
+  tls.DEFAULT_CIPHERS = AEAD_TLS12_CIPHERS;
+  const tls12 = tls.DEFAULT_CIPHERS.split(":")
+    .filter((suite) => !suite.startsWith("TLS_"))
+    .join(":");
+  if (tls12 !== AEAD_TLS12_CIPHERS) {
+    throw new Error(
+      "ERR_BUN_RUNTIME_SURFACE: tls.DEFAULT_CIPHERS did not keep the AEAD-only TLS 1.2 list",
+    );
+  }
+  return tls12;
+}
+
 export interface RuntimePreflightReport {
   readonly bunVersion: string;
   readonly bindings: {
@@ -63,6 +96,7 @@ export interface RuntimePreflightReport {
    * This is the canary result, not a seal: preflight must not mutate the shared `Bun.s3`.
    */
   readonly globalS3InspectRedacted: boolean;
+  readonly tls12Ciphers: string;
 }
 
 const PREFLIGHT_SECRET_ENV_NAMES = [
@@ -76,7 +110,8 @@ const PREFLIGHT_SECRET_ENV_NAMES = [
 
 /**
  * Startup guard: verify the native bindings the pipeline needs, enforce Cloudflare token
- * isolation, audit DNS cache errors, and run a redaction canary. No network I/O.
+ * isolation, pin AEAD-only TLS 1.2 ciphers, audit DNS cache errors, and run a redaction canary.
+ * No network I/O.
  */
 export function runRuntimePreflightAudit(options?: {
   readonly maxDnsErrorRatioBps?: number;
@@ -102,6 +137,7 @@ export function runRuntimePreflightAudit(options?: {
   }
 
   assertCloudflareTokenIsolation();
+  const tls12Ciphers = pinAeadTls12Ciphers();
 
   const telemetry = options?.dnsTelemetry ?? getDnsTelemetry();
   const errorRatioBps =
@@ -141,6 +177,7 @@ export function runRuntimePreflightAudit(options?: {
     ),
     dnsCache: Object.freeze({ ...telemetry, errorRatioBps }),
     globalS3InspectRedacted: true,
+    tls12Ciphers,
   });
 
   assertNoSecretLeak(JSON.stringify(report), activeSecrets);

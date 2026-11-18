@@ -21,7 +21,7 @@ import {
   lockWorkspaceDependencies,
   lockWorkspaceNames,
   lockWorkspaceVersions,
-  MACHINE_OWNED_INSTALL_KEYS,
+  machineOwnedInstallOverrides,
   auditTrustedDependencies,
   patchState,
 } from "../lib/pm_policy.ts";
@@ -144,9 +144,7 @@ async function globalConfigChecks(): Promise<Check[]> {
 
 async function projectChecks(): Promise<Check[]> {
   const install = (await readInstall(path.join(ROOT, "bunfig.toml"))) ?? {};
-  const overridden = MACHINE_OWNED_INSTALL_KEYS.filter(
-    (key) => install[key] !== undefined,
-  );
+  const overridden = machineOwnedInstallOverrides(install);
   const foreign = FOREIGN_LOCKFILES.filter((file) =>
     existsSync(path.join(ROOT, file)),
   );

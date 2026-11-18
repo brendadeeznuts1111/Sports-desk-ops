@@ -609,8 +609,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "surface:TOML",
       "test:tests/bun_builtin_replacements.test.ts",
-      "test:tests/bun_runtime_contracts.test.ts",
-      "test:tests/bun_toml.test.ts",
+      "test:tests/bun_config_policy.test.ts",
+      "test:tests/bun_lazy_file_arg_type.test.ts",
     ],
   },
   {
@@ -639,9 +639,9 @@ export const BUN_SHAPES: readonly BunShape[] = [
     heading: "Bun.YAML",
     evidence: [
       "surface:YAML",
+      "test:tests/bun_lazy_file_arg_type.test.ts",
       "test:tests/bun_loaders_and_import_attributes.test.ts",
       "test:tests/bun_runtime.test.ts",
-      "test:tests/bun_runtime_contracts.test.ts",
     ],
   },
   {
@@ -857,8 +857,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "test:lib/live_provenance.test.ts",
       "test:scripts/r2_manifest_cas_promote.test.ts",
+      "test:tests/bun_lazy_file_arg_type.test.ts",
       "test:tests/bun_runtime_contracts.test.ts",
-      "test:tests/bun_webview_screenshot.test.ts",
     ],
   },
   {

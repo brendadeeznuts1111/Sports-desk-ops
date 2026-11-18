@@ -62,13 +62,14 @@ flowchart LR
 
 **Machine-owned `[install]` keys** (must not appear in repo `bunfig.toml`; enforced by `MACHINE_OWNED_INSTALL_KEYS`):
 
-| Key                 | Upstream role                                                                                         | Expected on maintainer machines (`pm:doctor`) |
-| ------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| `linker`            | `hoisted` vs `isolated` ([isolated installs](https://bun.com/docs/pm/isolated-installs))              | `isolated` → `node_modules/.bun/`             |
-| `globalStore`       | Symlink installs into shared store ([global store](https://bun.com/docs/pm/global-store))             | Set in dotfiles; not duplicated in repo       |
-| `cache`             | Cache directory / manifest cache                                                                      | Set in dotfiles                               |
-| `frozenLockfile`    | Same as `--frozen-lockfile`                                                                           | `true` for plain `bun install` / `bun add`    |
-| `minimumReleaseAge` | Block freshly published versions ([install](https://bun.com/docs/pm/cli/install#minimum-release-age)) | Non-zero (typically ~3 days)                  |
+| Key                         | Upstream role                                                                                                                 | Expected on maintainer machines (`pm:doctor`) |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `linker`                    | `hoisted` vs `isolated` ([isolated installs](https://bun.com/docs/pm/isolated-installs))                                      | `isolated` → `node_modules/.bun/`             |
+| `globalStore`               | Symlink installs into shared store ([global store](https://bun.com/docs/pm/global-store))                                     | Set in dotfiles; not duplicated in repo       |
+| `cache`                     | Cache directory / manifest cache                                                                                              | Set in dotfiles                               |
+| `frozenLockfile`            | Same as `--frozen-lockfile`                                                                                                   | `true` for plain `bun install` / `bun add`    |
+| `minimumReleaseAge`         | Block freshly published versions ([install](https://bun.com/docs/pm/cli/install#minimum-release-age))                         | Non-zero (typically ~3 days)                  |
+| `minimumReleaseAgeExcludes` | Names or `name@version` entries exempt from the age gate ([install](https://bun.com/docs/pm/cli/install#minimum-release-age)) | Set in dotfiles; not duplicated in repo       |
 
 Maintainer machine config lives in **`~/dotfiles/bun/bunfig.toml`** (symlinked to the live global path). Typical shape beyond the table:
 

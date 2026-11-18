@@ -396,14 +396,41 @@ not encoded: a probe with `await new Promise(() => {})` did not exit within 120 
 bounded failure to assert. Timers, watch/hot mode, signal handling, and the `vitest` unhandled-error
 listener difference are also not re-measured here.
 
+## v1.4.4 pins: install keys, lazy files and TLS ciphers (measured 2026-11-18)
+
+Release: [bun-v1.4.4](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4). Docs at the release
+commit:
+[`docs/runtime/s3.mdx`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/runtime/s3.mdx),
+[`docs/pm/bunx.mdx`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/pm/bunx.mdx),
+[`docs/pm/cli/install.mdx`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/pm/cli/install.mdx),
+[`docs/runtime/bunfig.mdx`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/runtime/bunfig.mdx).
+
+- **`minimumReleaseAgeExcludes`** — documented in `install.mdx` (_Minimum release age_) and
+  `bunfig.mdx` (`install.minimumReleaseAgeExcludes`): names or `name@version` entries that skip
+  the age gate. It is machine-owned like `minimumReleaseAge`: `MACHINE_OWNED_INSTALL_KEYS` in
+  `lib/pm_policy.ts` lists it, so `pm:doctor` fails a project `bunfig.toml` that sets it
+  (`tests/bun_config_policy.test.ts`). The root `[install]` stays `exact` + `ignoreScripts`.
+- **Lazy `Bun.file()` inputs** — `Bun.CryptoHasher#update`, `Bun.YAML.parse` and
+  `Bun.TOML.parse` throw `TypeError` with code `ERR_INVALID_ARG_TYPE` ("File blob cannot be used
+  here") when handed an unread `Bun.file()`; read it first (`tests/bun_lazy_file_arg_type.test.ts`).
+- **TLS 1.2 ciphers** — a local probe (loopback TLS 1.2 listeners, throwaway CA, placeholder S3
+  credentials) shows both `fetch` and `Bun.S3Client` read `tls.DEFAULT_CIPHERS`: with the default
+  list both negotiate `ECDHE-RSA-AES128-SHA`; with an AEAD-only list both fail the handshake to a
+  CBC-only server and still connect over GCM and TLS 1.3. Reading `tls.DEFAULT_CIPHERS` back always
+  prepends the `TLS_*` 1.3 suites. `runRuntimePreflightAudit` in `src/telemetry/runtime-preflight.ts`
+  pins `AEAD_TLS12_CIPHERS` (`tests/runtime_preflight_tls_ciphers.test.ts`).
+
 ## Upstream doc commit pins
 
-| Pin                                                                                                                      | Tree                               | Use                                                                       |
-| :----------------------------------------------------------------------------------------------------------------------- | :--------------------------------- | :------------------------------------------------------------------------ |
-| [`38afee6c`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/README.md)                | `oven-sh/bun/docs` at `bun-v1.4.4` | Baseline runtime docs for the pinned binary                               |
-| [`6cdb3835`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/project/contributing.mdx) | `docs#contributing`                | MDX voice (same audited commit; tag `6cdb3835` is historical metadata)    |
-| [`6a380492`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/snippets)                 | `docs/snippets`                    | `guides.jsx` (guide index), `cli/*.mdx` (CLI flag blocks)                 |
-| [`b6e7b9cd`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/runtime/s3.mdx)           | `docs/runtime/s3.mdx`              | `Bun.S3Client`, `S3File`, `new Response(s3file)` 302 redirect, `ERR_S3_*` |
+| Pin                                                                                                                      | Tree                               | Use                                                                        |
+| :----------------------------------------------------------------------------------------------------------------------- | :--------------------------------- | :------------------------------------------------------------------------- |
+| [`38afee6c`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/README.md)                | `oven-sh/bun/docs` at `bun-v1.4.4` | Baseline runtime docs for the pinned binary                                |
+| [`6cdb3835`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/project/contributing.mdx) | `docs#contributing`                | MDX voice (same audited commit; tag `6cdb3835` is historical metadata)     |
+| [`6a380492`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/snippets)                 | `docs/snippets`                    | `guides.jsx` (guide index), `cli/*.mdx` (CLI flag blocks)                  |
+| [`b6e7b9cd`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/runtime/s3.mdx)           | `docs/runtime/s3.mdx`              | `Bun.S3Client`, `S3File`, `new Response(s3file)` 302 redirect, `ERR_S3_*`  |
+| [`38afee6c`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/pm/bunx.mdx)              | `docs/pm/bunx.mdx`                 | `bunx` / `bun x` flags (`docs/cli/bunx.mdx` does not exist at this commit) |
+| [`38afee6c`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/pm/cli/install.mdx)       | `docs/pm/cli/install.mdx`          | `--minimum-release-age`, `minimumReleaseAgeExcludes`                       |
+| [`38afee6c`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/runtime/bunfig.mdx)       | `docs/runtime/bunfig.mdx`          | `[install]` keys incl. `install.minimumReleaseAgeExcludes`                 |
 
 ## Related runbooks in this repo
 
