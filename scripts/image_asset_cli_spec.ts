@@ -125,7 +125,7 @@ export const FLAG_SPECS: readonly CliFlagSpec[] = Object.freeze([
   {
     flags: "--thumbs",
     value: "EDGE",
-    description: `Write WebP thumbnails capped at EDGE px (default ${DEFAULT_THUMBNAIL_EDGE})`,
+    description: `Write WebP thumbnails capped at EDGE px into <thumbs-dir>, and record them in its manifest.json (default ${DEFAULT_THUMBNAIL_EDGE})`,
   },
   {
     flags: "--thumbs-dir",

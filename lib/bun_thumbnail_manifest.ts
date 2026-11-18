@@ -11,11 +11,16 @@
 import { mkdirSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 
-export const THUMBNAIL_MANIFEST_VERSION = 1;
+/**
+ * v2: keys are relative to the artifact directory instead of `process.cwd()`.
+ * A v1 manifest reads as `null`, so a stale-key file is regenerated rather than
+ * silently half-matching.
+ */
+export const THUMBNAIL_MANIFEST_VERSION = 2;
 export const THUMBNAIL_MANIFEST_FILENAME = "manifest.json";
 
 export interface ThumbnailManifestEntry {
-  /** Portable source key (workspace-relative, posix separators). */
+  /** Portable source key: relative to the artifact directory, posix separators. */
   readonly source: string;
   /** Thumbnail path relative to the manifest directory. */
   readonly thumb: string;
@@ -41,9 +46,19 @@ function posixPath(path: string): string {
   return sep === "/" ? path : path.split(sep).join("/");
 }
 
-/** Manifest key for a source: workspace-relative when possible, else the basename. */
-export function thumbnailSourceKey(source: string): string {
-  const rel = relative(process.cwd(), source);
+/**
+ * Manifest key for a source: relative to the artifact that stores it, posix
+ * separators, basename as a last resort.
+ *
+ * The root is a required parameter rather than `process.cwd()` on purpose. A cwd
+ * default made the same asset map to different entries depending on where the CLI
+ * ran (`dist/assets/logo.png`, `assets/logo.png`, `logo.png`), so a check from
+ * another directory reported every thumbnail missing and a run from a
+ * subdirectory added duplicates. Pass the directory the manifest (or baseline)
+ * lives in — or its parent — and the key is stable from anywhere.
+ */
+export function thumbnailSourceKey(source: string, root: string): string {
+  const rel = relative(root, source);
   if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
     return posixPath(basename(source));
   }

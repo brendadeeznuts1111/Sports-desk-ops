@@ -12,7 +12,7 @@
  */
 
 import { statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { useColor } from "../lib/ansi_color.ts";
 import {
@@ -530,7 +530,11 @@ async function buildReport(
     const nextEntries: Record<string, ThumbnailManifestEntry> = {
       ...manifest?.entries,
     };
-    let manifestDirty = manifest === null || !configMatches;
+    // Keys seen in this scan; anything else in the manifest is an orphan from a
+    // deleted or renamed source and is dropped before writing, so the manifest
+    // tracks the tree instead of only growing.
+    const seenKeys = new Set<string>();
+    let wroteArtifact = false;
 
     for (const file of files) {
       if (file.entry.type !== "BunImageAssetDiagnostic") continue;
@@ -539,7 +543,10 @@ async function buildReport(
         file.path,
         thumbsDir,
       );
-      const key = thumbnailSourceKey(file.path);
+      // Keyed relative to the manifest's own directory (`<root>/.thumbs` -> root),
+      // so the entry is the same whichever directory the CLI runs from.
+      const key = thumbnailSourceKey(file.path, dirname(thumbsDir));
+      seenKeys.add(key);
       try {
         const sourceStat = statSync(file.path);
         const sourceMtimeMs = sourceStat.mtimeMs;
@@ -615,7 +622,7 @@ async function buildReport(
           bytes: thumb.bytesWritten,
           hash: await hashFile(destination),
         });
-        manifestDirty = true;
+        wroteArtifact = true;
         thumbnails.push(
           Object.freeze({
             ok: true as const,
@@ -640,15 +647,37 @@ async function buildReport(
       }
     }
 
+    // Pruning is only sound when the scan saw the whole tree. A --limit run, an
+    // explicit path list, or a filter/exclude/max-bytes narrowing all hide live
+    // sources, so their manifest entries must survive untouched.
+    const completeScan =
+      input.kind === "dir" &&
+      args.filter === undefined &&
+      args.exclude === undefined &&
+      args.maxBytes === undefined &&
+      scan.total === files.length;
+    const orphanCount =
+      completeScan && manifest !== null
+        ? Object.keys(manifest.entries).filter((key) => !seenKeys.has(key))
+            .length
+        : 0;
+    const manifestDirty =
+      manifest === null || !configMatches || wroteArtifact || orphanCount > 0;
+
     if (!args.thumbsCheck && manifestDirty) {
       try {
+        const pruned: Record<string, ThumbnailManifestEntry> = {};
+        for (const [key, entry] of Object.entries(nextEntries)) {
+          if (completeScan && !seenKeys.has(key)) continue;
+          pruned[key] = entry;
+        }
         await writeThumbnailManifest(thumbsDir, {
           version: THUMBNAIL_MANIFEST_VERSION,
           generatedAt: new Date().toISOString(),
           maxEdge: args.thumbs,
           quality: args.thumbQuality,
           backend,
-          entries: nextEntries,
+          entries: pruned,
         });
       } catch (error) {
         thumbnailFailures += 1;
@@ -916,7 +945,11 @@ async function main(argv: readonly string[]): Promise<number> {
     try {
       await writeAssetBaseline(
         args.writeBaseline,
-        buildAssetBaseline(candidates, args.visibility),
+        buildAssetBaseline(
+          candidates,
+          args.visibility,
+          dirname(resolve(args.writeBaseline)),
+        ),
       );
     } catch (error) {
       baselineError = errorCodeOf(error);
@@ -927,7 +960,11 @@ async function main(argv: readonly string[]): Promise<number> {
     if (baseline === null) {
       baselineError = "ERR_ASSET_BASELINE_MISSING";
     } else {
-      baselineDrift = compareAssetBaseline(baseline, candidates);
+      baselineDrift = compareAssetBaseline(
+        baseline,
+        candidates,
+        dirname(resolve(args.baseline)),
+      );
     }
   }
   const driftFailures =

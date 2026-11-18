@@ -12,7 +12,12 @@ import { dirname } from "node:path";
 
 import { thumbnailSourceKey } from "./bun_thumbnail_manifest.ts";
 
-export const ASSET_BASELINE_VERSION = 1;
+/**
+ * v2: keys follow `thumbnailSourceKey(source, root)` — relative to the baseline's
+ * own directory, not `process.cwd()` — so a baseline written from the repo root
+ * and compared from a subdirectory agree. A v1 baseline reads as `null`.
+ */
+export const ASSET_BASELINE_VERSION = 2;
 
 export interface BaselineAsset {
   readonly format: string;
@@ -47,14 +52,15 @@ export interface BaselineDrift {
 export function buildAssetBaseline(
   candidates: readonly BaselineCandidate[],
   visibility: string,
+  root: string,
 ): AssetBaseline {
   const entries: Record<string, BaselineAsset> = {};
   const keys = candidates
-    .map((candidate) => thumbnailSourceKey(candidate.path))
+    .map((candidate) => thumbnailSourceKey(candidate.path, root))
     .sort();
   for (const key of keys) {
     const candidate = candidates.find(
-      (item) => thumbnailSourceKey(item.path) === key,
+      (item) => thumbnailSourceKey(item.path, root) === key,
     );
     if (candidate === undefined) continue;
     entries[key] = Object.freeze({
@@ -106,10 +112,11 @@ export async function writeAssetBaseline(
 export function compareAssetBaseline(
   baseline: AssetBaseline,
   candidates: readonly BaselineCandidate[],
+  root: string,
 ): BaselineDrift {
   const current = new Map<string, BaselineAsset>();
   for (const candidate of candidates) {
-    current.set(thumbnailSourceKey(candidate.path), {
+    current.set(thumbnailSourceKey(candidate.path, root), {
       format: candidate.format,
       width: candidate.width,
       height: candidate.height,

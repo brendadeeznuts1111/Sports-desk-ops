@@ -7,6 +7,7 @@ import { afterAll, expect, test } from "bun:test";
 import {
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
   utimesSync,
   writeFileSync,
@@ -51,11 +52,19 @@ interface CliRun {
   readonly stderr: string;
 }
 
-function runCli(args: readonly string[]): CliRun {
-  const child = Bun.spawnSync(
-    [process.execPath, "scripts/image_asset_diagnostics.ts", ...args],
-    { stdout: "pipe", stderr: "pipe" },
-  );
+const CLI_ENTRY = join(
+  import.meta.dir,
+  "..",
+  "scripts",
+  "image_asset_diagnostics.ts",
+);
+
+function runCli(args: readonly string[], cwd?: string): CliRun {
+  const child = Bun.spawnSync([process.execPath, CLI_ENTRY, ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+    ...(cwd === undefined ? {} : { cwd }),
+  });
   return {
     code: child.exitCode,
     stdout: child.stdout.toString(),
@@ -657,6 +666,63 @@ test("--write-baseline writes a bun-fmt-clean artifact and --baseline compares i
   }
 });
 
+test("--baseline compares from any cwd, not just the one that wrote it", async () => {
+  // Same defect class as the thumbnail manifest key: a cwd-relative key means a
+  // baseline written higher up the tree cannot be compared from a subdirectory.
+  const parent = realpathSync(
+    mkdtempSync(join(tmpdir(), "sd-cli-baseline-cwd-")),
+  );
+  const assets = join(parent, "assets");
+  try {
+    mkdirSync(assets, { recursive: true });
+    await makePng(join(assets, "wide.png"), 120, 90);
+    const baselinePath = join(assets, "baseline.json");
+
+    expect(
+      runCli(["--json", `--write-baseline=${baselinePath}`, assets], parent)
+        .code,
+    ).toBe(0);
+    const keys = Object.keys(
+      (
+        (await Bun.file(baselinePath).json()) as {
+          assets: Record<string, unknown>;
+        }
+      ).assets,
+    ).sort();
+    expect(keys).toEqual(["wide.png"]);
+
+    const fromParent = runCli(
+      ["--json", `--baseline=${baselinePath}`, assets],
+      parent,
+    );
+    expect(fromParent.code).toBe(0);
+    expect(
+      (JSON.parse(fromParent.stdout) as CliPayload).baseline,
+    ).toMatchObject({
+      compared: 1,
+      added: [],
+      removed: [],
+      changed: [],
+    });
+
+    const fromChild = runCli(
+      ["--json", `--baseline=${baselinePath}`, assets],
+      assets,
+    );
+    expect(fromChild.code).toBe(0);
+    expect((JSON.parse(fromChild.stdout) as CliPayload).baseline).toMatchObject(
+      {
+        compared: 1,
+        added: [],
+        removed: [],
+        changed: [],
+      },
+    );
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
 test("--baseline reports a missing artifact and removed assets", async () => {
   const baseDir = mkdtempSync(join(tmpdir(), "sd-cli-baseline-removed-"));
   try {
@@ -714,7 +780,7 @@ test("--thumbs writes a manifest artifact and leaves it untouched when nothing c
       >;
     };
     expect(manifest).toMatchObject({
-      version: 1,
+      version: 2,
       maxEdge: 40,
       quality: 80,
       backend: "bun",
@@ -729,6 +795,102 @@ test("--thumbs writes a manifest artifact and leaves it untouched when nothing c
     const before = await Bun.file(manifestPath).text();
     expect(runCli(["--json", "--thumbs=40", thumbDir]).code).toBe(0);
     expect(await Bun.file(manifestPath).text()).toBe(before);
+  } finally {
+    rmSync(thumbDir, { recursive: true, force: true });
+  }
+});
+
+test("--thumbs keys the manifest on the artifact directory, not the cwd", async () => {
+  // The asset must live *inside* the invocation directory for the old
+  // cwd-relative key to differ: `parent` is above it, `nested` is below it, so
+  // the same file was `assets/wide.png`, `../wide.png` and `wide.png`.
+  const parent = realpathSync(
+    mkdtempSync(join(tmpdir(), "sd-cli-thumbs-cwd-")),
+  );
+  const thumbDir = join(parent, "assets");
+  try {
+    mkdirSync(join(thumbDir, "nested"), { recursive: true });
+    await makePng(join(thumbDir, "wide.png"), 120, 90);
+
+    const manifestPath = join(thumbDir, ".thumbs", "manifest.json");
+    const readKeys = async (): Promise<string[]> =>
+      Object.keys(
+        (
+          (await Bun.file(manifestPath).json()) as {
+            entries: Record<string, unknown>;
+          }
+        ).entries,
+      ).sort();
+
+    expect(runCli(["--json", "--thumbs=40", thumbDir], parent).code).toBe(0);
+    expect(await readKeys()).toEqual(["wide.png"]);
+
+    // Same manifest, invoked from a subdirectory: the key must not move, and the
+    // check must not report the thumbnail missing.
+    const fromNested = runCli(
+      ["--json", "--thumbs=40", "--thumbs-check", thumbDir],
+      join(thumbDir, "nested"),
+    );
+    expect(fromNested.code).toBe(0);
+
+    // A rewrite from another cwd updates the one entry instead of adding a second.
+    expect(runCli(["--json", "--thumbs=40", thumbDir], thumbDir).code).toBe(0);
+    expect(await readKeys()).toEqual(["wide.png"]);
+    expect(runCli(["--json", "--thumbs=40", thumbDir], parent).code).toBe(0);
+    expect(await readKeys()).toEqual(["wide.png"]);
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("--thumbs prunes entries for deleted sources, but never on a --limit run", async () => {
+  const thumbDir = mkdtempSync(join(tmpdir(), "sd-cli-thumbs-prune-"));
+  try {
+    await makePng(join(thumbDir, "wide.png"), 120, 90);
+    await makePng(join(thumbDir, "tall.png"), 60, 120);
+    const manifestPath = join(thumbDir, ".thumbs", "manifest.json");
+    const readKeys = async (): Promise<string[]> =>
+      Object.keys(
+        (
+          (await Bun.file(manifestPath).json()) as {
+            entries: Record<string, unknown>;
+          }
+        ).entries,
+      ).sort();
+
+    expect(runCli(["--json", "--thumbs=40", thumbDir]).code).toBe(0);
+    expect(await readKeys()).toEqual(["tall.png", "wide.png"]);
+
+    // A partial scan saw one of two files: pruning here would delete a live entry.
+    expect(runCli(["--json", "--thumbs=40", "--limit=1", thumbDir]).code).toBe(
+      0,
+    );
+    expect(await readKeys()).toEqual(["tall.png", "wide.png"]);
+
+    // So would a filter that legitimately matches only one of them.
+    const filtered = runCli([
+      "--json",
+      "--thumbs=40",
+      "--filter=wide",
+      thumbDir,
+    ]);
+    expect(filtered.code).toBe(0);
+    expect(
+      (JSON.parse(filtered.stdout) as CliPayload).directories[0]?.assets.length,
+    ).toBe(1);
+    expect(await readKeys()).toEqual(["tall.png", "wide.png"]);
+
+    // And an explicit path list is a subset by definition.
+    expect(
+      runCli(["--json", "--thumbs=40", thumbDir, join(thumbDir, "wide.png")])
+        .code,
+    ).toBe(0);
+    expect(await readKeys()).toEqual(["tall.png", "wide.png"]);
+
+    // The deleted source is an orphan even though the survivor is still fresh.
+    rmSync(join(thumbDir, "tall.png"));
+    expect(runCli(["--json", "--thumbs=40", thumbDir]).code).toBe(0);
+    expect(await readKeys()).toEqual(["wide.png"]);
   } finally {
     rmSync(thumbDir, { recursive: true, force: true });
   }
