@@ -317,6 +317,123 @@ keys are present and `error` is `{name, kind, code, platformCode, op, service, e
   `ERR_SECRETS_PLATFORM_ERROR`. A locked collection or a dismissed prompt also arrives as
   `ERR_SECRETS_PLATFORM_ERROR` on Linux (only macOS and Windows produce the access codes).
 
+## Transport and protocols
+
+Every F402 request from Bun goes through `lib/f402_fetch_sessions.ts`: one `Bun.FetchSession`
+per origin (scheme + host + port). Network flags for the puller (`f402:pull`) and the protocol
+matrix probe (`capture:probe-protocol-matrix`) come from one parser, `lib/f402_net_options.ts`.
+Source citations below are Bun `ed436333`, which is the 1.4.5-canary binary's revision; every
+behaviour was also checked on the pinned 1.4.4 binary (`38afee6c8`) with local servers
+(`tests/f402_fetch_protocols.test.ts`, `tests/f402_net_options.test.ts`).
+
+### Schemes
+
+- `https:` sessions are created with `tls: { rejectUnauthorized: true }`. A per-request `tls` is
+  refused (`F402FetchSessionConfigError`), because a request's `tls` replaces the session's as a
+  whole. `NODE_TLS_REJECT_UNAUTHORIZED=0` does not turn it off. A bad certificate is
+  `F402TlsVerificationError` with Bun's code, on HTTP/1.1 and HTTP/2 alike.
+- `http:` sessions are created with no `tls` at all. `http:` and `https:` on the same host are
+  separate sessions, as are two ports on one host.
+- The puller's and probe's base URL (`--base-url` > `F402_BASE_URL` > `https://www.fantasy402.com`)
+  still accepts only a bare `https:` origin, because every puller request carries the session
+  bearer and cookies. Plain `http:` is available to callers of the session layer.
+
+### HTTP versions and how Bun negotiates them
+
+| `--http-version` / `F402_HTTP_VERSION` | Sent to Bun           | `https:`                                                                                                                                                                 | `http:`                                    |
+| -------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| `auto` (default)                       | no `protocol`         | ALPN offers `http/1.1` only, so HTTP/1.1. Offers `h2,http/1.1` when Bun was launched with `--experimental-http2-fetch` or `BUN_FEATURE_FLAG_EXPERIMENTAL_HTTP2_CLIENT=1` | HTTP/1.1                                   |
+| `1.1`                                  | `protocol: "http1.1"` | HTTP/1.1, even with the experimental flag on                                                                                                                             | HTTP/1.1                                   |
+| `2`                                    | `protocol: "http2"`   | ALPN offers `h2` only. A server that does not pick h2 fails as `F402HttpVersionError` (Bun `HTTP2Unsupported`)                                                           | refused before any request: Bun has no h2c |
+
+- ALPN lists: `src/http/lib.rs:1122` `configure_http_client_with_alpn` (`H1` = `http/1.1`,
+  `H1OrH2` = `h2,http/1.1`, `H2Only` = `h2`, lines 1137-1144).
+- Choice of list: `src/http/lib.rs:2016` `alpn_offer` and `:1984` `can_offer_h2`. h2 is offered
+  only for `protocol: "http2"`, the CLI flag (`:277`, `src/runtime/cli/Arguments.rs:305`) or the
+  env flag (`src/bun_core/env_var.rs:321`, "Off by default"). `protocol: "http1.1"` turns it off.
+  h2 is also never offered with a proxy, a unix socket, a sendfile body or a JS
+  `checkServerIdentity` (we use none of these).
+- Option parsing: `src/runtime/webcore/fetch.rs:701` accepts `http2|h2|http1.1|h1|http3|h3` and
+  throws `ERR_INVALID_ARG_TYPE` for anything else. `FetchSessionInit` has no `protocol`
+  (`src/runtime/webcore/fetch/FetchSession.rs:291` `parse_options`: only `tls`, `proxy`, `unix`,
+  `keepAlive`), so the pool sets it on each request and refuses a per-request `protocol`.
+- No h2c: `src/http/lib.rs:2798` fails `protocol: "http2"` on a non-TLS socket with
+  `HTTP2Unsupported`.
+- HTTP/3: only with `--experimental-http3-fetch` / `BUN_FEATURE_FLAG_EXPERIMENTAL_HTTP3_CLIENT`
+  (`src/http/lib.rs:391`, `src/bun_core/env_var.rs:326`). With that flag Bun follows a cached
+  `Alt-Svc: h3` on `auto` requests (`src/http/h3_client/AltSvc.rs:1-13`, `src/http/lib.rs:2818`).
+  Pinning `1.1` or `2` disables that (`src/http/lib.rs:2031` `can_try_h3_alt_svc`). We do not
+  expose h3 and have not tested it.
+- **Negotiated version is not visible.** `Response` has no version or ALPN getter
+  (`src/runtime/webcore/response.bind.ts:67`), so the pool cannot record it per response. The
+  only signal is Bun's `verbose: true` stderr line `> HTTP/2 GET ...` (`src/http/lib.rs:1388`
+  `print_request`). Use `--http-version 2` when you need h2 to be guaranteed: it fails instead of
+  falling back.
+
+### What we have observed per host (repo evidence only)
+
+| Host                 | Evidence                                                                                                                      | What it shows                                                                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `www.fantasy402.com` | `docs/evidence/captures/har/manager-boot-pipeline-proven.redacted.har.json` (Chrome DevTools HAR, 2026-11-01 10:14-10:24 CST) | 14 requests over `http/2.0`, `server: cloudflare`. No `Alt-Svc` header in the redacted HAR                                                                    |
+| `cdn.fastassets.io`  | same HAR                                                                                                                      | 3 requests over `http/2.0`, Cloudflare                                                                                                                        |
+| `fantasy402.com`     | `docs/evidence/captures/2026-11-01/run.json`                                                                                  | TLSv1.3, `alpn: ""`. The empty value is a probe artifact: `probeTls` offered no ALPN, so the server could not select one. `probeTls` now offers `h2,http/1.1` |
+
+Unknown, not yet captured: HTTP/1.1-only behaviour (Brenda reports the portal also serves
+HTTP/1.1; nothing in the repo records it), whether plain `http:` redirects to `https:`, the ALPN
+the portal selects for a Bun client offering `h2,http/1.1`, and any Bun-side (non-browser) HTTP/2
+request to the portal.
+
+### Network flags (puller and probe)
+
+Precedence for every flag is **flag > env > default**. An invalid value is an
+`F402NetOptionsError` naming the flag or env variable, and the CLI exits 2.
+
+| Flag                                   | Env                                          | Default  | Meaning                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------- | -------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--host <hostname>`                    | `F402_HOST`                                  | none     | Replaces only the host of the resolved base URL. Scheme and port come from `--base-url` / `F402_BASE_URL` / the default. Bare hostname or IPv4, or `[IPv6]`. No scheme, port, path, credentials, query, fragment or non-ASCII (use punycode). The bearer and cookies go to this host, so use it only for hosts that share the portal session |
+| `--dns-prefetch` / `--no-dns-prefetch` | `F402_DNS_PREFETCH` (`1`/`0`/`true`/`false`) | on       | `Bun.dns.prefetch(host, port)` once per origin, before its first request. Passing both flags is an error                                                                                                                                                                                                                                     |
+| `--dns-cache-ttl <seconds>`            | `F402_DNS_CACHE_TTL_SECONDS`                 | Bun's 30 | Bun DNS cache lifetime, integer 0 to 4294967295. There is no off: `0` is the shortest (an entry expires once it is more than 0 whole seconds old, `src/runtime/dns_jsc/dns.rs:960-972`). `off` is rejected with that explanation                                                                                                             |
+| `--family <auto\|4\|6>`                | `F402_IP_FAMILY`                             | `auto`   | IP family for fetch connections and prefetch. In the probe it also sets `Bun.dns.lookup({ family })` for the preflight                                                                                                                                                                                                                       |
+| `--http-version <auto\|1.1\|2>`        | `F402_HTTP_VERSION`                          | `auto`   | See the table above                                                                                                                                                                                                                                                                                                                          |
+| `--verbose`                            | none                                         | off      | Prints `{"kind":"f402-net", host, dnsPrefetch, dnsCacheTtlSeconds, family, httpVersion, dnsCacheStats}` as one JSON line on stderr at exit. The probe also writes it as `network` in `protocol-matrix.json`                                                                                                                                  |
+
+**TTL and family are launch settings, so the CLI reruns itself once.** Bun reads
+`BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS` (default 30, `src/bun_core/env_var.rs:66`) into a
+`OnceLock` at the first DNS use (`src/runtime/dns_jsc/dns.rs:819`). It reads
+`BUN_FEATURE_FLAG_DISABLE_IPV6` / `_IPV4` (`src/bun_core/env_var.rs:294-295`) through the env-var
+cache into the resolver hints (`dns.rs:1138` `get_hints`; IPv6-off wins if both are set). Those
+hints are used by the cache that fetch connections and `Bun.dns.prefetch` share
+(`dns.rs:1462`, `:1826`). Bun has no runtime API for either: `Bun.dns.prefetch(hostname, port)`
+takes no family (`packages/bun-types/bun.d.ts:2631`), and a `process.env` write after startup is
+ignored (tested on both binaries). So when `--dns-cache-ttl` or `--family 4|6` differs from the
+launch env, the CLI spawns itself once with `BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS`,
+`BUN_FEATURE_FLAG_DISABLE_IPV6=1` (family 4) or `BUN_FEATURE_FLAG_DISABLE_IPV4=1` (family 6) set,
+plus `F402_NET_RELAUNCHED=1`, and exits with the child's code. If the child still lacks them,
+that is an `F402NetOptionsError` and the CLI does not loop. `--family auto` leaves any family flag
+you launched Bun with in place, and `--verbose` reports the effective family. `Bun.dns.lookup`
+has its own `family` option (`src/runtime/dns_jsc/options_jsc.rs:51`), which the flags do not
+change. Cache stats come from `Bun.dns.getCacheStats()` (`dns.rs:1553`): `cacheHitsCompleted`,
+`cacheHitsInflight`, `cacheMisses`, `size`, `errors` and `totalCount`.
+
+DNS prefetch has no `fetch.preconnect`: a preconnected socket goes into the default pool, and a
+session never uses it. The probe no longer calls it either.
+
+### Re-running the protocol matrix probe
+
+```bash
+bun run capture:probe-protocol-matrix --customer <id>                  # https://www.fantasy402.com
+bun run capture:probe-protocol-matrix --host fantasy402.com --verbose  # apex host, same scheme/port
+bun run capture:probe-protocol-matrix --family 4 --dns-cache-ttl 5
+```
+
+It signs in once through the WebView (Brenda's vault login, filled by the host) and makes only
+the read-only matrix calls (`getDeletedTransactionHistory`, `PendingDelete`). It never touches
+`/api/Log/`. The rows come from in-page fetch, so **the browser picks their HTTP version**. The
+network flags steer only the Bun preflight: DNS answers, TLS version, cipher and the ALPN Bun's
+`h2,http/1.1` offer gets (`networkWarm.tls.alpn`). Output goes to
+`scratch/f402-probes/protocol-matrix-<stamp>/protocol-matrix.json` (gitignored, raw IPs stay on
+the box). `--base` still works as an alias of `--base-url`.
+
 ## Known limitations
 
 - **The server token lives 21 minutes.** The refresher closes that gap; the file cannot extend
