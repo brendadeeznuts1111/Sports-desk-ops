@@ -64,6 +64,50 @@ protocol = "ANSI 24-bit TrueColor (\\x1b[38;2;R;G;Bm)"
 color_depth = "24-bit TrueColor RGB"
 
 # ------------------------------------------------------------------------------
+# Deterministic Bun.markdown.AnsiTheme Profiles ([cli.markdown_ansi.<profile>])
+# Maps 1:1 to Bun.markdown.AnsiTheme { colors, columns, hyperlinks, kittyGraphics, light }
+# Explicit `light = false` blocks ambient COLORFGBG env drift on #04070e
+# ------------------------------------------------------------------------------
+[cli.markdown_ansi.ghostty_interactive]
+profile_id = "ANSI_GHOSTTY_INTERACTIVE"
+colors = true
+columns = 120
+hyperlinks = true
+kitty_graphics = false # zero local-disk image side-reads; remote R2 URLs emit alt text
+light = false # locked to surfaces.cli (#04070e); ignores COLORFGBG
+
+[cli.markdown_ansi.tty_narrow]
+profile_id = "ANSI_TTY_NARROW"
+colors = true
+columns = 88
+hyperlinks = true
+kitty_graphics = false
+light = false
+
+[cli.markdown_ansi.r2_telemetry_stream]
+profile_id = "ANSI_R2_TELEMETRY_STREAM"
+colors = true
+columns = 0 # 0 disables wrapping so byte offsets & line hashes never drift
+hyperlinks = false # omits OSC 8 escapes in persisted R2 ANSI stream chunks
+kitty_graphics = false
+light = false
+
+[cli.markdown_ansi.pipe_ascii]
+profile_id = "ANSI_PIPE_ASCII"
+colors = false # plain ASCII chrome: zero escape codes, zero box-drawing, zero emoji
+columns = 0 # zero wrapping for diff -u, CI logs, and piped stdout
+hyperlinks = false
+kitty_graphics = false
+light = false
+
+[contracts.ansi_theme]
+surface_token = "--sd-surface-cli"
+max_dark_surface_l_star_milli = 20000 # L* <= 20.0 mandates light = false across all CLI profiles
+forbid_ambient_colorfgbg = true # every [cli.markdown_ansi.*] must set boolean `light` explicitly
+forbid_kitty_disk_io_in_ci = true # enforces kitty_graphics = false on non-ephemeral profiles
+ascii_fallback_profile = "pipe_ascii" # required profile when colors = false (NO_COLOR / !isTTY)
+
+# ------------------------------------------------------------------------------
 # Dashboard UI Chrome & Interactive State Slots
 # role: surface | border_hairline | border_interactive | focus | text
 # Every text token reaches >= 4.5:1 on every surface token.

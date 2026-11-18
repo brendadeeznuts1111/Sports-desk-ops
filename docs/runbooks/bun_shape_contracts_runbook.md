@@ -216,7 +216,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/markdown)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (4):** `ansi`, `html`, `react`, `render`
-- **Here:** `lib/dashboard_render.ts`, `lib/markdown_react_ssr.ts`
+- **Here:** `lib/cli_markdown_renderer.ts`, `lib/dashboard_render.ts`
 - **Evidence:** `surface:markdown` · deep dive: [§12](./bun_server_runtime_shapes_runbook.md)
 
 #### Bun.stringWidth

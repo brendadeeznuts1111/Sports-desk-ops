@@ -26,6 +26,7 @@ import { DOMAIN_BRANDED_TYPES_PATH } from "../lib/gen_tokens/domain_branded_sect
 import { DOMAIN_BRANDED_PREAMBLE } from "../lib/gen_tokens/domain_branded_preamble.ts";
 import { DOMAIN_BRANDED_TRANSPORT } from "../lib/gen_tokens/domain_branded_transport.ts";
 import { renderDomainBrandedSection7 } from "../lib/gen_tokens/domain_branded_section7.ts";
+import { emitGeneratedAnsiTokensModule } from "../lib/gen_tokens/ansi_tokens_module.ts";
 import { renderTokenRegistryModule } from "../lib/gen_tokens/token_registry_module.ts";
 import {
   parseTokensToml,
@@ -269,6 +270,19 @@ emitRepoFile(
   }),
 );
 console.log(`[gen:tokens] Emitted updated ${registryRelPath}`);
+
+const ansiRelPath = "lib/tokens_ansi.generated.ts";
+const ansiAbsPath = resolve(rootDir, ansiRelPath);
+mkdirSync(resolve(ansiAbsPath, ".."), { recursive: true });
+emitRepoFile(
+  ansiRelPath,
+  ansiAbsPath,
+  emitGeneratedAnsiTokensModule(
+    ssot.cli_ansi_profiles ?? {},
+    [...ingestion].sort((a, b) => a.channel_id - b.channel_id),
+  ),
+);
+console.log(`[gen:tokens] Emitted updated ${ansiRelPath}`);
 
 for (const template of DASHBOARD_TEMPLATES) {
   const dashboardPath = resolve(rootDir, template.repoPath);

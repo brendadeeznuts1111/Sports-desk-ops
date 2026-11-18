@@ -75,6 +75,23 @@ export type CasStateToml = {
   readonly description: string;
 };
 
+export type TomlAnsiProfile = {
+  readonly profile_id: string;
+  readonly colors: boolean;
+  readonly columns: number;
+  readonly hyperlinks: boolean;
+  readonly kitty_graphics: boolean;
+  readonly light: boolean;
+};
+
+export type TomlAnsiContract = {
+  readonly surface_token: string;
+  readonly max_dark_surface_l_star_milli: number;
+  readonly forbid_ambient_colorfgbg: boolean;
+  readonly forbid_kitty_disk_io_in_ci: boolean;
+  readonly ascii_fallback_profile: string;
+};
+
 export type SurfaceToml = {
   layer_id: "SURFACE.DOM" | "SURFACE.CLI";
   token_name: string;
@@ -203,6 +220,8 @@ export type TokensSsot = {
   ui: UiTokenToml[];
   sla: SlaStateToml[];
   cas_states?: CasStateToml[];
+  cli_ansi_profiles?: Readonly<Record<string, TomlAnsiProfile>>;
+  ansi_contract?: TomlAnsiContract;
   bridges: Readonly<Record<string, number>>;
   ingestion: IngestionChannelToml[];
   routes: RouteToml[];
@@ -1020,6 +1039,168 @@ export function assertCleanTomlBytes(buf: Uint8Array): void {
   }
 }
 
+const ANSI_PROFILE_KEYS = [
+  "colors",
+  "columns",
+  "hyperlinks",
+  "kitty_graphics",
+  "light",
+  "profile_id",
+] as const;
+
+function parseLabLightnessMilli(hex: string): number {
+  const labStr = Bun.color(hex, "lab");
+  if (!labStr) {
+    throw new Error(`ERR_SPEC_INVALID_HEX: surfaces.cli (${hex})`);
+  }
+  const m = labStr.match(/^lab\(\s*([+-]?\d+(?:\.\d+)?)%?\s+/);
+  if (!m) {
+    throw new Error(`ERR_SPEC_INVALID_LAB: ${labStr}`);
+  }
+  return Math.round(Number(m[1]) * 1000);
+}
+
+export function validateAnsiThemeProfiles(
+  cliCanvasHex: string,
+  profiles: Readonly<Record<string, TomlAnsiProfile>>,
+  contract: TomlAnsiContract,
+): void {
+  const surfaceLStarMilli = parseLabLightnessMilli(cliCanvasHex);
+  const expectedLight =
+    surfaceLStarMilli > contract.max_dark_surface_l_star_milli;
+
+  const fallback = profiles[contract.ascii_fallback_profile];
+  if (
+    !fallback ||
+    fallback.colors !== false ||
+    fallback.hyperlinks !== false ||
+    fallback.columns !== 0
+  ) {
+    throw new Error(
+      `ERR_SPEC_ANSI_FALLBACK_INVALID: ${contract.ascii_fallback_profile} must set colors=false, hyperlinks=false, columns=0`,
+    );
+  }
+
+  for (const [name, p] of Object.entries(profiles)) {
+    const actualKeys = Object.keys(p).sort();
+    if (
+      actualKeys.length !== ANSI_PROFILE_KEYS.length ||
+      actualKeys.some((k, idx) => k !== ANSI_PROFILE_KEYS[idx])
+    ) {
+      throw new Error(
+        `ERR_SPEC_NON_UNIFORM_ANSI_PROFILE: [cli.markdown_ansi.${name}]`,
+      );
+    }
+    if (contract.forbid_ambient_colorfgbg && typeof p.light !== "boolean") {
+      throw new Error(
+        `ERR_SPEC_AMBIENT_COLORFGBG_RISK: [cli.markdown_ansi.${name}].light must be explicit`,
+      );
+    }
+    if (p.light !== expectedLight) {
+      throw new Error(
+        `ERR_A11Y_ANSI_POLARITY_MISMATCH: [cli.markdown_ansi.${name}].light=${String(p.light)} contradicts ${cliCanvasHex} (L*=${(surfaceLStarMilli / 1000).toFixed(2)})`,
+      );
+    }
+    if (!Number.isInteger(p.columns) || p.columns < 0 || p.columns > 512) {
+      throw new Error(
+        `ERR_SPEC_ANSI_COLUMNS_RANGE: [cli.markdown_ansi.${name}].columns=${String(p.columns)}`,
+      );
+    }
+    if (contract.forbid_kitty_disk_io_in_ci && p.kitty_graphics !== false) {
+      throw new Error(
+        `ERR_SPEC_KITTY_LOCAL_DISK_FORBIDDEN: [cli.markdown_ansi.${name}].kitty_graphics must be false`,
+      );
+    }
+  }
+}
+
+function parseBoolField(
+  obj: Record<string, unknown>,
+  key: string,
+  ctx: string,
+): boolean {
+  const v = obj[key];
+  if (typeof v !== "boolean") {
+    throw new Error(
+      `[tokens_ssot] ${ctx}: ${key} must be a boolean (got ${String(v)})`,
+    );
+  }
+  return v;
+}
+
+function parseAnsiProfiles(
+  rawCli: unknown,
+): Record<string, TomlAnsiProfile> | undefined {
+  if (rawCli === undefined) return undefined;
+  if (!isRecord(rawCli)) {
+    throw new Error("[tokens_ssot] cli must be a table");
+  }
+  if (rawCli.markdown_ansi === undefined) return undefined;
+  const entries = tableValues("cli.markdown_ansi", rawCli.markdown_ansi);
+  const profiles: Record<string, TomlAnsiProfile> = {};
+  for (const [name, raw] of entries) {
+    if (!isRecord(raw)) {
+      throw new Error(
+        `[tokens_ssot] cli.markdown_ansi.${name}: expected table`,
+      );
+    }
+    profiles[name] = {
+      profile_id: reqString(raw, "profile_id", `cli.markdown_ansi.${name}`),
+      colors: parseBoolField(raw, "colors", `cli.markdown_ansi.${name}`),
+      columns: reqIntRange(raw, "columns", 0, 512, `cli.markdown_ansi.${name}`),
+      hyperlinks: parseBoolField(
+        raw,
+        "hyperlinks",
+        `cli.markdown_ansi.${name}`,
+      ),
+      kitty_graphics: parseBoolField(
+        raw,
+        "kitty_graphics",
+        `cli.markdown_ansi.${name}`,
+      ),
+      light: parseBoolField(raw, "light", `cli.markdown_ansi.${name}`),
+    };
+  }
+  return profiles;
+}
+
+function parseAnsiContract(
+  rawContracts: unknown,
+): TomlAnsiContract | undefined {
+  if (rawContracts === undefined) return undefined;
+  if (!isRecord(rawContracts)) {
+    throw new Error("[tokens_ssot] contracts must be a table");
+  }
+  const raw = rawContracts.ansi_theme;
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    throw new Error("[tokens_ssot] contracts.ansi_theme must be a table");
+  }
+  return {
+    surface_token: reqString(raw, "surface_token", "contracts.ansi_theme"),
+    max_dark_surface_l_star_milli: reqPositiveInt(
+      raw,
+      "max_dark_surface_l_star_milli",
+      "contracts.ansi_theme",
+    ),
+    forbid_ambient_colorfgbg: parseBoolField(
+      raw,
+      "forbid_ambient_colorfgbg",
+      "contracts.ansi_theme",
+    ),
+    forbid_kitty_disk_io_in_ci: parseBoolField(
+      raw,
+      "forbid_kitty_disk_io_in_ci",
+      "contracts.ansi_theme",
+    ),
+    ascii_fallback_profile: reqString(
+      raw,
+      "ascii_fallback_profile",
+      "contracts.ansi_theme",
+    ),
+  };
+}
+
 export function parseTokensToml(tomlText: string): TokensSsot {
   assertCleanTomlBytes(new TextEncoder().encode(tomlText));
   const parsed: unknown = Bun.TOML.parse(tomlText);
@@ -1033,6 +1214,9 @@ export function parseTokensTomlFromParsed(parsed: unknown): TokensSsot {
   if (parsed.gates !== undefined) scanNoFloats(parsed.gates, "gates");
   if (parsed.layout !== undefined) scanNoFloats(parsed.layout, "layout");
   if (parsed.motion !== undefined) scanNoFloats(parsed.motion, "motion");
+  if (parsed.cli !== undefined) scanNoFloats(parsed.cli, "cli");
+  if (parsed.contracts !== undefined)
+    scanNoFloats(parsed.contracts, "contracts");
   if (parsed.bridges !== undefined) scanNoFloats(parsed.bridges, "bridges");
   if (parsed.ingestion !== undefined)
     scanNoFloats(parsed.ingestion, "ingestion");
@@ -1066,6 +1250,19 @@ export function parseTokensTomlFromParsed(parsed: unknown): TokensSsot {
       : tableValues("cas_states", parsed.cas_states).map(([k, v]) =>
           parseCasStateEntry(k, v),
         );
+  const cli_ansi_profiles = parseAnsiProfiles(parsed.cli);
+  const ansi_contract = parseAnsiContract(parsed.contracts);
+  if (cli_ansi_profiles !== undefined && ansi_contract !== undefined) {
+    const cliSurface = surfaces.find(
+      (s) => s.token_name === ansi_contract.surface_token,
+    );
+    if (!cliSurface) {
+      throw new Error(
+        `ERR_SPEC_ANSI_SURFACE_MISSING: ${ansi_contract.surface_token}`,
+      );
+    }
+    validateAnsiThemeProfiles(cliSurface.hex, cli_ansi_profiles, ansi_contract);
+  }
   const bridges = parseBridges(parsed.bridges);
   const bitmasks = parseBitmasks(parsed.bitmasks);
   const keymap = parseKeymap(parsed.keymap);
@@ -1101,6 +1298,8 @@ export function parseTokensTomlFromParsed(parsed: unknown): TokensSsot {
     ui,
     sla,
     ...(cas_states !== undefined ? { cas_states } : {}),
+    ...(cli_ansi_profiles !== undefined ? { cli_ansi_profiles } : {}),
+    ...(ansi_contract !== undefined ? { ansi_contract } : {}),
     bridges,
     ingestion,
     routes,
