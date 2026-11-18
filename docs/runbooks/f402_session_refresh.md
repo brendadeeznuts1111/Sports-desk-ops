@@ -335,8 +335,16 @@ behaviour was also checked on the pinned 1.4.4 binary (`38afee6c8`) with local s
 - `http:` sessions are created with no `tls` at all. `http:` and `https:` on the same host are
   separate sessions, as are two ports on one host.
 - The puller's and probe's base URL (`--base-url` > `F402_BASE_URL` > `https://www.fantasy402.com`)
-  still accepts only a bare `https:` origin, because every puller request carries the session
-  bearer and cookies. Plain `http:` is available to callers of the session layer.
+  is a bare `https:` origin, or `http:` only for a loopback host (`localhost`, `127.0.0.0/8`,
+  `[::1]`, for local test servers), because every puller request carries the session bearer and
+  cookies. Any other `http:` base is a config `F402PullerError` (`f402-pull base-url: ...`), exit 2
+  (Brenda, 2026-11-18).
+- After `--host` is applied, the CLI origin's host must be on the allowlist
+  (`F402_ALLOWED_HOSTS` in `lib/f402_net_options.ts`: `fantasy402.com`, `www.fantasy402.com`,
+  `cdn.fastassets.io`) or a loopback host. This applies to `--base-url` / `F402_BASE_URL` too, so
+  `http://127.0.0.1:8080 --host www.fantasy402.com` is refused. Documented usage only ever names
+  the portal hosts, so nothing documented changes. The library `F402PullClient` keeps the scheme
+  rule but not the allowlist, for unit tests with synthetic hosts.
 
 ### HTTP versions and how Bun negotiates them
 
@@ -388,16 +396,16 @@ request to the portal.
 Precedence for every flag is **flag > env > default**. An invalid value is an
 `F402NetOptionsError` naming the flag or env variable, and the CLI exits 2.
 
-| Flag                                   | Env                                          | Default  | Meaning                                                                                                                                                                                                                                                                                                                                      |
-| -------------------------------------- | -------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--host <hostname>`                    | `F402_HOST`                                  | none     | Replaces only the host of the resolved base URL. Scheme and port come from `--base-url` / `F402_BASE_URL` / the default. Bare hostname or IPv4, or `[IPv6]`. No scheme, port, path, credentials, query, fragment or non-ASCII (use punycode). The bearer and cookies go to this host, so use it only for hosts that share the portal session |
-| `--dns-prefetch` / `--no-dns-prefetch` | `F402_DNS_PREFETCH` (`1`/`0`/`true`/`false`) | on       | `Bun.dns.prefetch(host, port)` once per origin, before its first request. Passing both flags is an error                                                                                                                                                                                                                                     |
-| `--dns-cache-ttl <seconds>`            | `F402_DNS_CACHE_TTL_SECONDS`                 | Bun's 30 | Bun DNS cache lifetime, integer 0 to 4294967295. There is no off: `0` is the shortest (an entry expires once it is more than 0 whole seconds old, `src/runtime/dns_jsc/dns.rs:960-972`). `off` is rejected with that explanation                                                                                                             |
-| `--family <auto\|4\|6>`                | `F402_IP_FAMILY`                             | `auto`   | IP family for fetch connections and prefetch. In the probe it also sets `Bun.dns.lookup({ family })` for the preflight                                                                                                                                                                                                                       |
-| `--http-version <auto\|1.1\|2>`        | `F402_HTTP_VERSION`                          | `auto`   | See the table above                                                                                                                                                                                                                                                                                                                          |
-| `--verbose`                            | none                                         | off      | Prints `{"kind":"f402-net", host, dnsPrefetch, dnsCacheTtlSeconds, family, httpVersion, dnsCacheStats}` as one JSON line on stderr at exit. The probe also writes it as `network` in `protocol-matrix.json`                                                                                                                                  |
+| Flag                                   | Env                                          | Default  | Meaning                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------- | -------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--host <hostname>`                    | `F402_HOST`                                  | none     | Replaces only the host of the resolved base URL. Scheme and port come from `--base-url` / `F402_BASE_URL` / the default. Must be `fantasy402.com`, `www.fantasy402.com`, `cdn.fastassets.io` or a loopback host (`localhost`, `127.0.0.0/8`, `[::1]`); anything else is an `F402NetOptionsError`. No scheme, port, path, credentials, query, fragment or non-ASCII. The bearer and cookies go to this host |
+| `--dns-prefetch` / `--no-dns-prefetch` | `F402_DNS_PREFETCH` (`1`/`0`/`true`/`false`) | on       | `Bun.dns.prefetch(host, port)` once per origin, before its first request. Passing both flags is an error                                                                                                                                                                                                                                                                                                   |
+| `--dns-cache-ttl <seconds>`            | `F402_DNS_CACHE_TTL_SECONDS`                 | Bun's 30 | Bun DNS cache lifetime, integer 0 to 4294967295. There is no off: `0` is the shortest (an entry expires once it is more than 0 whole seconds old, `src/runtime/dns_jsc/dns.rs:960-972`). `off` is rejected with that explanation                                                                                                                                                                           |
+| `--family <auto\|4\|6>`                | `F402_IP_FAMILY`                             | `auto`   | IP family for fetch connections and prefetch. In the probe it also sets `Bun.dns.lookup({ family })` for the preflight                                                                                                                                                                                                                                                                                     |
+| `--http-version <auto\|1.1\|2>`        | `F402_HTTP_VERSION`                          | `auto`   | See the table above                                                                                                                                                                                                                                                                                                                                                                                        |
+| `--verbose`                            | none                                         | off      | Prints `{"kind":"f402-net", host, dnsPrefetch, dnsCacheTtlSeconds, family, httpVersion, dnsCacheStats}` as one JSON line on stderr at exit. The probe also writes it as `network` in `protocol-matrix.json`                                                                                                                                                                                                |
 
-**TTL and family are launch settings, so the CLI reruns itself once.** Bun reads
+**TTL and family are launch settings, so set them when you launch Bun.** Bun reads
 `BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS` (default 30, `src/bun_core/env_var.rs:66`) into a
 `OnceLock` at the first DNS use (`src/runtime/dns_jsc/dns.rs:819`). It reads
 `BUN_FEATURE_FLAG_DISABLE_IPV6` / `_IPV4` (`src/bun_core/env_var.rs:294-295`) through the env-var
@@ -405,15 +413,24 @@ cache into the resolver hints (`dns.rs:1138` `get_hints`; IPv6-off wins if both 
 hints are used by the cache that fetch connections and `Bun.dns.prefetch` share
 (`dns.rs:1462`, `:1826`). Bun has no runtime API for either: `Bun.dns.prefetch(hostname, port)`
 takes no family (`packages/bun-types/bun.d.ts:2631`), and a `process.env` write after startup is
-ignored (tested on both binaries). So when `--dns-cache-ttl` or `--family 4|6` differs from the
-launch env, the CLI spawns itself once with `BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS`,
-`BUN_FEATURE_FLAG_DISABLE_IPV6=1` (family 4) or `BUN_FEATURE_FLAG_DISABLE_IPV4=1` (family 6) set,
-plus `F402_NET_RELAUNCHED=1`, and exits with the child's code. If the child still lacks them,
-that is an `F402NetOptionsError` and the CLI does not loop. `--family auto` leaves any family flag
-you launched Bun with in place, and `--verbose` reports the effective family. `Bun.dns.lookup`
-has its own `family` option (`src/runtime/dns_jsc/options_jsc.rs:51`), which the flags do not
-change. Cache stats come from `Bun.dns.getCacheStats()` (`dns.rs:1553`): `cacheHitsCompleted`,
-`cacheHitsInflight`, `cacheMisses`, `size`, `errors` and `totalCount`.
+ignored (tested on both binaries). So the CLI does not change them itself. When `--dns-cache-ttl`
+or `--family 4|6` differs from what Bun was launched with, it fails before any DNS use with an
+`F402BunLaunchEnvError` (an `F402NetOptionsError`), exit 2, and prints the exact command to
+relaunch with:
+
+```text
+f402-pull --dns-cache-ttl/--family: Bun reads its DNS cache TTL and IP family only at launch, and the launch env does not match the request (BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS, BUN_FEATURE_FLAG_DISABLE_IPV6); relaunch with:
+  BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS=5 BUN_FEATURE_FLAG_DISABLE_IPV6=1 bun scripts/f402_readonly_pull.ts census --agent-id <AGENT> --dns-cache-ttl 5 --family 4
+```
+
+Family 4 needs `BUN_FEATURE_FLAG_DISABLE_IPV6=1`, family 6 needs `BUN_FEATURE_FLAG_DISABLE_IPV4=1`;
+a conflicting flag already in the env is shown as `env -u <name>`. When the launch env already
+matches, the CLI proceeds. There is no self-relaunch and no guard variable (Brenda,
+2026-11-18). `--family auto` leaves any family flag you launched Bun with in place, and
+`--verbose` reports the effective family. `Bun.dns.lookup` has its own `family` option
+(`src/runtime/dns_jsc/options_jsc.rs:51`), which the flags do not change. Cache stats come from
+`Bun.dns.getCacheStats()` (`dns.rs:1553`): `cacheHitsCompleted`, `cacheHitsInflight`,
+`cacheMisses`, `size`, `errors` and `totalCount`.
 
 DNS prefetch has no `fetch.preconnect`: a preconnected socket goes into the default pool, and a
 session never uses it. The probe no longer calls it either.
@@ -423,7 +440,8 @@ session never uses it. The probe no longer calls it either.
 ```bash
 bun run capture:probe-protocol-matrix --customer <id>                  # https://www.fantasy402.com
 bun run capture:probe-protocol-matrix --host fantasy402.com --verbose  # apex host, same scheme/port
-bun run capture:probe-protocol-matrix --family 4 --dns-cache-ttl 5
+BUN_FEATURE_FLAG_DISABLE_IPV6=1 BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS=5 \
+  bun run capture:probe-protocol-matrix --family 4 --dns-cache-ttl 5
 ```
 
 It signs in once through the WebView (Brenda's vault login, filled by the host) and makes only
