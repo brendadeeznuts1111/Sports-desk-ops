@@ -77,6 +77,11 @@ const BEHAVIOR_METADATA: Readonly<Record<string, BehaviorMetadata>> = {
     docsPage: "/docs/test",
     shapes: [],
   },
+  "bun-test-writing": {
+    title: "writing tests: timeouts, retries and modifiers",
+    docsPage: "/docs/test",
+    shapes: [],
+  },
   "publish-recursive": {
     title: "bun publish --recursive workspace publishing",
     docsPage: "/docs/cli/publish",

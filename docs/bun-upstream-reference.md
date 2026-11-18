@@ -326,6 +326,31 @@ Measured on the pin with throwaway suites (`tests/bun_test_runner_cli.test.ts`):
 Not re-measured here: `--randomize`/`--seed`, `--concurrent`, `--max-concurrency`, `--aot`,
 `--check`, coverage, snapshots, and `--environment`/`--globals`.
 
+<!-- bun-behavior: bun-test-writing -->
+
+## Writing tests: timeouts, retries and modifiers (measured 2026-11-18)
+
+Measured with throwaway suites (`tests/bun_test_writing.test.ts`):
+
+| Feature                                          | Measured                                                                                   |
+| :----------------------------------------------- | :----------------------------------------------------------------------------------------- |
+| per-test timeout (third argument)                | a 100 ms test with `10` fails: `this test timed out after 10ms`                            |
+| `--timeout=10`                                   | applies to tests without their own timeout and fails the same way                          |
+| `{ retry: 1 }`                                   | retries the failed test, output `(pass) flaky (attempt 2)`                                 |
+| `{ repeats: 2 }`                                 | runs the test three times, output `(pass) repeat (run 3)`                                  |
+| `done` callback                                  | completing it finishes the async test                                                      |
+| `test.only`                                      | runs only the marked test (no `--only` flag needed on this pin)                            |
+| `test.todo` + `--todo`                           | plain run reports `(todo)`; `--todo` exits 1 with `this test is marked as todo but passes` |
+| `test.todoIf(true)`                              | reported as todo                                                                           |
+| `test.each` object row                           | one object argument; `$a`/`$b`/`$expected` interpolate                                     |
+| `expect.assertions(2)`, `expect.hasAssertions()` | enforce the assertion count                                                                |
+
+The live writing docs also describe `test.fails`, `test.for`, `test.extend`, `test.override`,
+`describe.for`, `expect.soft`, `expect.poll`, `expect.toSatisfy`, `expect.addEqualityTesters`,
+`expect.getState` and `expect.setState`; the pinned 1.4.4 runtime does **not** expose them, and
+the contract asserts their absence. The zombie-process killer and snapshot matchers are not
+re-measured here.
+
 ## Upstream doc commit pins
 
 | Pin                                                                                                                      | Tree                               | Use                                                                       |
