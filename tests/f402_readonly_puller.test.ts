@@ -29,6 +29,7 @@ import {
   parseCheckpoint,
   parseHierarchyList,
   redactSecrets,
+  REDACTED,
   redactSecretsAndIps,
   writeSummaryJson,
   resolvePullSession,
@@ -171,6 +172,55 @@ describe("redaction", () => {
     expect(noIps.IPAddress).toBe("<redacted>");
     expect(containsRawIp(secretsOnly)).toBe(true);
     expect(containsRawIp(noIps)).toBe(false);
+  });
+});
+
+describe("secret key matching", () => {
+  test("strips password, phone and email variants by partial name, any case", () => {
+    const keys = [
+      "Password",
+      "NewPassword",
+      "PasswordHash",
+      "EncryptPassword",
+      "passwd",
+      "pass",
+      "HomePhone",
+      "Phone1",
+      "PhoneNumber",
+      "SMSPhoneNumber",
+      "smsNumber",
+      "EMail",
+      "Email",
+      "email_address",
+      "TelegramID",
+      "authToken",
+      "Authorization",
+      "Cookie",
+      "clientSecret",
+      "PIN",
+      "PinCode",
+    ];
+    const raw: Record<string, unknown> = {};
+    for (const key of keys) raw[key] = `value-of-${key}`;
+    const nested = redactSecrets({ rows: [raw] }) as {
+      rows: Record<string, unknown>[];
+    };
+    for (const key of keys) {
+      expect(nested.rows[0]![key]).toBe(REDACTED);
+    }
+    expect(JSON.stringify(nested)).not.toContain("value-of-");
+  });
+
+  test("keeps ordinary keys that only resemble secret names", () => {
+    const raw = {
+      Login: "CUST1",
+      CustomerID: "C1",
+      Bypass: "x",
+      Spin: "y",
+      Shipping: "z",
+      PinnedLine: "w",
+    };
+    expect(redactSecrets(raw)).toEqual(raw);
   });
 });
 

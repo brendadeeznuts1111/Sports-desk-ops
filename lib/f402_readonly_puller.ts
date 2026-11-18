@@ -102,8 +102,14 @@ export class F402PullerError extends Error {
   }
 }
 
+/**
+ * Partial, case-insensitive key match so variants such as `NewPassword`,
+ * `EncryptPassword`, `HomePhone`, `Phone1`, `SMSPhoneNumber` and `EMail` are
+ * stripped too. `pass` and `pin` stay exact so `Bypass*` or `Spin*` keys
+ * are kept.
+ */
 const SECRET_KEY =
-  /^(?:password|pass|passwd|pin|phone|phonenumber|telegramid|token|authToken|authorization|cookie|secret)$/i;
+  /passw|^pass$|phone|sms|e-?mail|telegram|token|authorization|cookie|secret|^pin(?:code)?$/i;
 const IP_KEY = /^(?:ip|ipaddress|ip_address)$/i;
 
 export const REDACTED = "<redacted>";
