@@ -75,6 +75,32 @@ const GLOB_BOOL_KEYS = new Set([
   "throwErrorOnBrokenSymlink",
 ]);
 
+/** Runtime trees where signed R2 fetches live; `verbose` and `s3://` fetches are refused here. */
+const SIGNED_FETCH_GUARD_DIRS = ["lib/", "src/", "services/"] as const;
+
+function propertyKeyText(name: ts.PropertyName, sf: ts.SourceFile): string {
+  return ts.isIdentifier(name) || ts.isStringLiteral(name)
+    ? name.text
+    : name.getText(sf);
+}
+
+/** Object literals an init expression can evaluate to: `{…}`, `(…)`, `c ? {…} : {…}`, `c && {…}`. */
+function objectLiteralsOf(expr: ts.Expression): ts.ObjectLiteralExpression[] {
+  if (ts.isObjectLiteralExpression(expr)) return [expr];
+  if (ts.isParenthesizedExpression(expr))
+    return objectLiteralsOf(expr.expression);
+  if (ts.isConditionalExpression(expr)) {
+    return [
+      ...objectLiteralsOf(expr.whenTrue),
+      ...objectLiteralsOf(expr.whenFalse),
+    ];
+  }
+  if (ts.isBinaryExpression(expr)) {
+    return [...objectLiteralsOf(expr.left), ...objectLiteralsOf(expr.right)];
+  }
+  return [];
+}
+
 function loadTypeScriptProgram(tsconfigPath: string): ts.Program {
   const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
   if (configFile.error) {
@@ -247,7 +273,52 @@ function auditSourceFile(
     });
   };
 
+  const signedFetchScope = SIGNED_FETCH_GUARD_DIRS.some((dir) =>
+    relPath.startsWith(dir),
+  );
+
+  const auditVerboseOption = (init: ts.Expression): void => {
+    for (const literal of objectLiteralsOf(init)) {
+      for (const prop of literal.properties) {
+        if (ts.isSpreadAssignment(prop)) {
+          auditVerboseOption(prop.expression);
+          continue;
+        }
+        if (
+          (ts.isPropertyAssignment(prop) ||
+            ts.isShorthandPropertyAssignment(prop)) &&
+          propertyKeyText(prop.name, sf) === "verbose"
+        ) {
+          record(
+            prop,
+            "BUN-FETCH-VERBOSE",
+            Severity.ERROR,
+            'fetch `verbose` prints request headers to stderr: `true` leaks x-amz-security-token and cookies, `"curl"` also leaks the SigV4 signature and Proxy-Authorization. Keep it to tests with stub servers and fake credentials.',
+          );
+        }
+      }
+    }
+  };
+
+  const auditFetchTarget = (target: ts.Expression | undefined): void => {
+    if (!signedFetchScope || target === undefined) return;
+    const text = ts.isStringLiteralLike(target)
+      ? target.text
+      : ts.isTemplateExpression(target)
+        ? target.head.text
+        : null;
+    if (text !== null && /^s3:\/\//i.test(text)) {
+      record(
+        target,
+        "BUN-FETCH-S3-URL",
+        Severity.ERROR,
+        '`fetch("s3://…")` signs only host and x-amz-* with UNSIGNED-PAYLOAD and silently drops If-Match and x-amz-meta-*, so a CAS write still returns 200. Use R2S3Client / fetchSignedR2Read.',
+      );
+    }
+  };
+
   const auditFetchInit = (init: ts.Expression | undefined): void => {
+    if (init && signedFetchScope) auditVerboseOption(init);
     if (!init || !ts.isObjectLiteralExpression(init)) return;
     for (const prop of init.properties) {
       if (!ts.isPropertyAssignment(prop)) continue;
@@ -313,6 +384,7 @@ function auditSourceFile(
       node.expression.getText(sf) === "Request" &&
       node.arguments !== undefined
     ) {
+      auditFetchTarget(node.arguments[0]);
       auditFetchInit(node.arguments[1]);
     }
 
@@ -327,6 +399,7 @@ function auditSourceFile(
           expr.name.text === "fetch" &&
           expr.expression.getText(sf) === "Bun")
       ) {
+        auditFetchTarget(node.arguments[0]);
         auditFetchInit(node.arguments[1]);
       }
 
