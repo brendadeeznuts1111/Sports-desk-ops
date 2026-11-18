@@ -150,6 +150,14 @@ jobs:
         run: bun ci --no-env-file
       - name: Lockfile dedupe check
         run: bun dedupe --check
+      # Optional native packages differ by target even though bun.lock does not; resolve the two
+      # targets the desk ships to (Linux musl containers and Apple-silicon operators) without
+      # installing them.
+      - name: Resolve optional natives for musl and Darwin
+        timeout-minutes: 2
+        run: |
+          bun ci --dry-run --os=linux --libc=musl --no-env-file
+          bun ci --dry-run --os=darwin --cpu=arm64 --no-env-file
       # SECURITY-ADJACENT SEAL (merge gate): profile insecure-host import allowlist — do not move to a
       # non-required job or trim without replacing the merge gate. Runs early so a later step failure
       # still leaves proof this job executed the seal on PRs touching lib/. Full suite: `code-mode` job.
@@ -364,6 +372,11 @@ jobs:
         run: bun ci --no-env-file
       - name: Lockfile dedupe check
         run: bun dedupe --check
+      - name: Resolve optional natives for musl and Darwin
+        timeout-minutes: 2
+        run: |
+          bun ci --dry-run --os=linux --libc=musl --no-env-file
+          bun ci --dry-run --os=darwin --cpu=arm64 --no-env-file
       - name: Build workspace contracts dist
         run: bun run --filter '@sportsdesk-ops/contracts' build
       - name: "Pinned CDN asset drift (live origins; scheduled/unattended runs)"
