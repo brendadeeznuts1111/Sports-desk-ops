@@ -428,7 +428,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (1):** `parse`
 - **Here:** `lib/pm_policy.ts`, `scripts/bun_native_rules.ts`
-- **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_radix_literal_rounding.test.ts`, `probe:data.json`
+- **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_radix_literal_rounding.test.ts`, `test:tests/react_version_pairing.test.ts`, `probe:data.json`
 
 #### Bun.JSONL
 

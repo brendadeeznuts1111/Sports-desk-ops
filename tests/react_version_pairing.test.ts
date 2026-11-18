@@ -51,6 +51,52 @@ function majorOf(range: string | undefined): string | undefined {
   return /(\d+)/.exec(range)?.[1];
 }
 
+/**
+ * `bun.lock` is JSONC (trailing commas), and its `packages` values are
+ * `[name@version, resolution, dependencies?, integrity?]` tuples. The tuple's first element is the
+ * resolved package, whichever key it sits under — that is what makes a nested copy visible.
+ */
+interface LockTuple extends ReadonlyArray<unknown> {
+  readonly 0: string;
+}
+
+function isLockTuple(value: unknown): value is LockTuple {
+  return Array.isArray(value) && typeof value[0] === "string";
+}
+
+/** `react@18.3.1` → `{ name: "react", version: "18.3.1" }`; scoped names keep their `@scope/`. */
+function splitLockSpec(spec: string): { name: string; version: string } {
+  const at = spec.lastIndexOf("@");
+  if (at <= 0) return { name: spec, version: "" };
+  return { name: spec.slice(0, at), version: spec.slice(at + 1) };
+}
+
+async function readLockfile(): Promise<{
+  readonly packages?: Readonly<Record<string, unknown>>;
+  readonly workspaces?: Readonly<Record<string, unknown>>;
+}> {
+  const path = join(ROOT, "bun.lock");
+  if (!existsSync(path)) {
+    throw new Error(`${path} is missing; run \`bun ci\` first`);
+  }
+  return Bun.JSONC.parse(await Bun.file(path).text()) as {
+    packages?: Readonly<Record<string, unknown>>;
+    workspaces?: Readonly<Record<string, unknown>>;
+  };
+}
+
+/** Every resolved version of `pkg` in the lock, across nested copies too. */
+async function lockedVersions(pkg: string): Promise<readonly string[]> {
+  const lock = await readLockfile();
+  const versions: string[] = [];
+  for (const tuple of Object.values(lock.packages ?? {})) {
+    if (!isLockTuple(tuple)) continue;
+    const resolved = splitLockSpec(tuple[0]);
+    if (resolved.name === pkg) versions.push(resolved.version);
+  }
+  return versions;
+}
+
 async function workspaceManifests(): Promise<
   ReadonlyArray<{ readonly path: string; readonly manifest: Manifest }>
 > {
@@ -141,6 +187,31 @@ describe("React version pairing", () => {
         `installed react ${reactVersion} is outside react-dom's peer range "${peer}"`,
       ).toBe(true);
     }
+  });
+
+  test("bun.lock resolves one react and one react-dom, with no nested copy", async () => {
+    const reactMajor = majorOf(await installedVersion("react"));
+    const reactDomMajor = majorOf(await installedVersion("react-dom"));
+
+    const react = await lockedVersions("react");
+    const reactDom = await lockedVersions("react-dom");
+    expect(react.length, "bun.lock must record react").toBeGreaterThan(0);
+    expect(reactDom.length, "bun.lock must record react-dom").toBeGreaterThan(
+      0,
+    );
+
+    // A second copy (`@scope/ui/react`, recorded with the same tuple shape) is how the lock
+    // represents two Reacts in one tree; the install then hands the workspace a dispatcher the
+    // root's renderer cannot see. The lock is checked as well as node_modules because the installed
+    // tree is not always the tree a check ran in.
+    expect(
+      new Set(react.map((version) => majorOf(version))),
+      `react copies in bun.lock: ${react.join(", ")}`,
+    ).toEqual(new Set([reactMajor]));
+    expect(
+      new Set(reactDom.map((version) => majorOf(version))),
+      `react-dom copies in bun.lock: ${reactDom.join(", ")}`,
+    ).toEqual(new Set([reactDomMajor]));
   });
 
   test("@types/react tracks the installed react major", async () => {
