@@ -235,11 +235,11 @@ The default stays `file`. On a macOS desk host keychain mode works for every rea
 1. **Same value everywhere.** Only the session-refresh LaunchAgent template carries the key. Set
    the same value for the daemon LaunchAgent (its env file), the desk server, and any shell that
    runs `session:*`, bridge or capture commands; a mix means one side reads a stale file.
-2. **Long-lived processes keep their copy.** The replay transport, `live-stream --poll` and the
-   weblog bridge inputs load the keychain session once; in file mode the transport re-reads the
-   file on every request. A session rotated by the refresher is picked up by those processes only
-   on restart or after a 401 re-mint (which needs `F402_LIVE_LOGIN=1`). Per-request readers
-   (desk server reads, bridge3a, the graph poller, the cron gate) are not affected.
+2. **Long-lived transports keep their copy.** A replay transport loads the keychain session when
+   it is created (in file mode it re-reads the file on every request), and `live-stream --poll`
+   loads it once at start. A session rotated by the refresher reaches a long-running sweep or poll
+   only on restart or after a 401 re-mint (which needs `F402_LIVE_LOGIN=1`). Per-call readers
+   (desk server reads, bridge3a, the graph poller, the cron gate, one-shot CLIs) are not affected.
 3. **Keychain access is per binary.** Each new Bun binary path (a pinned upgrade) must be allowed
    once in Keychain Access for the `f402-session` item, or background agents get
    `F402SecretInteractionRequired` (exit 4).
