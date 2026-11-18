@@ -474,7 +474,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/YAML)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `parse`, `stringify`
-- **Here:** `bin/bun_surface.ts`, `bin/desk-provenance.ts`
+- **Here:** `lib/r2_chunk_manifest.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:YAML`, `test:tests/bun_loaders_and_import_attributes.test.ts`, `test:tests/bun_runtime.test.ts`, `test:tests/bun_runtime_contracts.test.ts`
 
 ## Storage and scheduling

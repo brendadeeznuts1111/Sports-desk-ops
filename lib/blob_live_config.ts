@@ -1,9 +1,11 @@
 /**
  * @file lib/blob_live_config.ts
- * @description Loads `config/blob-live.yaml` with `Bun.YAML.parse` and validates it.
+ * @description Loads `config/blob-live.yaml` via Bun's yaml import loader and validates it.
  */
 
 import { z } from "zod";
+
+import raw from "../config/blob-live.yaml";
 
 export const BLOB_LIVE_CONFIG_PATH = "config/blob-live.yaml";
 
@@ -36,17 +38,11 @@ export const blobLiveConfigSchema = z
 
 export type BlobLiveConfig = z.infer<typeof blobLiveConfigSchema>;
 
-export function parseBlobLiveConfig(
-  text: string,
+function validateBlobLiveConfig(
+  value: unknown,
   source = BLOB_LIVE_CONFIG_PATH,
 ): BlobLiveConfig {
-  let raw: unknown;
-  try {
-    raw = Bun.YAML.parse(text);
-  } catch (cause) {
-    throw new BlobLiveConfigInvalid(`${source}: not valid YAML`, { cause });
-  }
-  const parsed = blobLiveConfigSchema.safeParse(raw);
+  const parsed = blobLiveConfigSchema.safeParse(value);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
@@ -58,12 +54,19 @@ export function parseBlobLiveConfig(
   return parsed.data;
 }
 
-export async function loadBlobLiveConfig(
-  path = BLOB_LIVE_CONFIG_PATH,
-): Promise<BlobLiveConfig> {
-  const file = Bun.file(path);
-  if (!(await file.exists())) {
-    throw new BlobLiveConfigInvalid(`${path}: not found`);
+export function parseBlobLiveConfig(
+  text: string,
+  source = BLOB_LIVE_CONFIG_PATH,
+): BlobLiveConfig {
+  let parsed: unknown;
+  try {
+    parsed = Bun.YAML.parse(text);
+  } catch (cause) {
+    throw new BlobLiveConfigInvalid(`${source}: not valid YAML`, { cause });
   }
-  return parseBlobLiveConfig(await file.text(), path);
+  return validateBlobLiveConfig(parsed, source);
+}
+
+export function loadBlobLiveConfig(): BlobLiveConfig {
+  return validateBlobLiveConfig(raw, BLOB_LIVE_CONFIG_PATH);
 }

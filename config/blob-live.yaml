@@ -1,4 +1,4 @@
-# Blob & Live-Bets gateway boot config (Bun.YAML, validated by lib/blob_live_config.ts).
+# Blob & Live-Bets gateway boot config (Bun yaml loader, validated by lib/blob_live_config.ts).
 # R2 credentials never live here; they come from the existing runtime env / Bun.secrets.
 port: 4021
 hostname: 127.0.0.1

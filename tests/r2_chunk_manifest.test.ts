@@ -322,11 +322,44 @@ describe("S3ManifestStore over a mocked Bun.S3Client", () => {
 });
 
 describe("config/blob-live.yaml", () => {
-  test("the committed config parses with Bun.YAML", async () => {
-    const config = await loadBlobLiveConfig();
+  test("the committed config loads through the yaml import", () => {
+    const config = loadBlobLiveConfig();
     expect(config.channels.length).toBeGreaterThan(0);
     expect(config.hostname).toBe("127.0.0.1");
     expect(typeof config.port).toBe("number");
+    expect(config.bucket.length).toBeGreaterThan(0);
+    expect(config.manifest_prefix.length).toBeGreaterThan(0);
+  });
+
+  test("loadBlobLiveConfig works when cwd is not the repo root", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "blob-live-cwd-"));
+    dirs.push(cwd);
+    const modulePath = join(import.meta.dir, "../lib/blob_live_config.ts");
+    const proc = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        "--eval",
+        `import { loadBlobLiveConfig } from ${JSON.stringify(modulePath)};
+process.stdout.write(JSON.stringify(loadBlobLiveConfig()));`,
+      ],
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect({
+      exitCode: proc.exitCode,
+      stderr: proc.stderr.toString(),
+    }).toEqual({ exitCode: 0, stderr: "" });
+    const config = JSON.parse(proc.stdout.toString()) as {
+      hostname: string;
+      port: number;
+      channels: string[];
+      bucket: string;
+      manifest_prefix: string;
+    };
+    expect(config.hostname).toBe("127.0.0.1");
+    expect(typeof config.port).toBe("number");
+    expect(config.channels.length).toBeGreaterThan(0);
     expect(config.bucket.length).toBeGreaterThan(0);
     expect(config.manifest_prefix.length).toBeGreaterThan(0);
   });
