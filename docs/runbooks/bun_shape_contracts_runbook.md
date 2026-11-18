@@ -1056,7 +1056,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/revision)
 - **Shape:** value: `string` · writable false · enumerable true
 - **Here:** `lib/bun_runtime.ts`, `packages/sportsdesk-ops/src/bin/bun-surface.ts`
-- **Evidence:** `test:lib/f402_portal_runtime_pin.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_runtime.test.ts`, `test:tests/bun_surface_snapshot.test.ts`
+- **Evidence:** `test:lib/f402_portal_runtime_pin.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_reference_cli.test.ts`, `test:tests/bun_runtime.test.ts`
 
 #### Bun.version
 
@@ -1076,7 +1076,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 Non-test production imports from `bun:sqlite`, `bun:jsc`, and `bun:bundle` are inventoried alongside `MODULE "bun"` / `globalThis.Bun` (`BUN_SUBMODULE_SHAPES` in `lib/bun_shapes.ts`).
 
-- **`bun:bundle` → `feature`** (bundler macro) — here: `packages/ui/src/runtime_flags.ts` · evidence: `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bundle_runtime.test.ts`, `test:tests/bundle_types.test-d.ts`, `test:tests/pty_feature_flags.test.ts`
+- **`bun:bundle` → `feature`** (bundler macro) — here: `lib/bun_reference_probe.ts`, `packages/ui/src/runtime_flags.ts` · evidence: `test:tests/bun_shapes_manifest.test.ts`, `test:tests/bundle_runtime.test.ts`, `test:tests/bundle_types.test-d.ts`, `test:tests/pty_feature_flags.test.ts`
 - **`bun:jsc` → `estimateShallowMemoryUsageOf`** (runtime export) — here: `bin/bun_surface.ts`, `lib/f402_hierarchy_memory.ts` · evidence: `surface:bun:jsc.estimateShallowMemoryUsageOf`
 - **`bun:jsc` → `heapStats`** (runtime export) — here: `bin/bun_surface.ts`, `scripts/bench_bridge3a_workload.ts` · evidence: `surface:bun:jsc.heapStats`, `test:tests/f402_bet_ticker_delta.test.ts`
 - **`bun:sqlite` → `constants`** (runtime export) — here: `bin/bun_surface.ts`, `lib/sportsdesk_sqlite.ts` · evidence: `surface:bun:sqlite.constants`

@@ -1438,8 +1438,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "test:lib/f402_portal_runtime_pin.test.ts",
       "test:tests/bun_capabilities.test.ts",
+      "test:tests/bun_reference_cli.test.ts",
       "test:tests/bun_runtime.test.ts",
-      "test:tests/bun_surface_snapshot.test.ts",
     ],
   },
   {
