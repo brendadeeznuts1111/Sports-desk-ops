@@ -16,6 +16,7 @@ The table below is generated from the root `package.json` `bin`/`scripts` maps; 
 | `bun x image-meta` | `bun run image:meta` | `bin/image-meta.ts` | Native 'Bun.file().image()' & 'Bun.Image' metadata, SHA-256, and LQIP inspector. |
 | `bun x nsh-desk` | `bun run nsh` | `scripts/nsh_desk_cli.ts` | Operator & CI CLI for 'packages/nsh-desk' ('https://nsh.dev/docs/cli/'), |
 | `bun x sportsdesk` | `bun run sportsdesk` | `cli/sportsdesk_cli.ts` | SportsDesk & Fantasy402 Downline Intelligence & Automation CLI (Bun v1.4+). |
+| `bun x sportsdesk-assets` | `bun run assets:diagnostics` | `scripts/image_asset_diagnostics.ts` | Print 'Bun.Image' asset attributes and optionally write deterministic WebP thumbnails. |
 | `bun x sportsdesk-autobet` | `bun run autobet` | `cli/watchlist_autobet_cli.ts` | Watchlist autobet CLI — paper-only bet intents over the desk's own watchlist signals. |
 | `bun x sportsdesk-bet-flags` | `bun run bet:flags` | `cli/sportsdesk_bet_flags_cli.ts` | SportsDesk incoming-bet flags CLI — the reference implementation behind the autobet control |
 | `bun x sportsdesk-candidate` | `bun run candidate` | `cli/sportsdesk_candidate_cli.ts` | Candidate overlay evaluation — golden pin check + policy replay (append-only audit). |
@@ -33,7 +34,7 @@ The table below is generated from the root `package.json` `bin`/`scripts` maps; 
 | `bun x wrangler` | `bun run wrangler` | `bin/wrangler` | Official Wrangler CLI wrapper located in 'bin/wrangler' (linked into 'node_modules/.bin/wrangler' |
 | `bun x xml-parse` | `bun run xml:parse` | `bin/xml-parse.ts` | Parse an XML document and print the tree as JSON, or serialize it back to XML. |
 
-Run `bun run cli:bins` (or `./bin/dx scripts --bins [--json | --yaml]`) to inspect all 23 workspace CLI mappings and verify `node_modules/.bin/` symlink status.
+Run `bun run cli:bins` (or `./bin/dx scripts --bins [--json | --yaml]`) to inspect all 24 workspace CLI mappings and verify `node_modules/.bin/` symlink status.
 <!-- END GENERATED BUN X CATALOG -->
 
 Every bin above answers `-h` / `--help` with exit 0 (`tests/bun_x_cli_help.test.ts`

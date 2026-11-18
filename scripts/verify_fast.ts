@@ -7,7 +7,7 @@
  *   1. Scoped `bun fmt` on changed files (~30ms; `--check` for read-only)
  *   2. Parallel `Promise.all` execution of:
  *      - Workspace-scoped `bun check --no-script -p <tsconfig>` (UI-only edits skip root `tsconfig.json`)
- *      - `oxlint --deny-warnings` scoped to changed JS/TS/TSX files (`--deep` adds `--type-aware`)
+ *      - Native `bun lint --no-script --deny-warnings` scoped to changed JS/TS/TSX files (`--deep` adds `--type-aware`)
  *      - Path-triggered gates ONLY when relevant directories changed
  *      - Targeted tests: `bun test --parallel --changed` (or head shard `--shard=1/8` + explicit
  *        changed/matched `*.test.ts` when root configs changed or inside a sandboxed worktree).
@@ -17,7 +17,8 @@
  *   bun run verify:fast lib/foo.ts           # verify specific file(s) + matching tests
  *   bun run verify:fast --check              # read-only format check
  *   bun run verify:fast --shard              # force head shard (1/8)
- *   bun run verify:fast --deep               # include type-aware oxlint pass
+ *   bun run verify:fast --deep               # include type-aware bun lint pass
+ *   bun run verify:fast --no-lint            # skip lint when no native binary is available
  */
 
 import { existsSync, lstatSync, statSync } from "node:fs";
@@ -38,6 +39,289 @@ export const ROOT_BLAST_FILES = new Set([
   "bun.lock",
   "bunfig.toml",
 ]);
+
+/** Paths whose contents nothing imports: `bun test --changed` cannot select them. */
+export const NON_MODULE_PATHS: readonly string[] = [
+  "data/",
+  "tests/fixtures/",
+  "design/",
+  "schema/",
+  "config/",
+];
+
+/** Root files with the same property (nothing imports them). */
+export const NON_MODULE_FILES: ReadonlySet<string> = new Set([
+  "bunfig.toml",
+  ".bun-version",
+]);
+
+/**
+ * Extensions that hold behaviour a test reads through the filesystem rather than an import.
+ * Anything else under a non-module path (README, images, CSVs) changes no test expectation, so
+ * warning about it is noise.
+ */
+const DATA_EXTENSIONS: readonly string[] = [
+  ".json",
+  ".jsonl",
+  ".toml",
+  ".yml",
+  ".yaml",
+  ".xml",
+  ".sql",
+];
+
+function hasDataExtension(file: string): boolean {
+  return DATA_EXTENSIONS.some((ext) => file.endsWith(ext));
+}
+
+/**
+ * Drop paths a module imports, because `--changed` follows those and the warning would be wrong.
+ *
+ * The path list is a coarse prefix filter: `design/` and `config/` contain both imported artefacts
+ * (`design/domain-branded-types.ts`, `design/tokens.toml`, `config/slab.toml`) and files nothing
+ * imports (`config/fraud-model.json`). Import reachability decides per file.
+ *
+ * @param files - candidate paths from {@link nonModuleChangedFiles}.
+ * @param imported - the subset some module imports (see `importedSpecifierPaths`).
+ */
+export function filterImported(
+  files: readonly string[],
+  imported: ReadonlySet<string>,
+): string[] {
+  return files.filter((file) => hasDataExtension(file) && !imported.has(file));
+}
+
+/**
+ * The subset of `files` a module **imports**, found by matching each path inside an import
+ * specifier (`from "…"`, `import("…")`, `import "…"`).
+ *
+ * A plain substring search is not enough: `Bun.file("data/agent-tree.json")` mentions the path but
+ * is a filesystem read, which `--changed` does not follow. Runs only on the zero-selection branch,
+ * so the subprocess cost is bounded by a diff that already produced no tests.
+ */
+export function importedSpecifierPaths(
+  files: readonly string[],
+  root: string,
+): ReadonlySet<string> {
+  const imported = new Set<string>();
+  for (const file of files) {
+    const escaped = file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // POSIX ERE (git grep -E): no `(?:…)` and no `\s`.
+    const ws = "[[:space:]]";
+    const pattern = `(from${ws}*|import${ws}*\\(${ws}*|import${ws}+)["'][^"']*${escaped}["']`;
+    const result = Bun.spawnSync(
+      [
+        "git",
+        "-C",
+        root,
+        "grep",
+        "-q",
+        "-E",
+        "-e",
+        pattern,
+        "--",
+        "*.ts",
+        "*.tsx",
+        "*.js",
+        "*.mjs",
+      ],
+      { stdout: "ignore", stderr: "ignore" },
+    );
+    if (result.exitCode === 0) imported.add(file);
+  }
+  return imported;
+}
+
+/**
+ * The command that owns a non-module path, when one is known.
+ *
+ * A warning that says "run the owning suite" is only useful if the operator can guess it; these
+ * are the ones this repository actually has.
+ */
+export function ownerHint(file: string): string | null {
+  if (file === ".bun-version") return "bun test tests/bun_runtime_pin.test.ts";
+  if (file === "bunfig.toml") return "bun test tests/bun_config_policy.test.ts";
+  if (file.startsWith("schema/")) return "bun run schema:gate";
+  if (file.startsWith("tests/fixtures/")) {
+    const base = file.slice("tests/fixtures/".length);
+    return `the suite that reads tests/fixtures/${base} (name it explicitly)`;
+  }
+  return null;
+}
+
+/**
+ * Read the file count from Bun's test summary (`Ran N tests across M files.`).
+ * @param output - captured stdout/stderr of a `bun test` run.
+ * @returns M, or null when the summary line is absent.
+ */
+export function parseSelectedFileCount(output: string): number | null {
+  const match = /Ran \d+ tests? across (\d+) files?\./.exec(output);
+  return match === null ? null : Number(match[1]);
+}
+
+/**
+ * Changed files that `bun test --changed` cannot select, because selection follows module
+ * imports and nothing imports data, fixtures, or config.
+ * @param changed - repository-relative paths of the changed files.
+ * @returns the subset a changed-only test run cannot reach.
+ */
+export function nonModuleChangedFiles(changed: readonly string[]): string[] {
+  return changed.filter(
+    (file) =>
+      NON_MODULE_FILES.has(file) ||
+      NON_MODULE_PATHS.some((prefix) => file.startsWith(prefix)),
+  );
+}
+
+/**
+ * Upper bound on the reader suites a silent-zero run will execute automatically. A data-only diff
+ * currently runs zero tests, so spending a few seconds on its real readers is cheaper than a false
+ * green; beyond this the run warns instead of turning the inner loop into a suite run.
+ */
+export const MAX_READER_FILES = 25;
+
+/** Lines that only mention a path in prose (comments/docs) are not reads. */
+const COMMENT_LINE = /^\s*(?:\*|\/\/|\/\*)/;
+
+/**
+ * `git grep -E` pattern for a path that must appear as a whole path token.
+ *
+ * A literal (`-F`) search matches `bunfig.toml` inside `unfrozen.bunfig.toml`, and
+ * `data/x.json` inside `data/x.jsonl` — different files — which would recover suites that read
+ * something else and hide the "no references" warning for a path only ever named as a substring.
+ * The boundaries reject a neighbouring path character on either side; `/` is not one of them, so a
+ * relative specifier (`"../../design/tokens.toml"`) still matches.
+ */
+export function dataPathPattern(file: string): string {
+  const escaped = file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return `(^|[^A-Za-z0-9_.-])${escaped}([^A-Za-z0-9_.-]|$)`;
+}
+
+/**
+ * `git grep -n -E` over every tracked test file, keeping the ones that touch the path in code.
+ * Exit 1 means "no match", not an error. A comment that merely names the file is dropped.
+ *
+ * The pathspec is `*.test.ts`/`*.test.tsx` rather than a directory list, so a colocated suite is
+ * found wherever it lives (`tests/`, `lib/`, `scripts/`, `packages/`).
+ */
+function gitGrepReaders(file: string, root: string): string[] {
+  const result = Bun.spawnSync(
+    [
+      "git",
+      "-C",
+      root,
+      "grep",
+      "-n",
+      "-E",
+      "-e",
+      dataPathPattern(file),
+      "--",
+      "*.test.ts",
+      "*.test.tsx",
+    ],
+    { stdout: "pipe", stderr: "ignore" },
+  );
+  if (result.exitCode !== 0) return [];
+  const readers = new Set<string>();
+  for (const line of result.stdout.toString().split("\n")) {
+    const first = line.indexOf(":");
+    const second = first === -1 ? -1 : line.indexOf(":", first + 1);
+    if (first === -1 || second === -1) continue;
+    const filePart = line.slice(0, first);
+    const content = line.slice(second + 1);
+    if (filePart === "" || COMMENT_LINE.test(content)) continue;
+    readers.add(filePart);
+  }
+  return [...readers];
+}
+
+/**
+ * Test files whose source mentions an unreachable path.
+ *
+ * `--changed` follows module imports only, so a data change selects nothing; the suites that read
+ * that path do not import it, they pass it to `Bun.file`/`readFileSync`. A literal search over the
+ * test trees recovers those files without guessing at a test-name convention.
+ * @param files - changed paths no module imports.
+ * @param root - repository root for `git grep`.
+ * @param grep - seam for tests; defaults to the literal `git grep` above.
+ */
+export function dataReaderTestFiles(
+  files: readonly string[],
+  root: string,
+  grep: (file: string) => string[] = (file) => gitGrepReaders(file, root),
+): string[] {
+  const readers = new Set<string>();
+  for (const file of files) {
+    for (const hit of grep(file)) {
+      if (hit.endsWith(".test.ts") || hit.endsWith(".test.tsx"))
+        readers.add(hit);
+    }
+  }
+  return [...readers].sort();
+}
+
+export type ReaderRecovery =
+  | { readonly kind: "none" }
+  | { readonly kind: "run"; readonly files: readonly string[] }
+  | {
+      readonly kind: "warn";
+      readonly reason: "no-references" | "too-many";
+      readonly count: number;
+    };
+
+/**
+ * Decide what a silent-zero selection should do with the reader tests it recovered.
+ * @param unreachable - paths `--changed` cannot see.
+ * @param readers - test files recovered by {@link dataReaderTestFiles}.
+ * @param max - cap on files a single inner-loop run may execute.
+ */
+export function planReaderRecovery(
+  unreachable: readonly string[],
+  readers: readonly string[],
+  max: number = MAX_READER_FILES,
+): ReaderRecovery {
+  if (unreachable.length === 0) return { kind: "none" };
+  if (readers.length === 0)
+    return { kind: "warn", reason: "no-references", count: 0 };
+  if (readers.length > max)
+    return { kind: "warn", reason: "too-many", count: readers.length };
+  return { kind: "run", files: readers };
+}
+
+export type SelectionRecovery = {
+  /** Changed paths no module imports, after dropping what `--changed` already follows. */
+  readonly unreachable: string[];
+  readonly recovery: ReaderRecovery;
+};
+
+/**
+ * Plan the extra coverage for a diff, independently of how many tests `--changed` selected.
+ *
+ * A mixed diff (one code change plus one data change) selects tests, so a zero-selection gate
+ * would skip the data readers entirely; this runs them whenever an unreachable path changed.
+ * @param changed - repository-relative paths of the changed files.
+ * @param root - repository root, passed to the git greps.
+ * @param seams - injectable import/reader resolvers, for tests.
+ */
+export function planSelectionRecovery(
+  changed: readonly string[],
+  root: string,
+  seams: {
+    readonly imported?: (
+      files: readonly string[],
+      root: string,
+    ) => ReadonlySet<string>;
+    readonly readers?: (
+      files: readonly string[],
+      root: string,
+    ) => readonly string[];
+  } = {},
+): SelectionRecovery {
+  const imported = (seams.imported ?? importedSpecifierPaths)(changed, root);
+  const unreachable = filterImported(nonModuleChangedFiles(changed), imported);
+  const readers = (seams.readers ?? dataReaderTestFiles)(unreachable, root);
+  return { unreachable, recovery: planReaderRecovery(unreachable, readers) };
+}
 
 export const SCOPED_WORKSPACE_DIRS = [
   "packages/contracts",
@@ -250,6 +534,24 @@ export function inferTestsForFiles(
       candidates.push("tests/nsh_desk_contract.test.ts");
     }
 
+    // A `bin` map edit reaches three surfaces that no stem-matching test covers: the root and
+    // workspace bin maps must agree, the generated `cli/README.md` catalog must be regenerated, and
+    // every declared bin must answer `--help`. Without this, #416 added a bin with a stale catalog
+    // and an unmirrored package entry, and `main`'s full chain found it only after merge (10
+    // failures, run 44354504618).
+    if (
+      f === "package.json" ||
+      f === "packages/sportsdesk-ops/package.json" ||
+      f.startsWith("packages/sportsdesk-ops/bin/") ||
+      f === "cli/README.md"
+    ) {
+      candidates.push(
+        "tests/bunx_cli_root_layout.test.ts",
+        "tests/bun_x_catalog_docs.test.ts",
+        "tests/bun_x_cli_help.test.ts",
+      );
+    }
+
     if (f === "config/wager_tiers.toml") {
       candidates.push(
         "tests/wager_tiers_toml.test.ts",
@@ -435,6 +737,53 @@ function collectChangedFiles(
   });
 }
 
+/**
+ * Code extensions whose content can add a `Bun.*` call site (production) or a shape reference
+ * (test evidence). Changing one means the derived shape catalogue and its runbook may be stale.
+ */
+const SHAPE_SOURCE_RE = /\.(?:ts|tsx|mts|cts|mjs|js|jsx)$/;
+
+/** Trees the shape scan never reads, so a change there cannot move the catalogue. */
+const SHAPE_IGNORED_PREFIXES = [
+  "verification/",
+  "examples/",
+  "scratch/",
+  "Scratch/",
+];
+
+/**
+ * Whether the staged additions can move `lib/bun_shapes.generated.ts` or the runbook that renders
+ * it.
+ *
+ * The generator scans `git ls-files`, so only a file that is **added to the index** changes what
+ * it sees: an untracked file is invisible and a modified file was already counted. That is why
+ * this takes the `--diff-filter=A` set rather than the whole diff — and why the gate is cheap
+ * enough for the inner loop, since it fires only on the commit that introduces a file.
+ */
+export function addedShapeSources(changed: readonly string[]): boolean {
+  return changed.some(
+    (file) =>
+      SHAPE_SOURCE_RE.test(file) &&
+      !SHAPE_IGNORED_PREFIXES.some((prefix) => file.startsWith(prefix)),
+  );
+}
+
+/**
+ * Whether the change can move the installed dependency graph.
+ *
+ * `bun test --changed` follows module imports, so a change confined to a manifest or the lockfile
+ * selects no tests at all — nothing imports them (measured 2026-11-18, recorded in AGENTS.md). The
+ * install-graph suites read those files, so they are triggered from here instead.
+ */
+export function changedInstallGraph(changed: readonly string[]): boolean {
+  return changed.some(
+    (file) =>
+      file === "bun.lock" ||
+      file === "package.json" ||
+      file.endsWith("/package.json"),
+  );
+}
+
 interface TaskResult {
   name: string;
   ok: boolean;
@@ -468,19 +817,6 @@ async function runTask(
   };
 }
 
-function resolveOxlintCmd(): string[] | null {
-  const localBin = path.join(ROOT, "node_modules", ".bin", "oxlint");
-  if (
-    existsSync(localBin) ||
-    Bun.which("oxlint", { PATH: Bun.env.PATH ?? "" }) !== null
-  ) {
-    // Use `bun --bun run oxlint` so Bun injects its `node` PATH shim for both
-    // the oxlint wrapper (`#!/usr/bin/env node`) and any child `tsgolint` process.
-    return [process.execPath, "--bun", "run", "oxlint"];
-  }
-  return null;
-}
-
 async function main(): Promise<number> {
   const { values, positionals } = parseArgs({
     args: Bun.argv.slice(2),
@@ -488,6 +824,7 @@ async function main(): Promise<number> {
       check: { type: "boolean", default: false },
       shard: { type: "boolean", default: false },
       deep: { type: "boolean", default: false },
+      "no-lint": { type: "boolean", default: false },
       base: { type: "string" },
       "since-min": { type: "string", default: "45" },
     },
@@ -593,11 +930,9 @@ async function main(): Promise<number> {
   }
 
   const nativeLintBin = resolveNativeBunLintBin();
-  const lintLabel = nativeLintBin !== null ? "bun-lint" : "oxlint";
+  const lintLabel = "bun-lint";
   const lintCmd =
-    nativeLintBin !== null
-      ? [nativeLintBin, "lint", "--no-script"]
-      : resolveOxlintCmd();
+    nativeLintBin !== null ? [nativeLintBin, "lint", "--no-script"] : null;
   const workspaceGraph = analyzeWorkspaceGraph(await inspectWorkspaces(ROOT));
   const typecheckSpecs = planTypecheckTasks(changed, {
     hasRootBlast,
@@ -609,7 +944,14 @@ async function main(): Promise<number> {
     runTask(spec.name, spec.cmd),
   );
 
-  if (lintTargets.length > 0 && lintCmd !== null) {
+  if (lintTargets.length > 0 && lintCmd === null && !values["no-lint"]) {
+    console.error(
+      `[verify:fast] cannot lint ${lintTargets.length} changed file(s): no native \`bun lint\` binary on Bun ${Bun.version}. Set BUN_LINT_BIN or install bun-canary, or pass --no-lint to skip deliberately.`,
+    );
+    return 1;
+  }
+
+  if (lintTargets.length > 0 && lintCmd !== null && !values["no-lint"]) {
     tasks.push(
       runTask(`${lintLabel} (${lintTargets.length})`, [
         ...lintCmd,
@@ -619,13 +961,11 @@ async function main(): Promise<number> {
     );
   }
 
-  if (values.deep && lintCmd !== null) {
+  if (values.deep && lintCmd !== null && !values["no-lint"]) {
     tasks.push(
       runTask(`${lintLabel}:type-aware`, [
         ...lintCmd,
         "--type-aware",
-        "-c",
-        ".oxlintrc.type-aware.json",
         "--deny-warnings",
       ]),
     );
@@ -656,6 +996,35 @@ async function main(): Promise<number> {
   ) {
     tasks.push(
       runTask("audit:secrets", ["bun", "run", "scripts/audit_secrets.ts"]),
+    );
+  }
+
+  if (changedInstallGraph(changed)) {
+    tasks.push(
+      runTask(
+        "install-graph (react pairing, peer ranges)",
+        [
+          "bun",
+          "test",
+          "tests/react_version_pairing.test.ts",
+          "tests/peer_satisfaction.test.ts",
+        ],
+        { PRETEST_SKIP: "1" },
+      ),
+    );
+  }
+
+  const addedCode = gitAvailable
+    ? gitQuery(["diff", "--cached", "--name-only", "--diff-filter=A"]).lines
+    : [];
+  if (addedShapeSources(addedCode)) {
+    tasks.push(
+      runTask("shape catalog", ["bun", "scripts/bun_shapes_catalog.ts"]),
+      runTask("shape contracts", [
+        "bun",
+        "scripts/bun_shape_contracts.ts",
+        "--check",
+      ]),
     );
   }
 
@@ -697,10 +1066,53 @@ async function main(): Promise<number> {
   }
 
   const results = await Promise.all(tasks);
+
+  // `bun test --changed` follows module imports, so a data/fixture/config-only diff selects
+  // nothing and looks green. Surface that instead of reporting a silent pass — but only for paths
+  // nothing imports (an imported `design/*.ts` or `config/slab.toml` *is* followed).
+  const changedTask = results.find((r) => r.name === "test:changed");
+  const selectedFiles =
+    changedTask === undefined
+      ? null
+      : parseSelectedFileCount(changedTask.output);
+
+  // Deeper than a warning: run the suites that read unreachable paths, even when `--changed`
+  // selected other tests. A mixed diff would otherwise leave its data change unverified.
+  const { unreachable, recovery } = planSelectionRecovery(changed, ROOT);
+  const readersResult =
+    recovery.kind === "run"
+      ? await runTask("test:readers", ["bun", "test", ...recovery.files], {
+          PRETEST_SKIP: "1",
+        })
+      : undefined;
+
+  const reportUnreachable = (): void => {
+    if (unreachable.length === 0) return;
+    if (recovery.kind === "run") {
+      const selected =
+        selectedFiles === null ? "an unknown number of" : String(selectedFiles);
+      console.log(
+        `[verify:fast] test:changed selected ${selected} file(s); test:readers ran ${recovery.files.length} suite(s) for paths nothing imports.`,
+      );
+      return;
+    }
+    console.error("[verify:fast] the diff touches files no module imports:");
+    for (const file of unreachable) {
+      const hint = ownerHint(file);
+      console.error(`  ${file}${hint === null ? "" : `  → ${hint}`}`);
+    }
+    console.error(
+      recovery.kind === "warn" && recovery.reason === "too-many"
+        ? `  ${recovery.count} suites read these paths; too many to run here (cap ${MAX_READER_FILES}) — run one explicitly.`
+        : "  --changed cannot see filesystem reads; run the owner explicitly.",
+    );
+  };
+
   const all = [
     ...(fmtResult ? [fmtResult] : []),
     ...(tokensGateResult ? [tokensGateResult] : []),
     ...results,
+    ...(readersResult ? [readersResult] : []),
   ];
   const failures = all.filter((r) => !r.ok);
   const totalSec = ((performance.now() - started) / 1000).toFixed(2);
@@ -711,10 +1123,12 @@ async function main(): Promise<number> {
 
   if (failures.length === 0) {
     console.log(`${summary} — OK in ${totalSec}s`);
+    reportUnreachable();
     return 0;
   }
 
   console.error(`${summary} — FAILED (${failures.length}) in ${totalSec}s\n`);
+  reportUnreachable();
   for (const f of failures) {
     console.error(`── ✗ ${f.name} (${f.ms}ms) ──\n${f.output}\n`);
   }

@@ -115,6 +115,7 @@ interface CliPayload {
   readonly headerBytes: number | null;
   readonly budgetBytes: number | null;
   readonly maxDimension: number | null;
+  readonly requireSibling: string | null;
   readonly baseline: CliBaselineDrift | null;
   readonly baselineError: string | null;
   readonly baselineWritten: string | null;
@@ -1017,5 +1018,50 @@ test("--markdown includes thumbnail and baseline sections", async () => {
     expect(conflict.stderr).toContain("mutually exclusive");
   } finally {
     rmSync(mdDir, { recursive: true, force: true });
+  }
+});
+
+test("--require-sibling fails only assets without the requested sibling", async () => {
+  const siblingDir = mkdtempSync(join(tmpdir(), "sd-cli-sibling-"));
+  try {
+    writeFileSync(join(siblingDir, "paired.png"), png1x1());
+    writeFileSync(
+      join(siblingDir, "paired.webp"),
+      await new Bun.Image(png1x1()).webp({ quality: 80 }).bytes(),
+    );
+    writeFileSync(join(siblingDir, "orphan.png"), png1x1());
+
+    const result = runCli([
+      "--json",
+      "--require-sibling=.WEBP",
+      "--limit=10",
+      siblingDir,
+    ]);
+    expect(result.code).toBe(1);
+    const payload = JSON.parse(result.stdout) as CliPayload;
+    expect(payload.requireSibling).toBe("webp");
+    const directory = payload.directories[0];
+    if (directory === undefined) throw new Error("missing directory report");
+
+    expect(
+      directory.assets.find((asset) => asset.source.endsWith("paired.png"))
+        ?.type,
+    ).toBe("BunImageAssetDiagnostic");
+    expect(
+      directory.assets.find((asset) => asset.source.endsWith("paired.webp"))
+        ?.type,
+    ).toBe("BunImageAssetDiagnostic");
+    expect(
+      directory.assets.find((asset) => asset.source.endsWith("orphan.png"))
+        ?.code,
+    ).toBe("ERR_ASSET_SIBLING_MISSING");
+
+    const invalid = runCli(["--require-sibling=...", siblingDir]);
+    expect(invalid.code).toBe(2);
+    expect(invalid.stderr).toContain(
+      "--require-sibling must be a file extension",
+    );
+  } finally {
+    rmSync(siblingDir, { recursive: true, force: true });
   }
 });

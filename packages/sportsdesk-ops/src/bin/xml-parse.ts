@@ -9,15 +9,19 @@
  *
  * Adaptation note (Bun 1.4.4): `Bun.S3Client` exposes file/write/stat/presign but no
  * `fetch()`, so the conditional PUT and ETag reads go through the repo's
- * `R2S3Client.writeWithMetadata(ifMatch)` / `headEtag`, which sign the same S3 requests
- * with Web Crypto. Semantics and error codes are unchanged.
+ * `createXmlIngestR2Client` adapter (`src/lib/xml_ingest_r2_publish.ts`), which signs the
+ * same S3 requests with Web Crypto. Semantics and error codes are unchanged.
+ *
+ * The snapshot body and CAS live only in `publishXmlIngestSnapshotToR2`; this entrypoint
+ * supplies the canonical bytes and never constructs a manifest body itself.
+ *
+ * Unknown lines are carried explicitly end to end: an UNKNOWN `@line` row publishes
+ * `lineUnknown="1"` instead of `lineHundredths` (the root carries `lineUnknownCount`, the
+ * manifest `line_unknown_count`, and the `--json` summary `line_unknown_count`).
  */
 import { parseArgs } from "node:util";
 import { XML } from "bun";
-import {
-  R2PreconditionFailedError,
-  R2S3Client,
-} from "../../../../lib/r2_s3_client.ts";
+import { R2S3Client } from "../../../../lib/r2_s3_client.ts";
 import {
   MARKET_KIND_MASK,
   PERIOD_MASK,
@@ -28,9 +32,16 @@ import {
   WAGER_TYPE_SHIFT,
 } from "../../../../src/lib/portal_taxonomy_normalizer.ts";
 import {
+  createXmlOddsFeedColumnStore,
   hydrateXmlOddsFeedIntoSoA,
+  isXmlOddsLineUnknown,
   type XmlOddsFeedColumnStore,
 } from "../../../../src/lib/xml_feed_spine_hydrator.ts";
+import {
+  createXmlIngestR2Client,
+  publishXmlIngestSnapshotToR2,
+  XML_INGEST_SINK,
+} from "../../../../src/lib/xml_ingest_r2_publish.ts";
 
 const RETIRED_FALLBACK_ENV_KEYS = [
   "DOD6_SPINE_PATH",
@@ -43,9 +54,7 @@ const RETIRED_FALLBACK_ENV_KEYS = [
   "S3_SECRET_ACCESS_KEY",
 ] as const;
 
-const R2_BUCKET = "sportsdesk-ops-reports";
 const TAXONOMY_MANIFEST_KEY = "manifests/portal-taxonomy/latest";
-const XML_INGEST_MANIFEST_KEY = "manifests/xml-ingest/latest";
 
 const FNV_OFFSET_LO32 = 0x84222325;
 const FNV_OFFSET_HI32 = 0xcbf29ce4;
@@ -71,6 +80,10 @@ export interface XmlIngestManifest {
   readonly r2_published_at_epoch_ms: number;
   readonly chunk_key: string;
   readonly circuit_state: "CLOSED" | "OPEN";
+  /** Rows in this generation's chunk. Absent on generations written before it was added. */
+  readonly row_count?: number;
+  /** Rows whose line is explicitly unknown. Absent on older generations. */
+  readonly line_unknown_count?: number;
 }
 
 export interface QuarantineSink {
@@ -277,7 +290,7 @@ function createR2Client(
     throw new Error("ERR_CF_R2_CREDENTIALS_MISSING");
   }
   return R2S3Client.fromOptions({
-    bucket: R2_BUCKET,
+    bucket: XML_INGEST_SINK.r2Bucket,
     endpoint,
     accessKeyId,
     secretAccessKey,
@@ -291,19 +304,27 @@ export function serializeSoAToCanonicalXml(
   dataWindowMaxEpochMs: number,
 ): Uint8Array {
   const eventNodes: XML.NodeInput[] = [];
+  let lineUnknownCount = 0;
   for (let rowIndex = 0; rowIndex < store.count; rowIndex++) {
     const packed = store.packedComboKey15Col[rowIndex]!;
-    eventNodes.push({
-      name: "event",
-      attributes: {
-        id: String(store.eventId32Col[rowIndex]!),
-        subSportCode6: String((packed >>> SUB_SPORT_SHIFT) & SUB_SPORT_MASK),
-        wagerTypeCode3: String((packed >>> WAGER_TYPE_SHIFT) & WAGER_TYPE_MASK),
-        periodCode4: String((packed >>> PERIOD_SHIFT) & PERIOD_MASK),
-        marketKindCode2: String(packed & MARKET_KIND_MASK),
-        lineHundredths: String(store.lineHundredthsI32Col[rowIndex]!),
-      },
-    });
+    const lineUnknown = isXmlOddsLineUnknown(store, rowIndex);
+    if (lineUnknown) lineUnknownCount++;
+    const attributes: Record<string, string> = {
+      id: String(store.eventId32Col[rowIndex]!),
+      subSportCode6: String((packed >>> SUB_SPORT_SHIFT) & SUB_SPORT_MASK),
+      wagerTypeCode3: String((packed >>> WAGER_TYPE_SHIFT) & WAGER_TYPE_MASK),
+      periodCode4: String((packed >>> PERIOD_SHIFT) & PERIOD_MASK),
+      marketKindCode2: String(packed & MARKET_KIND_MASK),
+    };
+    if (lineUnknown) {
+      // The unit is unknown: publish the explicit flag, never a fabricated hundredths value.
+      attributes["lineUnknown"] = "1";
+    } else {
+      attributes["lineHundredths"] = String(
+        store.lineHundredthsI32Col[rowIndex]!,
+      );
+    }
+    eventNodes.push({ name: "event", attributes });
   }
 
   const rootNode: XML.NodeInput = {
@@ -312,6 +333,7 @@ export function serializeSoAToCanonicalXml(
       watermarkCursor,
       dataWindowMaxEpochMs: String(dataWindowMaxEpochMs),
       rowCount: String(store.count),
+      lineUnknownCount: String(lineUnknownCount),
     },
     children: eventNodes,
   };
@@ -352,6 +374,38 @@ async function fetchManifestWithETag<T>(
 }
 
 export async function run(): Promise<void> {
+  const help = Bun.argv.slice(2).some((a) => a === "-h" || a === "--help");
+  if (help) {
+    process.stdout.write(
+      [
+        "xml-parse — canonical XML ingest and R2 snapshot publisher",
+        "",
+        "Usage: bun x xml-parse [flags]",
+        "",
+        "Flags:",
+        "  --url <feed>        Live feed URL (or SPORTSDESK_XML_FEED_URL)",
+        "  --cursor <value>    Upstream cursor to resume from (default 0)",
+        "  --capacity <n>      SoA arena capacity (default 65536)",
+        "  --dry-run           Parse and plan the snapshot without writing anything:",
+        "                      no chunk, no generation, no CAS, no quarantine object.",
+        "                      Still reads the taxonomy + current manifests, so R2",
+        "                      credentials and a live feed URL are required.",
+        "  --allow-empty       Accept a feed that hydrates zero rows",
+        "  -h, --help          This text",
+        "",
+        'Snapshot line states: a KNOWN decimal line publishes lineHundredths="N";',
+        "an UNKNOWN line (blank, non-decimal, or an integer-valued |@line| >= 20)",
+        'publishes lineUnknown="1" with no lineHundredths. The root carries',
+        "lineUnknownCount, the manifest line_unknown_count, and the --json summary",
+        "reports line_unknown_count.",
+        "",
+        "Exit codes: 0 ok · 2 usage · 65 sink failure · 70 conservation ·",
+        "            74 manifest CAS rejected · 77 token bleed · 78 legacy/local input",
+      ].join("\n") + "\n",
+    );
+    return;
+  }
+
   const { values } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
@@ -359,6 +413,7 @@ export async function run(): Promise<void> {
       cursor: { type: "string", default: "0" },
       capacity: { type: "string", default: "65536" },
       "dry-run": { type: "boolean", default: false },
+      "allow-empty": { type: "boolean", default: false },
       json: { type: "boolean", default: true },
     },
     strict: true,
@@ -368,6 +423,7 @@ export async function run(): Promise<void> {
   const cursor = values.cursor ?? "0";
   const capacity = Number(values.capacity);
   const dryRun = Boolean(values["dry-run"]);
+  const allowEmpty = Boolean(values["allow-empty"]);
 
   // STAGE_0_PREFLIGHT
   assertLiveRuntimePreflight(Bun.env, feedUrl, capacity);
@@ -375,20 +431,14 @@ export async function run(): Promise<void> {
 
   const [taxonomyState, currentManifestState] = await Promise.all([
     fetchManifestWithETag<PortalTaxonomyManifest>(s3, TAXONOMY_MANIFEST_KEY),
-    fetchManifestWithETag<XmlIngestManifest>(s3, XML_INGEST_MANIFEST_KEY),
+    fetchManifestWithETag<XmlIngestManifest>(s3, XML_INGEST_SINK.manifestKey),
   ]);
 
   const taxonomyTable = new DenseSubSportLookupTable(
     taxonomyState.payload.entries,
   );
   const quarantineRing = new UnmappedTaxonomyQuarantineRing();
-  const store: XmlOddsFeedColumnStore = {
-    capacity,
-    count: 0,
-    eventId32Col: new Uint32Array(capacity),
-    packedComboKey15Col: new Uint16Array(capacity),
-    lineHundredthsI32Col: new Int32Array(capacity),
-  };
+  const store = createXmlOddsFeedColumnStore(capacity);
 
   // STAGE_1_LIVE_INGEST (stream live HTTP response into bounded arena buffer)
   const upstreamRes = await fetch(feedUrl, {
@@ -416,79 +466,60 @@ export async function run(): Promise<void> {
     throw new Error("ERR_DOD_CSR_CONSERVATION_BREACH");
   }
 
-  const quarantineKey = await quarantineRing.flushToR2(s3);
+  // A zero-row frame is mis-shaped, not healthy: publishing it would mint a
+  // generation the desk reads as "the feed is empty". Fail before any R2 write;
+  // an operator who really means an empty frame opts in with --allow-empty.
+  if (store.count === 0 && !allowEmpty) {
+    throw new Error(
+      "ERR_XML_FEED_EMPTY: no rows hydrated from the feed (pass --allow-empty for a deliberate empty frame)",
+    );
+  }
+
+  // `--dry-run` must not write, and the quarantine object is a write: keep the records in
+  // memory and report the count instead. (`publishXmlIngestSnapshotToR2` already skips the
+  // chunk/generation/CAS writes on the same flag.)
+  const quarantineKey = dryRun ? null : await quarantineRing.flushToR2(s3);
   const nextGenerationU32 =
     ((currentManifestState.payload.generation_u32 >>> 0) + 1) >>> 0;
   const watermarkCursor =
     upstreamRes.headers.get("x-next-watermark-cursor") ??
     `${cursor}:${hydratedCount}`;
 
+  const lineUnknownCount = store.malformedLineCount ?? 0;
   const canonicalXmlBytes = serializeSoAToCanonicalXml(
     store,
     watermarkCursor,
     dataWindowMaxEpochMs,
   );
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(canonicalXmlBytes);
-  const merkleRootSha256 = hasher.digest("hex");
 
-  // STAGE_3_R2_SNAPSHOT_CAS (0 manifest rebases on HTTP 412)
-  let r2PublishedAtEpochMs = 0;
-  const chunkKey = `chunks/${merkleRootSha256}.bin`;
-
-  if (!dryRun) {
-    await s3.write(chunkKey, canonicalXmlBytes, { type: "application/xml" });
-
-    r2PublishedAtEpochMs = Date.now();
-    const generationKey = `generations/xml-ingest/gen-${nextGenerationU32}-${merkleRootSha256.slice(0, 16)}`;
-    const manifestBody = JSON.stringify({
-      domain: "[Ops & Governance]",
-      sink_id: "xml-ingest",
-      r2_bucket: R2_BUCKET,
-      r2_manifest_key: XML_INGEST_MANIFEST_KEY,
-      generation_u32: nextGenerationU32,
-      merkle_root_sha256: merkleRootSha256,
-      watermark_cursor: watermarkCursor,
-      data_window_max_epoch_ms: dataWindowMaxEpochMs,
-      r2_published_at_epoch_ms: r2PublishedAtEpochMs,
-      chunk_key: chunkKey,
-      circuit_state: "CLOSED",
-      unresolved_gap_cents: "0",
-    });
-
-    await s3.write(generationKey, manifestBody, { type: "application/json" });
-
-    try {
-      await s3.writeWithMetadata(XML_INGEST_MANIFEST_KEY, manifestBody, {
-        type: "application/json",
-        ifMatch: currentManifestState.etag,
-      });
-    } catch (error) {
-      // `Bun.S3Client` has no conditional-PUT flag; R2S3Client surfaces 412 as
-      // R2PreconditionFailedError. 0 rebases: the caller must re-probe.
-      if (error instanceof R2PreconditionFailedError) {
-        throw new Error("ERR_R2_MANIFEST_CAS_REJECTED", { cause: error });
-      }
-      throw new Error(
-        `ERR_R2_SINK_BACKPRESSURE: PUT latest failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        { cause: error },
-      );
-    }
-  }
+  // STAGE_3_R2_SNAPSHOT_CAS (0 manifest rebases on HTTP 412). The snapshot body and
+  // the conditional PUT are owned by the publisher; this entrypoint never re-implements
+  // either, so the unit- and end-to-end-tested path is the shipped path.
+  const published = await publishXmlIngestSnapshotToR2({
+    client: createXmlIngestR2Client(s3),
+    prevManifestETag: currentManifestState.etag,
+    nextGenerationU32,
+    watermarkCursor,
+    dataWindowMaxEpochMs,
+    canonicalXmlBytes,
+    rowCount: store.count,
+    lineUnknownCount,
+    dryRun,
+  });
 
   process.stdout.write(
     `${JSON.stringify({
-      domain: "[Ops & Governance]",
-      sink_id: "xml-ingest",
-      r2_bucket: R2_BUCKET,
+      domain: XML_INGEST_SINK.domain,
+      sink_id: XML_INGEST_SINK.sinkId,
+      r2_bucket: XML_INGEST_SINK.r2Bucket,
       generation_u32: nextGenerationU32,
-      merkle_root_sha256: merkleRootSha256,
+      merkle_root_sha256: published.merkleRootSha256,
       watermark_cursor: watermarkCursor,
       data_window_max_epoch_ms: dataWindowMaxEpochMs,
-      r2_published_at_epoch_ms: r2PublishedAtEpochMs,
+      r2_published_at_epoch_ms: published.r2PublishedAtEpochMs,
       hydrated_rows: hydratedCount,
+      row_count: hydratedCount,
+      line_unknown_count: lineUnknownCount,
       unmapped_taxonomy_quarantined: quarantineRing.size,
       quarantine_key: quarantineKey,
       dry_run: dryRun,

@@ -37,8 +37,9 @@ native-motion inspiration from the NSH Gallery **`Stocks`** application (`Prev c
          stake presets, risk-cap progress bar, expandable `Review` breakdown, and spring
          `OrderToastBanner`.
      - **Dockable Classic Panels:** Preserves `SignalsPanel` (sortable `Float64Array` `DataTable`),
-       `ExposurePanel` (`nsh/base/plot` bar chart), `ScoreboardPanel`, left `KpisPanel` dock, and
-       bottom `DiagnosticsPanel` (`#78` `[DATA-STALE]` & `/api/live-bets/summary` `503` honesty).
+       `ExposurePanel` (`nsh/base/plot` bar chart), `ScoreboardPanel`, `XmlOddsPanel` (canonical R2 snapshot via
+       `/api/xml-odds/soa` — see §4.1), left `KpisPanel` dock, and bottom `DiagnosticsPanel` (`#78`
+       `[DATA-STALE]` & `/api/live-bets/summary` `503` honesty).
   2. **`Trading Desk` (`terminal` Plane — Unified Institutional Line-Trading, OTC Snapshot & Blotter):**
      - Unifies the multi-panel trading desk layout under a single clean dark institutional palette
        aligned with `design/tokens.toml` (`background #070b14`, `card #0d1527`, `popover #131f38`,
@@ -136,8 +137,8 @@ Verified statically via `Bun.Transpiler` (`auditNshModuleGraph` in `scripts/nsh_
   `createDeskStore()`, keyboard shortcuts, desktop menu bar, and plane/dock dispatch.
 - **Feature views (`components/*`):** `DeskHeader`, `MarketsPanel`, `TradingTerminalWorkspace`,
   `ExecutionTicketModal`, `BoardWorkspace`, `SurveillanceWorkspace`, `ForensicsWorkspace`,
-  `OpsWorkspace`, `SignalsPanel`, `ExposurePanel`, `ScoreboardPanel`, `KpisPanel`, `DiagnosticsPanel`.
-  Never import `nsh/base` or `nsh/desktop`.
+  `OpsWorkspace`, `SignalsPanel`, `ExposurePanel`, `ScoreboardPanel`, `KpisPanel`, `DiagnosticsPanel`,
+  `XmlOddsPanel` (R2 snapshot producer — see §4.1). Never import `nsh/base` or `nsh/desktop`.
 - **Design-system `ui/` layer (`ui/*`):**
   - `ui/tokens.ts` — `MOTION`, focus/popup/scrim tokens, `animateUserLayoutChange()`.
   - `ui/Button.tsx` — `DeskButton` & `DeskIconButton` (`split()`).
@@ -148,11 +149,35 @@ Verified statically via `Bun.Transpiler` (`auditNshModuleGraph` in `scripts/nsh_
   - `ui/Dialog.tsx` — `DeskDialog`.
   - `ui/Surface.tsx` — `Surface`, `Badge`, `ProvenanceChannelBadge`, `SectionHeader`, `Separator`,
     `StateNotice` (`split()`).
-  - `ui/DataView.tsx` — `DeskDataTable`, `DeskExposurePlot`, `DeskToolbar`, `DeskWorkspace`.
+  - `ui/DataView.tsx` — `DeskDataTable`, `DeskXmlOddsTable` (bounded XML odds row view), `DeskExposurePlot`,
+    `DeskToolbar`, `DeskWorkspace`.
   - `ui/StockPrimitives.tsx` — `LiveDot`, `SpringBar`, `StatGrid`, `DayRangeBar`,
     `SparklineCanvas`, `MarketChartCanvas`, `DepthChartCanvas`, `RangesDumbbellCanvas`,
     `DualTrajectoryCanvas`, `OrderToastBanner`.
   - `ui/UiKitGallery.tsx` — interactive gallery showcasing every `ui/` primitive in Light & Dark.
+
+### 4.1 XML odds panel: producer route + bounded view (`xml_odds`)
+
+`XmlOddsPanel` (`components/XmlOddsPanel.tsx`) is a default tab (`PANEL_TITLES["xml_odds"] = "XML Odds Feed"`,
+`App.tsx` `renderPanel` case, `defaultWorkspaceLayout()` center tabs) because it now has a real producer:
+`GET /api/xml-odds/soa` (`services/sportsdesk_webview_server.ts`) reads the canonical XML-ingest snapshot from
+public R2 through `R2_PUBLIC_BASE` — the same credential-free read path `/api/kpis` uses. The route returns the
+published `rowCount`, parallel `eventId32` / `comboKey15` / `lineHundredths` arrays, the chunk's
+`watermarkCursor`, the manifest's publish time as `generatedAt`, and `basis: r2-xml-ingest`. A missing manifest or
+chunk, a malformed chunk, and a manifest/chunk disagreement are HTTP 502 with the measured reason in `error` —
+never an empty 200.
+
+The store's `refreshAll()` (boot, manual refresh, auto-poll) calls `loadXmlOddsSoaFeed()` and publishes both the
+`EndpointSnapshot<XmlOddsSoaProvenance>` and the freshly parsed `Uint32Array` / `Uint16Array` / `Int32Array`
+columns (`setXmlOddsFeed` + `revision`). The panel renders `Loading XML odds feed` while the first poll is in
+flight, `XML odds feed unavailable` with the route's `code — reason` and a `Retry` action when it fails, and on
+success states the provenance line `basis · generatedAt · watermark <cursor> · N rows` above the table.
+
+`DeskXmlOddsTable` (`ui/DataView.tsx`) materialises at most `XML_ODDS_ROW_LIMIT` (2,000) row views, states
+`N rows`, or `Showing first 2000 of N` when the snapshot is larger; `revision` keys that one-pass
+materialisation, so an in-place refill of the same column set re-reads the rows. The producer contract is pinned
+by `tests/nsh_desk_contract.test.ts` (mocked-R2 route parsing, missing-manifest/sub-502, typed-column loader) and
+the panel states by `App.test.tsx` (stubbed `GET /api/xml-odds/soa` ready + unavailable).
 
 ## 5. Motion Tokens & Screen Motion Inventory
 

@@ -7,14 +7,20 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  createXmlOddsArena,
   formatLineHundredths,
+  hydrateCompactXmlDocIntoArena,
+  isXmlOddsLineUnknown,
   readXmlOddsRow,
   xmlOddsFeedCount,
   xmlOddsFeedSummary,
+  xmlOddsRowsHeader,
+  xmlOddsUnknownLineCount,
   type XmlOddsFeed,
 } from "../packages/nsh-desk/xml_odds_view.ts";
 import {
   createXmlOddsFeedColumnStore,
+  hydrateXmlOddsFeedIntoSoA,
   type XmlOddsFeedColumnStore,
 } from "../src/lib/xml_feed_spine_hydrator.ts";
 
@@ -46,6 +52,7 @@ describe("xml odds SoA read model", () => {
       eventId: 42,
       comboKey: 0b1_0101_0011,
       lineHundredths: 350,
+      lineKnown: true,
       line: "3.50",
     });
     expect(readXmlOddsRow(feed, 1)).toEqual({
@@ -53,6 +60,7 @@ describe("xml odds SoA read model", () => {
       eventId: 43,
       comboKey: 9,
       lineHundredths: -110,
+      lineKnown: true,
       line: "-1.10",
     });
   });
@@ -103,6 +111,39 @@ describe("xml odds SoA read model", () => {
     }
   });
 
+  test("a price-shaped @line hydrates as unknown, never as a scaled price", () => {
+    // The hydrator does not store a moneyline price (`-110`) as a line (`-11000`); the row
+    // is kept and flagged, so the table renders the placeholder instead of a fabricated line.
+    const store = createXmlOddsFeedColumnStore(2);
+    const written = hydrateXmlOddsFeedIntoSoA(
+      new TextEncoder().encode(
+        '<feed><event id="7" sport="FOOTBALL" subSport="NFL" line="-110"/><event id="8" sport="BASKETBALL" subSport="NBA" line="-3.5"/></feed>',
+      ),
+      store,
+      (sport, sub) => (sport === "FOOTBALL" && sub === "NFL" ? 1 : 3),
+    );
+    expect(written).toBe(2);
+    expect(store.malformedLineCount).toBe(1);
+
+    const feed: XmlOddsFeed = store;
+    expect(isXmlOddsLineUnknown(feed, 0)).toBe(true);
+    expect(isXmlOddsLineUnknown(feed, 1)).toBe(false);
+    expect(xmlOddsUnknownLineCount(feed)).toBe(1);
+    expect(readXmlOddsRow(feed, 0)).toMatchObject({
+      eventId: 7,
+      lineHundredths: 0,
+      lineKnown: false,
+      line: "—",
+    });
+    expect(readXmlOddsRow(feed, 1)).toMatchObject({
+      eventId: 8,
+      lineHundredths: -350,
+      lineKnown: true,
+      line: "-3.50",
+    });
+    expect(xmlOddsRowsHeader(feed)).toBe("2 rows · 1 line unit-unconfirmed");
+  });
+
   test("reading a row allocates only the view object, never the columns", () => {
     const feed = createXmlOddsFeedColumnStore(1000);
     feed.count = 1000;
@@ -110,5 +151,111 @@ describe("xml odds SoA read model", () => {
     for (let i = 0; i < 1000; i++) readXmlOddsRow(feed, i);
     expect(feed.eventId32Col).toBe(before);
     expect(feed.eventId32Col.length).toBe(1000);
+  });
+
+  test("hydrateCompactXmlDocIntoArena packs Bun.XML compact feed into pre-allocated columns", () => {
+    const arena = createXmlOddsArena(4);
+    const written = hydrateCompactXmlDocIntoArena(
+      {
+        feed: {
+          event: [
+            { "@id": "42", "@comboKey": "17", "@line": "3.5" },
+            { "@id": "43", "@wagerType": "2", "@line": "-1.10" },
+          ],
+        },
+      },
+      arena,
+    );
+    expect(written).toBe(2);
+    expect(arena.count).toBe(2);
+    expect(readXmlOddsRow(arena, 0)).toEqual({
+      index: 0,
+      eventId: 42,
+      comboKey: 17,
+      lineHundredths: 350,
+      lineKnown: true,
+      line: "3.50",
+    });
+    expect(readXmlOddsRow(arena, 1)).toEqual({
+      index: 1,
+      eventId: 43,
+      comboKey: 2,
+      lineHundredths: -110,
+      lineKnown: true,
+      line: "-1.10",
+    });
+  });
+
+  test("hydrateCompactXmlDocIntoArena fails closed on capacity overflow", () => {
+    const arena = createXmlOddsArena(1);
+    expect(() =>
+      hydrateCompactXmlDocIntoArena(
+        {
+          feed: {
+            event: [
+              { "@id": "1", "@line": "1.0" },
+              { "@id": "2", "@line": "2.0" },
+            ],
+          },
+        },
+        arena,
+      ),
+    ).toThrow("ERR_DOD_CSR_CONSERVATION_BREACH");
+    // A rejected frame must not leave a committed prefix in the arena.
+    expect(arena.count).toBe(0);
+    expect(arena.eventId32Col[0]).toBe(0);
+  });
+
+  test("hydrateCompactXmlDocIntoArena keeps the @line tri-state (no -11000 scaling)", () => {
+    const arena = createXmlOddsArena(4);
+    const written = hydrateCompactXmlDocIntoArena(
+      {
+        feed: {
+          event: [
+            { "@id": "1", "@comboKey": "3", "@line": "-110" },
+            { "@id": "2", "@comboKey": "4", "@line": "48" },
+            { "@id": "3", "@comboKey": "5", "@line": "-3.5" },
+          ],
+        },
+      },
+      arena,
+    );
+    expect(written).toBe(3);
+    expect(arena.lineUnknownCount).toBe(2);
+    expect(isXmlOddsLineUnknown(arena, 0)).toBe(true);
+    expect(isXmlOddsLineUnknown(arena, 1)).toBe(true);
+    expect(isXmlOddsLineUnknown(arena, 2)).toBe(false);
+    // The old scaling (`-110` -> `-11000`) is gone: the column keeps the 0 sentinel.
+    expect(arena.lineHundredthsI32Col[0]).toBe(0);
+    expect(arena.lineHundredthsI32Col[1]).toBe(0);
+    expect(readXmlOddsRow(arena, 0).line).toBe("—");
+    expect(readXmlOddsRow(arena, 1).line).toBe("—");
+    expect(readXmlOddsRow(arena, 2).line).toBe("-3.50");
+    // An all-known arena writes no flags and counts no unknown lines.
+    const knownArena = createXmlOddsArena(1);
+    hydrateCompactXmlDocIntoArena(
+      { feed: { event: { "@id": "9", "@line": "3.5" } } },
+      knownArena,
+    );
+    expect(knownArena.lineUnknownCount).toBe(0);
+    expect(xmlOddsUnknownLineCount(knownArena)).toBe(0);
+    expect(xmlOddsRowsHeader(knownArena)).toBe("1 row");
+  });
+
+  test("a legacy arena with no lineUnknown fields reads as all known", () => {
+    const knownOnly: XmlOddsFeed = {
+      capacity: 2,
+      count: 2,
+      eventId32Col: new Uint32Array([1, 2]),
+      packedComboKey15Col: new Uint16Array([3, 4]),
+      lineHundredthsI32Col: new Int32Array([350, -110]),
+    };
+    expect(isXmlOddsLineUnknown(knownOnly, 0)).toBe(false);
+    expect(xmlOddsUnknownLineCount(knownOnly)).toBe(0);
+    expect(readXmlOddsRow(knownOnly, 0)).toMatchObject({
+      lineKnown: true,
+      line: "3.50",
+    });
+    expect(xmlOddsRowsHeader(knownOnly)).toBe("2 rows");
   });
 });

@@ -1,7 +1,7 @@
 /**
  * @file lib/static_dir_probe.ts
- * @description Read-only inventory and live HTTP contract prober for Bun's
- * native `"/static/*": { dir }` wildcard mount on the local dev server.
+ * @description Read-only inventory and live HTTP contract prober for the dev server's
+ * `/static/*` mount (`lib/serve_file.ts` serves it; the inventory is the directory on disk).
  */
 
 import { statSync } from "node:fs";

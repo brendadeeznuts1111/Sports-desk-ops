@@ -11,19 +11,38 @@ so. Re-check any version-scoped claim against the pin before relying on it.
 
 ### Inner loop — during development
 
-Pull requests run **`verify-changed`** (`bun fmt --check --changed`, `typecheck`, `lint:check`,
+Pull requests run **`verify-changed`** (`bun fmt --check --changed`, `typecheck`,
 `check:derived-contracts`, `verify:docs`, `test:changed`, `test:pm-contracts`,
-`test-changed-plugins`, `test-changed-nsh`, and `check:profile-code-mode-host-seal`), not the
-full `main`-branch ratchet. Never run the whole suite (`bun test` / `bun test tests/`) on iterative
+`test-changed-plugins`, `test-changed-nsh`, and `check:profile-code-mode-host-seal`) plus the
+required **`lint-native`** job (canary), not the full `main`-branch ratchet. Never run the whole suite (`bun test` / `bun test tests/`) on iterative
 edits; use **`bun run verify:fast`**:
 
 ```sh
 bun run verify:fast          # auto-format (bun fmt) changed files + typecheck (.ts+.tsx) + scoped
-                             # oxlint (--deep adds --type-aware) + path-triggered gates +
-                             # test:changed, in parallel (~1–2s); --check for read-only fmt check
+                             # native bun lint (--deep adds --type-aware) + path-triggered gates +
+                             # test:changed, in parallel (~1–2s); --check for read-only fmt check,
+                             # --no-lint to skip when no canary binary is available
 bun run test:changed         # parallel changed-only tests
 bun run test:shard           # parallel head shard (1/8) when root configs are dirty
 ```
+
+**`bun test --changed` follows module imports, not data** (measured 2026-11-18 on the 1.4.4 pin):
+editing an imported module — static, transitive, or a literal dynamic `import()` — runs its
+importers, untracked test files are picked up, and `--changed=<ref>` works against a commit or
+branch. But a change confined to a data or config file (`data/*.json`, `tests/fixtures/**`,
+`bunfig.toml`) selects **zero** tests, because nothing imports it. Pair a data-only change with the
+owning suite explicitly; `verify:fast`'s path-triggered gates do not substitute for it. Whenever the diff touches
+`data/`, `tests/fixtures/`, `design/`, `schema/`, `config/`, `bunfig.toml` or `.bun-version`,
+`verify:fast` recovers the suites that read those paths (`git grep`, prose mentions dropped) and
+runs them as `test:readers` — up to 25 files, about a second for a typical data file. That happens
+**even when `--changed` selected other tests**, so a mixed diff cannot leave its data change
+unverified; the warning with the owner command remains for a path nothing references, or one read
+by more than 25 suites. The check is import-aware: a path that a
+module actually imports (`design/domain-branded-types.ts`, `design/tokens.toml`,
+`config/slab.toml`) _is_ followed by `--changed` and is not reported, a non-data file (README,
+image) is ignored, and the paths with a known owner print the command to run
+(`.bun-version` → `tests/bun_runtime_pin.test.ts`, `bunfig.toml` → `tests/bun_config_policy.test.ts`,
+`schema/` → `bun run schema:gate`).
 
 ### Full `main`-branch chain — pre-merge or scheduled only
 
@@ -42,7 +61,8 @@ bash scripts/ci/run-manager-oracle-gates.sh
 bun test lib/f402_har_redaction_proof_verify.test.ts
 bun run format:check
 bun run typecheck
-bun run lint:check
+# lint-native is a separate required CI job on canary, not a step in this chain; on a machine
+# with a native bun lint binary, `bun run lint:check` is the equivalent read-only gate
 bun run check:derived-contracts
 bun run test:docs
 bun run verify:docs
@@ -120,24 +140,29 @@ with `bun run audit:tool-calls`.
   they do not identify one site.
 - **Evidence labelling:** any claim in docs or commits states what was measured and when. The docs
   gates exist because fabricated contracts shipped before.
+- **A gate verdict belongs to the tree it ran in.** `bun fmt`, `bun check` and `oxlint` read
+  `bunfig.toml` and `tsconfig.json` from the working tree, so another session's uncommitted config
+  decides the answer. 2026-11-18: `bun fmt --check` failed on a committed file only while an
+  uncommitted `[[fmt.overrides]]` block was present; that file passes under every committed
+  `bunfig.toml` (pre- and post-#384). The same checkout also loses work when the other session
+  switches branches, which is why a claim about `main` gets verified in a clean worktree
+  (`git worktree add --detach`) rather than in the shared one.
 
 **Bun toolchain**
 
-- **Linting is `oxlint`; stable 1.4.4 has no native `bun lint`.** `bun run lint:check` runs oxlint
-  twice — `.oxlintrc.json`, then `.oxlintrc.type-aware.json` passed explicitly as
-  `-c .oxlintrc.type-aware.json` (it is not auto-discovered). On 1.4.4 a bare `bun lint` is not a
-  subcommand: it resolves to the package `"lint"` script (`bun --bun run oxlint --fix`, which
-  **rewrites files**), and `--no-script` does not bypass it — the flag is forwarded to oxlint
-  (measured 2026-11-15). Outside a package.json it reports `Script not found "lint"`. Never run
-  `bun lint` / `bun run lint` as a check; use `bun run lint:check`, or `bun run lint:bun` for a
-  read-only wrapper that refuses the mutable path.
-- **CI runs the native linter on a canary runtime:** job `lint-native` installs
-  `bun-version: canary` and runs `bun run lint:native` / `bun run lint:native:type-aware` (both
-  fail on 1.4.4 by design). The pin stays exact — one X.Y.Z across `.bun-version`, `engines.bun`,
-  `packageManager` and `@types/bun`; `@types/bun` has no canary version. A native linter
-  (`--no-script`, `--doctor`, `--type-aware`, `[lint]` in bunfig) exists only on the 1.4.5 canary
-  (measured on `1.4.5-canary.1+ed4363334`); on 1.4.4 the `[lint]` block is inert.
-- Keep `oxlint` in `devDependencies`: `lint`, `lint:check` and editors (`oxlint --lsp`) need it.
+- **Linting is native `bun lint` on a canary runtime only.** Stable 1.4.4 has no native
+  linter: `bun lint` resolves to the package `"lint"` script (which would rewrite files), and
+  `--no-script` is forwarded to that script rather than bypassing it. The repo therefore has no
+  oxlint dependency; `lint`, `lint:check`, `lint:canary` and `lint:bun` all resolve a native
+  binary (`BUN_LINT_BIN`, `bun-canary` on PATH, or `~/.bun/bin/bun-canary*`) and **exit 2** when
+  none is present. Native lint auto-discovers `.oxlintrc.json`; the type-aware config is passed
+  explicitly by `lint:native:type-aware`. Never run `bun lint` / `bun run lint` as a check on the
+  pin; use `bun run lint:check` on a machine with a native binary.
+- **CI's lint gate is the required `lint-native` job** on `bun-version: canary`; it runs
+  `bun run lint:native` / `bun run lint:native:type-aware`. The pin stays exact — one X.Y.Z
+  across `.bun-version`, `engines.bun`, `packageManager` and `@types/bun`; `@types/bun` has no
+  canary version. `bun run verify:fast` fails (exit 1) when it cannot lint changed files; pass
+  `--no-lint` only for an intentional skip.
 - **`bun:bundle` AST constraint:** `feature()` from `"bun:bundle"` can only appear directly inside
   an `if` condition or ternary (`feature("FLAG") ? true : false`). Passing it to functions like
   `expect()` or `expectTypeOf()` fails at parse time. Testing `--feature=FLAG` requires subprocess spawning
@@ -149,6 +174,14 @@ with `bun run audit:tool-calls`.
   `Bun.semver.order(v, "1.4.4-0") >= 0` — see `lib/manager_fetch.ts`. The npm `semver` package in
   `devDependencies` is required by `tests/market_index.test.ts` to match upstream Harness install
   behaviour. Do not swap it out.
+- **Never `bun x <name>` for a bin this repo declares.** `bun x` only prefers the local link; when
+  `node_modules/.bin/<name>` is missing — a fresh worktree, or a bin added in the same commit — it
+  resolves the **name on the npm registry** and runs that package instead. Measured 2026-11-18:
+  `bun x image-assets --help` installed and built `image-assets@0.10.0` (a 2015 iOS asset generator
+  depending on `sharp`) rather than running `scripts/image_asset_diagnostics.ts`; no repository file
+  was written. Run `node_modules/.bin/<bin>` when it is linked, else `bun <package.json bin target>`
+  (`sportsdesk-assets` is the asset bin). `tests/bun_x_cli_help.test.ts` follows that rule, so the
+  help-surface test cannot reach the registry.
 - **`bun run` flag position & profiling flags:**
   - **Runtime & runner flags** (`--watch`, `--hot`, `--smol`, `--check`, `--bun`, `--console-depth=<val>`,
     `--inspect`, `--cpu-prof`, `--heap-prof`, `--no-env-file`) must appear **before** the target script or
@@ -159,6 +192,15 @@ with `bun run audit:tool-calls`.
     bypassing Bun's runtime controls completely.
   - **Profiling flags:** Bun's native profiler flags are `--cpu-prof` (with `--cpu-prof-md` for LLM analysis),
     `--cpu-prof-name`, `--cpu-prof-dir`, and `--heap-prof` — never `--profile-cpu`.
+- **`bun --check` type-checks and then _runs_ the target; `bun check` only checks.** Measured on
+  1.4.4: `bun --check src/dashboard/index.tsx` type-checked clean and executed the browser entry
+  (`ReferenceError: document is not defined`), and `bun --check a.ts b.ts` checked only `a.ts`,
+  ran it with `b.ts` as argv, and never reported `b.ts`'s type error. `bun check a.ts b.ts`
+  reported both and followed the import graph (57 files for the schema set). So use
+  `bun check <files…>` for a gate — `schema:typecheck` used `bun --check` with 43 paths, which
+  checked one file and executed it — and reserve `--check` for entrypoints where running on
+  success is intended. For stdin there is no check-only form: `bun check -` answers
+  `error: Unknown flag "-"`, and `… | bun --check run -` executes the input once it type-checks.
 
 **Environment and tooling**
 
@@ -168,6 +210,9 @@ with `bun run audit:tool-calls`.
   (Linux/Windows) needs a system Chrome, Chromium, Edge or Brave, not a downloaded browser.
 - **Deploy credentials** come from `./cloudflare.env` or `$XDG_CONFIG_HOME/cloudflare/pages.env`.
   Never source `.env` — it is a 1Password FIFO carrying R2/F402 secrets that shadow the Pages token.
+  Bun's own `.env` auto-loader skips non-regular files (verified 2026-11-18: `bun run` opened a FIFO `.env`
+  in cwd without blocking and read no values), so `bun run` / `bun test` are unaffected; only a shell
+  `source`/`cat` reads the pipe.
 - **Feed-only refresh:** `graph_feed_poller_daemon.ts --once --live --no-backtest-artifact` (under
   `scripts/`) so a live refresh does not rewrite the committed 4-week backtest artifact.
 

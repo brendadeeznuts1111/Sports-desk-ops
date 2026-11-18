@@ -101,11 +101,12 @@ bun run reports -- --format table
 bun run sim
 ```
 
-Repository lint uses exact-pinned Oxlint through Bun; stable Bun 1.4.4 has no
-native `bun lint` (only the 1.4.5 canary does). Run `bun run lint:check` for a
-read-only gate that fails on warnings or errors, or `bun run lint` to apply safe
-fixes. CI runs lint
-alongside token regeneration, the fetch/innerHTML gates, and the full tests.
+Repository lint uses native `bun lint`, which ships on the canary (1.4.5+) but
+not on the pinned Bun 1.4.4. `bun run lint:check` is the read-only gate and
+`bun run lint` applies safe fixes; both resolve a canary binary (`BUN_LINT_BIN`,
+`bun-canary`, or `~/.bun/bin/bun-canary*`) and exit 2 when none is installed.
+CI's lint gate is the required `lint-native` job; `bun run verify:fast` fails
+when it cannot lint changed files (`--no-lint` is an explicit opt-out).
 
 Run `bun run format` to format the repository or `bun run format:check` for a
 read-only check. `bunfig.toml` preserves the existing 80-column, two-space,

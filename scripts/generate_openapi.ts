@@ -2951,6 +2951,49 @@ function surfaceOperationSpecs(
       },
     },
     {
+      path: "/api/xml-odds/soa",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary:
+        "Canonical XML odds SoA snapshot from public R2 (GET /api/xml-odds/soa)",
+      description:
+        'Reads the published XML-ingest snapshot from public R2 (R2_PUBLIC_BASE, the same credential-free path /api/kpis probes): `manifests/xml-ingest/latest` names a content-addressed `chunks/<sha256>.bin` `sportsdeskXmlFeed` document whose `event` rows carry `@id`, the packed `@subSportCode6` / `@wagerTypeCode3` / `@periodCode4` / `@marketKindCode2` taxonomy codes, and a tri-state line: known rows carry `@lineHundredths` (decimal hundredths) while a row whose unit cannot be deduced carries `@lineUnknown="1"` and no value. The root `@lineUnknownCount` and the manifest `line_unknown_count` are cross-checked against the flagged rows; an old chunk without those fields reads as all-known. Reads are capped (1 MiB manifest, 32 MiB chunk) by declared `content-length` and the bytes actually read. The route returns parallel arrays (with `lineUnknown` / `lineUnknownCount`) plus the watermark cursor, publish time and `basis: r2-xml-ingest`. A missing manifest or chunk, an oversized body, a malformed chunk, a count mismatch, or a manifest/chunk disagreement is HTTP 502 with the measured reason in `error`, never an empty 200. Public by the table\'s `aggregate` classification: event ids and packed codes, no account. Surface: surface.daemon-dashboard (tier D).',
+      requiredCapture:
+        "HTTP capture of GET /api/xml-odds/soa (handler-verified only; a published chunk response and the missing-artifact 502 are both uncaptured).",
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Parallel SoA columns parsed from the canonical published chunk.",
+          {
+            success: { type: "boolean" },
+            rowCount: { type: "integer" },
+            eventId32: { type: "array", items: { type: "integer" } },
+            comboKey15: { type: "array", items: { type: "integer" } },
+            lineHundredths: {
+              type: "array",
+              items: { type: "integer" },
+            },
+            lineUnknown: {
+              type: "array",
+              items: { type: "boolean" },
+            },
+            lineUnknownCount: { type: "integer" },
+            watermarkCursor: { type: "string" },
+            generatedAt: { type: "string", format: "date-time" },
+            basis: { type: "string" },
+          },
+        ),
+        "502": jsonSurfaceResponse(
+          "The canonical snapshot is unavailable; `error` states the measured reason (missing manifest/chunk, oversized body, malformed chunk, count mismatch, or manifest/chunk disagreement).",
+          {
+            success: { type: "boolean" },
+            status: { type: "string" },
+            error: { type: "string" },
+          },
+        ),
+      },
+    },
+    {
       path: "/api/dns/telemetry",
       httpMethod: "GET",
       surfaceId: "surface.daemon-dashboard",

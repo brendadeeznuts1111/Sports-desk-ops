@@ -95,7 +95,7 @@ describe("import.meta contract", () => {
     expect(import.meta.resolve("bun:test")).toBe("bun:test");
 
     // A bare specifier goes through node_modules and resolves to a file URL.
-    expect(import.meta.resolve("oxlint").startsWith("file:")).toBe(true);
+    expect(import.meta.resolve("zod").startsWith("file:")).toBe(true);
 
     // The parent argument is a *module* path or URL: `./x` anchors at its dirname. Passing a
     // directory as a plain path therefore resolves one level up (it is read as a file name);

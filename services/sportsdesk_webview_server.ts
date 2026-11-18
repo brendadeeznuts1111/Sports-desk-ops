@@ -116,6 +116,7 @@ import {
 } from "./sportsdesk_telegram_bot.ts";
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
 import { cachedJsonFile, readFileBytes } from "../lib/artifact_cache.ts";
+import { bunImageAssetSnapshot } from "../lib/bun_image_asset_snapshot.ts";
 import {
   buildStatusTelemetry,
   graphFingerprint,
@@ -3368,6 +3369,36 @@ export function startServer(options?: ServerOptions) {
         });
       }
 
+      if (pathname === "/api/diagnostics/image-assets") {
+        if (req.method !== "GET" && req.method !== "HEAD") {
+          return new Response("method not allowed", {
+            status: 405,
+            headers: { ...cors, Allow: "GET, HEAD" },
+          });
+        }
+        const requested = Number(url.searchParams.get("limit") ?? "24");
+        const limit = Number.isInteger(requested)
+          ? Math.min(Math.max(requested, 1), 100)
+          : 24;
+        // Same shared source the dev dashboard uses, so both endpoints answer from one cache.
+        const source = bunImageAssetSnapshot(resolve(repoRoot, "docs/assets"), {
+          limit,
+          visibility: "RISK_MANAGER",
+          displayRoot: "docs/assets",
+          ttlMs: 5_000,
+        });
+        const snapshot = await source.snapshot();
+        const headers = {
+          ...cors,
+          ETag: snapshot.etag,
+          "Cache-Control": "no-cache",
+        };
+        if (req.headers.get("if-none-match") === snapshot.etag) {
+          return new Response(null, { status: 304, headers });
+        }
+        return Response.json(snapshot, { headers });
+      }
+
       if (pathname.startsWith("/assets/")) {
         const asset = pathname.slice("/assets/".length);
         // realpath containment, not just a name check: Bun 1.4.4's `routes: { "/*": { dir } }`
@@ -3810,7 +3841,15 @@ export function startServer(options?: ServerOptions) {
     ...serveConfig,
     // The dashboard's live bridge upgrades a guarded route that is already in DAEMON_ROUTES.
     fetch: withBridgeUpgrade(
-      withMcpEndpoint(serveConfig.fetch, serveConfig, options, allowedOrigins),
+      withXmlOddsSoaEndpoint(
+        withMcpEndpoint(
+          serveConfig.fetch,
+          serveConfig,
+          options,
+          allowedOrigins,
+        ),
+        corsHeadersFor,
+      ),
       ingress,
     ),
     websocket: bridgeWebsocket,
@@ -3838,6 +3877,546 @@ export function startBridgeSchedules(): () => void {
     "[Bridge Cron] schedules active (America/Chicago): 3a/3b/3c every 15m, weblog hourly at :07, agent-tree hourly at :11 (requires F402_BEARER_TOKEN), customer-profiles every 6h at :27 (requires enriched_customers_full.json)",
   );
   return stop;
+}
+
+/* -------------------------------------------------------------------------- */
+/* XML odds SoA snapshot (public R2)                                          */
+/* -------------------------------------------------------------------------- */
+
+const XML_ODDS_SOA_FETCH_TIMEOUT_MS = 5_000;
+/** Provenance label for rows parsed from the canonical published chunk. */
+const XML_ODDS_SOA_BASIS = "r2-xml-ingest";
+/** A manifest is a pointer; anything larger is not the artifact this route publishes. */
+export const MAX_XML_ODDS_MANIFEST_BYTES = 1024 * 1024;
+/** The canonical chunk holds one `<event/>` per row; 32 MiB is ~ a full 1M-row arena. */
+export const MAX_XML_ODDS_CHUNK_BYTES = 32 * 1024 * 1024;
+
+/** Route body for `GET /api/xml-odds/soa`: the published SoA columns plus their provenance. */
+export interface XmlOddsSoaPayload {
+  readonly rowCount: number;
+  readonly eventId32: readonly number[];
+  readonly comboKey15: readonly number[];
+  /** Hundredths for a known line, the legacy 0 sentinel for an unknown one. */
+  readonly lineHundredths: readonly number[];
+  /**
+   * Dense bitset words (1 = that row's line unit is unknown), `ceil(rowCount/32)` entries.
+   * A boolean-per-row array is what the data-handling ratchet forbids on this path.
+   */
+  readonly lineUnknownFlags: readonly number[];
+  /** Rows with an unknown line; equals the popcount of `lineUnknownFlags`. */
+  readonly lineUnknownCount: number;
+  readonly watermarkCursor: string;
+  readonly generatedAt: string;
+  readonly basis: string;
+}
+
+export type XmlOddsSoaOutcome =
+  | { readonly available: true; readonly payload: XmlOddsSoaPayload }
+  | { readonly available: false; readonly reason: string };
+
+export interface XmlOddsSoaHttpResult {
+  readonly status: 200 | 502;
+  readonly body: Record<string, unknown>;
+}
+
+/** Injectable for tests (a mocked R2 read); the default is Bun's `fetch`. */
+export type XmlOddsSoaFetcher = (
+  url: string,
+  init: { readonly method: "GET"; readonly signal: AbortSignal },
+) => Promise<Response>;
+
+type XmlOddsComboKeyPacker = (
+  subSport6: number,
+  wagerType3: number,
+  period4: number,
+  marketKind2: number,
+) => number;
+
+function xmlOddsSoaUnavailable(reason: string): XmlOddsSoaOutcome {
+  return { available: false, reason };
+}
+
+function isXmlOddsSoaRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** An attribute read as an integer: canonical attributes are decimal strings. */
+function xmlOddsSoaInteger(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? value : null;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function xmlOddsSoaEpochMs(value: unknown): number | null {
+  const ms = xmlOddsSoaInteger(value);
+  return ms !== null && ms > 0 ? ms : null;
+}
+
+/** A manifest `chunk_key` must stay a relative key under the public base. */
+function xmlOddsSoaChunkKey(chunkKey: unknown): string | null {
+  if (typeof chunkKey !== "string") return null;
+  const key = chunkKey.trim().replace(/^\/+/, "");
+  if (key === "" || key.includes("..")) return null;
+  return /^[A-Za-z0-9._/-]+$/.test(key) ? key : null;
+}
+
+/**
+ * Reads one public-R2 object under a byte cap.
+ *
+ * The route must not parse an unbounded body: the declared `content-length` is checked
+ * first, then the bytes actually read, and only a within-cap body is decoded to text.
+ */
+async function fetchXmlOddsSoaText(
+  fetchImpl: XmlOddsSoaFetcher,
+  url: string,
+  label: string,
+  timeoutMs: number,
+  maxBytes: number,
+): Promise<
+  | { readonly ok: true; readonly text: string }
+  | { readonly ok: false; readonly reason: string }
+> {
+  let response: Response;
+  try {
+    response = await fetchImpl(url, {
+      method: "GET",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: `R2 ${label} fetch failed: ${message}` };
+  }
+  if (!response.ok) {
+    return {
+      ok: false,
+      reason: `R2 ${label} unavailable: HTTP ${response.status}`,
+    };
+  }
+  const declaredRaw = response.headers.get("content-length");
+  if (declaredRaw !== null && declaredRaw.trim() !== "") {
+    const declared = Number(declaredRaw);
+    if (Number.isFinite(declared) && declared >= 0 && declared > maxBytes) {
+      return {
+        ok: false,
+        reason: `R2 ${label} content-length ${declared} exceeds the ${maxBytes}-byte cap`,
+      };
+    }
+  }
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await response.arrayBuffer());
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: `R2 ${label} body read failed: ${message}` };
+  }
+  if (bytes.byteLength > maxBytes) {
+    return {
+      ok: false,
+      reason: `R2 ${label} body ${bytes.byteLength} bytes exceeds the ${maxBytes}-byte cap`,
+    };
+  }
+  try {
+    return { ok: true, text: new TextDecoder().decode(bytes) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: `R2 ${label} body decode failed: ${message}` };
+  }
+}
+
+interface ParsedXmlOddsSoaChunk {
+  readonly rowCount: number;
+  readonly eventId32: number[];
+  readonly comboKey15: number[];
+  readonly lineHundredths: number[];
+  readonly lineUnknownFlags: Uint32Array;
+  readonly lineUnknownCount: number;
+  readonly watermarkCursor: string;
+}
+
+type XmlOddsSoaChunkResult =
+  | { readonly ok: true; readonly chunk: ParsedXmlOddsSoaChunk }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * Parse the canonical `sportsdeskXmlFeed` chunk. Every malformed attribute is a reason, not a
+ * zeroed row: a bad chunk must not read as a healthy empty feed.
+ */
+function parseXmlOddsSoaChunk(
+  xmlText: string,
+  packComboKey: XmlOddsComboKeyPacker,
+): XmlOddsSoaChunkResult {
+  let document: unknown;
+  try {
+    document = Bun.XML.parse(xmlText);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: `R2 chunk is not valid XML: ${message}` };
+  }
+  const root = isXmlOddsSoaRecord(document)
+    ? document["sportsdeskXmlFeed"]
+    : undefined;
+  if (!isXmlOddsSoaRecord(root)) {
+    return {
+      ok: false,
+      reason: "R2 chunk has no <sportsdeskXmlFeed> root element",
+    };
+  }
+  const watermarkRaw = root["@watermarkCursor"];
+  const watermarkCursor =
+    typeof watermarkRaw === "string" ? watermarkRaw.trim() : "";
+  if (watermarkCursor === "") {
+    return { ok: false, reason: "R2 chunk root has no @watermarkCursor" };
+  }
+  const rowCount = xmlOddsSoaInteger(root["@rowCount"]);
+  if (rowCount === null || rowCount < 0) {
+    return {
+      ok: false,
+      reason: "R2 chunk root has no non-negative integer @rowCount",
+    };
+  }
+  // Absent on a chunk written before the unknown-line contract: then it is all-known.
+  const rootLineUnknownRaw = root["@lineUnknownCount"];
+  const rootLineUnknownCount =
+    rootLineUnknownRaw === undefined
+      ? null
+      : xmlOddsSoaInteger(rootLineUnknownRaw);
+  if (
+    rootLineUnknownRaw !== undefined &&
+    (rootLineUnknownCount === null || rootLineUnknownCount < 0)
+  ) {
+    return {
+      ok: false,
+      reason: "R2 chunk root @lineUnknownCount is not a non-negative integer",
+    };
+  }
+  const rawEvents = root["event"];
+  const events: unknown[] = Array.isArray(rawEvents)
+    ? rawEvents
+    : rawEvents === undefined
+      ? []
+      : [rawEvents];
+  if (rowCount !== events.length) {
+    return {
+      ok: false,
+      reason: `R2 chunk @rowCount ${rowCount} does not match ${events.length} <event> rows`,
+    };
+  }
+
+  const eventId32: number[] = [];
+  const comboKey15: number[] = [];
+  const lineHundredths: number[] = [];
+  const lineUnknownFlags = new Uint32Array(Math.ceil(events.length / 32));
+  let lineUnknownCount = 0;
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index];
+    if (!isXmlOddsSoaRecord(event)) {
+      return { ok: false, reason: `R2 chunk event ${index} is not an element` };
+    }
+    const eventId = xmlOddsSoaInteger(event["@id"]);
+    if (eventId === null || eventId < 0 || eventId > 0xffff_ffff) {
+      return {
+        ok: false,
+        reason: `R2 chunk event ${index} @id is not a uint32`,
+      };
+    }
+    const subSport6 = xmlOddsSoaInteger(event["@subSportCode6"]);
+    const wagerType3 = xmlOddsSoaInteger(event["@wagerTypeCode3"]);
+    const period4 = xmlOddsSoaInteger(event["@periodCode4"]);
+    const marketKind2 = xmlOddsSoaInteger(event["@marketKindCode2"]);
+    if (
+      subSport6 === null ||
+      wagerType3 === null ||
+      period4 === null ||
+      marketKind2 === null
+    ) {
+      return {
+        ok: false,
+        reason: `R2 chunk event ${index} has a malformed taxonomy code`,
+      };
+    }
+    let packed: number;
+    try {
+      packed = packComboKey(subSport6, wagerType3, period4, marketKind2);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        reason: `R2 chunk event ${index} taxonomy code out of range: ${message}`,
+      };
+    }
+    const lineUnknownRaw = event["@lineUnknown"];
+    const lineKnown = lineUnknownRaw === undefined;
+    let line = 0;
+    if (lineKnown) {
+      const parsedLine = xmlOddsSoaInteger(event["@lineHundredths"]);
+      if (parsedLine === null) {
+        return {
+          ok: false,
+          reason: `R2 chunk event ${index} @lineHundredths is not an integer`,
+        };
+      }
+      line = parsedLine;
+    } else {
+      // The canonical serializer omits the value for an unknown unit and writes the flag.
+      if (lineUnknownRaw !== "1" && lineUnknownRaw !== 1) {
+        return {
+          ok: false,
+          reason: `R2 chunk event ${index} @lineUnknown is not "1"`,
+        };
+      }
+      if (event["@lineHundredths"] !== undefined) {
+        return {
+          ok: false,
+          reason: `R2 chunk event ${index} has both @lineUnknown and @lineHundredths`,
+        };
+      }
+      lineUnknownCount += 1;
+      const wordIndex = index >>> 5;
+      lineUnknownFlags[wordIndex] =
+        (lineUnknownFlags[wordIndex] ?? 0) | (1 << (index & 31));
+    }
+    eventId32.push(eventId);
+    comboKey15.push(packed);
+    lineHundredths.push(line);
+  }
+  if (
+    rootLineUnknownCount !== null &&
+    rootLineUnknownCount !== lineUnknownCount
+  ) {
+    return {
+      ok: false,
+      reason: `R2 chunk @lineUnknownCount ${rootLineUnknownCount} does not match ${lineUnknownCount} unknown <event> rows`,
+    };
+  }
+  if (rootLineUnknownCount === null && lineUnknownCount > 0) {
+    return {
+      ok: false,
+      reason: `R2 chunk has ${lineUnknownCount} @lineUnknown rows but no root @lineUnknownCount`,
+    };
+  }
+  return {
+    ok: true,
+    chunk: {
+      rowCount,
+      eventId32,
+      comboKey15,
+      lineHundredths,
+      lineUnknownFlags,
+      lineUnknownCount,
+      watermarkCursor,
+    },
+  };
+}
+
+/**
+ * Read the canonical XML-ingest snapshot from public R2.
+ *
+ * Reuses the credential-free public-R2 read path `/api/kpis` uses: the manifest pointer and its
+ * content-addressed chunk are both plain `R2_PUBLIC_BASE` GETs under byte caps (the canonical keys
+ * come from `BRIDGE_R2_SINK_SPECS`). A missing artifact, an oversized body, a malformed chunk and a
+ * manifest/chunk disagreement all return `available: false` with the measured reason.
+ *
+ * Lines are tri-state (task-7 contract): a row either carries `@lineHundredths` (known decimal) or
+ * `@lineUnknown="1"` with no value (unit unconfirmed). The root `@lineUnknownCount` and the
+ * manifest `line_unknown_count` are cross-checked against the rows actually flagged.
+ */
+export async function readXmlOddsSoaFromR2(
+  options: {
+    readonly fetchImpl?: XmlOddsSoaFetcher;
+    readonly publicBase?: string;
+    readonly timeoutMs?: number;
+  } = {},
+): Promise<XmlOddsSoaOutcome> {
+  const [
+    { R2_PUBLIC_BASE },
+    { BRIDGE_R2_SINK_SPECS },
+    { packSubSportComboKey15 },
+  ] = await Promise.all([
+    import("../lib/r2_staleness.ts"),
+    import("../lib/r2_manifest_cas.ts"),
+    import("../src/lib/portal_taxonomy_normalizer.ts"),
+  ]);
+  const publicBase = (options.publicBase ?? R2_PUBLIC_BASE).replace(/\/+$/, "");
+  const fetchImpl: XmlOddsSoaFetcher =
+    options.fetchImpl ?? ((url, init) => fetch(url, init));
+  const timeoutMs = options.timeoutMs ?? XML_ODDS_SOA_FETCH_TIMEOUT_MS;
+  const manifestKey = BRIDGE_R2_SINK_SPECS["xml-ingest"].manifestKey;
+
+  const manifestText = await fetchXmlOddsSoaText(
+    fetchImpl,
+    `${publicBase}/${manifestKey}`,
+    `manifest ${manifestKey}`,
+    timeoutMs,
+    MAX_XML_ODDS_MANIFEST_BYTES,
+  );
+  if (!manifestText.ok) return xmlOddsSoaUnavailable(manifestText.reason);
+
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(manifestText.text);
+  } catch {
+    return xmlOddsSoaUnavailable(
+      `R2 manifest ${manifestKey} is not valid JSON`,
+    );
+  }
+  if (!isXmlOddsSoaRecord(manifest)) {
+    return xmlOddsSoaUnavailable(
+      `R2 manifest ${manifestKey} is not a JSON object`,
+    );
+  }
+
+  const chunkKey = xmlOddsSoaChunkKey(manifest["chunk_key"]);
+  if (chunkKey === null) {
+    return xmlOddsSoaUnavailable(
+      `R2 manifest ${manifestKey} has no relative chunk_key`,
+    );
+  }
+  const generatedAtMs =
+    xmlOddsSoaEpochMs(manifest["r2_published_at_epoch_ms"]) ??
+    xmlOddsSoaEpochMs(manifest["data_window_max_epoch_ms"]);
+  if (generatedAtMs === null) {
+    return xmlOddsSoaUnavailable(
+      `R2 manifest ${manifestKey} has no publish timestamp`,
+    );
+  }
+
+  const chunkText = await fetchXmlOddsSoaText(
+    fetchImpl,
+    `${publicBase}/${chunkKey}`,
+    `chunk ${chunkKey}`,
+    timeoutMs,
+    MAX_XML_ODDS_CHUNK_BYTES,
+  );
+  if (!chunkText.ok) return xmlOddsSoaUnavailable(chunkText.reason);
+
+  const parsed = parseXmlOddsSoaChunk(chunkText.text, packSubSportComboKey15);
+  if (!parsed.ok) return xmlOddsSoaUnavailable(parsed.reason);
+
+  const manifestRowCount = xmlOddsSoaInteger(manifest["row_count"]);
+  if (manifestRowCount !== null && manifestRowCount !== parsed.chunk.rowCount) {
+    return xmlOddsSoaUnavailable(
+      `R2 manifest row_count ${manifestRowCount} does not match chunk @rowCount ${parsed.chunk.rowCount}`,
+    );
+  }
+  const manifestLineUnknownRaw = manifest["line_unknown_count"];
+  const manifestLineUnknownCount =
+    manifestLineUnknownRaw === undefined
+      ? null
+      : xmlOddsSoaInteger(manifestLineUnknownRaw);
+  if (
+    manifestLineUnknownRaw !== undefined &&
+    (manifestLineUnknownCount === null || manifestLineUnknownCount < 0)
+  ) {
+    return xmlOddsSoaUnavailable(
+      `R2 manifest ${manifestKey} has a non-integer line_unknown_count`,
+    );
+  }
+  if (
+    manifestLineUnknownCount !== null &&
+    manifestLineUnknownCount !== parsed.chunk.lineUnknownCount
+  ) {
+    return xmlOddsSoaUnavailable(
+      `R2 manifest line_unknown_count ${manifestLineUnknownCount} does not match ${parsed.chunk.lineUnknownCount} unknown rows in chunk`,
+    );
+  }
+  const manifestWatermark =
+    typeof manifest["watermark_cursor"] === "string"
+      ? manifest["watermark_cursor"].trim()
+      : "";
+  if (
+    manifestWatermark !== "" &&
+    manifestWatermark !== parsed.chunk.watermarkCursor
+  ) {
+    return xmlOddsSoaUnavailable(
+      `R2 manifest watermark_cursor ${manifestWatermark} does not match chunk @watermarkCursor ${parsed.chunk.watermarkCursor}`,
+    );
+  }
+
+  return {
+    available: true,
+    payload: {
+      rowCount: parsed.chunk.rowCount,
+      eventId32: parsed.chunk.eventId32,
+      comboKey15: parsed.chunk.comboKey15,
+      lineHundredths: parsed.chunk.lineHundredths,
+      lineUnknownFlags: Array.from(parsed.chunk.lineUnknownFlags),
+      lineUnknownCount: parsed.chunk.lineUnknownCount,
+      watermarkCursor: parsed.chunk.watermarkCursor,
+      generatedAt: new Date(generatedAtMs).toISOString(),
+      basis: XML_ODDS_SOA_BASIS,
+    },
+  };
+}
+
+/** The HTTP mapping: an unavailable artifact is 502 with its reason, never an empty 200. */
+export function xmlOddsSoaHttpResult(
+  outcome: XmlOddsSoaOutcome,
+): XmlOddsSoaHttpResult {
+  if (!outcome.available) {
+    return {
+      status: 502,
+      body: { success: false, status: "unavailable", error: outcome.reason },
+    };
+  }
+  return { status: 200, body: { success: true, ...outcome.payload } };
+}
+
+/**
+ * `GET /api/xml-odds/soa` — the XML odds panel's producer.
+ *
+ * Wrapped around the main handler (like the MCP endpoint) because the arm is one public read and
+ * keeping it out of the arm chain leaves every cited range in `docs/evidence/ledger.json` intact.
+ */
+export function withXmlOddsSoaEndpoint(
+  innerFetch: (req: Request) => Promise<Response>,
+  corsHeadersFor: (req: Request) => Record<string, string>,
+): (req: Request) => Promise<Response> {
+  return async (req: Request) => {
+    const url = new URL(req.url);
+    if (url.pathname === "/api/xml-odds/soa") {
+      return handleXmlOddsSoaRequest(req, { corsHeadersFor });
+    }
+    return innerFetch(req);
+  };
+}
+
+/** Injectable for tests; the wrapper above passes the daemon's CORS closure. */
+export async function handleXmlOddsSoaRequest(
+  req: Request,
+  options: {
+    readonly corsHeadersFor?: (req: Request) => Record<string, string>;
+    readonly fetchImpl?: XmlOddsSoaFetcher;
+    readonly publicBase?: string;
+    readonly timeoutMs?: number;
+  } = {},
+): Promise<Response> {
+  const headers: Record<string, string> = { "Cache-Control": "no-store" };
+  const corsHeaders = options.corsHeadersFor?.(req);
+  if (corsHeaders !== undefined) Object.assign(headers, corsHeaders);
+  if (req.method === "OPTIONS") {
+    // Preflight for a browser caller that adds a custom header; the NSH client needs no
+    // preflight, but a 405 here would break a cross-origin dashboard fetch.
+    return new Response(null, {
+      status: 204,
+      headers: { ...headers, Allow: "GET, OPTIONS" },
+    });
+  }
+  if (req.method !== "GET") {
+    return Response.json(
+      { success: false, error: "Method not allowed" },
+      { status: 405, headers: { ...headers, Allow: "GET, OPTIONS" } },
+    );
+  }
+  const result = xmlOddsSoaHttpResult(await readXmlOddsSoaFromR2(options));
+  return Response.json(result.body, {
+    status: result.status,
+    headers,
+  });
 }
 
 if (import.meta.main)

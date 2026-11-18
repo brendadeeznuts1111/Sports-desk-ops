@@ -117,7 +117,26 @@ function auditContent(content: string, relPath: string): AuditResult {
       OBJECT_BODY_PROPERTY_RE.test(line) &&
       !PARSE_ARGS_OPTION_RE.test(line)
     ) {
+      // `body:` is a request body only when it sits in a RequestInit: a sibling `method`/
+      // `headers`, a `RequestInit` annotation, or the `fetch(`/`new Request(` call itself. A
+      // result object such as `{ status: 502, body: {...} }` in a file that also makes requests
+      // is not one, and flagging it turns a handler return type into a false positive
+      // (services/sportsdesk_webview_server.ts: xmlOddsSoaHttpResult).
+      const context = lines
+        .slice(Math.max(0, idx - 6), idx + 1)
+        .filter(
+          (candidate) =>
+            !candidate.trim().startsWith("//") &&
+            !candidate.trim().startsWith("*"),
+        )
+        .join("\n")
+        .toLowerCase();
+      const inRequestInit =
+        /\bmethod\s*:|\bheaders\s*:|\brequestinit\b|\bfetch\s*\(|\bnew\s+request\s*\(/.test(
+          context,
+        );
       if (
+        inRequestInit &&
         !stripped.endsWith(";") &&
         !line.toLowerCase().includes("json.stringify") &&
         !line.includes("type ") &&

@@ -18,9 +18,8 @@ import {
 } from "nsh/desktop";
 import type { ExposurePlotPoint } from "../desk_model";
 import {
-  readXmlOddsRow,
-  xmlOddsFeedCount,
-  xmlOddsFeedSummary,
+  xmlOddsRows,
+  xmlOddsRowsHeader,
   type XmlOddsFeed,
   type XmlOddsRow,
 } from "../xml_odds_view";
@@ -99,55 +98,72 @@ export function DeskDataTable<T = Record<string, unknown>>(
 export interface DeskXmlOddsTableProps {
   /** Hot-path SoA columns; `null` while no feed has been hydrated. */
   feed: XmlOddsFeed | null;
-  /** Bumped when the same columns are refilled in place, so rows re-read. */
+  /**
+   * Bumped when the same columns are refilled in place. It keys the row
+   * materialisation: `feed` can keep its identity while its rows change.
+   */
   revision: number;
   accessibilityLabel?: string;
   onRowSelect?: (rowIndex: number) => void;
 }
 
+/** Table input for one column generation: its header line and bounded rows. */
+interface XmlOddsTableInput {
+  readonly header: string;
+  readonly rows: XmlOddsRow[];
+}
+
 const XML_ODDS_COLUMNS: DataTableColumn[] = [
   { key: "eventId", title: "Event", width: 96, align: "end" },
-  { key: "comboKey", title: "Combo", width: 88, align: "end" },
-  { key: "line", title: "Line", width: 96, align: "end" },
+  { key: "comboKey", title: "Combo key", width: 96, align: "end" },
+  // Decimal spread/total line (`-3.50`), never a moneyline price. The ingest counts
+  // price-shaped `@line` values instead of scaling them; see docs/decisions/xml-line-unit.md.
+  { key: "line", title: "Line (dec.)", width: 96, align: "end" },
 ];
 
 /**
  * Renders the XML odds SoA columns as table rows.
  *
- * Rows are built by index from the typed arrays while the table is composed, so
- * the columns stay the only retained storage — the row objects here are the
- * table's input, not a second currency for the data.
+ * Rows are materialised from the typed arrays once per column generation and
+ * capped at `XML_ODDS_ROW_LIMIT`, so the columns stay the only retained
+ * storage — these row objects are the table's input, not a second copy.
  */
 export function DeskXmlOddsTable(props: DeskXmlOddsTableProps): JSX.Element {
+  let memoFeed: XmlOddsFeed | null | undefined;
+  let memoRevision = -1;
+  let memoInput: XmlOddsTableInput | undefined;
+
+  // One table input per generation: `revision` is read so a refill of the same
+  // columns re-materialises the rows, and the memo keeps that cost at one pass.
+  const input = (): XmlOddsTableInput => {
+    const feed = props.feed;
+    const revision = props.revision;
+    if (
+      memoInput !== undefined &&
+      memoFeed === feed &&
+      memoRevision === revision
+    ) {
+      return memoInput;
+    }
+    memoInput = { header: xmlOddsRowsHeader(feed), rows: xmlOddsRows(feed) };
+    memoFeed = feed;
+    memoRevision = revision;
+    return memoInput;
+  };
+
   return (
     <View class="min-h-0 flex-1 flex flex-col">
       <Text class="px-3 py-1 text-xs text-muted tabular-nums">
-        {`${xmlOddsFeedSummary(props.feed).rows} / ${xmlOddsFeedSummary(props.feed).capacity} rows`}
+        {input().header}
       </Text>
       <DeskDataTable
         columns={XML_ODDS_COLUMNS}
-        // `props.revision` is read so the effect below re-runs when the same
-        // arrays are filled again; the accessor keeps that dependency visible.
-        data={xmlOddsRows(props.feed, props.revision)}
-        accessibilityLabel={
-          props.accessibilityLabel ?? "XML odds feed (SoA columns)"
-        }
+        data={input().rows}
+        accessibilityLabel={props.accessibilityLabel ?? "XML odds feed"}
         onRowSelect={props.onRowSelect}
       />
     </View>
   );
-}
-
-/** Materialises the row views for the table input, in column order. */
-function xmlOddsRows(feed: XmlOddsFeed | null, revision: number): XmlOddsRow[] {
-  void revision;
-  const rows = xmlOddsFeedCount(feed);
-  const out: XmlOddsRow[] = [];
-  if (feed === null) return out;
-  for (let index = 0; index < rows; index++) {
-    out.push(readXmlOddsRow(feed, index));
-  }
-  return out;
 }
 
 export interface DeskExposurePlotProps {

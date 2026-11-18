@@ -4,7 +4,7 @@
  *
  * Bun 1.4.4: value flags use =; all flags before `run`; JSON redirect via naked CLI.
  * Runtime (flags go after `bun`, before `run`):
- *   bun --check sportsdesk_schema_cli.ts
+ *   bun check cli/sportsdesk_schema_cli.ts
  *   bun run --preload ./preload/schema-inspect.ts -   # stdin; __schemaReport + inspect.custom
  *   bun --preload ./preload/schema-inspect.ts -p 'console.log(__schemaReport)'
  *   bun run schema:inspect | schema:probe
@@ -142,7 +142,7 @@ Recipes:
   bun run schema --table match_evaluations
   bun sportsdesk_schema_cli.ts --json > schema.snapshot.json
   bun --watch --no-clear-screen run schema --table match_evaluations
-  bun --check sportsdesk_schema_cli.ts
+  bun check cli/sportsdesk_schema_cli.ts
   bun run schema:typecheck
   bun --parallel --elide-lines=10 --if-present --filter 'sportsdesk-*' run schema
   bun --preload ./preload/schema-inspect.ts -p 'console.log(__schemaReport.summary.length)'

@@ -556,10 +556,14 @@ export interface ShapeWorld {
 
 const TYPE_DECLARATION =
   /(?:^|\s)(?:interface|class|type|namespace)\s+([A-Za-z_$][\w$]*)/gm;
+/** `export import SpawnOptions = Spawn;` is a type-only alias, not a runtime value. */
+const TYPE_ALIAS = /(?:^|\s)export\s+import\s+([A-Za-z_$][\w$]*)\s*=/gm;
 
 function typeDeclarations(source: string): Set<string> {
   const names = new Set<string>();
   for (const match of source.matchAll(TYPE_DECLARATION))
+    names.add(match[1] as string);
+  for (const match of source.matchAll(TYPE_ALIAS))
     names.add(match[1] as string);
   return names;
 }

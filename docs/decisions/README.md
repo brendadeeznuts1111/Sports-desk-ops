@@ -19,8 +19,9 @@ turns a stalled issue into a page that can be answered in one sitting.
 | #239     | DOD6 overlay keys by normalized customer id and collapses duplicates — which record wins? | —                                                  |
 | #275     | should empty-wagers copy differ by provenance kind?                                       | [275-provenance-copy.md](275-provenance-copy.md)   |
 | #220     | which statistical/coverage evidence must a ranking claim carry before it is stated?       | —                                                  |
+| —        | is the live XML feed's `@line` a decimal line, an American price, or both?                | [xml-line-unit.md](xml-line-unit.md)               |
 
-Two of the six have documents: #242 and #275. The others are tracked in issues; each needs the same treatment
+Three documents now: #242, #275 and the unnumbered XML-line note. The rest are tracked in issues; each needs the same treatment
 before it can be answered rather than re-litigated.
 
 ## Settled, for reference

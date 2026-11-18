@@ -420,14 +420,21 @@ export async function declarationDrift(
       ? []
       : checker
           .getExportsOfModule(modNamespaceSymbol)
-          .filter(
-            (symbol) =>
-              !declaredSet.has(symbol.name) &&
-              (symbol.flags &
+          .filter((symbol) => {
+            if (declaredSet.has(symbol.name)) return false;
+            if (symbol.name.startsWith("__")) return false;
+            // `export import SpawnOptions = Spawn;` exports an alias symbol, whose own flags
+            // carry no Type/Namespace bit; resolve it before deciding it is a value.
+            const target =
+              (symbol.flags & ts.SymbolFlags.Alias) !== 0
+                ? checker.getAliasedSymbol(symbol)
+                : symbol;
+            return (
+              (target.flags &
                 (ts.SymbolFlags.Type | ts.SymbolFlags.Namespace)) !==
-                0 &&
-              !symbol.name.startsWith("__"),
-          )
+              0
+            );
+          })
           .map((symbol) => symbol.name);
   const declaredTypes = [
     ...new Set([...typeExports, ...abstractClassNames]),

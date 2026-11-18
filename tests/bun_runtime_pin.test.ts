@@ -67,6 +67,34 @@ describe("readBunRuntimePin", () => {
     }
   });
 
+  test("a catalog: @types/bun is resolved before the pin is compared", () => {
+    const root = tempRoot();
+    const writeManifest = (typesBunVersion: string) =>
+      writeFileSync(
+        join(root, "package.json"),
+        JSON.stringify({
+          engines: { bun: "1.4.4" },
+          packageManager: "bun@1.4.4",
+          devDependencies: { "@types/bun": "catalog:" },
+          catalog: { "@types/bun": typesBunVersion },
+        }),
+      );
+    try {
+      writeFileSync(join(root, ".bun-version"), "1.4.4\n");
+      writeManifest("1.4.4");
+      expect(readBunRuntimePin(root)).toBe("1.4.4");
+
+      // The catalog is the fourth pin source: bumping it alone must fail here, not silently
+      // type-check the tree against a runtime it does not run.
+      writeManifest("1.4.5");
+      expect(() => readBunRuntimePin(root)).toThrow(
+        /E_BUN_RUNTIME_PIN_MISMATCH/,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("a workspace engines.bun that drifts is E_BUN_RUNTIME_PIN_WORKSPACE_DRIFT", () => {
     const root = tempRoot();
     try {

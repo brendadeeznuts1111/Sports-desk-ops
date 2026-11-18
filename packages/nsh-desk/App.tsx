@@ -14,6 +14,7 @@ import {
   SignalsPanel,
   SurveillanceWorkspace,
   TradingTerminalWorkspace,
+  XmlOddsPanel,
 } from "./components";
 import { createDeskStore, DeskStoreContext } from "./store";
 import {
@@ -188,6 +189,8 @@ function DeskRootBody(props: {
                   return <ExposurePanel />;
                 case "scoreboard":
                   return <ScoreboardPanel />;
+                case "xml_odds":
+                  return <XmlOddsPanel />;
                 case "kpis":
                   return <KpisPanel />;
                 case "diagnostics":

@@ -153,6 +153,15 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     surface: "surface.daemon-graph-data-plane",
   }),
   defineRoute({
+    path: "/api/diagnostics/image-assets",
+    method: "GET",
+    guard: "none",
+    // Bun.Image attributes for docs/assets; every source is masked to a workspace-relative path
+    // under RISK_MANAGER, so the payload carries sizes and formats but no filesystem location.
+    dataClass: "static",
+    surface: "surface.daemon-dashboard",
+  }),
+  defineRoute({
     path: "/api/dns/telemetry",
     method: "GET",
     guard: "none",
@@ -250,6 +259,14 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     method: "ANY",
     guard: "none",
     // Counts and sums from lib/desk_kpis.ts; no login, customer id or agent key.
+    dataClass: "aggregate",
+    surface: "surface.daemon-dashboard",
+  }),
+  defineRoute({
+    path: "/api/xml-odds/soa",
+    method: "GET",
+    guard: "none",
+    // Event ids and packed taxonomy/line codes parsed from the published R2 chunk; no account.
     dataClass: "aggregate",
     surface: "surface.daemon-dashboard",
   }),

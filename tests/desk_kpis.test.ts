@@ -234,6 +234,25 @@ describe("deriveDeskKpis", () => {
     });
   });
 
+  test("a live-backed book that excluded its synthetic rows is not labelled fixture", () => {
+    const summary = readCustomerBookSummary({
+      generatedAt: hoursBefore(1).toISOString(),
+      source: {
+        book: "./enriched_customers_full.json",
+        syntheticRowsExcluded: 4,
+        liveFeed: { liveWagers: { source: "r2" } },
+      },
+      summary: { customers: 180, tickets: 900, lifetimeNetUsd: -100 },
+    });
+    expect(summary).not.toBeNull();
+    if (summary === null) return;
+    const kpis = deriveDeskKpis(
+      { ...none, customerBook: { value: summary, mtime: NOW } },
+      NOW,
+    );
+    expect(kpis.customerBook?.provenance.basis).toBe("capture");
+  });
+
   test("no block carries an identifier", () => {
     const kpis = deriveDeskKpis(
       {

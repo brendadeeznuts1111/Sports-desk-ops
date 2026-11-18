@@ -28,6 +28,17 @@ export function visibleLinkWidth(rendered: string): number {
   return Bun.stringWidth(Bun.stripANSI(rendered));
 }
 
+/** Clip or pad an ANSI/OSC-8 string to exactly `targetCols` visible columns. */
+export function fitAnsiCols(text: string, targetCols: number): string {
+  const target = Math.max(0, Math.floor(targetCols));
+  if (target === 0) return "";
+  const width = Bun.stringWidth(text);
+  if (width === target) return text;
+  if (width < target) return text + " ".repeat(target - width);
+  if (target === 1) return "…";
+  return `${Bun.sliceAnsi(text, 0, target - 1)}…`;
+}
+
 /** Render an HTML anchor safely escaping query/fragment characters via `Bun.escapeHTML`. */
 export function htmlAnchorLink(url: URL, label: string): string {
   return `<a href="${Bun.escapeHTML(url.href)}">${Bun.escapeHTML(label)}</a>`;
