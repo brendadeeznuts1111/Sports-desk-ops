@@ -203,9 +203,15 @@ Boundary rules for this split:
   collide, and suffix normalization makes `AB12` and `AB12_3` the same key.
 - A directory route such as `routes: { "/static/*": { dir: "./static" } }`
   serves a tree natively: the prefix is percent-decoded once, a directory
-  without a trailing slash redirects `301`, `index.html` is served for `/`,
-  and symlinks are clamped to `dir`. The dashboard uses this for `/static/*`;
-  `tests/dev_dashboard_endpoints.test.ts` covers a hit and a traversal attempt.
+  without a trailing slash redirects `301`, `index.html` is served for `/`, and
+  it answers `Range`/`If-Range`-less `206`, `416`, `ETag` (`W/"size-mtime"`) and
+  `If-None-Match`/`If-Modified-Since` `304`. **It does not clamp symlinks**:
+  measured 2026-11-18 on 1.4.4, a symlink inside `dir` that points outside it is
+  served with that file's content (`/static/escape.txt` → `200` with the outside
+  bytes). `lib/asset_path.ts` resolves real paths rather than trusting the mount,
+  and the dashboard's `/static/*` now goes through `lib/serve_file.ts` for the
+  same reason; `tests/dev_dashboard_endpoints.test.ts` covers a hit, a range and
+  a traversal attempt.
 - Measured 2026-11-16 on Bun 1.4.4: server-side `BunRequest.keepalive` is typed
   `boolean` but reads `undefined` at runtime. The BunRequest contract test records
   that measured gap; do not use `keepalive` for routing decisions until a later

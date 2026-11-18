@@ -1407,6 +1407,17 @@ export const DESK_ENDPOINT_CATALOG: readonly DeskEndpointCatalogEntry[] = [
     summary: "Bun.dns cache hit rate, inflight coalescing & core hosts",
   },
   {
+    id: "image-assets",
+    method: "GET",
+    path: "/api/diagnostics/image-assets",
+    aliases: [],
+    plane: "ops",
+    auth: "loopback",
+    autoSweep: true,
+    sweepPath: "/api/diagnostics/image-assets",
+    summary: "Bun.Image attributes for docs/assets, masked under RISK_MANAGER",
+  },
+  {
     id: "governance",
     method: "GET",
     path: "/governance.json",

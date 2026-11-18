@@ -107,6 +107,16 @@ const BEHAVIOR_METADATA: Readonly<Record<string, BehaviorMetadata>> = {
     docsPage: "/docs/cli/bunx",
     shapes: [],
   },
+  "bunx-minimum-release-age": {
+    title: "bunx --minimum-release-age on downloaded packages",
+    docsPage: "/docs/cli/bunx",
+    shapes: [],
+  },
+  "bunx-trust": {
+    title: "bunx --trust lifecycle scripts",
+    docsPage: "/docs/cli/bunx",
+    shapes: [],
+  },
   "deprecated-packages": {
     title: "bun add deprecated-package warnings and resolution",
     docsPage: "/docs/cli/add",
