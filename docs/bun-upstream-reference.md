@@ -305,6 +305,27 @@ the live reference section is `reference/bun/test`.
   `jest.fn`, asymmetric matchers (`any`, `anything`, `closeTo`), `spyOn`, `setSystemTime`, and
   `onTestFinished` (callbacks run after the body, in registration order).
 
+<!-- bun-behavior: bun-test-runner -->
+
+## `bun test` runner knobs (measured 2026-11-18)
+
+Measured on the pin with throwaway suites (`tests/bun_test_runner_cli.test.ts`):
+
+| Knob                          | Measured                                                                        |
+| :---------------------------- | :------------------------------------------------------------------------------ |
+| `--test-name-pattern`         | only matching test names run                                                    |
+| `--bail=1`                    | exits after the first failure; the second failing case does not run             |
+| `--retry=1`                   | retries a failed test and passes when the retry succeeds                        |
+| `--rerun-each=2`              | evaluates each file twice                                                       |
+| `--shard=1/2` + `--shard=2/2` | four files split disjointly; rerunning a shard yields the same set              |
+| `--parallel=2 --no-isolate`   | every file runs in worker processes                                             |
+| `--update-timings`            | writes `{version: 1, files: {path: ms}}`; a later run reads it with `--timings` |
+| `--reporter=junit`            | writes `<testsuites>`/`<testcase>` to `--reporter-outfile`                      |
+| `CLAUDECODE=1`                | hides `(pass)`/`(todo)` lines, keeps failure detail and summary counts          |
+
+Not re-measured here: `--randomize`/`--seed`, `--concurrent`, `--max-concurrency`, `--aot`,
+`--check`, coverage, snapshots, and `--environment`/`--globals`.
+
 ## Upstream doc commit pins
 
 | Pin                                                                                                                      | Tree                               | Use                                                                       |
