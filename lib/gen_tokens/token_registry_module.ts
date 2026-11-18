@@ -24,6 +24,13 @@ export type RegistryModuleInput = {
   readonly version: string;
   readonly tokens: readonly RegistryModuleToken[];
   readonly aliases: readonly RegistryModuleAlias[];
+  /**
+   * Raw `:root` declarations for the SSOT sections that are not colour tokens
+   * (`[layout]`, `[motion]`, `[cas_states]`), already formatted as
+   * `"  --sd-layout-grid-unit: 4px;"`. Emitted verbatim so the Copy-registry
+   * block reproduces the generated `:root` byte-for-byte.
+   */
+  readonly rootOptionDeclarations: readonly string[];
 };
 
 /**
@@ -87,6 +94,11 @@ ${tokenLines}
 /** \`:root\` aliases in emission order (legacy first, then dashboard). */
 export const TOKEN_ALIASES: readonly GeneratedAlias[] = [
 ${aliasLines}
+];
+
+/** Untyped \`:root\` declarations for [layout], [motion] and [cas_states]. */
+export const ROOT_OPTION_DECLARATIONS: readonly string[] = [
+${input.rootOptionDeclarations.map((line) => `  ${JSON.stringify(line)},`).join("\n")}
 ];
 `;
 }

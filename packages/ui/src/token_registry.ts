@@ -10,6 +10,7 @@
 
 import {
   CANONICAL_TOKENS,
+  ROOT_OPTION_DECLARATIONS,
   TOKEN_ALIASES,
   TOKENS_TOML_VERSION,
   type GeneratedAlias,
@@ -254,5 +255,6 @@ export function buildRegistryRootCss(): string {
   )
     .map((alias) => `  ${alias.alias}: var(${alias.target});`)
     .join("\n");
-  return `:root {\n  color-scheme: dark;\n  /* Generated from tokens.toml (v${TOKENS_TOML_VERSION}) */\n${canonical}\n${legacy}\n\n  /* Semantic dashboard aliases mapped to canonical tokens.toml variables */\n${dashboard}\n}\n`;
+  const options = ROOT_OPTION_DECLARATIONS.join("\n");
+  return `:root {\n  color-scheme: dark;\n  /* Generated from tokens.toml (v${TOKENS_TOML_VERSION}) */\n${canonical}\n${legacy}\n\n  /* Semantic dashboard aliases mapped to canonical tokens.toml variables */\n${dashboard}\n${options}\n}\n`;
 }

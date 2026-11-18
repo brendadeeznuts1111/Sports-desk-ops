@@ -724,14 +724,40 @@ describe("5. Dead-Token & Bi-Directional Reference Consistency", () => {
   });
 
   it("test_assert_non_token_root_properties_are_aliases_of_tokens", async () => {
+    const { parseTokensToml } =
+      await import("../lib/gen_tokens/tokens_ssot.ts");
+    const {
+      LAYOUT_CSS_NAMES,
+      MOTION_CSS_NAMES,
+      casPropertyNames,
+      casRootNames,
+    } = await import("../lib/gen_tokens/css_option_sections.ts");
+    const ssot = parseTokensToml(
+      await Bun.file(resolve(rootDir, "design/tokens.toml")).text(),
+    );
+
     const tokenNames = new Set(DASHBOARD_TOKENS.map((t) => t.tokenName));
+    // `[layout]`, `[motion]` and `[cas_states]` are SSOT values emitted as raw
+    // declarations, not aliases. They are named from the parsed TOML, so a new
+    // TOML key widens this set instead of failing as an "unknown property".
+    // `[cas_states]` colours are emitted as typed `@property`; `[layout]` and
+    // `[motion]` are untyped, so they only appear in `:root`.
+    const ssotPropertyNames = new Set(casPropertyNames(ssot.cas_states));
+    const ssotRootNames = new Set([
+      ...LAYOUT_CSS_NAMES,
+      ...MOTION_CSS_NAMES,
+      ...casRootNames(ssot.cas_states),
+    ]);
+
     for (const file of DASHBOARD_FILES) {
       const { initialValues, rootValues } =
         await readDashboardCustomProperties(file);
-      expect([...initialValues.keys()].sort()).toEqual([...tokenNames].sort());
+      expect([...initialValues.keys()].sort()).toEqual(
+        [...tokenNames, ...ssotPropertyNames].sort(),
+      );
 
       const nonAliases = [...rootValues]
-        .filter(([name]) => !tokenNames.has(name))
+        .filter(([name]) => !tokenNames.has(name) && !ssotRootNames.has(name))
         .filter(([, value]) => {
           const ref = value.match(/^var\((--sd-[\w-]+)\)$/)?.[1];
           return ref === undefined || !tokenNames.has(ref);
@@ -756,9 +782,11 @@ describe("5. Dead-Token & Bi-Directional Reference Consistency", () => {
         /^\s*(--[a-z0-9][a-z0-9-]*):\s*var\((--[a-z0-9][a-z0-9-]*)\);/gm,
       ),
     ].map((match) => `${match[1]} -> ${match[2]}`);
-    const expected = [...ssot.aliases.legacy, ...ssot.aliases.dashboard].map(
-      (alias) => `${alias.alias} -> ${alias.target}`,
-    );
+    const expected = [
+      ...ssot.aliases.legacy,
+      ...ssot.aliases.dashboard,
+      ...(ssot.aliases.accessibility ?? []),
+    ].map((alias) => `${alias.alias} -> ${alias.target}`);
 
     expect(emitted).toEqual(expected);
   });

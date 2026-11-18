@@ -254,6 +254,67 @@
   initial-value: #ff758f;
 }
 
+@property --sd-cas-committed {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #34d399;
+}
+@property --sd-cas-committed-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #0a2922;
+}
+@property --sd-cas-committed-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #10b981;
+}
+@property --sd-cas-retry {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #38bdf8;
+}
+@property --sd-cas-retry-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #0c2438;
+}
+@property --sd-cas-retry-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #29b6f6;
+}
+@property --sd-cas-conflict {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #fbbf24;
+}
+@property --sd-cas-conflict-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #2b200c;
+}
+@property --sd-cas-conflict-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f59e0b;
+}
+@property --sd-cas-quarantined {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #fca5a5;
+}
+@property --sd-cas-quarantined-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #2d161d;
+}
+@property --sd-cas-quarantined-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ff7878;
+}
+
 /* ==========================================================================
    2. Canonical :root Custom Properties & Semantic Surface Aliases
    ========================================================================== */
@@ -328,4 +389,43 @@
   --sd-state-danger: var(--sd-tier-alert);
   --sd-state-info: var(--sd-tier-phone);
   --sd-state-accent: var(--sd-focus-ring);
+  --sd-layout-grid-unit: 4px;
+  --sd-layout-card-padding: 12px;
+  --sd-layout-row-height-compact: 28px;
+  --sd-layout-row-height-comfortable: 36px;
+  --sd-layout-border-hairline-width: 1px;
+  --sd-layout-border-interactive-width: 1px;
+  --sd-layout-focus-ring-width: 2px;
+  --sd-layout-focus-ring-offset: 2px;
+  --sd-layout-radius-badge: 4px;
+  --sd-layout-radius-card: 6px;
+  --sd-layout-radius-modal: 8px;
+  --sd-motion-aria-live-coalesce: 500ms;
+  --sd-motion-tooltip-delay: 250ms;
+  --sd-motion-drawer-transition: 140ms;
+  --sd-motion-pulse-critical-period: 1600ms;
+  --sd-cas-committed: #34d399;
+  --sd-cas-committed-bg: #0a2922;
+  --sd-cas-committed-border: #10b981;
+  --sd-cas-committed-glyph: "✓";
+  --sd-cas-retry: #38bdf8;
+  --sd-cas-retry-bg: #0c2438;
+  --sd-cas-retry-border: #29b6f6;
+  --sd-cas-retry-glyph: "↻";
+  --sd-cas-conflict: #fbbf24;
+  --sd-cas-conflict-bg: #2b200c;
+  --sd-cas-conflict-border: #f59e0b;
+  --sd-cas-conflict-glyph: "⚡";
+  --sd-cas-quarantined: #fca5a5;
+  --sd-cas-quarantined-bg: #2d161d;
+  --sd-cas-quarantined-border: #ff7878;
+  --sd-cas-quarantined-glyph: "⛔";
+}
+
+/* Accessibility: prefers-contrast alias overrides (aliases.accessibility) */
+@media (prefers-contrast: more) {
+  :root {
+    --border: var(--sd-border-strong);
+    --muted: var(--sd-text-secondary);
+  }
 }

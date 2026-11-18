@@ -26,6 +26,12 @@ import { DOMAIN_BRANDED_TYPES_PATH } from "../lib/gen_tokens/domain_branded_sect
 import { DOMAIN_BRANDED_PREAMBLE } from "../lib/gen_tokens/domain_branded_preamble.ts";
 import { DOMAIN_BRANDED_TRANSPORT } from "../lib/gen_tokens/domain_branded_transport.ts";
 import { renderDomainBrandedSection7 } from "../lib/gen_tokens/domain_branded_section7.ts";
+import {
+  renderAccessibilityMedia,
+  renderCasHoudiniProperties,
+  renderCasVars,
+  renderLayoutMotionVars,
+} from "../lib/gen_tokens/css_option_sections.ts";
 import { emitGeneratedAnsiTokensModule } from "../lib/gen_tokens/ansi_tokens_module.ts";
 import { renderTokenRegistryModule } from "../lib/gen_tokens/token_registry_module.ts";
 import {
@@ -83,6 +89,8 @@ try {
   process.exit(1);
 }
 const { surfaces, ingestion, routes, ui, sla } = ssot;
+const { layout, motion, cas_states: casStates } = ssot;
+const accessibilityAliases = ssot.aliases.accessibility;
 
 const UI_ROLES = new Set<UiRole>([
   "surface",
@@ -161,6 +169,7 @@ function generateHoudiniPropertyCss(): string {
     css += `      initial-value: ${t.hex};\n`;
     css += `    }\n`;
   }
+  css += renderCasHoudiniProperties(casStates, "    ");
   return css;
 }
 
@@ -174,6 +183,8 @@ function generateRootVariablesCss(): string {
   for (const entry of legacyAliases) {
     css += `      ${entry.alias}: var(${entry.target});\n`;
   }
+  css += renderLayoutMotionVars(layout, motion);
+  css += renderCasVars(casStates);
   return css;
 }
 
@@ -214,6 +225,8 @@ function generateStandaloneDashboardTokensCss(): string {
     css += `  initial-value: ${t.hex};\n`;
     css += `}\n\n`;
   }
+  css += renderCasHoudiniProperties(casStates);
+  if (casStates !== undefined) css += "\n";
 
   css += `/* ==========================================================================
    2. Canonical :root Custom Properties & Semantic Surface Aliases
@@ -232,7 +245,11 @@ function generateStandaloneDashboardTokensCss(): string {
   for (const entry of dashboardAliases) {
     css += `  ${entry.alias}: var(${entry.target});\n`;
   }
+  css += renderLayoutMotionVars(layout, motion);
+  css += renderCasVars(casStates);
   css += `}\n`;
+  const accessibilityCss = renderAccessibilityMedia(accessibilityAliases);
+  if (accessibilityCss.length > 0) css += `\n${accessibilityCss}`;
   return css;
 }
 
@@ -267,6 +284,13 @@ emitRepoFile(
         scope: "dashboard" as const,
       })),
     ],
+    rootOptionDeclarations: [
+      renderLayoutMotionVars(layout, motion),
+      renderCasVars(casStates),
+    ]
+      .join("")
+      .split("\n")
+      .filter((line) => line.length > 0),
   }),
 );
 console.log(`[gen:tokens] Emitted updated ${registryRelPath}`);
