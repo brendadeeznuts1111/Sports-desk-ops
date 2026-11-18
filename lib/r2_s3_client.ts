@@ -349,7 +349,7 @@ export class R2PreconditionFailedError extends Error {
 
 async function buildSignedR2Headers(options: {
   readonly auth: R2S3Auth;
-  readonly method: "PUT" | "HEAD";
+  readonly method: "PUT" | "HEAD" | "GET";
   readonly path: string;
   readonly host: string;
   readonly payloadHash: string;
@@ -498,6 +498,14 @@ async function putObjectWithMetadata(
   }
   throw lastError ?? new Error(`R2 PUT ${key} failed`);
 }
+
+export type R2GetObjectResult =
+  | { readonly status: 404; readonly etag: null; readonly body: null }
+  | {
+      readonly status: 200;
+      readonly etag: string | null;
+      readonly body: Uint8Array;
+    };
 
 function encodeBucket(bucket: string): string {
   return encodeRfc3986(bucket);
@@ -678,6 +686,45 @@ export class R2S3Client {
     }
     const etag = response.headers.get("etag")?.trim() ?? "";
     return etag === "" ? null : etag;
+  }
+
+  /** One signed GET returning status, ETag and body together; 404 maps to `status: 404`. */
+  async getObject(
+    key: string,
+    options: { readonly fetchImpl?: typeof fetch } = {},
+  ): Promise<R2GetObjectResult> {
+    if (this.auth === undefined) {
+      throw new Error("R2S3Client: getObject requires auth options");
+    }
+    const endpoint = new URL(this.auth.endpoint);
+    const path = `/${encodeBucket(this.bucket)}/${key.split("/").map(encodeRfc3986).join("/")}`;
+    const requestHeaders = await buildSignedR2Headers({
+      auth: this.auth,
+      method: "GET",
+      path,
+      host: endpoint.host,
+      payloadHash: EMPTY_SHA256,
+      headers: {},
+    });
+    const doFetch = options.fetchImpl ?? fetch;
+    const response = await doFetch(`${endpoint.origin}${path}`, {
+      method: "GET",
+      headers: requestHeaders,
+    });
+    if (response.status === 404) {
+      await response.body?.cancel();
+      return { status: 404, etag: null, body: null };
+    }
+    if (response.status !== 200) {
+      await response.body?.cancel();
+      throw new Error(`R2 GET ${key} failed (${response.status})`);
+    }
+    const etag = response.headers.get("etag")?.trim() ?? "";
+    return {
+      status: 200,
+      etag: etag === "" ? null : etag,
+      body: await response.bytes(),
+    };
   }
 
   /** Back-compat alias for callers written before the writeWithMetadata rename. */
