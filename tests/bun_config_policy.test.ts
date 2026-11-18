@@ -44,6 +44,12 @@ describe("package manager policy", () => {
     }
   });
 
+  test("the age-gate exemption list is machine-owned too", () => {
+    // `minimumReleaseAgeExcludes` is the other half of the gate: a project copy would override the
+    // machine's vetted exemptions, so it cannot be a project key.
+    expect(MACHINE_OWNED_INSTALL_KEYS).toContain("minimumReleaseAgeExcludes");
+  });
+
   test("lifecycle scripts are not trusted implicitly", () => {
     // The cast is for the JSON literal: `trustedDependencies: []` infers `never[]`, and `toEqual`
     // binds its expected type to the received one (`toEqual(expected: T)`), so the policy

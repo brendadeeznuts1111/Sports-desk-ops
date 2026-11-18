@@ -42,11 +42,34 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
   });
 
   describe("Static directory routes", () => {
-    it("serves /static/* through Bun's native directory route", async () => {
+    it("serves /static/* through the range-aware handler, not the native dir mount", async () => {
       const res = await fetch(`${baseUrl}/static/live-bets.html`);
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
       expect(await res.text()).toContain("Live");
+      // A strong validator: the native `{ dir }` route answers `W/"1000-…"`, so this also proves
+      // the mount is the handler and not the directory route.
+      const etag = res.headers.get("etag") ?? "";
+      expect(etag).toMatch(/^"[0-9a-f]+-[0-9a-f]+"$/);
+      expect(res.headers.get("accept-ranges")).toBe("bytes");
+    });
+
+    it("answers a byte range on a static page", async () => {
+      const res = await fetch(`${baseUrl}/static/live-bets.html`, {
+        headers: { Range: "bytes=0-9" },
+      });
+      expect(res.status).toBe(206);
+      expect(res.headers.get("content-range")).toMatch(/^bytes 0-9\/\d+$/);
+      expect((await res.arrayBuffer()).byteLength).toBe(10);
+    });
+
+    it("revalidates a static page with its ETag", async () => {
+      const first = await fetch(`${baseUrl}/static/live-bets.html`);
+      const etag = first.headers.get("etag") ?? "";
+      const cached = await fetch(`${baseUrl}/static/live-bets.html`, {
+        headers: { "If-None-Match": etag },
+      });
+      expect(cached.status).toBe(304);
     });
 
     it("does not escape the static directory", async () => {

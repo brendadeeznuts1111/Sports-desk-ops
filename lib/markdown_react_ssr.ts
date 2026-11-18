@@ -8,14 +8,15 @@
  * The parser has raw HTML disabled, so the output contains only renderer-emitted tags; the brand
  * describes provenance, not a claim that arbitrary HTML is safe.
  *
- * The repository pins `react` and `react-dom` to 18.3.1, so this module passes `reactVersion: 18`
- * to `Bun.markdown.react()` (the legacy `react.element` symbol that React 18's renderer accepts).
- * The two must change together: React 18's renderer throws "Objects are not valid as a React
- * child" on React 19 elements and the reverse. The switch is not exposed, and the version is set
- * after the caller's parser options so they cannot override it.
+ * The element symbol follows the installed React: `Bun.markdown.react()` emits React 19 elements
+ * unless `reactVersion` says otherwise, and React 18's renderer throws "Objects are not valid as a
+ * React child" on them. `installedReactVersion()` reads the major from the installed package, so the
+ * renderer, the pin and this switch cannot disagree. The version is set after the caller's parser
+ * options so they cannot override it.
  */
 import { renderToString } from "react-dom/server";
 import type { Brand } from "./brand.ts";
+import { installedReactVersion } from "./react_element_version.ts";
 
 /** Markdown source that has not been rendered yet. */
 export type MarkdownText = Brand<string, "MarkdownText">;
@@ -58,7 +59,7 @@ export function renderMarkdownSsr(
   };
   const element = Bun.markdown.react(source, undefined, {
     ...parserOptions,
-    reactVersion: 18,
+    reactVersion: installedReactVersion(),
   });
   return renderedHtml(renderToString(element));
 }

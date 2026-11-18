@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  changedInstallGraph,
   inferTestsForFiles,
   planTypecheckTasks,
   type WorkspaceEdgeRef,
@@ -116,5 +117,33 @@ describe("verify_fast workspace scoping", () => {
     expect(
       inferTestsForFiles(["packages/ui/src/panels/CustomersTabPanel.tsx"]),
     ).toContain("tests/dashboard_ui_panels.test.tsx");
+  });
+});
+
+/**
+ * `bun test --changed` follows module imports, so a manifest or lockfile edit selects zero tests
+ * and the install-graph suites (`react_version_pairing`, `peer_satisfaction`) would never run on a
+ * dependency-only PR. `verify:fast` and CI trigger them from the file path instead.
+ */
+describe("install-graph gate", () => {
+  test("a manifest or lockfile change runs the install-graph suites", () => {
+    expect(changedInstallGraph(["package.json"])).toBe(true);
+    expect(changedInstallGraph(["bun.lock"])).toBe(true);
+    expect(changedInstallGraph(["packages/ui/package.json"])).toBe(true);
+    expect(
+      changedInstallGraph([
+        "packages/nsh-desk/package.json",
+        "lib/pm_policy.ts",
+      ]),
+    ).toBe(true);
+  });
+
+  test("changes that test:changed already covers do not trigger it", () => {
+    expect(changedInstallGraph([])).toBe(false);
+    expect(changedInstallGraph(["lib/pm_policy.ts"])).toBe(false);
+    // A foreign lockfile is rejected by the single-lockfile gate, not by this one.
+    expect(changedInstallGraph(["package-lock.json"])).toBe(false);
+    // Nested JSON such as a tsconfig is not a manifest.
+    expect(changedInstallGraph(["packages/ui/tsconfig.json"])).toBe(false);
   });
 });

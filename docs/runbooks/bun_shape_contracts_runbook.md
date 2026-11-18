@@ -186,7 +186,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/resolveSync)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `packages/sportsdesk-ops/src/lib/bun_surface_dts_inventory.ts`, `lib/f402_agent_graph_layouts.ts`
-- **Evidence:** `test:tests/bun_shapes_coverage.test.ts`, `probe:proc.paths`
+- **Evidence:** `test:tests/bun_shapes_coverage.test.ts`, `test:tests/peer_satisfaction.test.ts`, `test:tests/react_element_version.test.ts`, `probe:proc.paths`
 
 #### Bun.sleep
 
@@ -428,7 +428,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (1):** `parse`
 - **Here:** `lib/pm_policy.ts`, `scripts/bun_native_rules.ts`
-- **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_radix_literal_rounding.test.ts`, `probe:data.json`
+- **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_radix_literal_rounding.test.ts`, `test:tests/react_version_pairing.test.ts`, `probe:data.json`
 
 #### Bun.JSONL
 

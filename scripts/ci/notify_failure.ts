@@ -6,7 +6,7 @@
  * opens the PR. This posts the failure to the same chat `r2-staleness-alert.yml` already uses.
  *
  * Deliberately dependency-free — no imports, `fetch` only. The moments this matters most are the
- * ones where `bun install --frozen-lockfile` fails (a broken lockfile, a bad pin, a removed
+ * ones where `bun ci` fails (a broken lockfile, a bad pin, a removed
  * dependency), and a notifier that needs `node_modules` cannot report the failure that removed
  * them. `lib/telegram.ts` exists but is coupled to wager alert rendering; sharing it would pull in
  * the wager shapes and still need an install step.

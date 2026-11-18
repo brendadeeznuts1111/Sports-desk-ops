@@ -1,0 +1,1 @@
+../../../scripts/image_asset_diagnostics.ts
