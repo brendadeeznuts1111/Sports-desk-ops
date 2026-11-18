@@ -18,6 +18,7 @@ import {
   globalBunfigPath,
   inspectWorkspaceInstallLayout,
   inspectWorkspaces,
+  invalidReleaseAgeExcludes,
   lockWorkspaceDependencies,
   lockWorkspaceNames,
   lockWorkspaceVersions,
@@ -117,6 +118,9 @@ async function globalConfigChecks(): Promise<Check[]> {
   }
   const install = (await readInstall(live)) ?? {};
   const age = install.minimumReleaseAge;
+  const excludes = install.minimumReleaseAgeExcludes;
+  const ignoredExcludes = invalidReleaseAgeExcludes(excludes);
+  const excludeCount = Array.isArray(excludes) ? excludes.length : 0;
   checks.push(
     check(
       "frozen lockfile",
@@ -137,6 +141,13 @@ async function globalConfigChecks(): Promise<Check[]> {
       (typeof age === "number" && age > 0) ||
         (typeof age === "string" && age !== "" && age !== "0"),
       `minimumReleaseAge = ${String(age)}`,
+    ),
+    check(
+      "release age excludes",
+      ignoredExcludes.length === 0,
+      ignoredExcludes.length === 0
+        ? `${excludeCount} entries: bare names or exact versions`
+        : `Bun ignores ${ignoredExcludes.join(", ")} (use a name or name@x.y.z)`,
     ),
   );
   return checks;

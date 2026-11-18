@@ -57,11 +57,20 @@ so this list is not maintained by hand.
 | `XML.stringify`       | `packages/sportsdesk-ops/src/bin/xml-parse.ts` | Serializes the hydrated SoA feed into the canonical `chunks/<sha256>.bin` XML                                    |
 | `POST /api/parse-xml` | `services/sportsdesk_webview_server.ts`        | Parses one body with `Bun.XML.parse`; the daemon's 1 MiB `maxRequestBodySize` bounds it, and OpenAPI declares it |
 
-- `Bun.XML` is a parser, not a schema validator. The XML feed is hydrated into typed SoA
-  columns (`eventId32` / `packedComboKey15` / `lineHundredthsI32`) and the written count is
-  asserted against the returned count (`ERR_DOD_CSR_CONSERVATION_BREACH`).
-- The HTML-login-page guard runs **before** parsing; parse failures are classified into
-  `ERR_XML_ENTITY_BOMB` rather than leaking a raw `SyntaxError`.
+- `Bun.XML` is a parser, not a schema validator. The feed root and its event collection are
+  resolved by **local name**, so `<feed>` and `<m:feed>` hydrate the same rows; a document
+  with no feed root fails closed with `ERR_XML_FEED_ROOT_MISSING` instead of reading as a
+  healthy zero-row feed. Rows are hydrated into typed SoA columns (`eventId32` /
+  `packedComboKey15` / `lineHundredthsI32`), the whole frame is capacity-checked before the
+  first row is written, and the written count is asserted against the returned count
+  (`ERR_DOD_CSR_CONSERVATION_BREACH`).
+- A zero-row frame is refused with `ERR_XML_FEED_EMPTY` and writes no chunk, generation or
+  manifest; `--allow-empty` opts into publishing a deliberate empty generation. The manifest
+  body and the `--json` summary both carry `row_count`.
+- The HTML-login-page guard runs **before** parsing and reports a 200 HTML body as
+  `ERR_GSLIVE_SESSION_EXPIRED`. Entity-shaped parse failures map to `ERR_XML_ENTITY_BOMB`;
+  every other `SyntaxError` maps to `ERR_XML_PARSE_FAILED`, so a truncated tag is not
+  misreported as an entity bomb and no raw `SyntaxError` leaks through.
 - Docs coverage: `tests/bun_docs_surface_baseline.json` marks `XML` documented — the docs
   page is `bun.com/docs/runtime/xml`, pinned upstream at
   [`docs/runtime/xml.mdx`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/runtime/xml.mdx)

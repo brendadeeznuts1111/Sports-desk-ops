@@ -182,9 +182,7 @@ jobs:
       - name: Type check
         timeout-minutes: 3
         run: bun run typecheck
-      - name: Lint
-        timeout-minutes: 3
-        run: bun run lint:check
+      # Native `bun lint` runs in the `lint-native` job (canary) rather than on pinned 1.4.4.
       - name: Derived contract pins
         timeout-minutes: 2
         run: bun run check:derived-contracts
@@ -411,9 +409,7 @@ jobs:
       - name: Type check
         timeout-minutes: 3
         run: bun run typecheck
-      - name: Lint
-        timeout-minutes: 3
-        run: bun run lint:check
+      # Native `bun lint` runs in the `lint-native` job (canary) rather than on pinned 1.4.4.
       - name: Derived contract pins
         timeout-minutes: 2
         run: bun run check:derived-contracts

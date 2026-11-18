@@ -11,14 +11,14 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 
 const COVERAGE: Readonly<Record<string, string>> = {
-  ts: "bun fmt + oxlint + bun check + tests",
-  tsx: "bun fmt + oxlint + bun check + tests",
-  mts: "bun fmt + oxlint + bun check + tests",
-  cts: "bun fmt + oxlint + bun check + tests",
-  js: "bun fmt + oxlint + bun check + tests",
-  jsx: "bun fmt + oxlint + bun check + tests",
-  mjs: "bun fmt + oxlint + bun check + tests",
-  cjs: "bun fmt + oxlint + bun check + tests",
+  ts: "bun fmt + bun lint + bun check + tests",
+  tsx: "bun fmt + bun lint + bun check + tests",
+  mts: "bun fmt + bun lint + bun check + tests",
+  cts: "bun fmt + bun lint + bun check + tests",
+  js: "bun fmt + bun lint + bun check + tests",
+  jsx: "bun fmt + bun lint + bun check + tests",
+  mjs: "bun fmt + bun lint + bun check + tests",
+  cjs: "bun fmt + bun lint + bun check + tests",
   json: "bun fmt + schema/docs gates + JSON5.parse",
   json5: "Bun.JSON5.parse",
   jsonl: "Bun.JSONL.parseChunk",
@@ -116,7 +116,8 @@ describe("language coverage", () => {
     };
     const scripts = pkg.scripts ?? {};
     expect(scripts["format:check"]).toBe("bun fmt --check");
-    expect(scripts["lint:check"]).toContain("oxlint --deny-warnings");
+    expect(scripts["lint:check"]).toContain("lint_native.ts");
+    expect(scripts["lint:check"]).toContain("--deny-warnings");
     expect(scripts["check:innerhtml"]).toBe("bun run bin/check-innerhtml.ts");
     expect(scripts["check:fetch-init"]).toBe("bun run bin/check-fetch-init.ts");
     expect(scripts["verify:docs"]).toContain("check:spec-citations");

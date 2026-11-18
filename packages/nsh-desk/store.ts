@@ -19,6 +19,7 @@ import {
   DESK_PREFS_STORAGE_KEY,
   extractApiFailureCause,
   filterMarketInstruments,
+  isXmlOddsPollDue,
   PARSER_WORKBENCH_PRESETS,
   parseAgentsSearchPayload,
   parseAgentTreePayload,
@@ -105,7 +106,15 @@ import {
   type TerminalLadderViewMode,
 } from "./desk_model";
 import type { DataTableSort, DockAreaLayout } from "./ui";
-import type { XmlOddsFeed } from "./xml_odds_view";
+import {
+  createXmlOddsArena,
+  hydrateCompactXmlDocIntoArena,
+  loadXmlOddsSoaFeed,
+  XML_ODDS_SOA_PATH,
+  type XmlOddsFeed,
+  type XmlOddsSoaLoadResult,
+  type XmlOddsSoaProvenance,
+} from "./xml_odds_view";
 
 export type LeagueFilter = DeskLeagueFilter;
 
@@ -121,7 +130,7 @@ export function defaultWorkspaceLayout(): DockAreaLayout {
   return {
     center: {
       type: "tabs",
-      panels: ["markets", "signals", "scoreboard", "exposure"],
+      panels: ["markets", "signals", "scoreboard", "exposure", "xml_odds"],
     },
     left: { layout: { type: "tabs", panels: ["kpis"] }, size: 288 },
     bottom: { layout: { type: "tabs", panels: ["diagnostics"] }, size: 204 },
@@ -338,6 +347,16 @@ export function createDeskStore() {
   // recomputes when the same column objects are filled again in place.
   const xmlOddsFeed = signal<XmlOddsFeed | null>(null);
   const xmlOddsRevision = signal(0);
+  // The daemon route's snapshot: the panel states loading / ready provenance / an
+  // unavailable reason from this, never from a row count it inferred itself.
+  const xmlOddsSnap = signal<EndpointSnapshot<XmlOddsSoaProvenance>>({
+    status: "loading",
+    endpoint: XML_ODDS_SOA_PATH,
+  });
+  // Completion time of the last XML odds load (ready or unavailable). 0 = never
+  // loaded, which `isXmlOddsPollDue` treats as due. Plain closure state: no view
+  // reads it, only the poll cadence does.
+  let lastXmlOddsPollMs = 0;
 
   // Core boot snapshots (kept to the 4 primary endpoints for instant boot & stub compatibility)
   const kpisSnap = signal<EndpointSnapshot<ParsedKpisPayload>>({
@@ -1131,27 +1150,76 @@ export function createDeskStore() {
     recordLedger("test-error-guard", snap);
   };
 
-  const refreshAll = async () => {
+  // Publishes one R2-snapshot load: a ready load fills the SoA columns and bumps the
+  // revision, an unavailable load keeps the previous rows out of the panel and records
+  // the measured reason. Callers batch this with the other poll writes.
+  const applyXmlOddsLoad = (load: XmlOddsSoaLoadResult): void => {
+    const fetchedAtIso = new Date().toISOString();
+    if (load.ok) {
+      xmlOddsSnap.set({
+        status: "ready",
+        endpoint: XML_ODDS_SOA_PATH,
+        httpStatus: 200,
+        fetchedAtIso,
+        data: load.provenance,
+      });
+      xmlOddsFeed.set(load.feed);
+      xmlOddsRevision.update((value) => value + 1);
+      return;
+    }
+    xmlOddsSnap.set({
+      status: "unavailable",
+      endpoint: XML_ODDS_SOA_PATH,
+      httpStatus: null,
+      code: load.code,
+      cause: load.reason,
+      fetchedAtIso,
+    });
+  };
+
+  const refreshAll = async (
+    options: { readonly forceXmlOdds?: boolean } = {},
+  ) => {
     if (!originInfo.ok || polling()) return;
     polling.set(true);
     const t0 = Date.now();
     const base = originInfo.resolved.origin;
-    const [nextKpis, nextKalshi, nextBoard, nextLiveBets] = await Promise.all([
-      requestJsonEndpoint(base, "/api/kpis", parseKpisPayload),
-      requestJsonEndpoint(base, "/api/signals/kalshi", parseKalshiPayload),
-      requestJsonEndpoint(base, "/api/scoreboard", parseScoreboardPayload),
-      requestJsonEndpoint(
-        base,
-        "/api/live-bets/summary",
-        parseLiveBetsSummaryPayload,
-      ),
+    // The XML odds producer does two public-R2 GETs and a full canonical-XML parse,
+    // so the 10s dashboard poll only asks on `isXmlOddsPollDue`'s slower cadence.
+    // Boot, manual refresh, Retry and sweep force it (the default); the auto-poll
+    // passes `forceXmlOdds: false`. A skipped poll writes nothing, leaving the
+    // previous snapshot/rows on screen.
+    const forceXmlOdds = options.forceXmlOdds ?? true;
+    const shouldLoadXmlOdds =
+      forceXmlOdds || isXmlOddsPollDue(t0, lastXmlOddsPollMs);
+    const xmlOddsPromise: Promise<XmlOddsSoaLoadResult | null> =
+      shouldLoadXmlOdds ? loadXmlOddsSoaFeed(base) : Promise.resolve(null);
+    const [coreSnaps, nextXmlOdds] = await Promise.all([
+      Promise.all([
+        requestJsonEndpoint(base, "/api/kpis", parseKpisPayload),
+        requestJsonEndpoint(base, "/api/signals/kalshi", parseKalshiPayload),
+        requestJsonEndpoint(base, "/api/scoreboard", parseScoreboardPayload),
+        requestJsonEndpoint(
+          base,
+          "/api/live-bets/summary",
+          parseLiveBetsSummaryPayload,
+        ),
+      ]),
+      xmlOddsPromise,
     ]);
+    const [nextKpis, nextKalshi, nextBoard, nextLiveBets] = coreSnaps;
     const elapsed = Math.max(0, Date.now() - t0);
     batch(() => {
       kpisSnap.set(nextKpis);
       kalshiSnap.set(nextKalshi);
       scoreboardSnap.set(nextBoard);
       liveBetsSnap.set(nextLiveBets);
+      if (nextXmlOdds !== null) {
+        applyXmlOddsLoad(nextXmlOdds);
+        // Ready and unavailable both count as a completed poll, so a persistent
+        // failure is not retried by the auto-poll every 10 seconds.
+        lastXmlOddsPollMs = Date.now();
+      }
       lastPollMs.set(elapsed);
       pollCount.update((n) => n + 1);
       polling.set(false);
@@ -1176,7 +1244,7 @@ export function createDeskStore() {
     sweepingAll.set(true);
     try {
       await Promise.all([
-        refreshAll(),
+        refreshAll({ forceXmlOdds: true }),
         loadExecutionPlan(),
         loadBoardPlane(),
         loadSurveillancePlane(),
@@ -1192,11 +1260,12 @@ export function createDeskStore() {
     }
   };
 
-  void refreshAll();
+  // Boot is a forced load; the 10s auto-poll is throttled by isXmlOddsPollDue.
+  void refreshAll({ forceXmlOdds: true });
 
   const timer = setInterval(() => {
     if (autoPoll()) {
-      void refreshAll();
+      void refreshAll({ forceXmlOdds: false });
     }
   }, 10_000);
   cleanup(() => clearInterval(timer));
@@ -1644,8 +1713,9 @@ export function createDeskStore() {
     },
     setUiKitOpen: (next: boolean) => uiKitOpen.set(next),
 
-    // XML odds SoA columns (hot path). Hydration lives outside this package; the
-    // store only publishes the arrays and a revision so the table re-reads them.
+    // XML odds SoA columns (hot path). The store retains one pre-allocated
+    // arena in memory and bumps `revision` so the table re-reads in-place writes.
+    xmlOddsSnap: () => xmlOddsSnap(),
     xmlOddsFeed: () => xmlOddsFeed(),
     xmlOddsRevision: () => xmlOddsRevision(),
     setXmlOddsFeed: (next: XmlOddsFeed | null) => {
@@ -1653,6 +1723,42 @@ export function createDeskStore() {
         xmlOddsFeed.set(next);
         xmlOddsRevision.update((v) => v + 1);
       });
+    },
+    hydrateXmlOddsDoc: (doc: unknown, capacity = 256): number => {
+      const arena = xmlOddsFeed() ?? createXmlOddsArena(capacity);
+      const written = hydrateCompactXmlDocIntoArena(doc, arena);
+      batch(() => {
+        xmlOddsFeed.set(arena);
+        xmlOddsRevision.update((v) => v + 1);
+      });
+      return written;
+    },
+    parseXmlOddsViaDaemon: async (xmlBody: string): Promise<number> => {
+      if (!originInfo.ok) {
+        throw new Error(originInfo.error);
+      }
+      const response = await fetch(
+        `${originInfo.resolved.origin}/api/parse-xml`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/xml" },
+          body: xmlBody,
+          signal: AbortSignal.timeout(ENDPOINT_FETCH_TIMEOUT_MS),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(
+          `POST /api/parse-xml failed (${response.status}): ${await response.text()}`,
+        );
+      }
+      const parsed: unknown = await response.json();
+      const arena = xmlOddsFeed() ?? createXmlOddsArena(256);
+      const written = hydrateCompactXmlDocIntoArena(parsed, arena);
+      batch(() => {
+        xmlOddsFeed.set(arena);
+        xmlOddsRevision.update((v) => v + 1);
+      });
+      return written;
     },
   };
 }

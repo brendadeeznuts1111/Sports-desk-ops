@@ -61,6 +61,10 @@ export interface CustomerBookSummary {
   readonly customers: number;
   readonly tickets: number;
   readonly lifetimeNetUsd: number;
+  /** Fixture rows the generator excluded; >0 means this artifact publishes no synthetic rows. */
+  readonly syntheticRowsExcluded?: number;
+  /** Whether the generator read a live wager feed (R2 or captured) for this artifact. */
+  readonly liveFeedBacked?: boolean;
 }
 
 export interface DeskKpiInputs {
@@ -249,18 +253,23 @@ export function deriveDeskKpis(inputs: DeskKpiInputs, now: Date): DeskKpis {
     };
   })();
 
-  // The only book `customers:profiles` builds from is enriched_customers_full.json, a demo
-  // fixture (lib/parlay_combo_backtest_engine.ts), so this card is labelled as one.
+  // A book that declared and excluded synthetic fixture rows and was built from a live feed is
+  // measured data, not a fixture. Older artifacts (and test inputs) stay labelled `fixture`.
   const book = (() => {
     if (customerBook === null) return null;
     const summary = customerBook.value;
+    const basis: KpiBasis =
+      summary.liveFeedBacked === true &&
+      (summary.syntheticRowsExcluded ?? 0) > 0
+        ? "capture"
+        : "fixture";
     return {
       customers: summary.customers,
       tickets: summary.tickets,
       customerNetCents: Math.round(summary.lifetimeNetUsd * 100),
       provenance: provenance(
         summary.book,
-        "fixture",
+        basis,
         summary.generatedAt,
         customerBook.mtime,
         null,
@@ -285,7 +294,11 @@ export function readCustomerBookSummary(
   if (typeof raw !== "object" || raw === null) return null;
   const file = raw as {
     generatedAt?: unknown;
-    source?: { book?: unknown };
+    source?: {
+      book?: unknown;
+      syntheticRowsExcluded?: unknown;
+      liveFeed?: unknown;
+    };
     summary?: {
       customers?: unknown;
       tickets?: unknown;
@@ -302,5 +315,10 @@ export function readCustomerBookSummary(
     customers: finite(file.summary.customers),
     tickets: finite(file.summary.tickets),
     lifetimeNetUsd: finite(file.summary.lifetimeNetUsd),
+    syntheticRowsExcluded: finite(file.source?.syntheticRowsExcluded),
+    liveFeedBacked:
+      typeof file.source?.liveFeed === "object" &&
+      file.source.liveFeed !== null &&
+      Object.keys(file.source.liveFeed as object).length > 0,
   };
 }

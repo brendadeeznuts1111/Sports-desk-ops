@@ -34,12 +34,30 @@ function makeCache() {
     HOME: join(root, "home"),
     BUN_INSTALL: join(root, "bun"),
   };
+  const pkgDir = join(root, "pkg");
+  mkdirSync(pkgDir, { recursive: true });
+  writeFileSync(
+    join(pkgDir, "package.json"),
+    JSON.stringify({ name: "cache-pkg-fixture", version: "1.0.0" }, null, 2),
+  );
+  writeFileSync(join(pkgDir, "index.js"), "export default 1;\n");
+  const packRes = Bun.spawnSync([process.execPath, "pm", "pack", "--quiet"], {
+    cwd: pkgDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const tgzName = packRes.stdout.toString().trim();
+
   const dir = join(root, "fixture");
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify(
-      { name: "cache-fixture", private: true, dependencies: { zod: "4.6.7" } },
+      {
+        name: "cache-fixture",
+        private: true,
+        dependencies: { "cache-pkg-fixture": `file:../pkg/${tgzName}` },
+      },
       null,
       2,
     ),

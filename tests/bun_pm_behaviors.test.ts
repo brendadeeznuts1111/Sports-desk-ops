@@ -8,8 +8,8 @@
  * - `<pkg> was added` / `<pkg> changed from X to Y` (frozen lockfile)
  * - `not a bun cache pack (record #0)` (cache unpack)
  *
- * bun pm fetch verified manually 2026-11-17: lockfile unchanged, no scripts,
- * no node_modules; add a fixture if a Docker consumer appears.
+ * bun pm fetch verified via local fixture test below: lockfile unchanged,
+ * no scripts, no node_modules.
  */
 import { afterAll, describe, expect, test } from "bun:test";
 import {
@@ -398,5 +398,23 @@ describe("Bun 1.4.4 package-manager behaviors", () => {
     expect(result.stderr.toString()).toContain(
       "bunx has no --frozen-lockfil flag",
     );
+  });
+
+  test("bun pm fetch warms cache without creating node_modules or running scripts", () => {
+    const dir = fixture();
+    localPackage(dir, "vendor");
+    const manifest = readManifest(dir);
+    manifest.dependencies = { "vendor-fixture": "file:./vendor" };
+    writeFileSync(join(dir, "package.json"), JSON.stringify(manifest, null, 2));
+    expect(
+      run(dir, ["install", "--lockfile-only", "--no-env-file"]).exitCode,
+    ).toBe(0);
+    expect(existsSync(join(dir, "node_modules"))).toBe(false);
+    const lockBefore = readFileSync(join(dir, "bun.lock"), "utf8");
+
+    const fetched = run(dir, ["pm", "fetch", "--no-env-file"]);
+    expect(fetched.exitCode).toBe(0);
+    expect(existsSync(join(dir, "node_modules"))).toBe(false);
+    expect(readFileSync(join(dir, "bun.lock"), "utf8")).toBe(lockBefore);
   });
 });

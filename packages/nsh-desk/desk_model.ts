@@ -1042,6 +1042,18 @@ export const DESK_ENDPOINT_CATALOG: readonly DeskEndpointCatalogEntry[] = [
     summary: "Headline desk KPIs + R2 pipeline publish/data-window ages (#78)",
   },
   {
+    id: "xml-odds-soa",
+    method: "GET",
+    path: "/api/xml-odds/soa",
+    aliases: [],
+    plane: "markets",
+    auth: "loopback",
+    autoSweep: true,
+    sweepPath: "/api/xml-odds/soa",
+    summary:
+      "Canonical XML odds SoA snapshot from public R2 (rowCount + parallel columns + provenance)",
+  },
+  {
     id: "execution-plan",
     method: "GET",
     path: "/api/execution/plan",
@@ -3446,6 +3458,220 @@ export function parseDnsTelemetryPayload(
     hitsInflight: readNum(tel, "cacheHitsInflight") ?? 0,
     misses: readNum(tel, "cacheMisses") ?? 0,
     coreHostCount: hosts,
+  };
+}
+
+/** How often the 10s dashboard poll may refetch the full XML odds R2 snapshot. */
+export const XML_ODDS_POLL_INTERVAL_MS = 60_000;
+
+/**
+ * Whether the auto-poll may refetch the XML odds snapshot.
+ *
+ * The producer does two public-R2 GETs and parses the whole canonical chunk, so the
+ * 10s dashboard poll stops asking until this slower interval has elapsed. `lastPollMs`
+ * of 0 means "never loaded", which is due immediately.
+ */
+export function isXmlOddsPollDue(
+  nowMs: number,
+  lastPollMs: number,
+  intervalMs: number = XML_ODDS_POLL_INTERVAL_MS,
+): boolean {
+  if (lastPollMs === 0) return true;
+  return nowMs - lastPollMs >= intervalMs;
+}
+
+export interface ParsedXmlOddsSoaPayload {
+  /** Rows the canonical chunk publishes; the columns have exactly this many entries. */
+  readonly rowCount: number;
+  readonly eventId32Col: Uint32Array;
+  readonly comboKey15Col: Uint16Array;
+  readonly lineHundredthsCol: Int32Array;
+  /**
+   * Dense unknown-line bitset when the route reported unknown rows (1 = unit unconfirmed).
+   * Absent when the route body carried no `lineUnknown`, which is an all-known snapshot.
+   */
+  readonly lineUnknownFlags?: Uint32Array;
+  /** Unknown-line count (0 when the route body carried no `lineUnknown`). */
+  readonly lineUnknownCount: number;
+  readonly watermarkCursor: string;
+  readonly generatedAt: string;
+  readonly basis: string;
+}
+
+/** The route's parallel arrays, checked against `rowCount` before any column is built. */
+function requireXmlOddsSoaColumn(
+  raw: Record<string, unknown>,
+  key: string,
+  rowCount: number,
+): unknown[] {
+  const value = raw[key];
+  if (!Array.isArray(value)) {
+    throw new TypeError(`[nsh-desk] /api/xml-odds/soa ${key} is not an array`);
+  }
+  if (value.length !== rowCount) {
+    throw new TypeError(
+      `[nsh-desk] /api/xml-odds/soa ${key} has ${value.length} entries, rowCount says ${rowCount}`,
+    );
+  }
+  return value;
+}
+
+function isIntegerInRange(
+  value: unknown,
+  min: number,
+  max: number,
+): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= min &&
+    value <= max
+  );
+}
+
+/**
+ * Parses `GET /api/xml-odds/soa`. Every column is validated element by element, because these
+ * values feed `Uint*` columns: a malformed entry must fail the snapshot, not become a zero row.
+ */
+export function parseXmlOddsSoaPayload(raw: unknown): ParsedXmlOddsSoaPayload {
+  if (!isRecord(raw)) {
+    throw new TypeError("[nsh-desk] /api/xml-odds/soa is not a JSON object");
+  }
+  const rowCountRaw = raw["rowCount"];
+  if (!isIntegerInRange(rowCountRaw, 0, 0xffff_ffff)) {
+    throw new TypeError(
+      "[nsh-desk] /api/xml-odds/soa rowCount is not a non-negative integer",
+    );
+  }
+  const rowCount = rowCountRaw;
+
+  const eventId32Raw = requireXmlOddsSoaColumn(raw, "eventId32", rowCount);
+  const eventId32Col = new Uint32Array(rowCount);
+  for (let index = 0; index < rowCount; index += 1) {
+    const value = eventId32Raw[index];
+    if (!isIntegerInRange(value, 0, 0xffff_ffff)) {
+      throw new TypeError(
+        `[nsh-desk] /api/xml-odds/soa eventId32[${index}] is not a uint32`,
+      );
+    }
+    eventId32Col[index] = value;
+  }
+
+  const comboKey15Raw = requireXmlOddsSoaColumn(raw, "comboKey15", rowCount);
+  const comboKey15Col = new Uint16Array(rowCount);
+  for (let index = 0; index < rowCount; index += 1) {
+    const value = comboKey15Raw[index];
+    if (!isIntegerInRange(value, 0, 0x7fff)) {
+      throw new TypeError(
+        `[nsh-desk] /api/xml-odds/soa comboKey15[${index}] is not a 15-bit key`,
+      );
+    }
+    comboKey15Col[index] = value;
+  }
+
+  const lineHundredthsRaw = requireXmlOddsSoaColumn(
+    raw,
+    "lineHundredths",
+    rowCount,
+  );
+  const lineHundredthsCol = new Int32Array(rowCount);
+  for (let index = 0; index < rowCount; index += 1) {
+    const value = lineHundredthsRaw[index];
+    if (!isIntegerInRange(value, -0x8000_0000, 0x7fff_ffff)) {
+      throw new TypeError(
+        `[nsh-desk] /api/xml-odds/soa lineHundredths[${index}] is not an int32`,
+      );
+    }
+    lineHundredthsCol[index] = value;
+  }
+
+  // Unknown lines are optional for backward compatibility: a body without `lineUnknownFlags`
+  // (the route before the tri-state contract) is an all-known snapshot. The wire form is the
+  // dense bitset, so the server never builds one boolean per row.
+  const lineUnknownFlagsRaw = raw["lineUnknownFlags"];
+  const lineUnknownCountRaw = raw["lineUnknownCount"];
+  const wordCount = Math.ceil(rowCount / 32);
+  let lineUnknownFlags: Uint32Array | undefined;
+  let lineUnknownCount = 0;
+  if (lineUnknownFlagsRaw !== undefined) {
+    if (
+      !Array.isArray(lineUnknownFlagsRaw) ||
+      lineUnknownFlagsRaw.length !== wordCount
+    ) {
+      throw new TypeError(
+        `[nsh-desk] /api/xml-odds/soa lineUnknownFlags is not a ${wordCount}-word bitset`,
+      );
+    }
+    lineUnknownFlags = new Uint32Array(wordCount);
+    for (let word = 0; word < wordCount; word += 1) {
+      const value = lineUnknownFlagsRaw[word];
+      if (!isIntegerInRange(value, 0, 0xffff_ffff)) {
+        throw new TypeError(
+          `[nsh-desk] /api/xml-odds/soa lineUnknownFlags[${word}] is not a uint32`,
+        );
+      }
+      lineUnknownFlags[word] = value;
+      for (let bit = 0; bit < 32; bit += 1) {
+        if (word * 32 + bit >= rowCount) break;
+        if ((value & (1 << bit)) !== 0) lineUnknownCount += 1;
+      }
+    }
+  }
+  if (lineUnknownCountRaw !== undefined) {
+    if (!isIntegerInRange(lineUnknownCountRaw, 0, rowCount)) {
+      throw new TypeError(
+        "[nsh-desk] /api/xml-odds/soa lineUnknownCount is not a row count",
+      );
+    }
+    if (lineUnknownFlagsRaw === undefined) {
+      throw new TypeError(
+        "[nsh-desk] /api/xml-odds/soa lineUnknownCount is present without lineUnknownFlags",
+      );
+    }
+    if (lineUnknownCountRaw !== lineUnknownCount) {
+      throw new TypeError(
+        `[nsh-desk] /api/xml-odds/soa lineUnknownCount ${lineUnknownCountRaw} does not match ${lineUnknownCount} lineUnknownFlags bits`,
+      );
+    }
+    lineUnknownCount = lineUnknownCountRaw;
+  }
+
+  const watermarkRaw = raw["watermarkCursor"];
+  const watermarkCursor =
+    typeof watermarkRaw === "string" ? watermarkRaw.trim() : "";
+  if (watermarkCursor === "") {
+    throw new TypeError(
+      "[nsh-desk] /api/xml-odds/soa watermarkCursor is not a non-empty string",
+    );
+  }
+  const generatedAtRaw = raw["generatedAt"];
+  const generatedAt =
+    typeof generatedAtRaw === "string"
+      ? normalizeDeskIsoUtc(generatedAtRaw)
+      : null;
+  if (generatedAt === null) {
+    throw new TypeError(
+      "[nsh-desk] /api/xml-odds/soa generatedAt is not an ISO timestamp",
+    );
+  }
+  const basisRaw = raw["basis"];
+  const basis = typeof basisRaw === "string" ? basisRaw.trim() : "";
+  if (basis === "") {
+    throw new TypeError(
+      "[nsh-desk] /api/xml-odds/soa basis is not a non-empty string",
+    );
+  }
+
+  return {
+    rowCount,
+    eventId32Col,
+    comboKey15Col,
+    lineHundredthsCol,
+    ...(lineUnknownFlags === undefined ? {} : { lineUnknownFlags }),
+    lineUnknownCount,
+    watermarkCursor,
+    generatedAt,
+    basis,
   };
 }
 

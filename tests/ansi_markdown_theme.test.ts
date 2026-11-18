@@ -3,6 +3,7 @@ import {
   SD_ANSI_THEMES,
   formatChannelBadge,
   renderOpsMarkdownAnsi,
+  resolveCliAnsiTheme,
 } from "../lib/cli_markdown_renderer.ts";
 import { emitGeneratedAnsiTokensModule } from "../lib/gen_tokens/ansi_tokens_module.ts";
 import { validateAnsiThemeProfiles } from "../lib/gen_tokens/tokens_ssot.ts";
@@ -98,6 +99,54 @@ describe("Bun.markdown.AnsiTheme <-> design/tokens.toml v1.5.0 gates", () => {
           countAnsiEscapeCodes: false,
         }),
       ).toBeLessThanOrEqual(120);
+    }
+  });
+
+  test("tty_narrow emits OSC-8 and wraps within columns=88", () => {
+    const md =
+      "Inspect [Desk](https://desk.bookdeskops.com) " + "word ".repeat(40);
+    const out = renderOpsMarkdownAnsi(md, SD_ANSI_THEMES.tty_narrow);
+    expect(out.includes("\x1b]8;;https://desk.bookdeskops.com")).toBe(true);
+    for (const line of out.split("\n")) {
+      expect(
+        Bun.stringWidth(line, {
+          ambiguousIsNarrow: true,
+          countAnsiEscapeCodes: false,
+        }),
+      ).toBeLessThanOrEqual(88);
+    }
+  });
+
+  test("r2_telemetry_stream keeps color, drops OSC-8 (link renders as text (url)), and never wraps at columns=0", () => {
+    const md =
+      "Inspect [Desk](https://desk.bookdeskops.com) " + "word ".repeat(40);
+    const out = renderOpsMarkdownAnsi(md, SD_ANSI_THEMES.r2_telemetry_stream);
+    expect(out.includes("\x1b]8;;")).toBe(false);
+    // SGR styling wraps the closing paren, so compare the stripped text.
+    const plain = Bun.stripANSI(out);
+    expect(plain.includes("(https://desk.bookdeskops.com)")).toBe(true);
+    expect(out.includes("\x1b[")).toBe(true);
+    expect(out.trimEnd().split("\n")).toHaveLength(1);
+  });
+
+  test("resolveCliAnsiTheme honours NO_COLOR and an explicit profile override", () => {
+    const prevNoColor = Bun.env.NO_COLOR;
+    const prevForce = Bun.env.FORCE_COLOR;
+    try {
+      delete Bun.env.FORCE_COLOR;
+      Bun.env.NO_COLOR = "1";
+      expect(resolveCliAnsiTheme()).toBe(SD_ANSI_THEMES.pipe_ascii);
+      expect(resolveCliAnsiTheme("ghostty_interactive")).toBe(
+        SD_ANSI_THEMES.ghostty_interactive,
+      );
+      Bun.env.FORCE_COLOR = "1";
+      delete Bun.env.NO_COLOR;
+      expect(resolveCliAnsiTheme().colors).toBe(true);
+    } finally {
+      if (prevNoColor === undefined) delete Bun.env.NO_COLOR;
+      else Bun.env.NO_COLOR = prevNoColor;
+      if (prevForce === undefined) delete Bun.env.FORCE_COLOR;
+      else Bun.env.FORCE_COLOR = prevForce;
     }
   });
 

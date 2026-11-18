@@ -13,6 +13,7 @@ export {
   DeskToolbarGroup,
   DeskToolbarSeparator,
   DeskWorkspace,
+  DeskXmlOddsTable,
   SEMANTIC_DELTA_CLASSES,
   type DataTableColumn,
   type DataTableSort,
@@ -20,6 +21,7 @@ export {
   type DeskExposurePlotProps,
   type DesktopShellMenuOptions,
   type DeskWorkspaceProps,
+  type DeskXmlOddsTableProps,
   type DockAreaLayout,
   type DockAreaRef,
 } from "./DataView";

@@ -2068,6 +2068,7 @@
         "GET /status.json",
         "GET /api/status",
         "GET /api/kpis",
+        "GET /api/xml-odds/soa",
         "POST /api/parse-formdata",
         "POST /api/parse-xml",
         "POST /api/parse-customer-profile",
@@ -2615,6 +2616,6 @@
     "tests/fixtures/f402-report-requests-observed-2026-11-01.json:188": "\"writeObservation\": \"The last three requests are mutations, recorded as behaviour, never as a script.",
     "tests/fixtures/fantasy402-history-poll.json:2-24": "\"feed\": \"getHistory\"",
     "tests/fixtures/fantasy402-sport-catalog-2026-10-21.json:2-8": "\"provider\": \"fantasy402\"",
-    "docs/evidence/ledger.json:2388": "no response body has ever been seen, so no column set is documented"
+    "docs/evidence/ledger.json:2389": "no response body has ever been seen, so no column set is documented"
   }
 }

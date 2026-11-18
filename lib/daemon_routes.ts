@@ -263,6 +263,14 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     surface: "surface.daemon-dashboard",
   }),
   defineRoute({
+    path: "/api/xml-odds/soa",
+    method: "GET",
+    guard: "none",
+    // Event ids and packed taxonomy/line codes parsed from the published R2 chunk; no account.
+    dataClass: "aggregate",
+    surface: "surface.daemon-dashboard",
+  }),
+  defineRoute({
     path: "/api/live-bets",
     method: "ANY",
     guard: "pii",

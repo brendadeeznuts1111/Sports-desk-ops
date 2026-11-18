@@ -1,14 +1,9 @@
 #!/usr/bin/env bun
 /**
  * @file scripts/bun_lint.ts
- * @description `bun lint` entrypoint that refuses to rewrite files on 1.4.4.
+ * @description Read-only native `bun lint` entrypoint (`bun lint --no-script --type-aware`).
  *
- * Native `bun lint` (`--no-script`, `--type-aware`, `[lint]` config) exists from 1.4.5. On the
- * pinned 1.4.4, a bare `bun lint` resolves to the package `"lint"` script (`oxlint --fix`), and
- * `--no-script` is forwarded to oxlint, so it rewrites files. This wrapper reuses the canary
- * resolver in `scripts/lint_native.ts`: when a native binary is available it runs the native
- * linter, otherwise it runs the repo's two read-only oxlint passes.
- *
+ * Driven by `bunfig.toml` `[lint]` (both standard and type-aware rules in one pass).
  * Run: bun run lint:bun [files ...]
  */
 
@@ -20,40 +15,7 @@ export interface LintCommand {
   readonly native: boolean;
 }
 
-/** Read-only oxlint passes, equivalent to `lint:check` but scoped to the given files. */
-export function oxlintCommands(
-  files: readonly string[],
-): readonly LintCommand[] {
-  return Object.freeze([
-    Object.freeze({
-      bin: process.execPath,
-      native: false,
-      argv: Object.freeze([
-        "--bun",
-        "run",
-        "oxlint",
-        "--deny-warnings",
-        ...files,
-      ]),
-    }),
-    Object.freeze({
-      bin: process.execPath,
-      native: false,
-      argv: Object.freeze([
-        "--bun",
-        "run",
-        "oxlint",
-        "--type-aware",
-        "-c",
-        ".oxlintrc.type-aware.json",
-        "--deny-warnings",
-        ...files,
-      ]),
-    }),
-  ]);
-}
-
-/** Native `bun lint` passes, mirroring `lint:native` + `lint:native:type-aware`. */
+/** Native `bun lint` pass reading `bunfig.toml` `[lint]` (standard + type-aware). */
 export function nativeLintCommands(
   bin: string,
   files: readonly string[],
@@ -62,17 +24,10 @@ export function nativeLintCommands(
     Object.freeze({
       bin,
       native: true,
-      argv: Object.freeze(["lint", "--no-script", "--deny-warnings", ...files]),
-    }),
-    Object.freeze({
-      bin,
-      native: true,
       argv: Object.freeze([
         "lint",
         "--no-script",
         "--type-aware",
-        "-c",
-        ".oxlintrc.type-aware.json",
         "--deny-warnings",
         ...files,
       ]),
@@ -83,17 +38,13 @@ export function nativeLintCommands(
 if (import.meta.main) {
   const files = Bun.argv.slice(2);
   const nativeBin = resolveNativeBunLintBin();
-  const commands =
-    nativeBin === null
-      ? oxlintCommands(files)
-      : nativeLintCommands(nativeBin, files);
   if (nativeBin === null) {
     console.error(
-      `bun_lint: no native \`bun lint\` binary on Bun ${Bun.version}; running oxlint read-only ` +
-        "(a bare `bun lint` would pass oxlint --fix here).",
+      `bun_lint: no native \`bun lint\` binary found (current: Bun ${Bun.version}; requires Bun canary / 1.4.5+ or BUN_LINT_BIN).`,
     );
+    process.exit(2);
   }
-  for (const command of commands) {
+  for (const command of nativeLintCommands(nativeBin, files)) {
     const result = Bun.spawnSync([command.bin, ...command.argv], {
       stdout: "inherit",
       stderr: "inherit",

@@ -276,8 +276,8 @@ describe("the committed tree", () => {
       [],
     );
     // A ratchet: the count moves only with a reviewed route change, and the comparison above
-    // is what proves each served path is declared and (unless it is a page) specified. 75 since
-    // /api/diagnostics/image-assets was added with its daemon arm (#416).
-    expect(inputs.served.size).toBe(75);
+    // is what proves each served path is declared and (unless it is a page) specified.
+    // 76 since /api/diagnostics/image-assets (#416) and /api/xml-odds/soa landed.
+    expect(inputs.served.size).toBe(76);
   });
 });

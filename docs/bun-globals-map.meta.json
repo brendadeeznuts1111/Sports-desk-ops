@@ -61,5 +61,118 @@
       "globals.bun.ImportMetaGlobOptions"
     ],
     "partial": ["globals.bun.Build"]
+  },
+  "summariesSuppressed": [
+    {
+      "symbol": "globals.bun.MD4",
+      "reason": "types-only-falsified",
+      "detail": "function",
+      "upstreamSummary": "This class only exists in types"
+    },
+    {
+      "symbol": "globals.bun.MD5",
+      "reason": "types-only-falsified",
+      "detail": "function",
+      "upstreamSummary": "This class only exists in types"
+    },
+    {
+      "symbol": "globals.bun.SHA224",
+      "reason": "types-only-falsified",
+      "detail": "function",
+      "upstreamSummary": "This class only exists in types"
+    },
+    {
+      "symbol": "globals.bun.SHA256",
+      "reason": "types-only-falsified",
+      "detail": "function",
+      "upstreamSummary": "This class only exists in types"
+    },
+    {
+      "symbol": "globals.bun.SHA384",
+      "reason": "types-only-falsified",
+      "detail": "function",
+      "upstreamSummary": "This class only exists in types"
+    },
+    {
+      "symbol": "globals.bun.SHA512",
+      "reason": "types-only-falsified",
+      "detail": "function",
+      "upstreamSummary": "This class only exists in types"
+    },
+    {
+      "symbol": "globals.bun.EventSource",
+      "reason": "inherited-from-base",
+      "detail": "EventTarget",
+      "upstreamSummary": "EventTarget is a DOM interface implemented by objects that can receive events and may have listeners for them. [MDN Reference](https://developer.mozilla.org/docs/Web/API/EventTarget)"
+    },
+    {
+      "symbol": "globals.bun.Worker",
+      "reason": "inherited-from-base",
+      "detail": "EventTarget",
+      "upstreamSummary": "EventTarget is a DOM interface implemented by objects that can receive events and may have listeners for them. [MDN Reference](https://developer.mozilla.org/docs/Web/API/EventTarget)"
+    },
+    {
+      "symbol": "globals.bun.FileBlob",
+      "reason": "inherited-from-base",
+      "detail": "BunFile",
+      "upstreamSummary": "[`Blob`](https://developer.mozilla.org/en-US/docs/Web/API/Blob) powered by the fastest system calls available for operating on files. This Blob is lazy: it does no work until you read from it. - `size` is not valid until the contents of the file are read at least once. - `type` is auto-set based on the file extension when possible"
+    },
+    {
+      "symbol": "globals.bun.TCPSocket",
+      "reason": "inherited-from-base",
+      "detail": "Socket",
+      "upstreamSummary": "A TCP or TLS socket connection. Sockets are created with `Bun.connect()` or accepted by a `Bun.listen()` server."
+    },
+    {
+      "symbol": "globals.bun.TLSSocket",
+      "reason": "inherited-from-base",
+      "detail": "Socket",
+      "upstreamSummary": "A TCP or TLS socket connection. Sockets are created with `Bun.connect()` or accepted by a `Bun.listen()` server."
+    },
+    {
+      "symbol": "globals.bun.BunRequest",
+      "reason": "inherited-from-base",
+      "detail": "Request",
+      "upstreamSummary": "This Fetch API interface represents a resource request. [MDN Reference](https://developer.mozilla.org/docs/Web/API/Request)"
+    },
+    {
+      "symbol": "globals.bun.FetchEvent",
+      "reason": "inherited-from-base",
+      "detail": "Event",
+      "upstreamSummary": "An event which takes place in the DOM. [MDN Reference](https://developer.mozilla.org/docs/Web/API/Event)"
+    },
+    {
+      "symbol": "globals.bun.NetworkSink",
+      "reason": "inherited-from-base",
+      "detail": "FileSink",
+      "upstreamSummary": "Fast incremental writer for files and pipes. This uses the same interface as ArrayBufferSink, but writes to a file or pipe."
+    }
+  ],
+  "bunTypes": {
+    "package": "bun-types@1.4.4",
+    "files": [
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/index.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/globals.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/s3.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/fetch.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/bun.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/extensions.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/devserver.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/ffi.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/html-rewriter.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/jsc.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/sqlite.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/test.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/wasm.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/overrides.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/deprecated.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/redis.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/shell.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/serve.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/sql.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/security.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/bundle.d.ts",
+      "node_modules/.bun/bun-types@1.4.4/node_modules/bun-types/bun.ns.d.ts"
+    ]
   }
 }

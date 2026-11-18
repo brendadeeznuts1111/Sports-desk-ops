@@ -478,7 +478,7 @@ describe("dx workspaces — monorepo workspace dev control", () => {
     const bunxPlan = await buildWorkspaceBunxPlan(
       ROOT,
       "ui",
-      "oxlint",
+      "tsc",
       ["--version"],
       {
         bunxPath: "/usr/local/bin/bunx",
@@ -495,7 +495,7 @@ describe("dx workspaces — monorepo workspace dev control", () => {
       "--minimum-release-age=259200",
       "--bun",
       "--trust",
-      "oxlint",
+      "tsc",
       "--version",
     ]);
 
@@ -518,7 +518,7 @@ describe("dx workspaces — monorepo workspace dev control", () => {
     ).toBe(0);
     expect(
       await runWorkspacesCli(
-        ["x", "ui", "oxlint", "--version", "--dry-run"],
+        ["x", "--dry-run", "ui", "tsc", "--version"],
         ROOT,
       ),
     ).toBe(0);

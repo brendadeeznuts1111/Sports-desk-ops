@@ -18,6 +18,7 @@ import {
   defaultWorkspacePrefs,
   extractApiFailureCause,
   filterMarketInstruments,
+  isXmlOddsPollDue,
   mapLeagueToCanonicalSport,
   PARSER_WORKBENCH_PRESETS,
   parseAnalysisPayload,
@@ -37,11 +38,22 @@ import {
   parseLiveWagersPayload,
   parseScoreboardPayload,
   parseWorkspacePrefsJson,
+  parseXmlOddsSoaPayload,
   resolveDeskOrigin,
   serializeWorkspacePrefs,
   sortSignalArenaIndex,
   synthesizeMarketInstruments,
+  XML_ODDS_POLL_INTERVAL_MS,
 } from "../packages/nsh-desk/desk_model.ts";
+import {
+  isXmlOddsLineUnknown,
+  loadXmlOddsSoaFeed,
+  readXmlOddsRow,
+  XML_ODDS_ROW_LIMIT,
+  xmlOddsRows,
+  xmlOddsRowsHeader,
+  type XmlOddsFeed,
+} from "../packages/nsh-desk/xml_odds_view.ts";
 
 describe("packages/nsh-desk model and capability contracts", () => {
   test("resolveDeskOrigin returns value and source and rejects non-loopback hosts", () => {
@@ -483,7 +495,591 @@ describe("packages/nsh-desk model and capability contracts", () => {
       }
     }
     expect(compCount).toBeGreaterThanOrEqual(13);
-    expect(useDeskStoreCount).toBe(12);
+    // Pinned, not loosened: 13 of the 16 components/ files call useDeskStore.
+    // A new consumer must update this with its panel registration instead of
+    // lowering the floor.
+    expect(useDeskStoreCount).toBe(13);
+  });
+
+  test("every default workspace panel has an App.tsx switch case and a PANEL_TITLES entry", async () => {
+    const pkgDir = path.join(import.meta.dir, "..", "packages", "nsh-desk");
+    const storeSrc = await Bun.file(path.join(pkgDir, "store.ts")).text();
+    const layout = storeSrc.match(
+      /export function defaultWorkspaceLayout\(\): DockAreaLayout \{([\s\S]*?)\n\}/,
+    );
+    expect(layout).not.toBeNull();
+    const panelIds = [
+      ...(layout?.[1] ?? "").matchAll(/panels:\s*\[([^\]]*)\]/g),
+    ].flatMap((match) =>
+      [...(match[1] ?? "").matchAll(/"([^"]+)"/g)].map((id) => id[1] ?? ""),
+    );
+    expect(panelIds.length).toBeGreaterThanOrEqual(7);
+    expect(new Set(panelIds).size).toBe(panelIds.length);
+    // The producer is wired (refreshAll loads the daemon's R2 snapshot route), so
+    // the XML odds panel is a default tab again.
+    expect(panelIds).toContain("xml_odds");
+    expect(storeSrc).toContain("loadXmlOddsSoaFeed(base)");
+
+    const appSrc = await Bun.file(path.join(pkgDir, "App.tsx")).text();
+    const switchCases = new Set(
+      [...appSrc.matchAll(/case\s+"([^"]+)":/g)].map((match) => match[1] ?? ""),
+    );
+    // Read PANEL_TITLES from source instead of importing it: provenance.ts imports
+    // ../ui, which pulls the nsh-typed ui/*.tsx files into the root TS program.
+    const provenanceSrc = await Bun.file(
+      path.join(pkgDir, "components", "provenance.ts"),
+    ).text();
+    const titleBlock = provenanceSrc.match(
+      /PANEL_TITLES[^=]*=\s*\{([\s\S]*?)\n\};/,
+    );
+    expect(titleBlock).not.toBeNull();
+    const panelTitles = new Set(
+      [...(titleBlock?.[1] ?? "").matchAll(/([A-Za-z_$][\w$]*):\s*"/g)].map(
+        (match) => match[1] ?? "",
+      ),
+    );
+
+    for (const panelId of panelIds) {
+      expect(switchCases.has(panelId)).toBe(true);
+      expect(panelTitles.has(panelId)).toBe(true);
+    }
+  });
+
+  test("XML odds table input is bounded to XML_ODDS_ROW_LIMIT and states its truncation", () => {
+    const makeFeed = (count: number): XmlOddsFeed => {
+      const capacity = Math.max(count, 1);
+      const feed: XmlOddsFeed = {
+        capacity,
+        count,
+        eventId32Col: new Uint32Array(capacity),
+        packedComboKey15Col: new Uint16Array(capacity),
+        lineHundredthsI32Col: new Int32Array(capacity),
+      };
+      for (let index = 0; index < count; index++) {
+        feed.eventId32Col[index] = index + 1;
+      }
+      return feed;
+    };
+
+    expect(XML_ODDS_ROW_LIMIT).toBe(2000);
+    expect(xmlOddsRowsHeader(null)).toBe("0 rows");
+    expect(xmlOddsRowsHeader(makeFeed(0))).toBe("0 rows");
+    expect(xmlOddsRows(makeFeed(0))).toEqual([]);
+    expect(xmlOddsRowsHeader(makeFeed(1))).toBe("1 row");
+    expect(xmlOddsRowsHeader(makeFeed(3))).toBe("3 rows");
+    // Unknown lines append the unit-unconfirmed suffix; all-known feeds carry none.
+    expect(xmlOddsRowsHeader({ ...makeFeed(3), lineUnknownCount: 1 })).toBe(
+      "3 rows · 1 line unit-unconfirmed",
+    );
+    expect(xmlOddsRowsHeader({ ...makeFeed(3), lineUnknownCount: 2 })).toBe(
+      "3 rows · 2 lines unit-unconfirmed",
+    );
+
+    const total = XML_ODDS_ROW_LIMIT + 1;
+    const large = makeFeed(total);
+    expect(xmlOddsRowsHeader(large)).toBe(
+      `Showing first ${XML_ODDS_ROW_LIMIT} of ${total}`,
+    );
+    expect(xmlOddsRowsHeader({ ...large, lineUnknownCount: 2 })).toBe(
+      `Showing first ${XML_ODDS_ROW_LIMIT} of ${total} · 2 lines unit-unconfirmed`,
+    );
+    const rows = xmlOddsRows(large);
+    expect(rows.length).toBe(XML_ODDS_ROW_LIMIT);
+    expect(rows[0]?.eventId).toBe(1);
+    expect(rows.at(-1)?.eventId).toBe(XML_ODDS_ROW_LIMIT);
+    // Capacity is not rows: the bound follows the written count.
+    expect(xmlOddsRowsHeader({ ...makeFeed(1), capacity: 5000 })).toBe("1 row");
+  });
+
+  test("GET /api/xml-odds/soa parses the canonical R2 chunk and answers an unavailable artifact with its reason", async () => {
+    const { handleXmlOddsSoaRequest, readXmlOddsSoaFromR2 } =
+      await import("../services/sportsdesk_webview_server.ts");
+    const chunkKey = `chunks/${"a".repeat(64)}.bin`;
+    const manifestBody = (overrides: Record<string, unknown> = {}): string =>
+      JSON.stringify({
+        domain: "[Ops & Governance]",
+        sink_id: "xml-ingest",
+        r2_bucket: "sportsdesk-ops-reports",
+        generation_u32: 7,
+        merkle_root_sha256: "a".repeat(64),
+        watermark_cursor: "wm-9",
+        data_window_max_epoch_ms: 1700000000000,
+        r2_published_at_epoch_ms: 1700000000123,
+        chunk_key: chunkKey,
+        row_count: 2,
+        circuit_state: "CLOSED",
+        ...overrides,
+      });
+    const chunkBody = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<sportsdeskXmlFeed watermarkCursor="wm-9" dataWindowMaxEpochMs="1700000000000" rowCount="2">',
+      '<event id="11" subSportCode6="2" wagerTypeCode3="1" periodCode4="3" marketKindCode2="1" lineHundredths="350"/>',
+      '<event id="12" subSportCode6="4" wagerTypeCode3="0" periodCode4="0" marketKindCode2="2" lineHundredths="-110"/>',
+      "</sportsdeskXmlFeed>",
+    ].join("");
+    const okFetch = async (url: string): Promise<Response> =>
+      url.endsWith("/manifests/xml-ingest/latest")
+        ? new Response(manifestBody(), { status: 200 })
+        : new Response(chunkBody, { status: 200 });
+    const missingManifestFetch = async (): Promise<Response> =>
+      new Response("not found", { status: 404 });
+
+    const outcome = await readXmlOddsSoaFromR2({
+      publicBase: "https://r2.example",
+      fetchImpl: okFetch,
+    });
+    expect(outcome.available).toBe(true);
+    if (outcome.available) {
+      expect(outcome.payload.rowCount).toBe(2);
+      expect(outcome.payload.eventId32).toEqual([11, 12]);
+      // [14:9] subSport6 | [8:6] wagerType3 | [5:2] period4 | [1:0] marketKind2
+      expect(outcome.payload.comboKey15).toEqual([1101, 2050]);
+      expect(outcome.payload.lineHundredths).toEqual([350, -110]);
+      // One bitset word for two rows; no bit set means every line is known.
+      expect(outcome.payload.lineUnknownFlags).toEqual([0]);
+      expect(outcome.payload.lineUnknownCount).toBe(0);
+      expect(outcome.payload.watermarkCursor).toBe("wm-9");
+      expect(outcome.payload.generatedAt).toBe("2023-11-14T22:13:20.123Z");
+      expect(outcome.payload.basis).toBe("r2-xml-ingest");
+    }
+
+    const missing = await readXmlOddsSoaFromR2({
+      publicBase: "https://r2.example",
+      fetchImpl: missingManifestFetch,
+    });
+    expect(missing.available).toBe(false);
+    if (!missing.available) {
+      expect(missing.reason).toContain("manifest");
+      expect(missing.reason).toContain("404");
+    }
+
+    const readyResponse = await handleXmlOddsSoaRequest(
+      new Request("http://127.0.0.1:4020/api/xml-odds/soa"),
+      { publicBase: "https://r2.example", fetchImpl: okFetch },
+    );
+    expect(readyResponse.status).toBe(200);
+    const body = (await readyResponse.json()) as {
+      success: boolean;
+      rowCount: number;
+      eventId32: number[];
+      comboKey15: number[];
+      lineUnknownFlags: number[];
+      lineUnknownCount: number;
+    };
+    expect(body.success).toBe(true);
+    expect(body.rowCount).toBe(2);
+    expect(body.eventId32).toEqual([11, 12]);
+    expect(body.comboKey15).toEqual([1101, 2050]);
+    expect(body.lineUnknownFlags).toEqual([0]);
+    expect(body.lineUnknownCount).toBe(0);
+
+    // A missing artifact is a stated 502, never an empty 200.
+    const unavailableResponse = await handleXmlOddsSoaRequest(
+      new Request("http://127.0.0.1:4020/api/xml-odds/soa"),
+      { publicBase: "https://r2.example", fetchImpl: missingManifestFetch },
+    );
+    expect(unavailableResponse.status).toBe(502);
+    const unavailableBody = (await unavailableResponse.json()) as {
+      success: boolean;
+      status: string;
+      error: string;
+    };
+    expect(unavailableBody.success).toBe(false);
+    expect(unavailableBody.status).toBe("unavailable");
+    expect(unavailableBody.error).toContain("manifest");
+
+    const refused = await handleXmlOddsSoaRequest(
+      new Request("http://127.0.0.1:4020/api/xml-odds/soa", {
+        method: "POST",
+      }),
+      { publicBase: "https://r2.example", fetchImpl: okFetch },
+    );
+    expect(refused.status).toBe(405);
+
+    const preflight = await handleXmlOddsSoaRequest(
+      new Request("http://127.0.0.1:4020/api/xml-odds/soa", {
+        method: "OPTIONS",
+      }),
+      { corsHeadersFor: () => ({ "Access-Control-Allow-Origin": "*" }) },
+    );
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("Allow")).toBe("GET, OPTIONS");
+    expect(preflight.headers.get("Access-Control-Allow-Origin")).toBe("*");
+  });
+
+  test("GET /api/xml-odds/soa accepts explicit unknown lines and rejects count disagreements", async () => {
+    const { readXmlOddsSoaFromR2 } =
+      await import("../services/sportsdesk_webview_server.ts");
+    const chunkKey = `chunks/${"b".repeat(64)}.bin`;
+    const knownEvent = (id: number, line: string): string =>
+      `<event id="${id}" subSportCode6="2" wagerTypeCode3="1" periodCode4="3" marketKindCode2="1" lineHundredths="${line}"/>`;
+    const unknownEvent = (id: number): string =>
+      `<event id="${id}" subSportCode6="2" wagerTypeCode3="1" periodCode4="3" marketKindCode2="1" lineUnknown="1"/>`;
+    const chunkBody = (rootAttrs: string, events: readonly string[]): string =>
+      `<?xml version="1.0" encoding="UTF-8"?>\n<sportsdeskXmlFeed watermarkCursor="wm-11" dataWindowMaxEpochMs="1700000000000" rowCount="${events.length}"${rootAttrs}>${events.join("")}</sportsdeskXmlFeed>`;
+    const manifestBody = (overrides: Record<string, unknown> = {}): string =>
+      JSON.stringify({
+        domain: "[Ops & Governance]",
+        sink_id: "xml-ingest",
+        r2_bucket: "sportsdesk-ops-reports",
+        generation_u32: 8,
+        merkle_root_sha256: "b".repeat(64),
+        watermark_cursor: "wm-11",
+        data_window_max_epoch_ms: 1700000000000,
+        r2_published_at_epoch_ms: 1700000000123,
+        chunk_key: chunkKey,
+        row_count: 2,
+        line_unknown_count: 1,
+        circuit_state: "CLOSED",
+        ...overrides,
+      });
+    const fetchFor =
+      (chunkText: string, manifestText: string) =>
+      async (url: string): Promise<Response> =>
+        url.endsWith("/manifests/xml-ingest/latest")
+          ? new Response(manifestText, { status: 200 })
+          : new Response(chunkText, { status: 200 });
+
+    // Explicit unknown line: root + manifest counts agree, the route reports the flag and 0 sentinel.
+    const unknown = await readXmlOddsSoaFromR2({
+      publicBase: "https://r2.example",
+      fetchImpl: fetchFor(
+        chunkBody(' lineUnknownCount="1"', [
+          knownEvent(11, "350"),
+          unknownEvent(12),
+        ]),
+        manifestBody(),
+      ),
+    });
+    expect(unknown.available).toBe(true);
+    if (unknown.available) {
+      expect(unknown.payload.lineHundredths).toEqual([350, 0]);
+      // Bit 1 set: the second row's unit is unknown.
+      expect(unknown.payload.lineUnknownFlags).toEqual([0b10]);
+      expect(unknown.payload.lineUnknownCount).toBe(1);
+    }
+
+    // Root @lineUnknownCount disagreeing with the flagged rows is a stated 502.
+    const rootMismatch = await readXmlOddsSoaFromR2({
+      publicBase: "https://r2.example",
+      fetchImpl: fetchFor(
+        chunkBody(' lineUnknownCount="0"', [
+          knownEvent(11, "350"),
+          unknownEvent(12),
+        ]),
+        manifestBody(),
+      ),
+    });
+    expect(rootMismatch.available).toBe(false);
+    if (!rootMismatch.available) {
+      expect(rootMismatch.reason).toContain("@lineUnknownCount");
+      expect(rootMismatch.reason).toContain("unknown");
+    }
+
+    // Manifest line_unknown_count disagreeing with the chunk is a stated 502.
+    const manifestMismatch = await readXmlOddsSoaFromR2({
+      publicBase: "https://r2.example",
+      fetchImpl: fetchFor(
+        chunkBody(' lineUnknownCount="1"', [
+          knownEvent(11, "350"),
+          unknownEvent(12),
+        ]),
+        manifestBody({ line_unknown_count: 2 }),
+      ),
+    });
+    expect(manifestMismatch.available).toBe(false);
+    if (!manifestMismatch.available) {
+      expect(manifestMismatch.reason).toContain("line_unknown_count");
+    }
+
+    // A row claiming both a flag and a value is inconsistent, not "known wins".
+    const bothAttrs = await readXmlOddsSoaFromR2({
+      publicBase: "https://r2.example",
+      fetchImpl: fetchFor(
+        chunkBody(' lineUnknownCount="1"', [
+          knownEvent(11, "350"),
+          `<event id="12" subSportCode6="2" wagerTypeCode3="1" periodCode4="3" marketKindCode2="1" lineUnknown="1" lineHundredths="0"/>`,
+        ]),
+        manifestBody(),
+      ),
+    });
+    expect(bothAttrs.available).toBe(false);
+    if (!bothAttrs.available) {
+      expect(bothAttrs.reason).toContain(
+        "both @lineUnknown and @lineHundredths",
+      );
+    }
+
+    // Backward compatibility: a chunk/manifest written before the unknown-line contract is all-known.
+    const legacy = await readXmlOddsSoaFromR2({
+      publicBase: "https://r2.example",
+      fetchImpl: fetchFor(
+        chunkBody("", [knownEvent(11, "350"), knownEvent(12, "-110")]),
+        manifestBody({ line_unknown_count: undefined }),
+      ),
+    });
+    expect(legacy.available).toBe(true);
+    if (legacy.available) {
+      expect(legacy.payload.lineUnknownFlags).toEqual([0]);
+      expect(legacy.payload.lineUnknownCount).toBe(0);
+    }
+  });
+
+  test("GET /api/xml-odds/soa bounds the public-R2 reads (1 MiB manifest, 32 MiB chunk)", async () => {
+    const {
+      MAX_XML_ODDS_CHUNK_BYTES,
+      MAX_XML_ODDS_MANIFEST_BYTES,
+      readXmlOddsSoaFromR2,
+    } = await import("../services/sportsdesk_webview_server.ts");
+    expect(MAX_XML_ODDS_MANIFEST_BYTES).toBe(1024 * 1024);
+    expect(MAX_XML_ODDS_CHUNK_BYTES).toBe(32 * 1024 * 1024);
+
+    // A declared content-length over the manifest cap is refused before the body is read.
+    const oversizedManifest = await readXmlOddsSoaFromR2({
+      publicBase: "https://r2.example",
+      fetchImpl: async () => {
+        const response = new Response("{}", { status: 200 });
+        response.headers.set(
+          "content-length",
+          String(MAX_XML_ODDS_MANIFEST_BYTES + 1),
+        );
+        return response;
+      },
+    });
+    expect(oversizedManifest.available).toBe(false);
+    if (!oversizedManifest.available) {
+      expect(oversizedManifest.reason).toContain("content-length");
+      expect(oversizedManifest.reason).toContain("cap");
+    }
+
+    // An oversized chunk body without a content-length is refused after the bounded read.
+    const manifestText = JSON.stringify({
+      generation_u32: 8,
+      merkle_root_sha256: "b".repeat(64),
+      watermark_cursor: "wm-11",
+      data_window_max_epoch_ms: 1700000000000,
+      r2_published_at_epoch_ms: 1700000000123,
+      chunk_key: `chunks/${"b".repeat(64)}.bin`,
+      row_count: 1,
+    });
+    const oversizedChunk = await readXmlOddsSoaFromR2({
+      publicBase: "https://r2.example",
+      fetchImpl: async (url) =>
+        url.endsWith("/manifests/xml-ingest/latest")
+          ? new Response(manifestText, { status: 200 })
+          : new Response(new Uint8Array(MAX_XML_ODDS_CHUNK_BYTES + 1)),
+    });
+    expect(oversizedChunk.available).toBe(false);
+    if (!oversizedChunk.available) {
+      expect(oversizedChunk.reason).toContain("bytes exceeds");
+      expect(oversizedChunk.reason).toContain("cap");
+    }
+
+    // Source contract: the XML-odds reader decodes bounded bytes under the caps, never response.text().
+    const serviceSrc = await Bun.file(
+      path.join(
+        import.meta.dir,
+        "..",
+        "services",
+        "sportsdesk_webview_server.ts",
+      ),
+    ).text();
+    const sectionStart = serviceSrc.indexOf(
+      "XML odds SoA snapshot (public R2)",
+    );
+    const sectionEnd = serviceSrc.indexOf(
+      "export function withXmlOddsSoaEndpoint",
+    );
+    expect(sectionStart).toBeGreaterThan(-1);
+    expect(sectionEnd).toBeGreaterThan(sectionStart);
+    const section = serviceSrc.slice(sectionStart, sectionEnd);
+    expect(section).toContain("MAX_XML_ODDS_MANIFEST_BYTES");
+    expect(section).toContain("MAX_XML_ODDS_CHUNK_BYTES");
+    expect(section).toContain("arrayBuffer()");
+    expect(section).not.toContain("response.text()");
+  });
+
+  test("the desk XML odds loader turns the route body into typed columns and keeps the failure reason", async () => {
+    const loaded = await loadXmlOddsSoaFeed(
+      "http://127.0.0.1:4020/",
+      async () =>
+        Response.json({
+          success: true,
+          rowCount: 2,
+          eventId32: [11, 12],
+          comboKey15: [1101, 2050],
+          lineHundredths: [350, -110],
+          watermarkCursor: "wm-9",
+          generatedAt: "2023-11-14T22:13:20.123Z",
+          basis: "r2-xml-ingest",
+        }),
+    );
+    expect(loaded.ok).toBe(true);
+    if (loaded.ok) {
+      expect(loaded.feed.eventId32Col).toBeInstanceOf(Uint32Array);
+      expect(loaded.feed.packedComboKey15Col).toBeInstanceOf(Uint16Array);
+      expect(loaded.feed.lineHundredthsI32Col).toBeInstanceOf(Int32Array);
+      expect(Array.from(loaded.feed.eventId32Col)).toEqual([11, 12]);
+      expect(loaded.feed.count).toBe(2);
+      expect(loaded.provenance).toEqual({
+        basis: "r2-xml-ingest",
+        generatedAt: "2023-11-14T22:13:20.123Z",
+        watermarkCursor: "wm-9",
+        rowCount: 2,
+      });
+      // A route body without lineUnknown (pre-tri-state producer) is an all-known snapshot.
+      expect(loaded.feed.lineUnknownCount).toBe(0);
+      expect(xmlOddsRowsHeader(loaded.feed)).toBe("2 rows");
+    }
+
+    // Unknown rows arrive as the route's dense bitset word and stay a bitset in the feed.
+    const withUnknown = await loadXmlOddsSoaFeed(
+      "http://127.0.0.1:4020",
+      async () =>
+        Response.json({
+          success: true,
+          rowCount: 2,
+          eventId32: [11, 12],
+          comboKey15: [1101, 2050],
+          lineHundredths: [350, 0],
+          lineUnknownFlags: [0b10],
+          lineUnknownCount: 1,
+          watermarkCursor: "wm-9",
+          generatedAt: "2023-11-14T22:13:20.123Z",
+          basis: "r2-xml-ingest",
+        }),
+    );
+    expect(withUnknown.ok).toBe(true);
+    if (withUnknown.ok) {
+      expect(withUnknown.feed.lineUnknownFlags).toBeInstanceOf(Uint32Array);
+      expect(withUnknown.feed.lineUnknownCount).toBe(1);
+      expect(isXmlOddsLineUnknown(withUnknown.feed, 0)).toBe(false);
+      expect(isXmlOddsLineUnknown(withUnknown.feed, 1)).toBe(true);
+      expect(readXmlOddsRow(withUnknown.feed, 1)).toMatchObject({
+        lineKnown: false,
+        line: "—",
+      });
+      expect(xmlOddsRowsHeader(withUnknown.feed)).toBe(
+        "2 rows · 1 line unit-unconfirmed",
+      );
+    }
+
+    const unavailable = await loadXmlOddsSoaFeed(
+      "http://127.0.0.1:4020",
+      async () =>
+        Response.json(
+          {
+            success: false,
+            status: "unavailable",
+            error:
+              "R2 manifest manifests/xml-ingest/latest unavailable: HTTP 404",
+          },
+          { status: 502 },
+        ),
+    );
+    expect(unavailable.ok).toBe(false);
+    if (!unavailable.ok) {
+      expect(unavailable.code).toBe("http_502");
+      expect(unavailable.reason).toContain("R2 manifest");
+    }
+
+    // The daemon route's own parser rejects a malformed column instead of zeroing it.
+    expect(() =>
+      parseXmlOddsSoaPayload({
+        rowCount: 1,
+        eventId32: [1],
+        comboKey15: [0x8000],
+        lineHundredths: [0],
+        watermarkCursor: "wm-9",
+        generatedAt: "2023-11-14T22:13:20.123Z",
+        basis: "r2-xml-ingest",
+      }),
+    ).toThrow(/comboKey15/);
+
+    // Unknown-line payload validation: wrong length, wrong element type, count mismatch,
+    // and a count without the array are each rejected instead of guessed.
+    const validUnknownBase = {
+      rowCount: 2,
+      eventId32: [1, 2],
+      comboKey15: [0, 1],
+      lineHundredths: [350, 0],
+      watermarkCursor: "wm-9",
+      generatedAt: "2023-11-14T22:13:20.123Z",
+      basis: "r2-xml-ingest",
+    };
+    expect(
+      parseXmlOddsSoaPayload({
+        ...validUnknownBase,
+        lineUnknownFlags: [0b10],
+        lineUnknownCount: 1,
+      }).lineUnknownCount,
+    ).toBe(1);
+    expect(parseXmlOddsSoaPayload(validUnknownBase).lineUnknownCount).toBe(0);
+    expect(() =>
+      parseXmlOddsSoaPayload({ ...validUnknownBase, lineUnknownFlags: [] }),
+    ).toThrow(/lineUnknownFlags/);
+    expect(() =>
+      parseXmlOddsSoaPayload({
+        ...validUnknownBase,
+        lineUnknownFlags: [0x1_0000_0000],
+      }),
+    ).toThrow(/lineUnknownFlags\[0\]/);
+    expect(() =>
+      parseXmlOddsSoaPayload({
+        ...validUnknownBase,
+        lineUnknownFlags: [0b10],
+        lineUnknownCount: 2,
+      }),
+    ).toThrow(/lineUnknownCount/);
+    expect(() =>
+      parseXmlOddsSoaPayload({
+        ...validUnknownBase,
+        lineUnknownCount: 1,
+      }),
+    ).toThrow(/without lineUnknownFlags/);
+  });
+
+  test("the XML odds poll is due on first load and every 60s after", () => {
+    expect(XML_ODDS_POLL_INTERVAL_MS).toBe(60_000);
+    // Never loaded: due at once, whatever the clock says.
+    expect(isXmlOddsPollDue(0, 0)).toBe(true);
+    expect(isXmlOddsPollDue(500_000, 0)).toBe(true);
+    // 59_999ms after the last load: not yet; exactly 60_000ms: due.
+    expect(isXmlOddsPollDue(159_999, 100_000)).toBe(false);
+    expect(isXmlOddsPollDue(160_000, 100_000)).toBe(true);
+    expect(isXmlOddsPollDue(160_001, 100_000)).toBe(true);
+    // A different cadence is the third argument.
+    expect(isXmlOddsPollDue(4_999, 1_000, 4_000)).toBe(false);
+    expect(isXmlOddsPollDue(5_000, 1_000, 4_000)).toBe(true);
+  });
+
+  test("the store throttles the auto-poll and forces boot, manual, Retry and sweep XML odds loads", async () => {
+    const storeSrc = await Bun.file(
+      path.join(import.meta.dir, "..", "packages", "nsh-desk", "store.ts"),
+    ).text();
+
+    // The pure cadence helper is what the store consults, keyed on a recorded time.
+    expect(storeSrc).toContain("isXmlOddsPollDue(");
+    expect(storeSrc).toContain("lastXmlOddsPollMs");
+
+    // The 10s auto-poll is the only unforced caller, and it says so explicitly.
+    expect(storeSrc).toMatch(
+      /setInterval\(\(\) => \{\s*if \(autoPoll\(\)\) \{\s*void refreshAll\(\{ forceXmlOdds: false \}\);/,
+    );
+    // A manual `store.refreshAll()` (Refresh, Retry, menus) forces by default.
+    expect(storeSrc).toContain(
+      "const forceXmlOdds = options.forceXmlOdds ?? true;",
+    );
+    // Boot and the parity sweep force explicitly.
+    expect(storeSrc).toContain("void refreshAll({ forceXmlOdds: true });");
+    expect(storeSrc).toMatch(
+      /refreshAll\(\{ forceXmlOdds: true \}\),\s*\n\s*loadExecutionPlan\(\),/,
+    );
+    // A skipped poll writes nothing; a completed one records its time (ready or unavailable).
+    expect(storeSrc).toMatch(
+      /if \(nextXmlOdds !== null\) \{\s*applyXmlOddsLoad\(nextXmlOdds\);[\s\S]*?lastXmlOddsPollMs = Date\.now\(\);/,
+    );
+    expect(storeSrc).not.toMatch(/nextXmlOdds === null[^\n]*xmlOddsFeed/);
   });
 
   test("round-trips workspace Storage preferences and builds signal-honest diagnostics JSON", () => {
@@ -800,7 +1396,7 @@ describe("packages/nsh-desk model and capability contracts", () => {
   });
 
   test("DESK_ENDPOINT_CATALOG achieves 100% route parity with services/sportsdesk_webview_server.ts", async () => {
-    expect(DESK_ENDPOINT_CATALOG.length).toBe(51);
+    expect(DESK_ENDPOINT_CATALOG.length).toBe(52);
     expect(PARSER_WORKBENCH_PRESETS.length).toBe(9);
 
     const registeredPaths = new Set<string>();

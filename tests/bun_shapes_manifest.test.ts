@@ -90,6 +90,7 @@ describe("manifest", () => {
     expect(types.map((s) => s.name).sort()).toEqual([
       "BunFile",
       "BunRequest",
+      "ColorInput",
       "CronController",
       "CryptoHashInterface",
       "Env",
@@ -101,6 +102,7 @@ describe("manifest", () => {
       "ImportKind",
       "MatchedRoute",
       "Password",
+      "ResourceUsage",
       "S3File",
       "S3FilePresignOptions",
       "S3ListObjectsOptions",
@@ -109,6 +111,9 @@ describe("manifest", () => {
       "S3Stats",
       "Serve",
       "Server",
+      "SpawnOptions",
+      "Subprocess",
+      "TerminalOptions",
       "WebSocket",
       "Worker",
     ]);

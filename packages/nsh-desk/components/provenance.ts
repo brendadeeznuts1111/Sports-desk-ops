@@ -6,6 +6,7 @@ export const PANEL_TITLES: Readonly<Record<string, string>> = {
   signals: "Kalshi Signals",
   exposure: "Risk Exposure",
   scoreboard: "Scoreboard",
+  xml_odds: "XML Odds Feed",
   kpis: "KPIs & Provenance",
   diagnostics: "Pipeline & Honesty",
 };

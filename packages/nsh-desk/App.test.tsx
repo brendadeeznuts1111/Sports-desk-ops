@@ -1200,3 +1200,120 @@ test("renders unified read-only Trading Desk plane across all 6 mockup panels, f
   );
   expect(app.texts().join("\n")).toContain("SHARP_DESK_7");
 });
+
+test("XML odds panel renders ready rows with the R2 snapshot provenance", async () => {
+  const app = await open("./App.tsx", {
+    platform: "macos",
+    width: 1280,
+    height: 820,
+    network: {
+      ...defaultStubNetwork(),
+      "GET http://127.0.0.1:4020/api/xml-odds/soa": {
+        status: 200,
+        body: {
+          success: true,
+          rowCount: 2,
+          eventId32: [11, 12],
+          comboKey15: [1101, 2050],
+          lineHundredths: [350, -110],
+          watermarkCursor: "wm-9",
+          generatedAt: "2023-11-14T22:13:20.123Z",
+          basis: "r2-xml-ingest",
+        },
+      },
+    },
+  });
+
+  await app.press("XML Odds Feed");
+  await app.waitUntil(() =>
+    app.texts().some((text) => text.includes("r2-xml-ingest")),
+  );
+  const texts = app.texts().join("\n");
+  expect(texts).toContain(
+    "r2-xml-ingest · 2023-11-14T22:13:20.123Z · watermark wm-9 · 2 rows",
+  );
+  expect(texts).toContain("Combo key");
+  expect(texts).toContain("2 rows");
+  expect(texts).not.toContain("XML odds feed unavailable");
+});
+
+test("XML odds panel reports unknown lines as unit-unconfirmed instead of a fabricated line", async () => {
+  const app = await open("./App.tsx", {
+    platform: "macos",
+    width: 1280,
+    height: 820,
+    network: {
+      ...defaultStubNetwork(),
+      "GET http://127.0.0.1:4020/api/xml-odds/soa": {
+        status: 200,
+        body: {
+          success: true,
+          rowCount: 3,
+          eventId32: [11, 12, 13],
+          comboKey15: [1101, 2050, 1101],
+          lineHundredths: [350, 0, -110],
+          // Dense bitset words (bit 1 set = the second row's line unit is unknown).
+          lineUnknownFlags: [0b010],
+          lineUnknownCount: 1,
+          watermarkCursor: "wm-10",
+          generatedAt: "2023-11-14T22:13:20.123Z",
+          basis: "r2-xml-ingest",
+        },
+      },
+    },
+  });
+
+  await app.press("XML Odds Feed");
+  await app.waitUntil(() =>
+    app.texts().some((text) => text.includes("1 line unit-unconfirmed")),
+  );
+  const texts = app.texts().join("\n");
+  expect(texts).toContain("3 rows · 1 line unit-unconfirmed");
+  expect(texts).toContain(
+    "r2-xml-ingest · 2023-11-14T22:13:20.123Z · watermark wm-10 · 3 rows · Line unavailable (unit unconfirmed)",
+  );
+  // The unknown row renders the placeholder, not a fabricated 0.00 line.
+  expect(texts).toContain("—");
+
+  // Selecting the unknown row states why the line is missing instead of showing a number.
+  await app.press("—");
+  await app.waitUntil(() =>
+    app
+      .texts()
+      .some((text) => text.includes("Line unavailable (unit unconfirmed)")),
+  );
+  expect(app.texts().join("\n")).toContain(
+    "Line unavailable (unit unconfirmed)",
+  );
+});
+
+test("XML odds panel states the unavailable reason instead of showing an empty table", async () => {
+  const app = await open("./App.tsx", {
+    platform: "macos",
+    width: 1280,
+    height: 820,
+    network: {
+      ...defaultStubNetwork(),
+      "GET http://127.0.0.1:4020/api/xml-odds/soa": {
+        status: 502,
+        body: {
+          success: false,
+          status: "unavailable",
+          error:
+            "R2 manifest manifests/xml-ingest/latest unavailable: HTTP 404",
+        },
+      },
+    },
+  });
+
+  await app.press("XML Odds Feed");
+  await app.waitUntil(() =>
+    app.texts().some((text) => text.includes("XML odds feed unavailable")),
+  );
+  const texts = app.texts().join("\n");
+  expect(texts).toContain("XML odds feed unavailable");
+  expect(texts).toContain(
+    "R2 manifest manifests/xml-ingest/latest unavailable: HTTP 404",
+  );
+  expect(texts).not.toContain("Showing first 2000 of");
+});
