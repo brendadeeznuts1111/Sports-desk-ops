@@ -8,6 +8,7 @@ This is an **isolated local microbenchmark**, not an application benchmark or a 
 
 ```sh
 bun --version     # should be 1.4.4 (repository pin)
+mkdir -p scratch/bench
 bun test tests/routes_vs_fetch_2proc_bench.test.ts
 bun run bench/routes-vs-fetch-2proc.bench.ts \
   --rounds=4 --warmup=2000 --latency=10000 --heap=2000 \
