@@ -23,7 +23,7 @@ bun run bench/routes-vs-fetch-2proc.bench.ts \
   --rounds=1 --warmup=100 --latency=200 --heap=100
 ```
 
-The output file is **written only when `--output` is requested**. `scratch/` is gitignored. A snapshot is *real measured data* and includes timestamp, Bun version, OS/architecture, CPU model and logical CPU count, settings, each run and median summary. No fabricated latency numbers are committed.
+The output file is **written only when `--output` is requested**. `scratch/` is gitignored. A snapshot is *real measured data* and includes timestamp, **git commit and dirty-worktree flag**, Bun version, OS/architecture, CPU model and logical CPU count, settings, each run and median summary. No fabricated latency numbers are committed.
 
 ## What is actually measured
 
