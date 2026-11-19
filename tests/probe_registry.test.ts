@@ -141,6 +141,14 @@ test("user config diagnostics match local registry requests and project preceden
       ]);
       expect(exit, err).toBe(0);
       expect(JSON.parse(out)).toMatchObject({
+        npmrc: {
+          source,
+          rawEnv: env.NPM_CONFIG_USERCONFIG || env.npm_config_userconfig || null,
+          userConfigPath: path,
+          userConfigExists: exists,
+          projectConfigPath: join(cwd, ".npmrc"),
+          projectConfigExists: project,
+        },
         userConfig: { source, path, exists },
         cwdConfig: { path: join(cwd, ".npmrc"), exists: project },
       });
