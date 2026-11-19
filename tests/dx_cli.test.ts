@@ -1,10 +1,12 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import {
+  existsSync,
   lstatSync,
   mkdtempSync,
   readdirSync,
   readlinkSync,
   rmSync,
+  symlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -86,6 +88,25 @@ async function dx(
     child.exited,
   ]);
   return { code, stdout, stderr };
+}
+
+/**
+ * A PATH that resolves `bun` but no `wrangler`.
+ *
+ * `dx status` reports "wrangler not installed" only when `bin/wrangler`'s PATH probe finds
+ * nothing. A host-global wrangler usually shares a directory with bun (`~/.bun/bin`), so that
+ * directory cannot simply be dropped while `bin/dx` still re-execs `bun` from PATH. Keep every
+ * directory that holds no wrangler, prepend one shim holding a `bun` symlink, and the probe
+ * finds nothing whatever the host has installed — the premise becomes a property of the test
+ * rather than of the machine.
+ */
+function bunOnlyPath(): string {
+  const shim = mkdtempSync(path.join(SCRATCH, "bun-only-"));
+  symlinkSync(process.execPath, path.join(shim, "bun"));
+  const withoutWrangler = (Bun.env["PATH"] ?? "")
+    .split(":")
+    .filter((dir) => dir.length > 0 && !existsSync(path.join(dir, "wrangler")));
+  return [shim, ...withoutWrangler].join(":");
 }
 
 function isSymlinkTo(file: string, target: string): boolean {
@@ -325,13 +346,19 @@ describe("dx status reports only what it measured", () => {
 
   test("online status finishes and reports wrangler not installed when the package is absent", async () => {
     const started = Date.now();
-    const result = await dx(["status"], { DX_STATUS_OFFLINE: "" });
+    // The env isolates the probe: without it a host-global wrangler answers and the
+    // "package is absent" premise holds only on machines that happen not to have one.
+    const result = await dx(["status"], {
+      DX_STATUS_OFFLINE: "",
+      PATH: bunOnlyPath(),
+    });
     expect(Date.now() - started).toBeLessThan(15_000);
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("wrangler not installed");
     expect(result.stdout).not.toContain("not probed: DX_STATUS_OFFLINE=1");
     expect(result.stdout).not.toContain("wrangler missing");
-  });
+    // The assertion above budgets 15s, so the test needs more than bun's 5s default to run at all.
+  }, 20_000);
 
   test("XDG_CONFIG_HOME is reported as re-anchored only when it changed", async () => {
     const same = await dx(["status"], {
