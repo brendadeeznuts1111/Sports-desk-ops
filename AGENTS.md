@@ -74,7 +74,7 @@ For PR, CI, runtime, performance, proxy/TLS, or cross-chat work, follow
 [engineering_review_evidence.md](docs/runbooks/engineering_review_evidence.md).
 Pin the working fork/upstream and base/head SHAs before making a claim;
 distinguish inspected/inferred evidence from tests actually run, and keep
-\`startup_failure\`, skipped checks, and GitHub 403s separate from test failures.
+`startup_failure`, skipped checks, and GitHub 403s separate from test failures.
 Classify URL schemes, protocols, options, TLS/SNI, and typed error boundaries
 independently. Do not claim production parity from synthetic benchmarks or
 retained-heap snapshots. Report exact commands/exits, unverified paths, and
