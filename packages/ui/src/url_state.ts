@@ -68,6 +68,17 @@ function filter(value: string | null): string {
   return trimmed === "" ? "ALL" : trimmed;
 }
 
+/**
+ * Primary header navigation hashes → the view they own. Kept here (not in the App) so a deep link
+ * `#risk-overview` resolves on first render, before React has mounted.
+ */
+export const DASHBOARD_SECTION_TABS: Readonly<Record<string, DashboardTabId>> =
+  Object.freeze({
+    "risk-overview": "surveillance",
+    "bettor-churn-simulation": "customers",
+    "system-logs": "terminal",
+  });
+
 function resolveTab(
   params: URLSearchParams,
   search: string,
@@ -88,6 +99,8 @@ function resolveTab(
     return "shadow";
   }
   if (hash !== "") {
+    const section = DASHBOARD_SECTION_TABS[hash.replace(/^#/, "")];
+    if (section !== undefined) return section;
     return resolveDashboardTabId(hash, DASHBOARD_DEFAULT_TAB);
   }
   return resolveInitialTab(search, pathname);

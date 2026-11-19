@@ -124,7 +124,8 @@ describe("runtime and UI code never carry seed or fixture data", () => {
 
   test("the App's first paint shows pending and unavailable states, not rows", () => {
     const html = renderToStaticMarkup(React.createElement(App));
-    expect(html).toContain("No live profile source yet");
+    // Risk Overview (surveillance) is the configured landing view; it starts in a pending state.
+    expect(html).toContain("Loading real-time surveillance dashboard...");
     expect(html).toContain("Live Wagers (0)");
     expect(html).toContain("Downlines (—)");
     for (const customer of FIXTURE_PROFILE_CUSTOMERS) {

@@ -430,3 +430,38 @@ blockquote {
 .sd-markdown-doc th {
   white-space: nowrap;
 }
+
+/* Primary surveillance navigation (header lockup → section routes). */
+.sd-primary-nav a {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-decoration: none;
+  color: #94a3b8;
+  background-color: transparent;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.sd-primary-nav a:hover {
+  color: #f8fafc;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.sd-primary-nav a[aria-current="page"] {
+  color: #38bdf8;
+  background-color: rgba(56, 189, 248, 0.12);
+  box-shadow: inset 0 -2px 0 #38bdf8;
+}
+
+.sd-primary-nav a:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}

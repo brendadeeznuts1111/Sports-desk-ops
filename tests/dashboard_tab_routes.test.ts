@@ -18,12 +18,13 @@ describe("resolveInitialTab", () => {
 
   test("works under the /app mount", () => {
     expect(resolveInitialTab("", "/app/live-bets")).toBe("wagers");
-    expect(resolveInitialTab("", "/app/")).toBe("customers");
+    // The configured landing view is Risk Overview (surveillance).
+    expect(resolveInitialTab("", "/app/")).toBe("surveillance");
   });
 
-  test("an unknown path or invalid tab falls back to customers", () => {
-    expect(resolveInitialTab("", "/nope")).toBe("customers");
-    expect(resolveInitialTab("?tab=bogus", "/nope")).toBe("customers");
+  test("an unknown path or invalid tab falls back to the configured default", () => {
+    expect(resolveInitialTab("", "/nope")).toBe("surveillance");
+    expect(resolveInitialTab("?tab=bogus", "/nope")).toBe("surveillance");
     expect(resolveInitialTab("?tab=bogus", "/live-bets")).toBe("wagers");
   });
 

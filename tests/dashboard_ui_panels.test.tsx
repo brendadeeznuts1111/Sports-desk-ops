@@ -57,7 +57,8 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(html).toContain("Profiles (—)");
     expect(html).toContain("Downlines (—)");
     expect(html).toContain("Live Wagers (0)");
-    expect(html).toContain("No live profile source yet");
+    // The configured landing view is Risk Overview (surveillance).
+    expect(html).toContain("Loading real-time surveillance dashboard...");
     expect(html).toContain("Desk Quick-Jump:");
     expect(html).toContain('data-desk-quickjump="active-risk"');
     expect(html).toContain("NFL 1H Pregame");

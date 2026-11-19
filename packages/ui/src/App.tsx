@@ -7,6 +7,8 @@ import {
   wagerChannelOf,
 } from "@sportsdesk-ops/contracts";
 import "./desk.css";
+// Bun's file loader: absolute path under `bun run`, copied-relative path under `bun build`.
+import logo from "./assets/logo.svg";
 import { ShadowPricingPanel } from "./ShadowPricingPanel.tsx";
 import { styles } from "./dashboard_styles.ts";
 import { newTicketIds as diffNewTicketIds } from "./live_stream.ts";
@@ -151,6 +153,39 @@ function apiPostHeaders(): HeadersInit {
   return headers;
 }
 
+/** Primary header navigation: each item is a real view and an in-page anchor. */
+interface PrimaryNavItem {
+  readonly hash: string;
+  readonly label: string;
+  readonly tab: DashboardTabId;
+  readonly title: string;
+}
+
+const PRIMARY_NAV_ITEMS: readonly PrimaryNavItem[] = [
+  {
+    hash: "risk-overview",
+    label: "Risk Overview",
+    tab: "surveillance",
+    title: "Telemetry, Bun.dns cache health and the risk brief",
+  },
+  {
+    hash: "bettor-churn-simulation",
+    label: "Bettor Churn Simulation",
+    tab: "customers",
+    title: "Bettor profiles, churn hazard and sizing discipline",
+  },
+  {
+    hash: "system-logs",
+    label: "System Logs",
+    tab: "terminal",
+    title: "Operator PTY console and system output",
+  },
+];
+
+export const PRIMARY_SECTION_HASHES: readonly string[] = PRIMARY_NAV_ITEMS.map(
+  (item) => item.hash,
+);
+
 function initialDashboardUrlState(): DashboardUrlState {
   if (typeof window === "undefined") return DEFAULT_DASHBOARD_URL_STATE;
   return readDashboardUrlState(
@@ -172,6 +207,9 @@ export function App(): React.ReactElement {
   const [activeTab, setActiveTab] = useState<DashboardTabId>(
     () => initialUrl.tab,
   );
+  // The header nav reflects the view actually on screen, never a remembered click.
+  const activePrimaryNav =
+    PRIMARY_NAV_ITEMS.find((item) => item.tab === activeTab) ?? null;
   const [showBuildMatrix, setShowBuildMatrix] = useState<boolean>(
     () => initialUrl.matrix,
   );
@@ -1605,6 +1643,47 @@ export function App(): React.ReactElement {
     wagerSortDir,
   ]);
 
+  // Section hashes are routes: `#system-logs` opens the terminal view, and a tab change keeps
+  // the hash honest (a non-primary view clears our section hash instead of carrying a stale one).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const apply = () => {
+      const hash = window.location.hash.replace(/^#/, "");
+      const item = PRIMARY_NAV_ITEMS.find((entry) => entry.hash === hash);
+      if (item) setActiveTab(item.tab);
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const current = window.location.hash.replace(/^#/, "");
+    const target = activePrimaryNav?.hash ?? "";
+    const isPrimaryHash = PRIMARY_NAV_ITEMS.some(
+      (item) => item.hash === current,
+    );
+    if (current === target) return;
+    // Never strip a foreign fragment (text fragments, row anchors) for a non-primary tab.
+    if (target === "" && !isPrimaryHash) return;
+    const url = new URL(window.location.href);
+    url.hash = target;
+    window.history.replaceState(
+      null,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }, [activePrimaryNav?.hash]);
+
+  // Scroll the newly shown primary section under the sticky header.
+  useEffect(() => {
+    if (typeof window === "undefined" || activePrimaryNav === null) return;
+    document
+      .getElementById(activePrimaryNav.hash)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activePrimaryNav?.hash]);
+
   // Customer deep links are usable outside the build matrix too: keep the
   // selected profile, or the failed lookup id, in the URL without dropping the
   // hash (text fragments / row anchors).
@@ -1731,9 +1810,54 @@ export function App(): React.ReactElement {
     <div style={styles.container}>
       {/* Global Header */}
       <header style={styles.header}>
+        <div style={styles.headerTopRow}>
+          <a
+            href="#risk-overview"
+            style={styles.brandLockup}
+            data-brand-lockup="true"
+            aria-label="SportsDesk Ops Surveillance — Risk Overview"
+          >
+            <img
+              src={logo}
+              alt=""
+              aria-hidden="true"
+              width={36}
+              height={36}
+              style={styles.brandLogo}
+              data-brand-logo="true"
+            />
+            <span style={styles.brandText}>
+              <h1 style={styles.title}>
+                ⚡ SportsDesk & Fantasy402 Operations
+              </h1>
+              <span style={styles.brandSubtitle}>
+                Surveillance · telemetry · bettor risk
+              </span>
+            </span>
+          </a>
+          <nav
+            aria-label="Primary Surveillance Navigation"
+            className="sd-primary-nav"
+            style={styles.primaryNav}
+          >
+            {PRIMARY_NAV_ITEMS.map((item) => (
+              <a
+                key={item.hash}
+                href={`#${item.hash}`}
+                aria-current={
+                  activePrimaryNav?.hash === item.hash ? "page" : undefined
+                }
+                data-primary-nav={item.hash}
+                title={item.title}
+                onClick={() => setActiveTab(item.tab)}
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
+        </div>
         <div style={styles.headerLeft}>
           <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-            <h1 style={styles.title}>⚡ SportsDesk & Fantasy402 Operations</h1>
             <div
               style={{
                 display: "flex",
@@ -2483,7 +2607,11 @@ export function App(): React.ReactElement {
       </section>
 
       {/* Main View Area */}
-      <main style={styles.main}>
+      <main
+        id={activePrimaryNav?.hash}
+        data-dashboard-section={activePrimaryNav?.hash ?? undefined}
+        style={{ ...styles.main, scrollMarginTop: "96px" }}
+      >
         {activeTab === "customers" ? (
           <CustomersTabPanel
             bannerDismissed={bannerDismissed}

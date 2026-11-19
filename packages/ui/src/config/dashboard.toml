@@ -68,7 +68,7 @@ poll_dns_seconds = 30
 # Panel Defaults & Telemetry Bounds
 # ------------------------------------------------------------------------------
 [panels]
-default_tab = "customers"
+default_tab = "surveillance"
 customers_page_size = 50
 live_wagers_limit = 100
 ticker_max_rows = 200
@@ -83,3 +83,6 @@ dns_active_hit_rate_pct = 50
 # ------------------------------------------------------------------------------
 [churn]
 window_days = 30
+# Tree-shake sentinel: never imported. `validate_dashboard_config.ts` asserts this exact string is
+# absent from the bundle, so a nav label that merely says "churn" cannot break the proof.
+dead_marker = "dashboard-churn-dead-table-sentinel"

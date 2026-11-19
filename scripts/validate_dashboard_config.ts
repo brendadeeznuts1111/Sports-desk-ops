@@ -9,7 +9,9 @@
  *  2. Schema invariants across `[meta]`, `[thresholds]`, `[leagues]`, `[api]`, `[freshness]`,
  *     and `[panels]` (including `meta.auto_execute === false` and origin-only `api.base`).
  *  3. Static bundle tree-shaking proof against `dist/dashboard/*.js`: `REQUIRED_PROBE` (`sharp`)
- *     is inlined while `SENTINEL_PROBE` (`churn`) is dead-code eliminated.
+ *     is inlined while `SENTINEL_PROBE` (the `[churn].dead_marker` value) is dead-code
+ *     eliminated. The sentinel is a unique string, not the dictionary word `churn`: a nav label
+ *     or hash can legitimately contain "churn" without importing the table.
  */
 
 import { Glob, TOML } from "bun";
@@ -23,7 +25,7 @@ const CONFIG_GLOB = "packages/ui/src/config/*.toml";
 const SOURCE_ROOTS = ["src/dashboard", "packages/ui/src"] as const;
 const DIST_DIR = "dist/dashboard";
 const REQUIRED_PROBE = "sharp"; // rendered by ThresholdsPanel
-const SENTINEL_PROBE = "churn"; // defined in dashboard.toml, never imported
+const SENTINEL_PROBE = "dashboard-churn-dead-table-sentinel"; // [churn].dead_marker, never imported
 // wagers.toml carries a string probe because minification preserves string
 // literals but not property names: the tag must appear, the dead marker must not.
 const WAGERS_REQUIRED_PROBE = "wagers-policy/v1"; // [table].policy_tag, rendered in the tab header
@@ -68,6 +70,15 @@ export function findTemporal(value: unknown, path = "$"): string[] {
     );
   }
   return [];
+}
+
+function hasValueDeep(obj: unknown, value: string): boolean {
+  if (typeof obj === "string") return obj === value;
+  if (Array.isArray(obj)) return obj.some((v) => hasValueDeep(v, value));
+  if (obj && typeof obj === "object") {
+    return Object.values(obj).some((v) => hasValueDeep(v, value));
+  }
+  return false;
 }
 
 export function hasKeyDeep(obj: unknown, key: string): boolean {
@@ -666,7 +677,7 @@ export async function validateDashboardConfig(
       `config missing required probe "${REQUIRED_PROBE}" — add it to dashboard.toml or update REQUIRED_PROBE`,
     );
   }
-  if (!parsed.some((v) => hasKeyDeep(v, SENTINEL_PROBE))) {
+  if (!parsed.some((v) => hasValueDeep(v, SENTINEL_PROBE))) {
     throw new Error(
       `config missing sentinel probe "${SENTINEL_PROBE}" — add it to dashboard.toml or update SENTINEL_PROBE`,
     );

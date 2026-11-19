@@ -5,6 +5,7 @@
  * relative (`?tab=…`) and the path resolver only looks at the last segment. That makes
  * `/app/live-bets` and `/live-bets` both open the wagers tab, while an explicit `?tab=` still wins.
  */
+import { DASHBOARD_DEFAULT_TAB } from "./config/dashboard.ts";
 import type { DashboardTabId } from "./types.ts";
 
 const TAB_IDS: readonly DashboardTabId[] = [
@@ -36,7 +37,10 @@ export function isDashboardTab(value: string | null): value is DashboardTabId {
   return value !== null && (TAB_IDS as readonly string[]).includes(value);
 }
 
-/** Resolve the initial tab: explicit `?tab=`, then the last path segment, then customers. */
+/**
+ * Resolve the initial tab: explicit `?tab=`, then the last path segment, then the configured
+ * `[panels].default_tab` (Risk Overview / surveillance unless `dashboard.toml` says otherwise).
+ */
 export function resolveInitialTab(
   search: string,
   pathname: string,
@@ -44,7 +48,7 @@ export function resolveInitialTab(
   const fromQuery = new URLSearchParams(search).get("tab");
   if (isDashboardTab(fromQuery)) return fromQuery;
   const segment = pathname.split("/").filter(Boolean).pop() ?? "";
-  return PATH_TABS[segment] ?? "customers";
+  return PATH_TABS[segment] ?? DASHBOARD_DEFAULT_TAB;
 }
 
 /** A relative link that carries the tab; resolves under both `/` and `/app/`. */
