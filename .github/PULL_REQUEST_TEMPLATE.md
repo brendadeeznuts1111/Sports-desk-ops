@@ -6,6 +6,15 @@
 
 - [ ] <!-- e.g. bun test path/to.test.ts -->
 
+## Verification provenance
+
+- **Working repository / PR base SHA / head SHA:** <!-- exact refs -->
+- **Runtime and environment:** <!-- bun --version, OS, relevant CI job -->
+- **Commands actually run and exit codes:** <!-- distinguish local and hosted -->
+- **Not run / blocked / remaining risk:** <!-- include startup_failure, 403, missing logs -->
+
+See [engineering review and evidence rules](../docs/runbooks/engineering_review_evidence.md).
+
 ## Signal Honesty Checklist
 
 - [ ] **No silent fallbacks:** If an env var or file is missing, does the error name the exact path/variable?

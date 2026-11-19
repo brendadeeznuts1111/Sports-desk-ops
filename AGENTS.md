@@ -68,6 +68,18 @@ and the Pages deploy token. The agent tool-call audit lives in
 [`docs/runbooks/agent_tool_friction.md`](docs/runbooks/agent_tool_friction.md) and is reproducible
 with `bun run audit:tool-calls`.
 
+## Evidence-first review and handoff
+
+For PR, CI, runtime, performance, proxy/TLS, or cross-chat work, follow
+[engineering_review_evidence.md](docs/runbooks/engineering_review_evidence.md).
+Pin the working fork/upstream and base/head SHAs before making a claim;
+distinguish inspected/inferred evidence from tests actually run, and keep
+`startup_failure`, skipped checks, and GitHub 403s separate from test failures.
+Classify URL schemes, protocols, options, TLS/SNI, and typed error boundaries
+independently. Do not claim production parity from synthetic benchmarks or
+retained-heap snapshots. Report exact commands/exits, unverified paths, and
+deployment/merge holds in every handoff.
+
 ## Agent friction quick reference
 
 - **Anchor to the checkout root (`git rev-parse --show-toplevel`).** Always write repository code,
