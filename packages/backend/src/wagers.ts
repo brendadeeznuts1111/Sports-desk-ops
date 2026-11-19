@@ -50,6 +50,12 @@ export interface ProjectedDevWagerRow {
   readonly selection: string;
   readonly lineDisplay: string;
   readonly oddsAmerican: string;
+  /**
+   * `1` for a straight ticket, the parsed leg count for a multi-leg ticket. The wire
+   * `WagerType` can say `S` (Spread) on a ticket whose description carries four legs, so the
+   * leg count is the ticket shape and `wagerTypeCode` stays the raw label.
+   */
+  readonly legCount: number;
   readonly riskUsd: number;
   readonly volumeUsd: number;
   readonly toWinUsd: number;
@@ -128,6 +134,10 @@ export function projectLiveWagerRow(
     typeof item.clvCents === "number" && Number.isFinite(item.clvCents)
       ? item.clvCents
       : null;
+  const legCount = Math.max(1, parsed.legs.length);
+  const wireLegCount = Number(item.ItemCount ?? item.NumLegs ?? item.LegCount);
+  const isMultiLeg =
+    legCount > 1 || (Number.isFinite(wireLegCount) && wireLegCount > 1);
 
   let alertTier: WagerTier = "RECREATIONAL";
   let alertBadge = "✅ RECREATIONAL";
@@ -151,6 +161,13 @@ export function projectLiveWagerRow(
     alertBadge = "⚠️ LATENCY (In-Play)";
     operatorDirective = "Delay 3s + Cap $1,000 (autoExecute: false)";
     maxRecommendedStake = 1000;
+  }
+
+  // The cap is a floor, not decoration: a ticket above it never keeps "Accept Normal".
+  const oversize = Number.isFinite(riskUsd) && riskUsd > maxRecommendedStake;
+  if (oversize) {
+    operatorDirective = `Oversize: $${riskUsd.toLocaleString("en-US")} > cap $${maxRecommendedStake.toLocaleString("en-US")} — manual review (autoExecute: false)`;
+    alertBadge = `${alertBadge} · OVERSIZE`;
   }
 
   const ticketWriter =
@@ -200,13 +217,29 @@ export function projectLiveWagerRow(
       return normalized === "" ? null : normalized.toUpperCase();
     })(),
     // Declared projection of the raw wire code, not a rewrite of it:
-    // `wagerTypeCode` keeps what the vendor sent, `betType` is the label.
-    ...wagerTypeProjection,
-    event: String(firstLeg?.game || (item.event ?? "Event Matchup")),
-    selection: String(firstLeg?.pick || (item.selection ?? "Selection")),
-    lineDisplay: String(firstLeg?.pick || (item.lineDisplay ?? "ML")),
+    // `wagerTypeCode` keeps what the vendor sent, `betType` is the label. A multi-leg ticket
+    // is labelled from its legs, because the wire code can describe only one of them.
+    ...(isMultiLeg
+      ? {
+          ...wagerTypeProjection,
+          betType: "Parlay",
+          unknownWagerType: false,
+        }
+      : wagerTypeProjection),
+    legCount,
+    event: isMultiLeg
+      ? `${legCount}-leg parlay`
+      : String(firstLeg?.game || (item.event ?? "Event Matchup")),
+    selection: isMultiLeg
+      ? `${legCount} legs`
+      : String(firstLeg?.pick || (item.selection ?? "Selection")),
+    lineDisplay: isMultiLeg
+      ? "—"
+      : String(firstLeg?.pick || (item.lineDisplay ?? "ML")),
     oddsAmerican:
-      typeof item.oddsAmerican === "string" ? item.oddsAmerican : "-110",
+      typeof item.oddsAmerican === "string" && item.oddsAmerican.trim() !== ""
+        ? item.oddsAmerican
+        : (impliedAmericanOdds(riskUsd, toWinUsd) ?? "—"),
     riskUsd,
     volumeUsd,
     toWinUsd,
@@ -312,6 +345,21 @@ const WAGER_TYPE_LABELS: Readonly<Record<string, string>> = Object.freeze({
 });
 
 export const WAGER_TYPE_UNKNOWN_PREFIX = "Unknown";
+
+/**
+ * American price implied by the ticket's own risk/payout, or `null` when either is unusable.
+ *
+ * The wire does not always carry a price; defaulting to `-110` fabricated a price for a
+ * four-leg parlay whose true payout was ~+1075. Risk/payout is measured, so it is the honest
+ * fallback and the caller can still tell it apart from a wire value by this being absent.
+ */
+function impliedAmericanOdds(riskUsd: number, toWinUsd: number): string | null {
+  if (!Number.isFinite(riskUsd) || !Number.isFinite(toWinUsd)) return null;
+  if (riskUsd <= 0 || toWinUsd <= 0) return null;
+  const ratio = toWinUsd / riskUsd;
+  if (ratio >= 1) return `+${Math.round(ratio * 100)}`;
+  return `${-Math.round(100 / ratio)}`;
+}
 
 function projectWagerType(item: Record<string, unknown>): {
   readonly wagerTypeCode: string;
