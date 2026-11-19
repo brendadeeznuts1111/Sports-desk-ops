@@ -1107,6 +1107,12 @@ export function startDashboardServer(
         if (upgraded) return undefined;
         return new Response("WebSocket upgrade failed", { status: 400 });
       }
+      // `Bun.serve` routes only see the methods they declare; a POST/HEAD to a JSON route would
+      // otherwise fall through to the SPA 404. Hand every API/health request the dispatcher did
+      // not already answer to the in-memory router, which owns the 405 + `Allow` contract.
+      if (url.pathname.startsWith("/api/") || url.pathname === "/health") {
+        return api.fetch(req);
+      }
       if (!apiOnly) {
         const path = url.pathname;
         if (path === "/live-bets") {

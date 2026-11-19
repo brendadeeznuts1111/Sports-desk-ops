@@ -849,3 +849,68 @@ describe("conditional GET (ETag / If-None-Match)", () => {
     ).toBe(200);
   });
 });
+
+describe("HEAD and Allow", () => {
+  const call = (
+    api: ReturnType<typeof createDashboardApi>,
+    path: string,
+    init: RequestInit = {},
+  ) => api.fetch(new Request(`http://dashboard.local${path}`, init));
+
+  test("HEAD mirrors the GET headers and sends no body", async () => {
+    const api = createDashboardApi(buildMockDeps());
+    const get = await call(api, "/api/customers");
+    const head = await call(api, "/api/customers", { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("etag")).toBe(get.headers.get("etag"));
+    expect(head.headers.get("content-type")).toBe(
+      get.headers.get("content-type"),
+    );
+    expect((await head.arrayBuffer()).byteLength).toBe(0);
+  });
+
+  test("HEAD honours a matching If-None-Match with 304", async () => {
+    const api = createDashboardApi(buildMockDeps());
+    const etag = (await call(api, "/api/customers")).headers.get("etag")!;
+    const head = await call(api, "/api/customers", {
+      method: "HEAD",
+      headers: { "if-none-match": etag },
+    });
+    expect(head.status).toBe(304);
+    expect((await head.arrayBuffer()).byteLength).toBe(0);
+  });
+
+  test("HEAD reaches parameterised routes", async () => {
+    const api = createDashboardApi(buildMockDeps());
+    const head = await call(api, "/api/agent/FAKEMONEY", {
+      method: "HEAD",
+    });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-type")).toContain("application/json");
+    expect((await head.arrayBuffer()).byteLength).toBe(0);
+  });
+
+  test("HEAD on an unknown path is a bodiless 404", async () => {
+    const api = createDashboardApi(buildMockDeps());
+    const head = await call(api, "/api/does-not-exist", { method: "HEAD" });
+    expect(head.status).toBe(404);
+    expect((await head.arrayBuffer()).byteLength).toBe(0);
+  });
+
+  test("a disallowed method names the methods the route allows", async () => {
+    const api = createDashboardApi(buildMockDeps());
+    const post = await call(api, "/api/customers", { method: "POST" });
+    expect(post.status).toBe(405);
+    // HEAD is implicit wherever GET is served.
+    expect(post.headers.get("allow")).toBe("GET, HEAD");
+
+    const postHealth = await call(api, "/health", { method: "POST" });
+    expect(postHealth.status).toBe(405);
+    expect(postHealth.headers.get("allow")).toBe("GET, HEAD");
+
+    // A POST-only route must not advertise GET/HEAD.
+    const getAck = await call(api, "/api/alerts/A1/ack", { method: "GET" });
+    expect(getAck.status).toBe(405);
+    expect(getAck.headers.get("allow")).toBe("POST");
+  });
+});

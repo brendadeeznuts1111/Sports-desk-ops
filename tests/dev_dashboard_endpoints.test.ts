@@ -229,6 +229,43 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
     expect((await second.arrayBuffer()).byteLength).toBe(0);
   });
 
+  describe("Method semantics (HEAD, 405 + Allow)", () => {
+    it("answers HEAD with the GET headers and no body", async () => {
+      const get = await fetch(`${baseUrl}/api/customers`);
+      const head = await fetch(`${baseUrl}/api/customers`, {
+        method: "HEAD",
+      });
+      expect(head.status).toBe(200);
+      expect(head.headers.get("etag")).toBe(get.headers.get("etag"));
+      expect(head.headers.get("content-type")).toBe(
+        get.headers.get("content-type"),
+      );
+      expect((await head.arrayBuffer()).byteLength).toBe(0);
+    });
+
+    it("answers an undeclared method with 405 and the methods it allows", async () => {
+      const post = await fetch(`${baseUrl}/api/customers`, { method: "POST" });
+      expect(post.status).toBe(405);
+      expect(post.headers.get("allow")).toBe("GET, HEAD");
+
+      const postHealth = await fetch(`${baseUrl}/health`, { method: "POST" });
+      expect(postHealth.status).toBe(405);
+      expect(postHealth.headers.get("allow")).toBe("GET, HEAD");
+
+      const getAck = await fetch(`${baseUrl}/api/alerts/A1/ack`);
+      expect(getAck.status).toBe(405);
+      expect(getAck.headers.get("allow")).toBe("POST");
+    });
+
+    it("still answers an unknown API path with a plain 404", async () => {
+      const missing = await fetch(`${baseUrl}/api/not-a-route`, {
+        method: "POST",
+      });
+      expect(missing.status).toBe(404);
+      expect(missing.headers.get("allow")).toBeNull();
+    });
+  });
+
   describe("Live Wagers Ingestion Feed", () => {
     it("dynamically loads and projects wagers on GET /api/wagers", async () => {
       const res = await fetch(`${baseUrl}/api/wagers`);

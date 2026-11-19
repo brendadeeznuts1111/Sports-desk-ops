@@ -36,6 +36,57 @@ type SimpleMethodHandlers = {
   readonly [M in HttpMethod]?: (req: Request) => Response | Promise<Response>;
 };
 
+/** Methods in the order an `Allow` header lists them. */
+const ALLOW_ORDER: readonly HttpMethod[] = [
+  "GET",
+  "HEAD",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "OPTIONS",
+];
+
+/**
+ * The methods a route actually serves. `HEAD` is implicit wherever `GET` is: the dispatcher
+ * answers it from the GET handler with the body stripped, so a probe gets real headers.
+ */
+function allowedMethods(
+  handlers: SimpleMethodHandlers | IdParamMethodHandlers,
+): readonly HttpMethod[] {
+  const present = new Set<HttpMethod>(Object.keys(handlers) as HttpMethod[]);
+  if (present.has("GET")) present.add("HEAD");
+  return ALLOW_ORDER.filter((method) => present.has(method));
+}
+
+/** RFC 9110 §15.5.6: a 405 must say what the resource does allow. */
+function methodNotAllowed(
+  handlers: SimpleMethodHandlers | IdParamMethodHandlers,
+): Response {
+  return Response.json(
+    { error: "Method Not Allowed" },
+    {
+      status: 405,
+      headers: { Allow: allowedMethods(handlers).join(", ") },
+    },
+  );
+}
+
+/**
+ * A HEAD response is the GET response without a body: status, `ETag`, `Content-Type` and
+ * `Content-Length` all describe the representation a GET would return.
+ */
+function headOnly(response: Response): Response {
+  if (response.status === 304) return response;
+  // Release a stream we will not read.
+  void response.body?.cancel();
+  return new Response(null, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
 type IdParamMethodHandlers = {
   readonly [M in HttpMethod]?: (
     req: RouteRequestWithParams<{ readonly id: string }>,
@@ -1056,7 +1107,9 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
   const routes = {
     ...staticRoutes,
     ...paramRoutes,
-    "/api/*": () => apiFallbackResponse(),
+    // A method a `Bun.serve` route does not declare (a POST to a GET route) still has to reach
+    // the dispatcher: otherwise the wildcard answers 404 and the 405/`Allow` contract is lost.
+    "/api/*": (req: Request) => fetch(req),
   };
 
   /** Dispatch a dashboard API/health `Request` completely in-memory with zero port bind. */
@@ -1068,11 +1121,11 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
       url.pathname
     ];
     if (exact !== undefined) {
-      const handler = exact[method];
-      if (!handler) {
-        return Response.json({ error: "Method Not Allowed" }, { status: 405 });
-      }
-      return handler(req);
+      const handler =
+        exact[method] ?? (method === "HEAD" ? exact.GET : undefined);
+      if (!handler) return methodNotAllowed(exact);
+      const response = await handler(req);
+      return method === "HEAD" ? headOnly(response) : response;
     }
 
     const alertActionMatch = /^\/api\/alerts\/([^/]+)\/(ack|retry)$/.exec(
@@ -1084,15 +1137,15 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
           ? "/api/alerts/:id/ack"
           : "/api/alerts/:id/retry";
       const handlers = paramRoutes[routeKey] as IdParamMethodHandlers;
-      const handler = handlers[method];
-      if (!handler) {
-        return Response.json({ error: "Method Not Allowed" }, { status: 405 });
-      }
+      const handler =
+        handlers[method] ?? (method === "HEAD" ? handlers.GET : undefined);
+      if (!handler) return methodNotAllowed(handlers);
       const id = decodeURIComponent(alertActionMatch[1]);
       const reqWithParams = Object.assign(req, {
         params: { id },
       }) as RouteRequestWithParams<{ readonly id: string }>;
-      return handler(reqWithParams);
+      const response = await handler(reqWithParams);
+      return method === "HEAD" ? headOnly(response) : response;
     }
 
     const agentDetailMatch = /^\/api\/agents?\/([^/]+)$/.exec(url.pathname);
@@ -1101,22 +1154,24 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
         ? "/api/agents/:id"
         : "/api/agent/:id";
       const handlers = paramRoutes[routeKey] as IdParamMethodHandlers;
-      const handler = handlers[method];
-      if (!handler) {
-        return Response.json({ error: "Method Not Allowed" }, { status: 405 });
-      }
+      const handler =
+        handlers[method] ?? (method === "HEAD" ? handlers.GET : undefined);
+      if (!handler) return methodNotAllowed(handlers);
       const id = decodeURIComponent(agentDetailMatch[1]);
       const reqWithParams = Object.assign(req, {
         params: { id },
       }) as RouteRequestWithParams<{ readonly id: string }>;
-      return handler(reqWithParams);
+      const response = await handler(reqWithParams);
+      return method === "HEAD" ? headOnly(response) : response;
     }
 
     if (url.pathname.startsWith("/api/")) {
-      return apiFallbackResponse();
+      const response = apiFallbackResponse();
+      return method === "HEAD" ? headOnly(response) : response;
     }
 
-    return new Response("Not Found", { status: 404 });
+    const notFound = new Response("Not Found", { status: 404 });
+    return method === "HEAD" ? headOnly(notFound) : notFound;
   };
 
   return {
