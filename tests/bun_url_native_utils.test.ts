@@ -93,7 +93,7 @@ describe("source_location_url (pathToFileURL, fileURLToPath, openInEditor)", () 
 
   test("round-trips source path + line/column metadata cleanly to Bun.openInEditor", () => {
     const locUrl = createSourceLocationUrl(
-      "/Users/nolarose/code/sportsdesk-ops/src/lib/terminal links.ts",
+      "/srv/checkout/src/lib/terminal links.ts",
       42,
       7,
     );
@@ -109,9 +109,7 @@ describe("source_location_url (pathToFileURL, fileURLToPath, openInEditor)", () 
       capturedOpts = opts;
     });
 
-    expect(capturedPath).toBe(
-      "/Users/nolarose/code/sportsdesk-ops/src/lib/terminal links.ts",
-    );
+    expect(capturedPath).toBe("/srv/checkout/src/lib/terminal links.ts");
     expect(capturedOpts).toEqual({ line: 42, column: 7 });
   });
 

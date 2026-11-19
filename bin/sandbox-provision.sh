@@ -4,7 +4,7 @@
 #
 # Installs or refreshes the pinned `bun` runtime (`@oven/bun-darwin-aarch64`) and
 # `@types/bun` directly inside the sandbox `$HOME/.bun` via npm/package cache
-# (avoiding cross-user Seatbelt symlink blocks on `/Users/nolarose/.bun`), wires
+# (avoiding cross-user Seatbelt symlink blocks on another user's `~/.bun`), wires
 # dotfiles via `./bin/dx setup --replace`, and verifies `shell-health --strict`
 # and `bun_verify`.
 # ==============================================================================

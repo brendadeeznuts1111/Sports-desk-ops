@@ -327,7 +327,7 @@ values of the right shape, falling back to the defaults in `DEFAULT_CONFIG`:
 
 | Key                 | Default                                       | Meaning                                                                |
 | ------------------- | --------------------------------------------- | ---------------------------------------------------------------------- |
-| `repoPath`          | `/Users/nolarose/code/sportsdesk-ops`         | Checkout the tools read and shell.                                     |
+| `repoPath`          | `/path/to/sportsdesk-ops`                     | Checkout the tools read and shell.                                     |
 | `bunPath`           | `bun`                                         | Bun executable; set an absolute path when the Host's PATH has no bun.  |
 | `serviceUrl`        | `http://127.0.0.1:4020`                       | Base URL of `bun run serve`.                                           |
 | `timeoutMs`         | `60000`                                       | Cheap reads and checks.                                                |
@@ -345,7 +345,7 @@ gets the tools, and the change survives restart.
 
 ```
 plugin_manager({ action: "install_bundle",
-                 target: "/Users/nolarose/code/sportsdesk-ops/dsh-plugin" })
+                 target: "/path/to/sportsdesk-ops/dsh-plugin" })
 ```
 
 Read the result's `application` field: `applied` means the rows are live, `restart-required`

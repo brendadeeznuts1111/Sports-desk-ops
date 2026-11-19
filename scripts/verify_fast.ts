@@ -944,6 +944,20 @@ async function main(): Promise<number> {
     runTask(spec.name, spec.cmd),
   );
 
+  // Runs on every invocation, not path-triggered: a tracked path that names this machine's home
+  // cannot resolve on another checkout, and the check costs a few hundred milliseconds.
+  tasks.push(
+    runTask("check:home-paths", ["bun", "run", "scripts/check_home_paths.ts"]),
+  );
+  // A tracked file under an ignored path means the tree ships what it declared it would not.
+  tasks.push(
+    runTask("check:tracked-ignored", [
+      "bun",
+      "run",
+      "scripts/check_tracked_ignored.ts",
+    ]),
+  );
+
   if (lintTargets.length > 0 && lintCmd === null && !values["no-lint"]) {
     console.error(
       `[verify:fast] cannot lint ${lintTargets.length} changed file(s): no native \`bun lint\` binary on Bun ${Bun.version}. Set BUN_LINT_BIN or install bun-canary, or pass --no-lint to skip deliberately.`,

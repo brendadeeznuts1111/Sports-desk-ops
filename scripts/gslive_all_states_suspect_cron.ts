@@ -20,6 +20,8 @@
 
 import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { parseCliArgs } from "../lib/cli_args.ts";
 import { resolveF402BetsJsonlPath } from "../lib/f402_bets_corpus_path.ts";
 import { resolve } from "node:path";
@@ -31,10 +33,13 @@ import { resolve } from "node:path";
  */
 const GSLIVE_BET_REPORT_CSV =
   Bun.env.GSLIVE_BET_REPORT_CSV ??
-  "/Users/nolarose/code/turbo-cap/turbo-cap-valley-lion/.data/exports/bet-report.csv";
+  join(
+    homedir(),
+    "code/turbo-cap/turbo-cap-valley-lion/.data/exports/bet-report.csv",
+  );
 const F402_HISTORY_DB =
   Bun.env.F402_HISTORY_DB ??
-  "/Users/nolarose/4c-odds-intergration/probes/out11/history.db";
+  join(homedir(), "4c-odds-intergration/probes/out11/history.db");
 
 export const GSLIVE_ALL_STATES = [
   "pending",

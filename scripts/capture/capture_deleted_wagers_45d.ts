@@ -16,6 +16,7 @@
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import {
@@ -44,7 +45,7 @@ const days = Math.max(1, Number(flag("--days", "45")) || 45);
 const backend = flag("--backend", "webkit") === "chrome" ? "chrome" : "webkit";
 const profile = flag(
   "--profile",
-  "/Users/nolarose/code/sportsdesk-ops/scratch/webview-profile",
+  join(homedir(), "code/sportsdesk-ops/scratch/webview-profile"),
 );
 const base = flag(
   "--base",
@@ -576,9 +577,11 @@ async function main(): Promise<void> {
     "utf8",
   );
 
-  // Also mirror to /Users/nolarose/code/sportsdesk-ops/scratch/f402-deleted-wagers if it exists
-  const mainScratchDir =
-    "/Users/nolarose/code/sportsdesk-ops/scratch/f402-deleted-wagers";
+  // Also mirror to $HOME/code/sportsdesk-ops/scratch/f402-deleted-wagers if it exists
+  const mainScratchDir = join(
+    homedir(),
+    "code/sportsdesk-ops/scratch/f402-deleted-wagers",
+  );
   try {
     await mkdir(mainScratchDir, { recursive: true });
     await writeFile(

@@ -13,6 +13,8 @@
  */
 
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { Database } from "bun:sqlite";
 
@@ -78,8 +80,10 @@ export interface RawRow {
   result: string;
 }
 
-export const FALLBACK_DB_PATH =
-  "/Users/nolarose/4c-odds-intergration/probes/.snapshot/hist-mine.db";
+export const FALLBACK_DB_PATH = join(
+  homedir(),
+  "4c-odds-intergration/probes/.snapshot/hist-mine.db",
+);
 
 export function runShadowPricing(
   options: Partial<ShadowPricingOptions> = {},

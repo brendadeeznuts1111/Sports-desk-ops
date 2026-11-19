@@ -199,7 +199,7 @@ cannot say "sources fresh" while the gate says "engine marked this signal's prov
     - id: watchlist-autobet
       name: dsh-plugin-watchlist-autobet
       config:
-        repoPath: /Users/nolarose/code/sportsdesk-ops
+        repoPath: /path/to/sportsdesk-ops
         bunPath: bun
         configPath: config/watchlist-autobet.json
         timeoutMs: 60000
@@ -351,7 +351,7 @@ the clean URL keeps working. The same web Host serves the control plane when the
 profile:
 
 ```sh
-dsh plugin --profile web add /Users/nolarose/code/sportsdesk-ops/dsh-plugin-watchlist-autobet
+dsh plugin --profile web add /path/to/sportsdesk-ops/dsh-plugin-watchlist-autobet
 # profile manager adds the dependency; ensure "dsh-plugin-watchlist-autobet" is in
 # ~/.dsh/profiles/web/package.json -> dsh.profile.bundles, then restart/refresh the web GUI
 ```

@@ -44,12 +44,12 @@ describe("ProfileId & ProfileArtifactPaths [Bun.inspect.custom] 17-Gate Suite", 
     );
     const paths = new ProfileArtifactPaths({
       profileId,
-      rootDir: "/Users/brenda/secret-workspace/profiles/desk-ops-prod",
-      envPath: "/Users/brenda/secret-workspace/profiles/desk-ops-prod/.env",
+      rootDir: "/Users/example/secret-workspace/profiles/desk-ops-prod",
+      envPath: "/Users/example/secret-workspace/profiles/desk-ops-prod/.env",
       themeTsPath:
-        "/Users/brenda/secret-workspace/profiles/desk-ops-prod/theme.gen.ts",
+        "/Users/example/secret-workspace/profiles/desk-ops-prod/theme.gen.ts",
       barrelTsPath:
-        "/Users/brenda/secret-workspace/profiles/index.theme.gen.ts",
+        "/Users/example/secret-workspace/profiles/index.theme.gen.ts",
       r2ManifestKey: "manifests/profiles/desk-ops-prod/latest",
       role: "ROLE_AUDITOR_SANITIZED",
     });
@@ -60,7 +60,7 @@ describe("ProfileId & ProfileArtifactPaths [Bun.inspect.custom] 17-Gate Suite", 
       colors: true,
     } as unknown as InspectOptions);
 
-    expect(inspected).not.toContain("/Users/brenda");
+    expect(inspected).not.toContain("/Users/example");
     expect(inspected).toContain("[REDACTED_ENV_PATH]");
     expect(inspected).toContain("<workspace>/profiles/desk-ops-prod");
     expect(inspected).toContain("https://bun.com/reference/bun/inspect");

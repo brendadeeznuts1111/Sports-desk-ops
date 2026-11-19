@@ -3,7 +3,7 @@
  * @file scripts/live_positions_cron.ts
  * @description 10-Minute Bun.cron (every 10m) Live Volume & Open Positions Sync + Telegram Pulse Engine.
  *
- * Bridges the active Fantasy402 live bet-ticker stream (`/Users/nolarose/4c-odds-intergration/probes/out13/f402-bets.jsonl`
+ * Bridges the active Fantasy402 live bet-ticker stream (`$HOME/4c-odds-intergration/probes/out13/f402-bets.jsonl`
  * and `f402-open-export.jsonl`) and the 88-section DOD6 v5.4 binary spine (`data/sportsdesk_unified_baseline_v54.dodbin`)
  * into `sportsdesk-ops`:
  *   1. Rebuilds `data/live-wagers.json` (`getBetTicker` window) and `data/live-bets.json` (`Report/Pending` open positions)
@@ -20,6 +20,8 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 import { writtenUint8Prefix } from "../lib/jsonl_stream_replay.ts";
 import {
@@ -97,7 +99,7 @@ function readIsoField(fieldName: string): (body: unknown) => string | null {
 }
 const DEFAULT_LIFETIME_CSV =
   Bun.env.F402_LIFETIME_CSV ??
-  "/Users/nolarose/4c-odds-intergration/probes/out13/bettor_lifetime.csv";
+  join(homedir(), "4c-odds-intergration/probes/out13/bettor_lifetime.csv");
 const DEFAULT_DODBIN_PATH = resolve(
   REPO_ROOT,
   "data/sportsdesk_unified_baseline_v54.dodbin",

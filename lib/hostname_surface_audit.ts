@@ -369,11 +369,7 @@ const epDefsPart3: [
     "LOCAL-FILE-03",
     "Sink LOCAL-03",
     "sink",
-    [
-      "file://",
-      "/Users/nolarose",
-      "/code/sportsdesk-ops/docs/evidence/ledger.json",
-    ].join(""),
+    ["file://", "/srv/sportsdesk-ops", "/docs/evidence/ledger.json"].join(""),
     DomainMask.ALL_MODES,
     "none",
     "none",

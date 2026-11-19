@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "appliedAt": "2026-11-01T02:29:00.429Z",
   "tool": "scripts/apply_captures.ts",
-  "capturesDir": "/Users/nolarose/code/sportsdesk-ops/docs/evidence/captures",
+  "capturesDir": "docs/evidence/captures",
   "ledgerCountsBefore": {
     "A": 5,
     "B": 5,

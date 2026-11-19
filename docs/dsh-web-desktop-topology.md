@@ -46,7 +46,7 @@ Link installs: `link:../../../code/sportsdesk-ops/dsh-plugin-…` in `desktop/pa
 - id: sportsdesk-ops
   name: dsh-plugin-sportsdesk-ops
   config:
-    repoPath: /Users/nolarose/code/sportsdesk-ops
+    repoPath: /path/to/sportsdesk-ops
 ```
 
 Same pattern for `sportsdesk-security` and `watchlist-autobet` (`repoPath` required at plugin `apply()`).

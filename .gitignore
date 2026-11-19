@@ -70,6 +70,7 @@ junit-report.xml
 
 # Large report exports (contain identifiers; never commit)
 betReport*.json
+!tests/fixtures/fraud/betreport-small.json
 
 # Append-only audit logs (contain operator activity, IPs, and identifiers; local only)
 /audit/

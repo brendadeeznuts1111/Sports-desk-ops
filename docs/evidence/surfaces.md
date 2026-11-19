@@ -125,7 +125,7 @@ All `/api/telegram/*` and `/api/watchlist` calls pass through `adminRejection`
 ## D-7. `surface.gs-manager-cli`
 
 The GS Buckeye 2 Partner 118 deliverable, extracted at
-`/Users/nolarose/code/sportsdesk-ops/scratch/docs-audit/gs-manager-cli/`. It has **6 report kinds** and a
+`scratch/docs-audit/gs-manager-cli/`. It has **6 report kinds** and a
 real CLI, but every upstream report contract is `blocked_contract`.
 
 **6 report kinds** (`zip:templates/endpoint-registry.json:8,39,95,151,210,272`;

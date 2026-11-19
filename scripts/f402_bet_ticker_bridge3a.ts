@@ -16,7 +16,7 @@
  *   bun run bridge3a:poll                       # one loop tick (agent from F402_AGENT_ID)
  *   bun run bridge3a:poll --agent BILLY666 --interval-ms 30000
  *   bun run bridge3a:poll --dry-run --from-body scratch/f402-captures/bet-ticker.json
- *   bun run bridge3a:poll --from-jsonl /Users/nolarose/4c-odds-intergration/probes/out13/f402-bets.jsonl --publish-baseline
+ *   bun run bridge3a:poll --from-jsonl $HOME/4c-odds-intergration/probes/out13/f402-bets.jsonl --publish-baseline
  *
  * Exit codes: 0 processed (published/baseline/noop), 1 poll failure or fail-closed skip, 2 usage.
  */

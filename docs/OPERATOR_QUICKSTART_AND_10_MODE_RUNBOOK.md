@@ -10,7 +10,7 @@
 
 ## 1. Day-1 Operator Onboarding: What to Run in Your First 60 Seconds
 
-When you open `/Users/nolarose/code/sportsdesk-ops`, **always start with `./bin/dx`**. It automatically configures your shell environment, silences macOS sandbox/Git `EPERM` warnings, loads Cloudflare R2 credentials, and runs its tooling through Bun (`v1.4.4`).
+When you open the repository root, **always start with `./bin/dx`**. It automatically configures your shell environment, silences macOS sandbox/Git `EPERM` warnings, loads Cloudflare R2 credentials, and runs its tooling through Bun (`v1.4.4`).
 
 | Step                                      | Command                                                                                       | What It Checks / Executes                                                                                                                                                                                                                                                                                                                | When to Run                                                      |
 | :---------------------------------------- | :-------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------- |

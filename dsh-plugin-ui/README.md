@@ -60,7 +60,7 @@ origin, registered by `dsh-plugin-sportsdesk-desk-panel`), then falls back to
 
 ```
 plugin_manager({ action: "install_bundle",
-                 target: "/Users/nolarose/code/sportsdesk-ops/dsh-plugin-ui" })
+                 target: "/path/to/sportsdesk-ops/dsh-plugin-ui" })
 plugin_manager({ action: "remove_bundle", target: "dsh-plugin-sportsdesk-desk-status" })
 ```
 

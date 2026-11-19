@@ -165,6 +165,8 @@
     "verify:gen-tokens-gate": "bun run verification/gen-tokens-zero-drift-gate/run.ts",
     "check:fetch-init": "bun run bin/check-fetch-init.ts",
     "check:innerhtml": "bun run bin/check-innerhtml.ts",
+    "check:home-paths": "bun run scripts/check_home_paths.ts",
+    "check:tracked-ignored": "bun run scripts/check_tracked_ignored.ts",
     "check:signal-honesty": "bun run bin/check-signal-honesty.ts",
     "probe:bun": "bun scripts/probe_bun.ts --check tests/bun_baseline.json",
     "ci:local": "bun scripts/ci_local.ts",

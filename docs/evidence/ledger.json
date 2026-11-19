@@ -33,8 +33,8 @@
     "citationAnchors": "Cited `file:line` or `file:start-end` (as written in the docs, prefix stripped) → a literal that must appear on one of the cited lines. scripts/check_spec_citations.ts (run by `bun run verify:docs`) fails on a citation with no entry, an entry no doc cites, and an anchor that has left its range, and reports where the anchor moved. Write the anchor from the range's first line where that line is distinctive, so a single hit also gives the corrected range. zip: citations name the external GS extract and are reported as unchecked."
   },
   "sourcePrefixes": {
-    "(no prefix)": "Path relative to the worktree root /Users/nolarose/code/sportsdesk-ops/.worktrees/docs.",
-    "main:": "Read-only main tree /Users/nolarose/code/sportsdesk-ops (never edited by this task).",
+    "(no prefix)": "Path relative to the worktree root.",
+    "main:": "Read-only main tree (never edited by this task).",
     "zip:": "GS manager-cli extract at <main>/scratch/docs-audit/gs-manager-cli.",
     "fixture:": "Committed fixture under the worktree; a shape sample, not a wire capture."
   },
