@@ -111,3 +111,46 @@ describe("Contract #36: workspace publish policy & flag-order guard", () => {
     }
   });
 });
+
+const FORBIDDEN_PUBLISH_WORKFLOW_FLAGS_RE =
+  /\bbun\s+publish\b[^\n]*(?:--provenance(?!\s*=?\s*false)\b|--trust\b|--use-openssl-ca\b|--use-system-ca\b|--cafile\b|--ca\b)|NPM_CONFIG_PROVENANCE\s*[:=]\s*["']?true\b/;
+
+describe("Contract #37: publishConfig, provenance, and packageExtensions invariants", () => {
+  test("publishable workspaces set publishConfig.access and never enable provenance", async () => {
+    const glob = new Glob("packages/*/package.json");
+    for await (const relPath of glob.scan({ cwd: root })) {
+      const manifest = (await Bun.file(join(root, relPath)).json()) as {
+        private?: boolean;
+        packageExtensions?: unknown;
+        publishConfig?: { access?: string; provenance?: boolean };
+      };
+
+      expect(
+        manifest.packageExtensions,
+        `${relPath} must not declare packageExtensions`,
+      ).toBeUndefined();
+
+      if (manifest.private === false) {
+        expect(
+          manifest.publishConfig?.access,
+          `${relPath} must set publishConfig.access`,
+        ).toBe("public");
+        expect(
+          manifest.publishConfig?.provenance,
+          `${relPath} must not set publishConfig.provenance: true (unsupported in Bun)`,
+        ).not.toBe(true);
+      }
+    }
+  });
+
+  test("CI workflows do not pass forbidden bun publish flags or NPM_CONFIG_PROVENANCE=true", async () => {
+    const wfGlob = new Glob(".github/workflows/*.{yml,yaml}");
+    for await (const relPath of wfGlob.scan({ cwd: root })) {
+      const text = await Bun.file(join(root, relPath)).text();
+      expect(
+        FORBIDDEN_PUBLISH_WORKFLOW_FLAGS_RE.test(text),
+        `${relPath} contains forbidden bun publish flag or NPM_CONFIG_PROVENANCE=true`,
+      ).toBe(false);
+    }
+  });
+});

@@ -643,11 +643,14 @@ Bun enforces npm 11 parity and rejects prerelease versions (e.g., `*-next`) unle
 # Read-only CI probe (safe on Bun >= 1.4.4)
 bun publish --filter "@sportsdesk-ops/contracts" --tag next --dry-run
 
-# Release invocation (stops on first failure; re-run resumes cleanly)
-bun publish --filter "@sportsdesk-ops/contracts" --tag next
+# Idempotent release invocation (stops on first failure; re-run resumes cleanly)
+bun publish --filter "@sportsdesk-ops/contracts" --tag next --tolerate-republish --ignore-scripts
 ```
 
-Never add `publishConfig.tag` to root `package.json`; declare it only on publishable workspace packages.
+Never add `publishConfig.tag` to root `package.json`; declare it only on publishable workspace packages. Also note:
+
+- **Initial publish always sets `latest`:** Even with `--tag next`, the first-ever publish of a new package also assigns `latest`.
+- **No provenance / CA overrides:** Never set `NPM_CONFIG_PROVENANCE=true`, `publishConfig.provenance: true`, `--provenance`, `--trust`, or CA-override flags in workflows (enforced by Contract #37 in `tests/pm_state.test.ts`).
 
 ## `packageExtensions` Governance
 
