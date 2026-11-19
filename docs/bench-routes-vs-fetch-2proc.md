@@ -126,3 +126,9 @@ The tests call `fetch(input)` for each URL representation below. The first argum
 Run `bun --no-env-file run bench/uuid-contract.snapshot.ts` from the repository root. The command checks the repository Bun pin and emits JSON only after validating the samples. The snapshot separates runtime type, object class, returned string, decoded byte length and raw bytes in hex. Repeated captures can produce new v4, v7 and Blob URL values.
 
 [Bun fetch reference](https://bun.com/docs/runtime/networking/fetch)
+
+## Blob lookup timing and process scope
+
+[Raw trials and summary](benchmarks/bun-1.4.4-blob-lookup.snapshot.json) · [Capture script](../bench/blob-lookup.snapshot.ts)
+
+Run `bun --no-env-file run bench/blob-lookup.snapshot.ts`. Each fresh child registers its own Blob and receives the parent's still-active URL. The first lookup alternates between local and parent URLs. After 500 warmups per kind, each child measures a batch of 5,000 lookups per kind. The raw rows include elapsed nanoseconds, process-relative uptime in seconds and the hit count. The first-in-process summary uses only the first lookup in each child. Warm summaries aggregate per-child batch means. Parent-side spawn-to-exit includes the entire child workload. Adjacent timer reads are reported separately without a timing correction. The worker probes use separate same-process threads before and after revocation.
