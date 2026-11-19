@@ -112,6 +112,45 @@ describe("probeDaemonEndpoint", () => {
     expect(probe.detail).toContain("7 row");
   });
 
+  test("a cached answer says so, and stays a serving probe", async () => {
+    const probe = await probeDaemonEndpoint(base, async () =>
+      Response.json({ success: true, rowCount: 7, cached: true, stale: false }),
+    );
+    expect(probe).toMatchObject({
+      kind: "serving",
+      cached: true,
+      stale: false,
+    });
+    expect(probe.detail).toBe("7 row(s), cached");
+  });
+
+  test("a stale answer names itself — the rows are the last good snapshot", async () => {
+    const probe = await probeDaemonEndpoint(base, async () =>
+      Response.json({ success: true, rowCount: 7, cached: true, stale: true }),
+    );
+    expect(probe).toMatchObject({ kind: "serving", cached: true, stale: true });
+    expect(probe.detail).toBe("7 row(s), cached, stale — last good snapshot");
+    // The one line an operator reads must not present stale rows as current.
+    expect(describeProbe(probe)).toContain("stale — last good snapshot");
+  });
+
+  test("a body without cache flags reads as a fresh read", async () => {
+    // A daemon predating the route cache sends neither flag; guessing "cached" would be wrong.
+    const probe = await probeDaemonEndpoint(base, async () =>
+      Response.json({ success: true, rowCount: 7 }),
+    );
+    expect(probe).toMatchObject({ cached: false, stale: false });
+    expect(probe.detail).toBe("7 row(s)");
+  });
+
+  test("non-boolean cache flags are not read as true", async () => {
+    const probe = await probeDaemonEndpoint(base, async () =>
+      Response.json({ success: true, rowCount: 7, cached: "yes", stale: 1 }),
+    );
+    expect(probe).toMatchObject({ cached: false, stale: false });
+    expect(probe.detail).toBe("7 row(s)");
+  });
+
   test("502 means the route is live and the snapshot is missing", async () => {
     const probe = await probeDaemonEndpoint(base, async () =>
       Response.json(

@@ -74,6 +74,16 @@ export interface EndpointProbe {
   readonly kind:
     "serving" | "artifact-missing" | "route-absent" | "unreachable" | "error";
   readonly detail: string;
+  /**
+   * The daemon reused a read inside its TTL window (or a manifest 304). Optional because a
+   * build predating the route cache sends no flag, and `false` is the honest reading then.
+   */
+  readonly cached?: boolean;
+  /**
+   * The daemon's refresh failed and it answered with the last good snapshot. An operator must
+   * see this: the row count is real, but it is older than the poll that asked for it.
+   */
+  readonly stale?: boolean;
 }
 
 export const XML_ODDS_SOA_PATH = "/api/xml-odds/soa";
@@ -144,19 +154,35 @@ export async function probeDaemonEndpoint(
     };
   }
   if (response.status === 200) {
-    let rowCount: unknown;
+    let body: Record<string, unknown> | null = null;
     try {
-      rowCount = (JSON.parse(text) as Record<string, unknown>)["rowCount"];
+      const parsed: unknown = JSON.parse(text);
+      if (parsed !== null && typeof parsed === "object") {
+        body = parsed as Record<string, unknown>;
+      }
     } catch {
-      rowCount = undefined;
+      body = null;
     }
+    const rowCount = body?.["rowCount"];
+    const cached = body?.["cached"] === true;
+    const stale = body?.["stale"] === true;
+    // The cache state is stated inline rather than as a separate field, because the probe's
+    // one line is what an operator reads: rows that are the last good snapshot must not look
+    // like rows the daemon just read from R2.
+    const rows =
+      typeof rowCount === "number" ? `${rowCount} row(s)` : "serving rows";
+    const state = [
+      ...(cached ? ["cached"] : []),
+      ...(stale ? ["stale — last good snapshot"] : []),
+    ];
     return {
       origin,
       reachable: true,
       status: 200,
       kind: "serving",
-      detail:
-        typeof rowCount === "number" ? `${rowCount} row(s)` : "serving rows",
+      detail: state.length === 0 ? rows : `${rows}, ${state.join(", ")}`,
+      cached,
+      stale,
     };
   }
   let reason = `HTTP ${response.status}`;
