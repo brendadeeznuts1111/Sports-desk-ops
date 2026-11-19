@@ -2,7 +2,7 @@
 
 Production intelligence, downline risk surveillance, 10-Mode Forensic/Risk/Cross-Market/Reconciliation engine, Cloudflare R2 edge portal, Qwen3.5-4B neuron token taxonomy, and automated reporting pipeline built on the **Bun runtime (v1.4.4)** for SportsDesk and Fantasy402 books.
 
-Repository: [bw496915-cmyk/Sports-desk-ops](https://github.com/bw496915-cmyk/Sports-desk-ops)
+Working fork: [brendadeeznuts1111/Sports-desk-ops](https://github.com/brendadeeznuts1111/Sports-desk-ops) · Upstream: [bw496915-cmyk/Sports-desk-ops](https://github.com/bw496915-cmyk/Sports-desk-ops)
 
 **Engineering:** [Signal honesty ADR](docs/architecture/signal-honesty.md) — errors must name cause, missing ≠ zero, cron/CLI surfaces must match reality (see also [AGENTS.md](AGENTS.md)).
 
@@ -68,7 +68,7 @@ SPORTSDESK_LIVE_INGEST=1 ./bin/dx deploy
 ## Quick Start
 
 ```bash
-git clone https://github.com/bw496915-cmyk/Sports-desk-ops.git
+git clone https://github.com/brendadeeznuts1111/Sports-desk-ops.git
 cd Sports-desk-ops
 
 # Verify Bun 1.4.4, then install the locked dependencies
