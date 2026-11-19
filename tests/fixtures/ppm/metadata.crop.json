@@ -1,20 +1,39 @@
 {
   "sports": {
-    "1": { "n": "Baseball" },
-    "2": { "n": "Basketball" },
-    "93": { "n": "Table Tennis" },
-    "102": { "n": "College Basketball" }
+    "1": {
+      "n": "Baseball"
+    },
+    "2": {
+      "n": "Basketball"
+    },
+    "93": {
+      "n": "Table Tennis"
+    },
+    "102": {
+      "n": "College Basketball"
+    }
   },
   "leagues": {
-    "1": { "n": "MLB Props", "po": false, "mo": false, "s": 1 },
+    "1": {
+      "n": "MLB Props",
+      "po": false,
+      "mo": false,
+      "s": 1
+    },
     "4": {
       "n": "NFL",
       "o": -450,
       "po": false,
       "mo": false,
       "p": "m",
-      "m": { "3": true, "5": "secondary", "6": "primary" },
-      "pn": { "85": "Total Player Interceptions" },
+      "m": {
+        "3": true,
+        "5": "secondary",
+        "6": "primary"
+      },
+      "pn": {
+        "85": "Total Player Interceptions"
+      },
       "mn": {
         "85": "Total Player Interceptions",
         "276": "What Will Happen 1st",
@@ -31,6 +50,14 @@
     }
   },
   "wagertypes": {
+    "2": {
+      "n": "Double Chance",
+      "po": false,
+      "mo": false,
+      "sn": "DC",
+      "mcId": 1,
+      "bId": 17
+    },
     "3": {
       "n": "Money Line",
       "po": false,
@@ -38,6 +65,125 @@
       "sn": "ML",
       "mcId": 1,
       "bId": 0
+    },
+    "4": {
+      "n": "Draw No Bet",
+      "po": false,
+      "mo": false,
+      "sn": "DNB",
+      "tp": 4,
+      "mcId": 1,
+      "bId": 2901
+    },
+    "5": {
+      "n": "Total",
+      "po": false,
+      "mo": false,
+      "sn": "T",
+      "mcId": 1,
+      "bId": 2,
+      "tg": {}
+    },
+    "6": {
+      "n": "Spread",
+      "po": false,
+      "mo": false,
+      "sn": "S",
+      "mcId": 1,
+      "bId": 1,
+      "tg": {}
+    },
+    "7": {
+      "n": "Team Total 1",
+      "po": false,
+      "mo": false,
+      "sn": "TT1",
+      "mcId": 1,
+      "bId": 3
+    },
+    "8": {
+      "n": "Team Total 2",
+      "po": false,
+      "mo": false,
+      "sn": "TT2",
+      "mcId": 1,
+      "bId": 4
+    },
+    "9": {
+      "n": "Odd / Even",
+      "po": false,
+      "mo": false,
+      "sn": "OE",
+      "mcId": 3,
+      "bId": 5,
+      "tg": {}
+    },
+    "14": {
+      "n": "Odd/Even Team 1",
+      "po": false,
+      "mo": false,
+      "sn": "OET1",
+      "mcId": 3,
+      "bId": 21
+    },
+    "15": {
+      "n": "Odd/Even Team 2",
+      "po": false,
+      "mo": false,
+      "sn": "OET2",
+      "mcId": 3,
+      "bId": 22
+    },
+    "17": {
+      "n": "HalfTime / FullTime",
+      "po": false,
+      "mo": false,
+      "sn": "HTFT",
+      "mcId": 3,
+      "bId": 23
+    },
+    "18": {
+      "n": "Race To",
+      "po": false,
+      "mo": false,
+      "sn": "RACE_TO",
+      "mcId": 3,
+      "bId": 24
+    },
+    "60": {
+      "n": "Winning Margin",
+      "po": false,
+      "mo": false,
+      "sn": "MARGIN",
+      "mcId": 3,
+      "bId": 74
+    },
+    "196": {
+      "n": "Highest Scoring Period",
+      "po": false,
+      "mo": false,
+      "sn": "HIGH_SCORE_PD",
+      "mcId": 3,
+      "bId": 217
+    },
+    "525": {
+      "n": "1x2 And Total",
+      "po": false,
+      "mo": false,
+      "sn": "1x2_AND_TOTAL",
+      "tp": 329,
+      "mcId": 7,
+      "bId": 539
+    },
+    "568": {
+      "n": "Halftime/Fulltime - Double Chance",
+      "po": false,
+      "mo": false,
+      "sn": "HTFT_DC",
+      "tp": 329,
+      "mcId": 7,
+      "sId": -1,
+      "bId": 577
     }
   }
 }

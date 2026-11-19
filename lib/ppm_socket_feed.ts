@@ -140,7 +140,7 @@ export interface PpmMarketGroup {
 
 export interface PpmCoefficientPayload {
   readonly eventId: string;
-  /** Empty until the event has tradeable prices on this session. */
+  /** Empty when the event has no open market; prices arrive via the bootstrap. */
   readonly coefficients: readonly number[];
   readonly group: PpmMarketGroup | null;
 }
@@ -148,11 +148,11 @@ export interface PpmCoefficientPayload {
 /**
  * Decodes a coefficient frame.
  *
- * Corrected 2026-11-13: this topic ships the market-group descriptor on
- * subscribe, and its coefficient vector is empty for events with no open
- * market — not because of a session gate. The full price table comes from the
- * HTTP bootstrap (`getUpdates?groupId=…`), which is not part of this branch.
- * Empty stays empty; it is never turned into a price.
+ * Measured 2026-11-13, correcting an earlier reading: this topic ships the
+ * market-group descriptor on subscribe, and its coefficient vector is empty for
+ * events with no open market — not because of a session gate. The full price
+ * table comes from the HTTP bootstrap (`getUpdates?groupId=…`, see
+ * `ppm_bootstrap.ts`). Empty stays empty; it is never turned into a price.
  */
 export function decodeCoefficientFrame(
   bytes: Uint8Array<ArrayBuffer>,

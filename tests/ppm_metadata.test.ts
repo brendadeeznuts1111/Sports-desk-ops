@@ -13,7 +13,8 @@ import {
 } from "../lib/ppm_join_guard.ts";
 
 const CROP = new URL("./fixtures/ppm/metadata.crop.json", import.meta.url);
-const META = parsePpmMetadata(await Bun.file(CROP).json());
+const RAW = await Bun.file(CROP).json();
+const META = parsePpmMetadata(RAW);
 
 describe("parsePpmMetadata", () => {
   test("extracts the sports dictionary", () => {
@@ -24,9 +25,17 @@ describe("parsePpmMetadata", () => {
     expect(META.counts.unnamedSports).toBe(0);
   });
 
-  test("counts the dictionaries it deliberately does not expose", () => {
+  test("counts leagues but does not expose them", () => {
     expect(META.counts.leagues).toBe(2);
-    expect(META.counts.wagertypes).toBe(1);
+    expect(META.counts.wagertypes).toBe(Object.keys(RAW.wagertypes).length);
+  });
+
+  test("exposes market names, skipping the ones without a name", () => {
+    expect(META.marketNames.get(3)).toBe("Money Line");
+    expect(META.marketNames.size).toBe(
+      META.counts.wagertypes - META.counts.unnamedWagertypes,
+    );
+    expect(META.counts.unnamedWagertypes).toBe(0);
   });
 
   test("rejects a payload without a sports map", () => {

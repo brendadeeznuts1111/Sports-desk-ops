@@ -17,6 +17,14 @@
 export interface PpmMetadata {
   /** sportId -> display name. */
   readonly sportNames: ReadonlyMap<number, string>;
+  /**
+   * marketId -> display name from `wagertypes`. Unlike leagues, these ids do
+   * share the price book's market identity space (`getUpdates` keys markets by
+   * wagertype id): 399 of the book's 407 distinct ids resolve on 2026-11-13.
+   * The 8 that do not are absent here, so the join reports them as unnamed
+   * instead of inventing a label.
+   */
+  readonly marketNames: ReadonlyMap<number, string>;
   /** Counts kept for provenance reporting; not used for joins. */
   readonly counts: {
     readonly sports: number;
@@ -24,6 +32,8 @@ export interface PpmMetadata {
     readonly unnamedSports: number;
     readonly leagues: number;
     readonly wagertypes: number;
+    /** Wager-type entries present but unusable (no display name). */
+    readonly unnamedWagertypes: number;
   };
 }
 
@@ -61,8 +71,28 @@ export function parsePpmMetadata(payload: unknown): PpmMetadata {
     sportNames.set(id, name);
   }
 
+  const marketNames = new Map<number, string>();
+  let unnamedWagertypes = 0;
+  if (isRecord(payload.wagertypes)) {
+    for (const [key, entry] of Object.entries(payload.wagertypes)) {
+      const id = Number(key);
+      if (!Number.isSafeInteger(id) || id <= 0) {
+        throw new PpmMetadataError(
+          `wagertype key is not a positive integer: ${key}`,
+        );
+      }
+      const name = isRecord(entry) ? entry.n : undefined;
+      if (typeof name !== "string" || name.length === 0) {
+        unnamedWagertypes += 1;
+        continue;
+      }
+      marketNames.set(id, name);
+    }
+  }
+
   return {
     sportNames,
+    marketNames,
     counts: {
       sports: sportNames.size,
       unnamedSports,
@@ -72,6 +102,7 @@ export function parsePpmMetadata(payload: unknown): PpmMetadata {
       wagertypes: isRecord(payload.wagertypes)
         ? Object.keys(payload.wagertypes).length
         : 0,
+      unnamedWagertypes,
     },
   };
 }

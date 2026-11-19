@@ -235,3 +235,48 @@ describe("coefficient frames", () => {
     expect(decodeCoefficientFrame(DESCRIPTOR).coefficients).toHaveLength(0);
   });
 });
+
+describe("populated coefficient frames", () => {
+  test("decodes a coefficient vector when the wire carries one", () => {
+    // Synthetic, schema-shaped: the live feed did not produce one while the
+    // events sampled had no open market. This pins the populated path so the
+    // decoder is ready when prices do arrive here.
+    const frame = Bun.gzipSync(
+      new TextEncoder().encode(
+        JSON.stringify({
+          isDiff: false,
+          payload: {
+            id: "51603109",
+            c: [1.526316, 2.5],
+            m: {
+              gp: 1,
+              m: [3],
+              m_cnr: [0],
+              s: [[1], [2]],
+              t: 7,
+              tu: 1794583115000,
+            },
+          },
+          ti: null,
+        }),
+      ),
+    );
+    const parsed = decodeCoefficientFrame(frame);
+    expect(parsed.eventId).toBe("51603109");
+    expect(parsed.coefficients).toEqual([1.526316, 2.5]);
+    expect(parsed.group!.marketIds).toEqual([3]);
+  });
+
+  test("drops non-numeric entries rather than coercing them", () => {
+    const frame = Bun.gzipSync(
+      new TextEncoder().encode(
+        JSON.stringify({
+          isDiff: true,
+          payload: { id: "1", c: [1.9, "2.0", null, 2.1], m: null },
+          ti: null,
+        }),
+      ),
+    );
+    expect(decodeCoefficientFrame(frame).coefficients).toEqual([1.9, 2.1]);
+  });
+});
