@@ -1,4 +1,5 @@
 {
+  "bin": {},
   "name": "@sportsdesk-ops/nsh-desk",
   "version": "0.2.0",
   "private": true,

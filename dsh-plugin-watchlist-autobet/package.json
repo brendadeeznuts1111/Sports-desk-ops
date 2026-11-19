@@ -1,4 +1,6 @@
 {
+  "scripts": {},
+  "bin": {},
   "name": "dsh-plugin-watchlist-autobet",
   "version": "0.2.1",
   "private": true,

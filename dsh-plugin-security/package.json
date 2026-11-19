@@ -1,4 +1,6 @@
 {
+  "scripts": {},
+  "bin": {},
   "name": "dsh-plugin-sportsdesk-security",
   "version": "0.1.1",
   "private": true,

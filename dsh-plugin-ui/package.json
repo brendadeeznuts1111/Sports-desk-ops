@@ -1,4 +1,6 @@
 {
+  "scripts": {},
+  "bin": {},
   "name": "dsh-plugin-sportsdesk-desk-status",
   "version": "0.1.2",
   "private": true,

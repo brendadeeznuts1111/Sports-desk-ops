@@ -64,7 +64,7 @@ For example, `bun run --silent customers:profiles --help` prints profile help.
 The alias column names alternate spellings of the Bun command. A dash means no
 alias or short spelling is listed here. Installation is a separate operation.
 
-| Runtime | Command | Command alias | Package script | Long flag | Short flag | Value | Purpose |
+| Runtime | Command | Command alias | Script name (scripts key) | Long flag | Short flag | Value | Purpose |
 |---|---|---|---|---|---|---|---|
 | `bun` | `install` | `i` | — | `--config` | `-c` | `path` | Select bunfig.toml |
 | `bun` | `install` | `i` | — | `--registry` | — | `url` | Override the default registry |
@@ -98,6 +98,23 @@ alias or short spelling is listed here. Installation is a separate operation.
 | `bun` | `run` | — | `customers:profiles` | `--out` | — | `path` | Profile output |
 | `bun` | `run` | — | `customers:profiles` | `--json` | — | — | Also print summary and profiles |
 | `bun` | `run` | — | `customers:profiles` | `--help` | `-h` | — | Show script help |
+
+#### Root package manifest entries
+
+| Script name | Script command |
+|---|---|
+| `graph:agent` | `bun run scripts/build_agent_graph.ts` |
+| `build:agent-tree` | `bun run scripts/build_agent_tree.ts` |
+| `customers:profiles` | `bun run scripts/build_customer_profiles.ts` |
+
+These pipeline stages are declared in `scripts`. The root manifest separately declares executable names and entry files in `bin`. For example:
+
+| Binary name | Binary file |
+|---|---|
+| `sportsdesk` | `cli/sportsdesk_cli.ts` |
+| `sportsdesk-hierarchy-ingest` | `cli/f402_manager_hierarchy_ingest_cli.ts` |
+
+An empty `bin` object declares zero executables. An empty `scripts` object declares zero package scripts.
 
 **Offline (no session):** envelope JSON already captured and redacted:
 
