@@ -1,6 +1,10 @@
 /**
  * @file packages/sportsdesk-ops/src/lib/gate_bun_doc_blob_sha.ts
- * @description GATE-BUN-DOC-BLOB-SHA-01 — pinned `oven-sh/bun` blob URLs and banned floats.
+ * @description GATE-BUN-DOC-BLOB-SHA-01 — validate pinned `oven-sh/bun` blob URLs.
+ *
+ * A markdown citation may point anywhere (bun.sh, bun.com, `blob/main`, a `#:~:text=` fragment).
+ * What the gate still enforces is that a citation which claims a pinned blob carries the audited
+ * commit, and that any line anchor stays inside the cited file.
  */
 
 import { relative, resolve } from "node:path";
@@ -14,9 +18,7 @@ import {
 } from "./bun_surface_dts_inventory.ts";
 
 export type CitationViolationCode =
-  | "ERR_SPEC_UNPINNED_BUN_URL"
-  | "E_DOC_BUN_VERSION_DRIFT"
-  | "ERR_CAT_UNPINNED_BUN_URL";
+  "E_DOC_BUN_VERSION_DRIFT" | "ERR_CAT_UNPINNED_BUN_URL";
 
 export interface CitationViolation {
   readonly file: string;
@@ -48,9 +50,6 @@ export interface GateBunDocBlobFail {
 }
 
 export type GateBunDocBlobResult = GateBunDocBlobPass | GateBunDocBlobFail;
-
-export const BANNED_BUN_URL_RE =
-  /https?:\/\/(?:bun\.(?:sh|com)\/[^\s)>"'`]+|github\.com\/oven-sh\/bun\/(?:tree\/|blob\/main\/)[^\s)>"'`]+|raw\.githubusercontent\.com\/oven-sh\/bun\/main\/[^\s)>"'`]+|[^\s)>"'`]*#:~:text=[^\s)>"'`]*)/g;
 
 export const PINNED_BLOB_URL_RE =
   /https:\/\/github\.com\/oven-sh\/bun\/blob\/([0-9a-f]{40})\/([^\s)#>"'`]+)(?:#L(\d+)(?:-L(\d+))?)?/g;
@@ -157,19 +156,6 @@ export function scanMarkdownTextForViolations(
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
     const lineText = lines[lineIndex]!;
     const lineNum = lineIndex + 1;
-
-    BANNED_BUN_URL_RE.lastIndex = 0;
-    let bannedMatch: RegExpExecArray | null;
-    while ((bannedMatch = BANNED_BUN_URL_RE.exec(lineText)) !== null) {
-      violations.push({
-        file: relFile,
-        line: lineNum,
-        url: bannedMatch[0],
-        code: "ERR_SPEC_UNPINNED_BUN_URL",
-        detail:
-          "Banned unpinned Bun URL (/tree/, main, #:~:text=, or bun.sh/bun.com)",
-      });
-    }
 
     PINNED_BLOB_URL_RE.lastIndex = 0;
     let pinnedMatch: RegExpExecArray | null;
