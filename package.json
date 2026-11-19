@@ -161,6 +161,7 @@
     "ticker:coverage": "bun run scripts/ticker_tree_coverage.ts",
     "hierarchy:enrich": "bun run scripts/hierarchy_enrich.ts",
     "customers:profiles": "bun run scripts/build_customer_profiles.ts",
+    "profiles:agents": "bun run scripts/agent_profile_lookup.ts",
     "wagers:score-coverage": "bun run scripts/wager_score_coverage.ts",
     "session:login": "bun run scripts/session_login.ts",
     "session:status": "bun run scripts/session_login.ts --status",
