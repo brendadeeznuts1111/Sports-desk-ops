@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { buildCustomerProfiles } from "../lib/customer_profile.ts";
 import { fixtureBookRows, fixtureTree } from "./__fixtures__/v1-edge-cases.ts";
 
@@ -126,4 +129,76 @@ test("found child keeps its ancestry without a level and counts a PUSH in win ra
       .filter((row) => row.customerId === "C004")
       .map((row) => row.tickets.n),
   ).toEqual([1, 0]);
+});
+
+test("each portfolio dimension reconciles all seven ticket rows", () => {
+  const { summary } = buildCustomerProfiles(fixtureBookRows, fixtureTree);
+  for (const dimension of ["byLeague", "byMarket", "byChannel"] as const) {
+    const buckets = Object.values(summary[dimension]);
+    expect(buckets.reduce((sum, b) => sum + b.n, 0)).toBe(7);
+    expect(buckets.reduce((sum, b) => sum + b.riskUsd, 0)).toBe(500);
+    expect(buckets.reduce((sum, b) => sum + b.netUsd, 0)).toBe(-40);
+  }
+  expect(summary.byLeague.NBA).toEqual({ n: 4, riskUsd: 200, netUsd: 115 });
+  expect(summary.byMarket.SPREAD).toEqual({ n: 4, riskUsd: 200, netUsd: 115 });
+});
+
+test("customers:profiles writes the local registry from JSON inputs", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "profile-registry-"));
+  try {
+    const book = join(dir, "book.json");
+    const tree = join(dir, "tree.json");
+    const out = join(dir, "registry.json");
+    await Promise.all([
+      Bun.write(book, JSON.stringify(fixtureBookRows)),
+      Bun.write(tree, JSON.stringify(fixtureTree)),
+    ]);
+    const proc = Bun.spawn(
+      [
+        process.execPath,
+        "run",
+        "--silent",
+        "customers:profiles",
+        "--book",
+        book,
+        "--tree",
+        tree,
+        "--out",
+        out,
+        "--json",
+      ],
+      {
+        cwd: join(import.meta.dir, ".."),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [exit, stdout, stderr] = await Promise.all([
+      proc.exited,
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    expect(exit, stderr).toBe(0);
+    const file = await Bun.file(out).json();
+    expect(file.schemaVersion).toBe(1);
+    expect(file.source).toEqual({ book, tree });
+    expect(new Date(file.generatedAt).toISOString()).toBe(file.generatedAt);
+    expect(file.profiles).toHaveLength(6);
+    expect(file.summary).toMatchObject({
+      customers: 6,
+      tickets: 7,
+      sampleNetUsd: -40,
+    });
+    expect(
+      file.profiles.filter(
+        (p: { customerId: string }) => p.customerId === "C004",
+      ),
+    ).toHaveLength(2);
+    expect(JSON.parse(stdout)).toEqual({
+      summary: file.summary,
+      profiles: file.profiles,
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
