@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { existsSync } from "node:fs";
 import type { Subprocess } from "bun";
 
 describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
@@ -210,6 +211,40 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
       };
       expect(sumJson.success).toBe(true);
       expect(sumJson.summary.totalPending).toBeGreaterThanOrEqual(0);
+    });
+
+    it("surfaces real profiles in GET /api/customers and resolves DOD6 profile/rating when local artifacts exist", async () => {
+      const hasRealProfiles =
+        existsSync("data/customer-profiles.json") ||
+        existsSync("reports/harvested-live-profiles.json");
+      const custRes = await fetch(`${baseUrl}/api/customers`);
+      expect(custRes.status).toBe(200);
+      const custJson = (await custRes.json()) as {
+        book?: Array<{
+          customer_id?: string;
+          synthetic?: boolean;
+          clv_bps?: number;
+        }>;
+      };
+      if (hasRealProfiles) {
+        const realRows = (custJson.book ?? []).filter(
+          (r) => r.synthetic !== true,
+        );
+        expect(realRows.length).toBeGreaterThan(100);
+        expect(custJson.book?.some((r) => r.synthetic === true)).toBe(true);
+      }
+
+      if (existsSync("data/sportsdesk_unified_baseline_v54.dodbin")) {
+        const gxRes = await fetch(`${baseUrl}/api/customer/rating?id=GX195`);
+        expect(gxRes.status).toBe(200);
+        const gx = (await gxRes.json()) as {
+          success: boolean;
+          rating: { customerId: string; clvBps: number | null };
+        };
+        expect(gx.success).toBe(true);
+        expect(gx.rating.customerId).toBe("GX195");
+        expect(gx.rating.clvBps).toBe(185);
+      }
     });
   });
 

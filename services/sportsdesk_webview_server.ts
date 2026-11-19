@@ -5104,6 +5104,48 @@ function customerRowFromProfileDocument(
   };
 }
 
+type Dod6LifetimeReaderRef =
+  import("../lib/dod6_v54_lifetime_reader.ts").Dod6V54LifetimeReader;
+let cachedWebviewDod6: {
+  readonly stamp: string;
+  readonly reader: Dod6LifetimeReaderRef | null;
+} | null = null;
+
+async function lookupWebviewDod6(id: string) {
+  const norm = id.trim().toUpperCase();
+  if (!norm) return null;
+  const dodbinPath = resolve(
+    repoRoot,
+    "data/sportsdesk_unified_baseline_v54.dodbin",
+  );
+  const st = await Bun.file(dodbinPath)
+    .stat()
+    .catch(() => null);
+  const stamp = st === null ? "missing" : `${st.mtimeMs}:${st.size}`;
+  if (cachedWebviewDod6 === null || cachedWebviewDod6.stamp !== stamp) {
+    if (st === null) {
+      cachedWebviewDod6 = { stamp, reader: null };
+    } else {
+      try {
+        const { createDod6V54LifetimeReader } =
+          await import("../lib/dod6_v54_lifetime_reader.ts");
+        cachedWebviewDod6 = {
+          stamp,
+          reader: await createDod6V54LifetimeReader(dodbinPath),
+        };
+      } catch {
+        cachedWebviewDod6 = { stamp, reader: null };
+      }
+    }
+  }
+  const reader = cachedWebviewDod6.reader;
+  if (!reader) return null;
+  const exact = reader.lookup(norm);
+  if (exact) return exact;
+  const canonical = norm.replace(/_\d+$/, "");
+  return canonical && canonical !== norm ? reader.lookup(canonical) : null;
+}
+
 /**
  * Look up a customer record in enriched_customers_full.json, fixtures, or data/customer-profiles.json.
  */
@@ -5212,16 +5254,55 @@ async function findCustomerRow(id: string): Promise<CustomerBookRow | null> {
     }
   }
 
-  // 4. Open wagers captured tonight: identity and pending tickets, no lifetime aggregates.
+  // 4. Open wagers captured tonight: identity and pending tickets, no lifetime aggregates unless
+  // DOD6 carries measured lifetime stats for the customer.
   try {
     const liveRows = liveWagerRows(
       await Bun.file(resolve(repoRoot, "data/live-wagers.json")).json(),
     );
-    return customerRowFromLiveWagers(normId, liveRows);
+    const liveRow = customerRowFromLiveWagers(normId, liveRows);
+    if (liveRow !== null) {
+      const dod = await lookupWebviewDod6(normId);
+      if (dod === null) return liveRow;
+      return {
+        ...liveRow,
+        ...(dod.clvBps !== null && Number.isFinite(dod.clvBps)
+          ? { clv_bps: dod.clvBps }
+          : {}),
+        ...(dod.clvLegs > 0 ? { clv_legs: dod.clvLegs } : {}),
+        ...(dod.sharpScore !== null && Number.isFinite(dod.sharpScore)
+          ? { sharp_score: dod.sharpScore }
+          : {}),
+        ...(dod.lifetimeNetUsd !== null && Number.isFinite(dod.lifetimeNetUsd)
+          ? { lifetime_net_usd: dod.lifetimeNetUsd }
+          : {}),
+      };
+    }
   } catch {
-    // signal-honesty: an unreadable capture is not a customer record
-    return null;
+    // signal-honesty: an unreadable capture falls through to DOD6 fallback
   }
+
+  // 5. Fallback: DOD6 lifetime binary spine (`data/sportsdesk_unified_baseline_v54.dodbin`).
+  const dod = await lookupWebviewDod6(normId);
+  if (dod !== null) {
+    return {
+      customer_id: normId,
+      provenance: "dod6-spine",
+      status: "Active",
+      ...(dod.clvBps !== null && Number.isFinite(dod.clvBps)
+        ? { clv_bps: dod.clvBps }
+        : {}),
+      ...(dod.clvLegs > 0 ? { clv_legs: dod.clvLegs } : {}),
+      ...(dod.sharpScore !== null && Number.isFinite(dod.sharpScore)
+        ? { sharp_score: dod.sharpScore }
+        : {}),
+      ...(dod.lifetimeNetUsd !== null && Number.isFinite(dod.lifetimeNetUsd)
+        ? { lifetime_net_usd: dod.lifetimeNetUsd }
+        : {}),
+      recent_tickets: [],
+    };
+  }
+  return null;
 }
 
 const ASSET_TEXT_MIMES: Readonly<Record<string, string>> = {

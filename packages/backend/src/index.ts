@@ -9,3 +9,9 @@ export * from "./health.ts";
 export * from "./r2_pipeline.ts";
 export * from "./bet_ticker.ts";
 export * from "./agents.ts";
+export {
+  profileDocumentRow,
+  harvestedCustomerRow,
+  type Dod6CustomerLookupHit,
+  type RankedPlayerLookupHit,
+} from "./customers.ts";

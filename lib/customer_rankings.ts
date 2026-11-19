@@ -372,8 +372,11 @@ export async function buildCustomerRanking(options: {
 
 export {
   runBatchedRanking,
+  peekCachedRankedPlayer,
   computeGini,
   calculateCompositeScore,
+  type CompositeScoreComponents,
+  type FormulaCohortSummary,
   type PlayerRankingRecord,
   type SubAgentRollup,
   type MasterAgentRollup,

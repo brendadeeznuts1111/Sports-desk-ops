@@ -14,11 +14,40 @@ export interface GenericCustomerRow {
   readonly customer_id?: string | undefined;
 }
 
+export interface Dod6CustomerLookupHit {
+  readonly clvBps: number | null;
+  readonly sharpScore: number | null;
+  readonly lifetimeNetUsd: number | null;
+  readonly clvLegs: number;
+  readonly sharpCandidateGatePassed: boolean;
+}
+
+export interface RankedPlayerLookupHit {
+  readonly customerId: string;
+  readonly agentId?: string;
+  readonly masterAgent?: string;
+  readonly totalWagers?: number;
+  readonly avgStakeUsd?: number;
+  readonly lastWagerAt?: string;
+  readonly dominantSport?: string;
+  readonly tierLabel?: string;
+  readonly compositeScore?: number;
+  readonly recommendedLimitUsd?: number;
+  readonly recommendedDelaySeconds?: number;
+}
+
 export interface CustomerRowFinderOptions {
   readonly cwd?: string | undefined;
   readonly enrichedPaths?: readonly string[] | undefined;
   readonly profilesPath?: string | undefined;
   readonly backtestPath?: string | undefined;
+  readonly dodLookup?:
+    | ((
+        id: string,
+      ) => Promise<Dod6CustomerLookupHit | null> | Dod6CustomerLookupHit | null)
+    | undefined;
+  readonly rankedLookup?:
+    ((id: string) => RankedPlayerLookupHit | null) | undefined;
 }
 
 /** Build a stat-cached customer row lookup function over enriched JSON corpora & profiles. */
@@ -161,18 +190,126 @@ export function createCustomerRowFinder<
     }
 
     // 4. Fallback: open wagers captured tonight. The capture writes { LIST }; its rows are pending
-    // tickets, so the row carries identity and the sample but no lifetime aggregates.
+    // tickets, so the row carries identity and the sample but no lifetime aggregates unless DOD6
+    // matches the customer's settled lifetime record.
     const liveWagersPath = resolve(cwd, "data/live-wagers.json");
     const liveWagersStamp = await statStamp(liveWagersPath);
     if (liveWagersStamp !== null) {
       try {
         const rows = liveWagerRows(await Bun.file(liveWagersPath).json());
         const row = liveWagersCustomerRow(normId, rows);
-        if (row !== null) return row as unknown as TRow;
+        if (row !== null) {
+          const ranked = options.rankedLookup?.(normId) ?? null;
+          const dod = options.dodLookup
+            ? await options.dodLookup(normId)
+            : null;
+          if (ranked === null && dod === null) {
+            return row as unknown as TRow;
+          }
+          const enriched: SourcedRow = { ...row };
+          if (
+            enriched.master_agent === undefined &&
+            ranked?.masterAgent &&
+            ranked.masterAgent.trim() !== ""
+          ) {
+            enriched.master_agent = ranked.masterAgent.trim();
+          }
+          if (ranked?.lastWagerAt && enriched.last_active_at === undefined) {
+            enriched.last_active_at = ranked.lastWagerAt;
+          }
+          if (dod !== null) {
+            if (
+              dod.clvBps !== null &&
+              Number.isFinite(dod.clvBps) &&
+              enriched.clv_bps === undefined
+            ) {
+              enriched.clv_bps = dod.clvBps;
+            }
+            if (dod.clvLegs > 0 && enriched.clv_legs === undefined) {
+              enriched.clv_legs = dod.clvLegs;
+            }
+            if (
+              dod.sharpScore !== null &&
+              Number.isFinite(dod.sharpScore) &&
+              enriched.sharp_score === undefined
+            ) {
+              enriched.sharp_score = dod.sharpScore;
+            }
+            if (
+              dod.lifetimeNetUsd !== null &&
+              Number.isFinite(dod.lifetimeNetUsd) &&
+              enriched.lifetime_net_usd === undefined
+            ) {
+              enriched.lifetime_net_usd = dod.lifetimeNetUsd;
+            }
+          }
+          return enriched as unknown as TRow;
+        }
       } catch {
         // signal-honesty: intentional-fallback-invalid-live-wagers-json
       }
     }
+
+    // 5. Fallback: cached 30d rankings and/or DOD6 lifetime binary spine.
+    // Signal honesty: 30d handle is never written as lifetime_volume_usd, and
+    // recommendedLimitUsd is never written as wager_limit_usd.
+    const ranked = options.rankedLookup?.(normId) ?? null;
+    const dod = options.dodLookup ? await options.dodLookup(normId) : null;
+    if (ranked !== null || dod !== null) {
+      const synth: SourcedRow = {
+        customer_id: normId,
+        provenance: ranked !== null ? "rankings-30d" : "dod6-spine",
+        status: "Active",
+        recent_tickets: [],
+      };
+      if (ranked !== null) {
+        if (ranked.agentId && ranked.agentId.trim() !== "") {
+          synth.agent_id = ranked.agentId.trim();
+        }
+        if (ranked.masterAgent && ranked.masterAgent.trim() !== "") {
+          synth.master_agent = ranked.masterAgent.trim();
+        }
+        if (
+          typeof ranked.totalWagers === "number" &&
+          Number.isFinite(ranked.totalWagers) &&
+          ranked.totalWagers > 0
+        ) {
+          synth.total_wagers = ranked.totalWagers;
+        }
+        if (
+          typeof ranked.avgStakeUsd === "number" &&
+          Number.isFinite(ranked.avgStakeUsd) &&
+          ranked.avgStakeUsd > 0
+        ) {
+          synth.average_bet_usd = ranked.avgStakeUsd;
+        }
+        if (ranked.lastWagerAt && ranked.lastWagerAt.trim() !== "") {
+          synth.last_active_at = ranked.lastWagerAt.trim();
+        }
+        if (ranked.dominantSport && ranked.dominantSport.trim() !== "") {
+          synth.context_type = ranked.dominantSport.trim();
+        }
+      }
+      if (dod !== null) {
+        if (dod.clvBps !== null && Number.isFinite(dod.clvBps)) {
+          synth.clv_bps = dod.clvBps;
+        }
+        if (dod.clvLegs > 0) {
+          synth.clv_legs = dod.clvLegs;
+        }
+        if (dod.sharpScore !== null && Number.isFinite(dod.sharpScore)) {
+          synth.sharp_score = dod.sharpScore;
+        }
+        if (
+          dod.lifetimeNetUsd !== null &&
+          Number.isFinite(dod.lifetimeNetUsd)
+        ) {
+          synth.lifetime_net_usd = dod.lifetimeNetUsd;
+        }
+      }
+      return synth as unknown as TRow;
+    }
+
     return null;
   };
 
@@ -210,7 +347,7 @@ const jsonRows = (value: unknown): readonly JsonRow[] =>
  * `data/customer-profiles.json` stores built profiles, not book rows. Lift the book aggregates back
  * into the row field names every other source uses; the ticket sample is not stored there.
  */
-function profileDocumentRow(value: unknown): SourcedRow | null {
+export function profileDocumentRow(value: unknown): SourcedRow | null {
   const profile = jsonRow(value);
   if (!profile) return null;
   const id =
@@ -296,7 +433,7 @@ function liveTicket(row: JsonRow): Record<string, unknown> {
  * Map one harvested profile. `ltvUsd` is the DOD6 lifetime net and `dodClvBps` is null when CLV
  * was never measured; the harvester publishes no lifetime volume, so that field stays absent.
  */
-function harvestedCustomerRow(value: unknown): SourcedRow | null {
+export function harvestedCustomerRow(value: unknown): SourcedRow | null {
   const profile = jsonRow(value);
   if (!profile) return null;
   const id = nonEmptyText(profile.id) ?? nonEmptyText(profile.canonicalId);

@@ -222,6 +222,54 @@ describe("@sportsdesk-ops/backend workspace services", () => {
     expect(backtestRow?.average_bet_usd).toBe(5000);
     expect(await findCustomerRow("UNKNOWN")).toBeNull();
 
+    const { findCustomerRow: findWithDodAndRank } = createCustomerRowFinder<
+      Record<string, unknown> & { customer_id?: string; provenance?: string }
+    >({
+      cwd: SCRATCH,
+      enrichedPaths: [],
+      profilesPath: path.join(SCRATCH, "missing-profiles.json"),
+      backtestPath: path.join(SCRATCH, "missing-backtest.json"),
+      rankedLookup: (id) =>
+        id === "MM1023"
+          ? {
+              customerId: "MM1023",
+              agentId: "MOOSEM",
+              masterAgent: "NOLAWOLF",
+              totalWagers: 301,
+              avgStakeUsd: 1618.6,
+              lastWagerAt: "2026-11-18 18:50:00",
+              dominantSport: "FOOTBALL",
+              recommendedLimitUsd: 1000,
+            }
+          : null,
+      dodLookup: (id) =>
+        id === "MM1023" || id === "DOD_ONLY_1"
+          ? {
+              clvBps: 185,
+              sharpScore: 7.3,
+              lifetimeNetUsd: 42500,
+              clvLegs: 15,
+              sharpCandidateGatePassed: true,
+            }
+          : null,
+    });
+
+    const rankedDodRow = await findWithDodAndRank("MM1023");
+    expect(rankedDodRow?.provenance).toBe("rankings-30d");
+    expect(rankedDodRow?.clv_bps).toBe(185);
+    expect(rankedDodRow?.clv_legs).toBe(15);
+    expect(rankedDodRow?.lifetime_net_usd).toBe(42500);
+    expect(rankedDodRow?.total_wagers).toBe(301);
+    expect(rankedDodRow?.last_active_at).toBe("2026-11-18 18:50:00");
+    // Signal honesty: 30d handle is never written as lifetime volume, nor recommended cap as account limit.
+    expect(rankedDodRow?.lifetime_volume_usd).toBeUndefined();
+    expect(rankedDodRow?.wager_limit_usd).toBeUndefined();
+
+    const dodOnlyRow = await findWithDodAndRank("DOD_ONLY_1");
+    expect(dodOnlyRow?.provenance).toBe("dod6-spine");
+    expect(dodOnlyRow?.clv_bps).toBe(185);
+    expect(dodOnlyRow?.lifetime_volume_usd).toBeUndefined();
+
     const cohorts = computeCustomersCohortPayload({
       backtestLeaderboard: [{ customer: "gp301" }, { customer: "NEW_1" }],
       fixtures: [{ customer_id: "FIX_1" }, { customer_id: "GP301" }],

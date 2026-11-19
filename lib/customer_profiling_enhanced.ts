@@ -729,7 +729,7 @@ export function computeSharpnessCompositeIndex(
 ): SharpnessCompositeIndex {
   // 1. CLV component: 0.0 to 3.0
   let clvScore = 0.0;
-  if (rating.clvSignificance) {
+  if (rating.clvSignificance && rating.clvSignificance.sampleCount >= 2) {
     const t = rating.clvSignificance.tStatistic;
     if (t >= 3.0) clvScore = 3.0;
     else if (t >= 2.0) clvScore = 2.4;
@@ -789,12 +789,14 @@ export function computeSharpnessCompositeIndex(
   }
   timingExploitationScore = Math.min(1.0, timingExploitationScore);
 
+  const roundedClv = Math.round(clvScore * 10) / 10;
+  const roundedBayes = Math.round(bayesianSkillScore * 10) / 10;
+  const roundedSizing = Math.round(sizingDisciplineScore * 10) / 10;
+  const roundedSig = Math.round(signatureSpecializationScore * 10) / 10;
+  const roundedTiming = Math.round(timingExploitationScore * 10) / 10;
+
   const rawSum =
-    clvScore +
-    bayesianSkillScore +
-    sizingDisciplineScore +
-    signatureSpecializationScore +
-    timingExploitationScore;
+    roundedClv + roundedBayes + roundedSizing + roundedSig + roundedTiming;
   const overallScore = Math.min(10.0, Math.round(rawSum * 10) / 10);
 
   let tier: CompositeSharpnessTier = "TIER_5_RECREATIONAL";
@@ -804,20 +806,19 @@ export function computeSharpnessCompositeIndex(
   else if (overallScore >= 4.0) tier = "TIER_4_SEMI_SHARP";
 
   const explanation =
-    `Decomposed Score ${overallScore.toFixed(1)}/10.0 [CLV: ${clvScore.toFixed(1)}/3.0, ` +
-    `Skill: ${bayesianSkillScore.toFixed(1)}/2.5, Sizing: ${sizingDisciplineScore.toFixed(1)}/1.5, ` +
-    `Sig: ${signatureSpecializationScore.toFixed(1)}/2.0, Timing/Parlay: ${timingExploitationScore.toFixed(1)}/1.0] -> ${tier}`;
+    `Decomposed Score ${overallScore.toFixed(1)}/10.0 [CLV: ${roundedClv.toFixed(1)}/3.0, ` +
+    `Skill: ${roundedBayes.toFixed(1)}/2.5, Sizing: ${roundedSizing.toFixed(1)}/1.5, ` +
+    `Sig: ${roundedSig.toFixed(1)}/2.0, Timing/Parlay: ${roundedTiming.toFixed(1)}/1.0] -> ${tier}`;
 
   return {
     overallScore,
     tier,
     components: {
-      clvScore: Math.round(clvScore * 10) / 10,
-      bayesianSkillScore: Math.round(bayesianSkillScore * 10) / 10,
-      sizingDisciplineScore: Math.round(sizingDisciplineScore * 10) / 10,
-      signatureSpecializationScore:
-        Math.round(signatureSpecializationScore * 10) / 10,
-      timingExploitationScore: Math.round(timingExploitationScore * 10) / 10,
+      clvScore: roundedClv,
+      bayesianSkillScore: roundedBayes,
+      sizingDisciplineScore: roundedSizing,
+      signatureSpecializationScore: roundedSig,
+      timingExploitationScore: roundedTiming,
     },
     explanation,
   };

@@ -115,6 +115,8 @@ export function AgentInspectorModal({
                 padding: "5px 10px",
                 fontSize: "12px",
                 textDecoration: "none",
+                backgroundColor: "rgba(56, 189, 248, 0.12)",
+                border: "1px solid rgba(56, 189, 248, 0.35)",
                 color: "#38bdf8",
               }}
             >

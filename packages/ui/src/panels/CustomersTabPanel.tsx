@@ -1,7 +1,8 @@
-import type React from "react";
+import React, { useEffect, useState } from "react";
 import { DASHBOARD_FRESHNESS } from "../config/dashboard.ts";
 import { styles } from "../dashboard_styles.ts";
 import {
+  type CustomerCohortKpiCard,
   type CustomerCohortKpiTone,
   deriveCustomerCohortKpiCards,
   formatProvenanceBadge,
@@ -12,8 +13,12 @@ import type { ReverseDnsForensicsView } from "../../../../lib/reverse_dns_forens
 import { ReverseDnsForensicsCard } from "./ReverseDnsForensicsCard.tsx";
 import { SharpnessDecomposition } from "../viz/SharpnessDecomposition.tsx";
 import type {
+  Billy666BranchCounts,
+  Billy666BranchFilter,
+  CustomerAccountScope,
   CustomerRatingApiPayload,
   CustomersApiResponse,
+  CustomerScopeCounts,
   CustomerSortKey,
   ShowcaseCustomer,
 } from "../types.ts";
@@ -37,9 +42,21 @@ export interface CustomersTabPanelProps {
   };
   readonly onCustomerSort: (key: CustomerSortKey) => void;
   readonly selectedCustomer: ShowcaseCustomer | null;
+  readonly inspectedCustomer?: ShowcaseCustomer | null | undefined;
   readonly onSelectCustomer: (cust: ShowcaseCustomer) => void;
   readonly selectedCustomerRating?: CustomerRatingApiPayload | null | undefined;
   readonly selectedCustomerRatingLoading?: boolean | undefined;
+  readonly customerScope?: CustomerAccountScope | undefined;
+  readonly onCustomerScopeChange?:
+    ((scope: CustomerAccountScope) => void) | undefined;
+  readonly scopeCounts?: CustomerScopeCounts | null | undefined;
+  readonly formulaKpiCards?:
+    readonly CustomerCohortKpiCard[] | null | undefined;
+  readonly masterBranchFilter?: Billy666BranchFilter | undefined;
+  readonly onMasterBranchFilterChange?:
+    ((branch: Billy666BranchFilter) => void) | undefined;
+  readonly masterBranchCounts?: Billy666BranchCounts | null | undefined;
+  readonly rankingsLoading?: boolean | undefined;
   /** Account id the operator tried to inspect but the curated cohort lacks. */
   readonly customerLookupNotice?: string | null | undefined;
   readonly onClearCustomerLookupNotice?: (() => void) | undefined;
@@ -173,9 +190,18 @@ export function CustomersTabPanel({
   customerSort,
   onCustomerSort,
   selectedCustomer,
+  inspectedCustomer = null,
   onSelectCustomer,
   selectedCustomerRating = null,
   selectedCustomerRatingLoading = false,
+  customerScope = "ALL_REAL",
+  onCustomerScopeChange,
+  scopeCounts = null,
+  formulaKpiCards = null,
+  masterBranchFilter = "ALL",
+  onMasterBranchFilterChange,
+  masterBranchCounts = null,
+  rankingsLoading = false,
   customerLookupNotice = null,
   onClearCustomerLookupNotice,
   copiedCliId,
@@ -192,15 +218,31 @@ export function CustomersTabPanel({
   matrixProfileOverlay = null,
   onOpenTerminalRadar,
 }: CustomersTabPanelProps): React.ReactElement {
-  const showOpenRisk =
-    matrixMode && sortedCustomers.some((c) => (c.openRiskUsd ?? 0) > 0);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(100);
+  useEffect(() => {
+    setPage(0);
+  }, [
+    searchQuery,
+    filterTier,
+    customerScope,
+    masterBranchFilter,
+    customerSort.key,
+    customerSort.dir,
+    sortedCustomers.length,
+    pageSize,
+  ]);
+  const showOpenRisk = sortedCustomers.some((c) => (c.openRiskUsd ?? 0) > 0);
+  const inspected = inspectedCustomer ?? selectedCustomer;
   const effectiveStatus: "pending" | "ready" | "unavailable" =
     cohortsStatus ?? (cohortsReport !== null ? "ready" : "pending");
-  const kpiCards = deriveCustomerCohortKpiCards({
+  const legacyKpiCards = deriveCustomerCohortKpiCards({
     report: cohortsReport,
     status: effectiveStatus,
     error: cohortsError,
   });
+  const kpiCards = formulaKpiCards ?? legacyKpiCards;
+  const usingFormulaCards = formulaKpiCards !== null;
   const isUnknown = (cust: ShowcaseCustomer, field: string): boolean =>
     cust.unknown?.includes(field) ?? false;
   const provenanceBadge = formatProvenanceBadge(
@@ -276,10 +318,20 @@ export function CustomersTabPanel({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: "8px 12px",
           marginBottom: "8px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "6px 8px",
+            minWidth: 0,
+          }}
+        >
           <span
             style={{
               fontSize: "11px",
@@ -289,23 +341,46 @@ export function CustomersTabPanel({
               fontWeight: 600,
             }}
           >
-            Corpora & Surveillance Cohorts
+            {usingFormulaCards
+              ? "Formula Surveillance Cohorts (CLV · Key-Number · Hook · Syndicate · BILLY666 Tree)"
+              : "Corpora & Surveillance Cohorts"}
           </span>
+          {usingFormulaCards ? (
+            <span
+              data-customers-formula-badge="true"
+              style={{
+                fontSize: "10px",
+                fontWeight: 700,
+                padding: "2px 8px",
+                borderRadius: "999px",
+                color: "#34d399",
+                backgroundColor: "rgba(16, 185, 129, 0.14)",
+                border: "1px solid rgba(52, 211, 153, 0.4)",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+              title="All 6 cohort cards are derived live from DOD6 CLV formulas, 30d JSONL point-buy regexes, multi-seat/conduit grouping, and BILLY666 hierarchy."
+            >
+              ƒ COMPUTED LIVE
+            </span>
+          ) : null}
           <span
             title={provenanceBadge.detail}
             style={{
               fontSize: "10px",
               fontWeight: 700,
-              padding: "2px 7px",
+              padding: "2px 8px",
               borderRadius: "999px",
               color: provenanceBadge.fg,
               backgroundColor: provenanceBadge.bg,
               border: `1px solid ${provenanceBadge.border}`,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
             }}
           >
             {provenanceBadge.badgeText}
           </span>
-          {cohortsReport?.provenance.sourcePath ? (
+          {!usingFormulaCards && cohortsReport?.provenance.sourcePath ? (
             <span style={{ fontSize: "10px", color: "#64748b" }}>
               {cohortsReport.provenance.sourcePath}
             </span>
@@ -313,20 +388,31 @@ export function CustomersTabPanel({
         </div>
         <button
           type="button"
+          className="sd-filter-pill"
           style={{
-            background: "none",
-            border: "none",
+            background: "rgba(56, 189, 248, 0.08)",
+            border: "1px solid rgba(56, 189, 248, 0.28)",
+            borderRadius: "6px",
             color: "#38bdf8",
             fontSize: "11px",
+            fontWeight: 600,
             cursor: "pointer",
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
             gap: "4px",
-            padding: "2px 6px",
+            padding: "4px 10px",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
           }}
           onClick={onToggleKpis}
         >
-          {kpisCollapsed ? "Show Corpora ▼" : "Hide Corpora ▲"}
+          {usingFormulaCards
+            ? kpisCollapsed
+              ? "Show Formulas ▼"
+              : "Hide Formulas ▲"
+            : kpisCollapsed
+              ? "Show Corpora ▼"
+              : "Hide Corpora ▲"}
         </button>
       </div>
 
@@ -370,7 +456,8 @@ export function CustomersTabPanel({
                 >
                   <span style={styles.kpiLabel}>{card.label}</span>
                   {card.sharePct !== null &&
-                    card.id !== "unique-surveillance" && (
+                    card.id !== "unique-surveillance" &&
+                    card.id !== "billy666-universe" && (
                       <span
                         style={{
                           fontSize: "10px",
@@ -382,7 +469,7 @@ export function CustomersTabPanel({
                           padding: "1px 6px",
                           whiteSpace: "nowrap",
                         }}
-                        title={`${card.sharePct}% of Unique Surveillance (${card.count?.toLocaleString() ?? "?"})`}
+                        title={`${card.sharePct}% of ${usingFormulaCards ? "Active Universe" : "Unique Surveillance"} (${card.count?.toLocaleString() ?? "?"})`}
                       >
                         {card.sharePct}%
                       </span>
@@ -408,6 +495,7 @@ export function CustomersTabPanel({
               <button
                 key={card.id}
                 type="button"
+                className="sd-kpi-card"
                 style={cardStyle}
                 onClick={() => {
                   if (card.filterTier) {
@@ -423,7 +511,7 @@ export function CustomersTabPanel({
                 {content}
               </button>
             ) : (
-              <div key={card.id} style={cardStyle}>
+              <div key={card.id} className="sd-kpi-card" style={cardStyle}>
                 {content}
               </div>
             );
@@ -434,14 +522,16 @@ export function CustomersTabPanel({
       {/* Filter and Search Bar */}
       <div style={styles.filterBar}>
         <input
+          className="sd-search-input"
           style={styles.searchInput}
           placeholder="🔍 Search by Customer ID, Name, Agent or Sport..."
           value={searchQuery}
           onChange={(e) => onSearchQueryChange(e.target.value)}
         />
-        <div style={styles.filterPills}>
+        <div style={{ ...styles.filterPills, flexWrap: "wrap" }}>
           <button
             type="button"
+            className="sd-filter-pill"
             style={styles.pill(filterTier === "ALL")}
             onClick={() => onFilterTierChange("ALL")}
           >
@@ -449,6 +539,7 @@ export function CustomersTabPanel({
           </button>
           <button
             type="button"
+            className="sd-filter-pill"
             style={styles.pill(filterTier === "ELITE")}
             onClick={() => onFilterTierChange("ELITE")}
           >
@@ -456,13 +547,59 @@ export function CustomersTabPanel({
           </button>
           <button
             type="button"
+            className="sd-filter-pill"
             style={styles.pill(filterTier === "POSITIVE_CLV")}
             onClick={() => onFilterTierChange("POSITIVE_CLV")}
           >
             📈 +CLV Sharps
           </button>
+          {usingFormulaCards ? (
+            <>
+              <button
+                type="button"
+                className="sd-filter-pill"
+                data-customer-filter="POWERED_POS_CLV"
+                style={styles.pill(filterTier === "POWERED_POS_CLV")}
+                onClick={() => onFilterTierChange("POWERED_POS_CLV")}
+                title="clvLegs ≥ 5 and measured CLV > 0 bps"
+              >
+                ⚡ Powered +CLV
+              </button>
+              <button
+                type="button"
+                className="sd-filter-pill"
+                data-customer-filter="PROFITABLE_CLV"
+                style={styles.pill(filterTier === "PROFITABLE_CLV")}
+                onClick={() => onFilterTierChange("PROFITABLE_CLV")}
+                title="Measured CLV > 0 bps and lifetime player net > $0"
+              >
+                💰 Profitable +CLV
+              </button>
+              <button
+                type="button"
+                className="sd-filter-pill"
+                data-customer-filter="KEY_NUMBER_BUYER"
+                style={styles.pill(filterTier === "KEY_NUMBER_BUYER")}
+                onClick={() => onFilterTierChange("KEY_NUMBER_BUYER")}
+                title="30d Football spread point-buys on key numbers (3/7/10/14/21) ≥ 3"
+              >
+                🎯 Key-Num Buyers
+              </button>
+              <button
+                type="button"
+                className="sd-filter-pill"
+                data-customer-filter="HOOK_OR_SYNDICATE"
+                style={styles.pill(filterTier === "HOOK_OR_SYNDICATE")}
+                onClick={() => onFilterTierChange("HOOK_OR_SYNDICATE")}
+                title="½-pt hook buyers (≥ 5 & ≥ 5%), proxy conduits, or multi-seat accounts"
+              >
+                🪝 Hook/Syndicates
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
+            className="sd-filter-pill"
             style={styles.pill(filterTier === "SYNDICATE")}
             onClick={() => onFilterTierChange("SYNDICATE")}
           >
@@ -470,6 +607,7 @@ export function CustomersTabPanel({
           </button>
           <button
             type="button"
+            className="sd-filter-pill"
             style={styles.pill(filterTier === "STEAM")}
             onClick={() => onFilterTierChange("STEAM")}
           >
@@ -477,6 +615,7 @@ export function CustomersTabPanel({
           </button>
           <button
             type="button"
+            className="sd-filter-pill"
             style={styles.pill(filterTier === "RECREATIONAL")}
             onClick={() => onFilterTierChange("RECREATIONAL")}
           >
@@ -539,6 +678,170 @@ export function CustomersTabPanel({
           ) : null}
         </div>
       </div>
+
+      {scopeCounts && onCustomerScopeChange ? (
+        <div
+          data-customers-scope-strip="true"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "6px",
+            margin: "0 0 12px",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "11px",
+              color: "#64748b",
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+              fontWeight: 600,
+              marginRight: "4px",
+            }}
+          >
+            Universe:
+          </span>
+          {(
+            [
+              {
+                id: "ALL_REAL",
+                label: `🌐 All Real (${scopeCounts.allReal.toLocaleString()})`,
+                title:
+                  "Real profiled, backtest, 30d active, and live-open accounts",
+              },
+              {
+                id: "ACTIVE_7D",
+                label: `📅 7d Active (${scopeCounts.active7d.toLocaleString()})`,
+                title:
+                  "Accounts with wagers in the last 7 days or live open exposure",
+              },
+              {
+                id: "LIVE_OPEN",
+                label: `⚡ Live Open (${scopeCounts.liveOpen.toLocaleString()})`,
+                title:
+                  "Accounts with pending tickets on tonight's live capture",
+              },
+              {
+                id: "WITH_CLV",
+                label: `📈 Measured CLV (${scopeCounts.withClv.toLocaleString()})`,
+                title:
+                  "Accounts with measured closing-line value (book, backtest, or DOD6 spine)",
+              },
+              {
+                id: "CURATED",
+                label: `📋 Curated (${scopeCounts.curated.toLocaleString()})`,
+                title:
+                  "Live customer profiles, harvested profiles, and backtest leaderboard",
+              },
+              ...(scopeCounts.synthetic > 0
+                ? [
+                    {
+                      id: "ALL_WITH_SYNTHETIC" as const,
+                      label: `🧪 + Synthetic (${scopeCounts.synthetic.toLocaleString()})`,
+                      title:
+                        "Include synthetic fixture demo accounts (SYNTH_*)",
+                    },
+                  ]
+                : []),
+            ] as const
+          ).map((pill) => (
+            <button
+              key={pill.id}
+              type="button"
+              className="sd-filter-pill"
+              data-customer-scope={pill.id}
+              style={styles.pill(customerScope === pill.id)}
+              onClick={() => onCustomerScopeChange(pill.id)}
+              title={pill.title}
+            >
+              {pill.label}
+            </button>
+          ))}
+          {rankingsLoading ? (
+            <span
+              data-customers-rankings-loading="true"
+              style={{
+                fontSize: "11px",
+                color: "#38bdf8",
+                marginLeft: "4px",
+              }}
+            >
+              ⏳ Hydrating 30d active accounts…
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {masterBranchCounts && onMasterBranchFilterChange ? (
+        <div
+          data-customers-billy666-tree="true"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "6px",
+            margin: "-4px 0 12px",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "11px",
+              color: "#64748b",
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+              fontWeight: 600,
+              marginRight: "4px",
+            }}
+          >
+            BILLY666 Tree:
+          </span>
+          {(
+            [
+              {
+                id: "ALL",
+                label: `🌳 All (${masterBranchCounts.all.toLocaleString()})`,
+              },
+              {
+                id: "NOLAWOLF",
+                label: `NOLAWOLF (${masterBranchCounts.NOLAWOLF.toLocaleString()})`,
+              },
+              {
+                id: "BILLY667",
+                label: `BILLY667 (${masterBranchCounts.BILLY667.toLocaleString()})`,
+              },
+              {
+                id: "RTEST5",
+                label: `RTEST5 (${masterBranchCounts.RTEST5.toLocaleString()})`,
+              },
+              {
+                id: "SAINTS2009",
+                label: `SAINTS2009 (${masterBranchCounts.SAINTS2009.toLocaleString()})`,
+              },
+              ...(masterBranchCounts.OTHER > 0
+                ? [
+                    {
+                      id: "OTHER" as const,
+                      label: `Other Sub-Trees (${masterBranchCounts.OTHER.toLocaleString()})`,
+                    },
+                  ]
+                : []),
+            ] as const
+          ).map((branch) => (
+            <button
+              key={branch.id}
+              type="button"
+              className="sd-filter-pill"
+              data-billy666-branch={branch.id}
+              style={styles.pill(masterBranchFilter === branch.id)}
+              onClick={() => onMasterBranchFilterChange(branch.id)}
+              title={`Filter Customers by BILLY666 tree branch ${branch.id}`}
+            >
+              {branch.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {matrixMode && matrixProfileOverlay ? (
         <div
@@ -648,8 +951,20 @@ export function CustomersTabPanel({
           );
         }
         const cohortSummary = summarizeDisplayedCustomers(sortedCustomers);
+        const totalPages = Math.max(
+          1,
+          Math.ceil(sortedCustomers.length / pageSize),
+        );
+        const safePage = Math.min(page, totalPages - 1);
+        const pagedCustomers = sortedCustomers.slice(
+          safePage * pageSize,
+          (safePage + 1) * pageSize,
+        );
         const hasActiveFilter =
-          searchQuery.trim() !== "" || filterTier !== "ALL";
+          searchQuery.trim() !== "" ||
+          filterTier !== "ALL" ||
+          (scopeCounts !== null && customerScope !== "ALL_REAL") ||
+          (masterBranchCounts !== null && masterBranchFilter !== "ALL");
         const selectedIndex = selectedCustomer
           ? sortedCustomers.findIndex((c) => c.id === selectedCustomer.id)
           : -1;
@@ -659,6 +974,12 @@ export function CustomersTabPanel({
         const resetFilters = () => {
           onSearchQueryChange("");
           onFilterTierChange("ALL");
+          if (onCustomerScopeChange && customerScope !== "ALL_REAL") {
+            onCustomerScopeChange("ALL_REAL");
+          }
+          if (onMasterBranchFilterChange && masterBranchFilter !== "ALL") {
+            onMasterBranchFilterChange("ALL");
+          }
         };
         const stepCustomer = (delta: -1 | 1) => {
           if (sortedCustomers.length === 0) return;
@@ -673,6 +994,8 @@ export function CustomersTabPanel({
           if (next) {
             onSelectCustomer(next);
             onClearForensicResult();
+            const targetPage = Math.floor(nextIdx / pageSize);
+            if (targetPage !== safePage) setPage(targetPage);
           }
         };
 
@@ -758,6 +1081,100 @@ export function CustomersTabPanel({
                   </span>
                 </div>
               </div>
+              {sortedCustomers.length > pageSize ? (
+                <div
+                  data-customers-pagination="true"
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
+                    marginBottom: "8px",
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #1e293b",
+                    backgroundColor: "rgba(15, 23, 42, 0.72)",
+                    fontSize: "11px",
+                    color: "#94a3b8",
+                  }}
+                >
+                  <span>
+                    Showing {(safePage * pageSize + 1).toLocaleString()}–
+                    {Math.min(
+                      (safePage + 1) * pageSize,
+                      sortedCustomers.length,
+                    ).toLocaleString()}{" "}
+                    of {sortedCustomers.length.toLocaleString()}
+                  </span>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <label style={{ color: "#64748b" }}>
+                      Rows:{" "}
+                      <select
+                        value={pageSize}
+                        onChange={(e) =>
+                          setPageSize(Number(e.target.value) || 100)
+                        }
+                        style={{
+                          backgroundColor: "#0f172a",
+                          color: "#e2e8f0",
+                          border: "1px solid #334155",
+                          borderRadius: "4px",
+                          padding: "2px 6px",
+                          fontSize: "11px",
+                        }}
+                      >
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                        <option value={250}>250</option>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      disabled={safePage === 0}
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      style={{
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        border: "1px solid #334155",
+                        backgroundColor: "#1e293b",
+                        color: safePage === 0 ? "#475569" : "#e2e8f0",
+                        cursor: safePage === 0 ? "default" : "pointer",
+                      }}
+                    >
+                      ← Prev
+                    </button>
+                    <span>
+                      Page {safePage + 1} / {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={safePage >= totalPages - 1}
+                      onClick={() =>
+                        setPage((p) => Math.min(totalPages - 1, p + 1))
+                      }
+                      style={{
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        border: "1px solid #334155",
+                        backgroundColor: "#1e293b",
+                        color:
+                          safePage >= totalPages - 1 ? "#475569" : "#e2e8f0",
+                        cursor:
+                          safePage >= totalPages - 1 ? "default" : "pointer",
+                      }}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <div className="profiles-wrap">
                 <table style={styles.table}>
                   <thead>
@@ -857,7 +1274,7 @@ export function CustomersTabPanel({
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedCustomers.map((cust) => {
+                    {pagedCustomers.map((cust) => {
                       const isSelected = selectedCustomer?.id === cust.id;
                       const tierClass = cust.tier.includes("TIER_1")
                         ? "tier-1"
@@ -931,6 +1348,44 @@ export function CustomersTabPanel({
                                   Seat #{cust.subAccountIndex}
                                 </span>
                               )}
+                              {cust.isKeyNumberBuyer ? (
+                                <span
+                                  style={{
+                                    ...styles.subBadge,
+                                    backgroundColor: "rgba(251, 191, 36, 0.16)",
+                                    color: "#fbbf24",
+                                  }}
+                                  title="Football spread key-number point buyer (3/7/10/14/21)"
+                                >
+                                  Key# ×{cust.keyNumberBuys30d ?? 0}
+                                </span>
+                              ) : null}
+                              {cust.isHalfPointHookBuyer ? (
+                                <span
+                                  style={{
+                                    ...styles.subBadge,
+                                    backgroundColor:
+                                      "rgba(167, 139, 250, 0.16)",
+                                    color: "#c4b5fd",
+                                  }}
+                                  title={`Half-point hook buyer (${cust.halfPointBuyRatePct ?? 0}% of 30d wagers)`}
+                                >
+                                  ½pt ×{cust.halfPointBuys30d ?? 0}
+                                </span>
+                              ) : null}
+                              {cust.isMultiSeatCluster ? (
+                                <span
+                                  style={{
+                                    ...styles.subBadge,
+                                    backgroundColor:
+                                      "rgba(248, 113, 113, 0.16)",
+                                    color: "#fca5a5",
+                                  }}
+                                  title="Multiple CustomerID seats under one Login"
+                                >
+                                  {cust.seatCount} seats
+                                </span>
+                              ) : null}
                             </div>
                             <div style={styles.custAgent}>
                               Agent:{" "}
@@ -957,6 +1412,24 @@ export function CustomersTabPanel({
                                 {cust.agentId} ↗
                               </a>
                             </div>
+                            {cust.handle30dUsd !== undefined ||
+                            cust.lastWagerAt ? (
+                              <div style={styles.custSub}>
+                                {[
+                                  cust.handle30dUsd !== undefined
+                                    ? `30d: $${Math.round(cust.handle30dUsd).toLocaleString()}`
+                                    : null,
+                                  cust.totalWagers !== undefined
+                                    ? `${cust.totalWagers}w`
+                                    : null,
+                                  cust.lastWagerAt
+                                    ? `Last: ${cust.lastWagerAt.slice(0, 10)}`
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </div>
+                            ) : null}
                           </td>
                           <td style={styles.td}>
                             <span className={`chip ${tierClass}`}>
@@ -1004,6 +1477,12 @@ export function CustomersTabPanel({
                             ) : (
                               <span style={{ color: "#64748b" }}>—</span>
                             )}
+                            {typeof cust.clvLegs === "number" &&
+                            cust.clvLegs > 0 ? (
+                              <div style={styles.custSub}>
+                                {cust.clvLegs} matched legs
+                              </div>
+                            ) : null}
                           </td>
                           <td style={styles.td}>
                             <div>{cust.sizingStrategy}</div>
@@ -1077,7 +1556,7 @@ export function CustomersTabPanel({
                     {sortedCustomers.length === 0 && (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={showOpenRisk ? 9 : 8}
                           style={{
                             padding: "24px 16px",
                             textAlign: "center",
@@ -1115,7 +1594,7 @@ export function CustomersTabPanel({
 
             {/* Right Column: Deep-Dive Inspector */}
             <div className="detail-panel" style={styles.inspectorPanel}>
-              {selectedCustomer ? (
+              {inspected ? (
                 <div>
                   <div style={styles.inspectorHeader}>
                     <div>
@@ -1126,9 +1605,7 @@ export function CustomersTabPanel({
                           gap: "8px",
                         }}
                       >
-                        <h2 style={styles.inspectorTitle}>
-                          {selectedCustomer.id}
-                        </h2>
+                        <h2 style={styles.inspectorTitle}>{inspected.id}</h2>
                         {selectedIndex >= 0 && (
                           <span
                             style={{
@@ -1146,10 +1623,33 @@ export function CustomersTabPanel({
                         )}
                       </div>
                       <div style={styles.inspectorSub}>
-                        {selectedCustomer.name} · Agent:{" "}
-                        <b>{selectedCustomer.agentId}</b> (Master:{" "}
-                        <b>{selectedCustomer.masterAgent}</b>)
+                        {inspected.name} · Agent: <b>{inspected.agentId}</b>{" "}
+                        (Master: <b>{inspected.masterAgent}</b>)
                       </div>
+                      {inspected.handle30dUsd !== undefined ||
+                      inspected.totalWagers !== undefined ||
+                      inspected.openRiskUsd !== undefined ||
+                      inspected.lastWagerAt ? (
+                        <div style={{ ...styles.custSub, marginTop: "3px" }}>
+                          {[
+                            inspected.handle30dUsd !== undefined
+                              ? `30d Handle: $${Math.round(inspected.handle30dUsd).toLocaleString()}`
+                              : null,
+                            inspected.totalWagers !== undefined
+                              ? `Wagers: ${inspected.totalWagers.toLocaleString()}`
+                              : null,
+                            inspected.openRiskUsd !== undefined &&
+                            inspected.openRiskUsd > 0
+                              ? `Open: $${Math.round(inspected.openRiskUsd).toLocaleString()}`
+                              : null,
+                            inspected.lastWagerAt
+                              ? `Last Wager: ${inspected.lastWagerAt.slice(0, 10)}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
+                      ) : null}
                     </div>
                     <div
                       style={{
@@ -1203,9 +1703,7 @@ export function CustomersTabPanel({
                           fontSize: "11px",
                           cursor: "pointer",
                         }}
-                        onClick={() =>
-                          onOpenTerminalProfile(selectedCustomer.id)
-                        }
+                        onClick={() => onOpenTerminalProfile(inspected.id)}
                         title="Inspect this customer in Bun.Terminal emulator"
                       >
                         💻 Terminal
@@ -1219,9 +1717,7 @@ export function CustomersTabPanel({
                             fontSize: "11px",
                             cursor: "pointer",
                           }}
-                          onClick={() =>
-                            onOpenTerminalRadar(selectedCustomer.id)
-                          }
+                          onClick={() => onOpenTerminalRadar(inspected.id)}
                           title="Run profile &lt;id&gt; --radar in Bun.Terminal"
                         >
                           📊 Radar
@@ -1236,9 +1732,7 @@ export function CustomersTabPanel({
                             fontSize: "11px",
                             cursor: "pointer",
                           }}
-                          onClick={() =>
-                            onViewCustomerWagers(selectedCustomer.id)
-                          }
+                          onClick={() => onViewCustomerWagers(inspected.id)}
                           title="Filter Live Wagers tape to this customer"
                         >
                           ⚡ Wager Tape
@@ -1252,15 +1746,15 @@ export function CustomersTabPanel({
                           fontSize: "11px",
                           cursor: "pointer",
                         }}
-                        onClick={() => onCopyCli(selectedCustomer.id)}
+                        onClick={() => onCopyCli(inspected.id)}
                         title="Copy terminal CLI command to clipboard"
                       >
-                        {copiedCliId === selectedCustomer.id
+                        {copiedCliId === inspected.id
                           ? "✓ Copied CLI"
                           : "📋 Copy CLI"}
                       </button>
                       <a
-                        href={`https://fantasy402.com/manager.html?customer=${selectedCustomer.id}`}
+                        href={`https://fantasy402.com/manager.html?customer=${inspected.id}`}
                         target="_blank"
                         rel="noreferrer"
                         style={{
@@ -1274,11 +1768,11 @@ export function CustomersTabPanel({
                       >
                         Portal ↗
                       </a>
-                      <span style={styles.tierBadge(selectedCustomer.tier)}>
-                        {selectedCustomer.tierLabel ?? selectedCustomer.tier}{" "}
-                        (Score: {selectedCustomer.score.toFixed(1)}/10.0)
+                      <span style={styles.tierBadge(inspected.tier)}>
+                        {inspected.tierLabel ?? inspected.tier} (Score:{" "}
+                        {inspected.score.toFixed(1)}/10.0)
                       </span>
-                      {selectedCustomer.source ? (
+                      {inspected.source ? (
                         <span
                           style={{
                             fontSize: "10px",
@@ -1288,7 +1782,7 @@ export function CustomersTabPanel({
                             color: "#94a3b8",
                           }}
                         >
-                          source: {selectedCustomer.source}
+                          source: {inspected.source}
                         </span>
                       ) : null}
                     </div>
@@ -1300,11 +1794,11 @@ export function CustomersTabPanel({
                       🎯 Decomposed Sharpness Radars
                     </h4>
                     <SharpnessDecomposition
-                      score={selectedCustomer.score}
+                      score={inspected.score}
                       components={RADAR_AXES.map((axis) => ({
                         key: axis.valueKey,
                         label: axis.label,
-                        value: selectedCustomer[axis.valueKey],
+                        value: inspected[axis.valueKey],
                         cap: axis.max,
                       }))}
                     />
@@ -1319,25 +1813,23 @@ export function CustomersTabPanel({
                       <div>
                         Strategy:{" "}
                         <b>
-                          {isUnknown(selectedCustomer, "sizing")
+                          {isUnknown(inspected, "sizing")
                             ? "—"
-                            : selectedCustomer.sizingStrategy}
+                            : inspected.sizingStrategy}
                         </b>
                       </div>
                       <div>
                         Gini Inequality:{" "}
                         <b>
-                          {isUnknown(selectedCustomer, "gini")
-                            ? "—"
-                            : selectedCustomer.gini}
+                          {isUnknown(inspected, "gini") ? "—" : inspected.gini}
                         </b>
                       </div>
                       <div>
                         Mean Stake:{" "}
                         <b>
-                          {isUnknown(selectedCustomer, "meanStake")
+                          {isUnknown(inspected, "meanStake")
                             ? "—"
-                            : `$${selectedCustomer.meanStake.toLocaleString()}`}
+                            : `$${inspected.meanStake.toLocaleString()}`}
                         </b>
                       </div>
                       <div>
@@ -1345,19 +1837,18 @@ export function CustomersTabPanel({
                         <b
                           style={{
                             color:
-                              !isUnknown(selectedCustomer, "var95") &&
-                              !isUnknown(selectedCustomer, "limit") &&
-                              selectedCustomer.recommendedLimitUsd > 0 &&
-                              selectedCustomer.var95Usd >
-                                selectedCustomer.recommendedLimitUsd
+                              !isUnknown(inspected, "var95") &&
+                              !isUnknown(inspected, "limit") &&
+                              inspected.recommendedLimitUsd > 0 &&
+                              inspected.var95Usd > inspected.recommendedLimitUsd
                                 ? "#f87171"
                                 : "#7dd3fc",
                           }}
                         >
-                          {!isUnknown(selectedCustomer, "var95") &&
-                          !isUnknown(selectedCustomer, "limit") &&
-                          selectedCustomer.recommendedLimitUsd > 0
-                            ? `${Math.round((selectedCustomer.var95Usd / selectedCustomer.recommendedLimitUsd) * 100)}%`
+                          {!isUnknown(inspected, "var95") &&
+                          !isUnknown(inspected, "limit") &&
+                          inspected.recommendedLimitUsd > 0
+                            ? `${Math.round((inspected.var95Usd / inspected.recommendedLimitUsd) * 100)}%`
                             : "n/a"}
                         </b>
                       </div>
@@ -1369,42 +1860,42 @@ export function CustomersTabPanel({
                       <div>
                         7d 95% VaR:{" "}
                         <b>
-                          {isUnknown(selectedCustomer, "var95")
+                          {isUnknown(inspected, "var95")
                             ? "—"
-                            : `$${selectedCustomer.var95Usd.toLocaleString()}`}
+                            : `$${inspected.var95Usd.toLocaleString()}`}
                         </b>
                       </div>
                       <div>
                         Expected Shortfall (CVaR):{" "}
                         <b>
-                          {isUnknown(selectedCustomer, "var95")
+                          {isUnknown(inspected, "var95")
                             ? "—"
-                            : `$${selectedCustomer.cvar95Usd.toLocaleString()}`}
+                            : `$${inspected.cvar95Usd.toLocaleString()}`}
                         </b>
                       </div>
                       <div>
                         Lifetime Hold:{" "}
                         <b
                           style={{
-                            color: isUnknown(selectedCustomer, "holdPct")
+                            color: isUnknown(inspected, "holdPct")
                               ? "#94a3b8"
-                              : selectedCustomer.holdPct < 0
+                              : inspected.holdPct < 0
                                 ? "#f87171"
                                 : "#4ade80",
                           }}
                         >
-                          {isUnknown(selectedCustomer, "holdPct")
+                          {isUnknown(inspected, "holdPct")
                             ? "—"
-                            : `${selectedCustomer.holdPct}%`}
+                            : `${inspected.holdPct}%`}
                         </b>
                       </div>
                       <div>
                         Projected LTV:{" "}
                         <b>
-                          {isUnknown(selectedCustomer, "ltv")
+                          {isUnknown(inspected, "ltv")
                             ? "—"
-                            : `$${Math.abs(selectedCustomer.ltvUsd).toLocaleString()}${
-                                selectedCustomer.ltvUsd < 0
+                            : `$${Math.abs(inspected.ltvUsd).toLocaleString()}${
+                                inspected.ltvUsd < 0
                                   ? " (Loss to Desk)"
                                   : " (Desk Hold)"
                               }`}
@@ -1572,33 +2063,27 @@ export function CustomersTabPanel({
                       <div>
                         Risk Tier:{" "}
                         <span
-                          style={styles.corrBadge(
-                            selectedCustomer.correlatedRisk,
-                          )}
+                          style={styles.corrBadge(inspected.correlatedRisk)}
                         >
-                          {selectedCustomer.correlatedRisk}
+                          {inspected.correlatedRisk}
                         </span>
                       </div>
                       <div>
                         Exploit Rate:{" "}
                         <b>
-                          {(
-                            selectedCustomer.correlatedExploitRate * 100
-                          ).toFixed(0)}
-                          %
+                          {(inspected.correlatedExploitRate * 100).toFixed(0)}%
                         </b>
                       </div>
                     </div>
                     <div style={styles.detailCard}>
                       <h4 style={styles.cardHeader}>⏱️ Timing Fingerprint</h4>
                       <div>
-                        Archetype: <b>{selectedCustomer.timingArchetype}</b>
+                        Archetype: <b>{inspected.timingArchetype}</b>
                       </div>
                       <div>
                         Downline Syndicate:{" "}
                         <b>
-                          {(selectedCustomer.syndicateProb * 100).toFixed(0)}%
-                          Prob
+                          {(inspected.syndicateProb * 100).toFixed(0)}% Prob
                         </b>
                       </div>
                     </div>
@@ -1611,38 +2096,38 @@ export function CustomersTabPanel({
                     </h4>
                     <div style={styles.directiveRow}>
                       <span>Action:</span>
-                      <span style={styles.actionBadge(selectedCustomer.action)}>
-                        {selectedCustomer.action}
+                      <span style={styles.actionBadge(inspected.action)}>
+                        {inspected.action}
                       </span>
                     </div>
                     <div style={styles.directiveRow}>
                       <span>Max Stake Ceiling:</span>
                       <b>
-                        {isUnknown(selectedCustomer, "limit")
+                        {isUnknown(inspected, "limit")
                           ? "—"
-                          : `$${selectedCustomer.recommendedLimitUsd.toLocaleString()}`}
+                          : `$${inspected.recommendedLimitUsd.toLocaleString()}`}
                       </b>
                     </div>
                     <div style={styles.directiveRow}>
                       <span>In-Play Submission Delay:</span>
                       <b>
-                        {isUnknown(selectedCustomer, "delay")
+                        {isUnknown(inspected, "delay")
                           ? "—"
-                          : `${selectedCustomer.inPlayDelaySec} seconds`}
+                          : `${inspected.inPlayDelaySec} seconds`}
                       </b>
                     </div>
                     <div style={styles.directiveRow}>
                       <span>Line Shading:</span>
-                      <b>{selectedCustomer.lineShadeCents}¢ against action</b>
+                      <b>{inspected.lineShadeCents}¢ against action</b>
                     </div>
                     <div style={styles.directiveRow}>
                       <span>Shadow Copy Multiplier:</span>
-                      <b>{selectedCustomer.shadowCopyMultiplier.toFixed(2)}x</b>
+                      <b>{inspected.shadowCopyMultiplier.toFixed(2)}x</b>
                     </div>
                   </div>
 
                   {/* Cross-Endpoint Portal & Figure-Date Reconciliation Card */}
-                  {selectedCustomer.portalReconciliation && (
+                  {inspected.portalReconciliation && (
                     <div
                       style={{
                         ...styles.detailCard,
@@ -1670,24 +2155,23 @@ export function CustomersTabPanel({
                             borderRadius: "999px",
                             fontSize: "10px",
                             fontWeight: 700,
-                            backgroundColor: selectedCustomer
-                              .portalReconciliation.creditEquationBalanced
+                            backgroundColor: inspected.portalReconciliation
+                              .creditEquationBalanced
                               ? "rgba(34, 197, 94, 0.16)"
                               : "rgba(239, 68, 68, 0.18)",
-                            color: selectedCustomer.portalReconciliation
+                            color: inspected.portalReconciliation
                               .creditEquationBalanced
                               ? "#4ade80"
                               : "#f87171",
                             border: `1px solid ${
-                              selectedCustomer.portalReconciliation
+                              inspected.portalReconciliation
                                 .creditEquationBalanced
                                 ? "rgba(74, 222, 128, 0.4)"
                                 : "rgba(248, 113, 113, 0.45)"
                             }`,
                           }}
                         >
-                          {selectedCustomer.portalReconciliation
-                            .creditEquationBalanced
+                          {inspected.portalReconciliation.creditEquationBalanced
                             ? "✓ CREDIT & CARRYOVER BALANCED (0¢ DELTA)"
                             : "⚠️ LEDGER DELTA"}
                         </span>
@@ -1723,7 +2207,7 @@ export function CustomersTabPanel({
                             Credit Limit:{" "}
                             <b>
                               $
-                              {selectedCustomer.portalReconciliation.creditLimitUsd.toLocaleString()}
+                              {inspected.portalReconciliation.creditLimitUsd.toLocaleString()}
                             </b>
                           </div>
                           <div>
@@ -1731,36 +2215,32 @@ export function CustomersTabPanel({
                             <b
                               style={{
                                 color:
-                                  selectedCustomer.portalReconciliation
+                                  inspected.portalReconciliation
                                     .currentBalanceUsd < 0
                                     ? "#f87171"
                                     : "#4ade80",
                               }}
                             >
-                              {selectedCustomer.portalReconciliation
+                              {inspected.portalReconciliation
                                 .currentBalanceUsd < 0
-                                ? `-$${Math.abs(selectedCustomer.portalReconciliation.currentBalanceUsd).toLocaleString()}`
-                                : `+$${selectedCustomer.portalReconciliation.currentBalanceUsd.toLocaleString()}`}
+                                ? `-$${Math.abs(inspected.portalReconciliation.currentBalanceUsd).toLocaleString()}`
+                                : `+$${inspected.portalReconciliation.currentBalanceUsd.toLocaleString()}`}
                             </b>
                           </div>
                           <div>
                             Pending Exposure:{" "}
                             <b style={{ color: "#fbbf24" }}>
                               $
-                              {selectedCustomer.portalReconciliation.pendingWagerBalanceUsd.toLocaleString()}
+                              {inspected.portalReconciliation.pendingWagerBalanceUsd.toLocaleString()}
                             </b>{" "}
-                            (
-                            {
-                              selectedCustomer.portalReconciliation
-                                .pendingWagerCount
-                            }{" "}
+                            ({inspected.portalReconciliation.pendingWagerCount}{" "}
                             open)
                           </div>
                           <div>
                             Available Balance:{" "}
                             <b style={{ color: "#38bdf8" }}>
                               $
-                              {selectedCustomer.portalReconciliation.availableBalanceUsd.toLocaleString()}
+                              {inspected.portalReconciliation.availableBalanceUsd.toLocaleString()}
                             </b>
                           </div>
                         </div>
@@ -1786,13 +2266,13 @@ export function CustomersTabPanel({
                             Carryover Prefix:{" "}
                             <b style={{ color: "#f87171" }}>
                               +$
-                              {selectedCustomer.portalReconciliation.carryOverUsd.toLocaleString()}
+                              {inspected.portalReconciliation.carryOverUsd.toLocaleString()}
                             </b>{" "}
                             <span
                               style={{ fontSize: "10px", color: "#4ade80" }}
                             >
                               (
-                              {selectedCustomer.portalReconciliation
+                              {inspected.portalReconciliation
                                 .carryOverParityMatched
                                 ? "PreviousBalance × 100 ✓"
                                 : "Mismatch"}
@@ -1801,41 +2281,34 @@ export function CustomersTabPanel({
                           </div>
                           <div style={{ fontSize: "11px", color: "#94a3b8" }}>
                             Window:{" "}
-                            {
-                              selectedCustomer.portalReconciliation
-                                .carryOverWindow
-                            }
+                            {inspected.portalReconciliation.carryOverWindow}
                           </div>
                           <div>
                             Post-Carryover Net:{" "}
                             <b
                               style={{
                                 color:
-                                  selectedCustomer.portalReconciliation
+                                  inspected.portalReconciliation
                                     .postCarryOverNetUsd < 0
                                     ? "#4ade80"
                                     : "#f87171",
                               }}
                             >
-                              {selectedCustomer.portalReconciliation
+                              {inspected.portalReconciliation
                                 .postCarryOverNetUsd < 0
-                                ? `-$${Math.abs(selectedCustomer.portalReconciliation.postCarryOverNetUsd).toLocaleString()}`
-                                : `+$${selectedCustomer.portalReconciliation.postCarryOverNetUsd.toLocaleString()}`}
+                                ? `-$${Math.abs(inspected.portalReconciliation.postCarryOverNetUsd).toLocaleString()}`
+                                : `+$${inspected.portalReconciliation.postCarryOverNetUsd.toLocaleString()}`}
                             </b>
                           </div>
                           <div>
                             31d Customer Net:{" "}
                             <b style={{ color: "#f87171" }}>
                               +$
-                              {selectedCustomer.portalReconciliation.net31dUsd.toLocaleString()}
+                              {inspected.portalReconciliation.net31dUsd.toLocaleString()}
                             </b>{" "}
-                            ({selectedCustomer.portalReconciliation.winDays31d}W
-                            -{selectedCustomer.portalReconciliation.lossDays31d}
-                            L ·{" "}
-                            {
-                              selectedCustomer.portalReconciliation
-                                .activeDays31d
-                            }{" "}
+                            ({inspected.portalReconciliation.winDays31d}W-
+                            {inspected.portalReconciliation.lossDays31d}L ·{" "}
+                            {inspected.portalReconciliation.activeDays31d}{" "}
                             figureDates)
                           </div>
                         </div>
@@ -1854,7 +2327,7 @@ export function CustomersTabPanel({
                           Wager Limit:{" "}
                           <b>
                             $
-                            {selectedCustomer.portalReconciliation.wagerLimitUsd.toLocaleString()}
+                            {inspected.portalReconciliation.wagerLimitUsd.toLocaleString()}
                           </b>
                         </span>
                         <span>·</span>
@@ -1862,7 +2335,7 @@ export function CustomersTabPanel({
                           Settle Figure:{" "}
                           <b>
                             $
-                            {selectedCustomer.portalReconciliation.settleFigureUsd.toLocaleString()}
+                            {inspected.portalReconciliation.settleFigureUsd.toLocaleString()}
                           </b>
                         </span>
                         <span>·</span>
@@ -1870,7 +2343,7 @@ export function CustomersTabPanel({
                           WiseLineWeight:{" "}
                           <b>
                             {
-                              selectedCustomer.portalReconciliation
+                              inspected.portalReconciliation
                                 .wiseLineMovementWeight
                             }
                           </b>
@@ -1880,7 +2353,7 @@ export function CustomersTabPanel({
                           Delay:{" "}
                           <b>
                             {
-                              selectedCustomer.portalReconciliation
+                              inspected.portalReconciliation
                                 .confirmationDelaySec
                             }
                             s
@@ -1890,17 +2363,14 @@ export function CustomersTabPanel({
                         <span>
                           Inet:{" "}
                           <code>
-                            {selectedCustomer.portalReconciliation.inetTarget}
+                            {inspected.portalReconciliation.inetTarget}
                           </code>
                         </span>
                         <span>·</span>
                         <span>
                           Parlay:{" "}
                           <b>
-                            {
-                              selectedCustomer.portalReconciliation
-                                .assignedParlayName
-                            }
+                            {inspected.portalReconciliation.assignedParlayName}
                           </b>
                         </span>
                       </div>
@@ -1911,7 +2381,7 @@ export function CustomersTabPanel({
                           gap: "5px",
                         }}
                       >
-                        {selectedCustomer.portalReconciliation.postureFlags.map(
+                        {inspected.portalReconciliation.postureFlags.map(
                           (flag) => (
                             <span
                               key={flag}
@@ -1951,13 +2421,11 @@ export function CustomersTabPanel({
                     </h4>
                     <div style={styles.forensicRow}>
                       <span>Observed Login IP:</span>
-                      <code>{selectedCustomer.ipAddress}</code>
+                      <code>{inspected.ipAddress}</code>
                       <button
                         type="button"
                         style={styles.actionBtnSmall}
-                        onClick={() =>
-                          onRunReverseLookup(selectedCustomer.ipAddress)
-                        }
+                        onClick={() => onRunReverseLookup(inspected.ipAddress)}
                       >
                         🔍 Run Reverse DNS
                       </button>

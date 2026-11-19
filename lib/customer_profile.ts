@@ -314,7 +314,9 @@ export type CustomerRowProvenance =
   | "harvested-live-profiles"
   | "live-wagers"
   | "live-bets"
-  | "backtest-leaderboard";
+  | "backtest-leaderboard"
+  | "dod6-spine"
+  | "rankings-30d";
 
 /** Measured per-writer counts from the live wager capture, not from the five-ticket sample. */
 export interface ChannelEvidenceBucket {
@@ -341,6 +343,7 @@ export interface CustomerRow {
   readonly sports_7d_volume_usd?: number;
   readonly sports_7d_net_usd?: number;
   readonly clv_bps?: number;
+  readonly clv_legs?: number;
   readonly sharp_score?: number;
   readonly total_wagers?: number;
   readonly average_bet_usd?: number;

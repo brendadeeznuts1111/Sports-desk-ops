@@ -1,3 +1,63 @@
+/* ── Secondary Workspace Toolbar & Interactive Focus/Hover Polish ── */
+.sd-header-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.sd-ops-toolbar {
+  padding: 10px 24px;
+  background-color: #0b1120;
+  border-bottom: 1px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sd-ops-telemetry-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+}
+
+.sd-tab-btn:hover {
+  border-color: rgba(56, 189, 248, 0.4) !important;
+  color: #f8fafc !important;
+  background-color: rgba(30, 41, 59, 0.9) !important;
+}
+
+.sd-tab-btn[aria-pressed="true"]:hover {
+  border-color: rgba(56, 189, 248, 0.7) !important;
+  color: #38bdf8 !important;
+  background-color: rgba(56, 189, 248, 0.22) !important;
+}
+
+.sd-tab-btn:focus-visible,
+.sd-filter-pill:focus-visible,
+.sd-kpi-card:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+button.sd-kpi-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.45) !important;
+}
+
+.sd-filter-pill:hover {
+  border-color: rgba(56, 189, 248, 0.45) !important;
+  color: #f8fafc !important;
+}
+
+.sd-search-input:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+}
+
 /* ── Framed table: enables sticky header + frozen directive column ── */
 .profiles-wrap {
   max-height: min(62vh, 720px);
@@ -5,6 +65,8 @@
   border: 1px solid var(--border-default);
   border-radius: 8px;
   background-color: var(--surface-panel);
+  scrollbar-width: thin;
+  scrollbar-color: #334155 #090d16;
 
   thead th {
     position: sticky;
@@ -45,10 +107,57 @@
 /* ── Sticky detail inspector ── */
 .detail-panel {
   position: sticky;
-  top: 16px;
-  max-height: calc(100vh - 32px);
+  top: 80px;
+  max-height: calc(100vh - 96px);
   overflow-y: auto;
   z-index: var(--z-inspector);
+  scrollbar-width: thin;
+  scrollbar-color: #334155 #090d16;
+}
+
+.profiles-wrap::-webkit-scrollbar,
+.detail-panel::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.profiles-wrap::-webkit-scrollbar-track,
+.detail-panel::-webkit-scrollbar-track {
+  background: #090d16;
+}
+
+.profiles-wrap::-webkit-scrollbar-thumb,
+.detail-panel::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 999px;
+}
+
+.profiles-wrap::-webkit-scrollbar-thumb:hover,
+.detail-panel::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+@media (max-width: 960px) {
+  .sd-ops-toolbar {
+    padding: 10px 16px;
+  }
+
+  .sd-primary-nav {
+    order: 3;
+    flex-basis: 100%;
+    width: 100%;
+    padding-bottom: 2px;
+  }
+}
+
+@media (max-width: 520px) {
+  .sd-top-header h1 {
+    font-size: 16px !important;
+  }
+
+  .sd-header-status {
+    display: none !important;
+  }
 }
 
 /* ── Semantic color grammar (desk-profit: green = desk retained, red = desk exposure) ── */

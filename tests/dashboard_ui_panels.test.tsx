@@ -8,6 +8,7 @@ import { App } from "../packages/ui/src/App.tsx";
 import { renderAnsiReact } from "../packages/ui/src/ansi.tsx";
 import * as uiBarrel from "../packages/ui/src/index.ts";
 import {
+  AgentInspectorModal,
   AlertAuditDetail,
   AlertsTabPanel,
   ApiUsageCard,
@@ -25,6 +26,7 @@ import {
   TOKEN_ALIAS_SPECS,
 } from "../packages/ui/src/panels/index.tsx";
 import { DASHBOARD_META } from "../packages/ui/src/config/dashboard.ts";
+import { deriveLiveFormulaCohortKpiCards } from "../packages/ui/src/hydration.ts";
 import { TERMINAL_WELCOME_HELP_STDOUT } from "../packages/ui/src/terminal_catalog.ts";
 import type {
   LiveWager,
@@ -1747,6 +1749,15 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(degradedR2Html).toContain("Reachable — Auth Down (9ms)");
     expect(degradedR2Html).toContain("F402 session expired");
     expect(degradedR2Html).not.toContain("Offline");
+    expect(degradedR2Html).toContain(
+      'href="/live-bets" target="_blank" rel="noreferrer" style="padding:4px 10px;border-radius:6px;background-color:rgba(56, 189, 248, 0.12);color:#38bdf8',
+    );
+    expect(degradedR2Html).toContain("📈 Live Bets / Scoreboard ↗");
+    expect(degradedR2Html).toContain("🕸️ Hierarchy Graph ↗");
+    expect(degradedR2Html).toContain("🩺 Ops Status ↗");
+    expect(degradedR2Html).not.toContain(
+      "background-color:#38bdf8;color:#38bdf8",
+    );
 
     const automationsR2Html = renderToStaticMarkup(
       React.createElement(R2PipelineTabPanel, {
@@ -2440,4 +2451,73 @@ test("CustomersTabPanel and LiveWagersTabPanel render CLV extensions and signal-
   expect(wagersHtml).toContain("Sharp 91.4");
   expect(wagersHtml).toContain("Live Pending Bets Book (/api/v2/live-bets):");
   expect(wagersHtml).toContain("source=fixture (sample fallback)");
+});
+
+describe("UI style polish, contrast & responsive strip ergonomics", () => {
+  test("AgentInspectorModal standalone link uses dark translucent cyan pill instead of blue-on-blue", () => {
+    const noop = () => {};
+    const html = renderToStaticMarkup(
+      React.createElement(AgentInspectorModal, {
+        agentId: "NOLAWOLF",
+        onClose: noop,
+        onSelectAgent: noop,
+        onSelectCustomerById: noop,
+        onInspectPty: noop,
+      }),
+    );
+    expect(html).toContain("Open Standalone /agent/NOLAWOLF ↗");
+    expect(html).toContain("background-color:rgba(56, 189, 248, 0.12)");
+    expect(html).not.toContain("background-color:#38bdf8;color:#38bdf8");
+  });
+
+  test("CustomersTabPanel keeps COMPUTED LIVE badge and Hide Formulas toggle single-line", () => {
+    const noop = () => {};
+    const formulaCards = deriveLiveFormulaCohortKpiCards(
+      FIXTURE_PROFILE_CUSTOMERS,
+    );
+    const html = renderToStaticMarkup(
+      React.createElement(CustomersTabPanel, {
+        bannerDismissed: true,
+        onDismissBanner: noop,
+        kpisCollapsed: false,
+        onToggleKpis: noop,
+        cohortsReport: null,
+        cohortsStatus: "ready",
+        cohortsError: null,
+        formulaKpiCards: formulaCards,
+        searchQuery: "",
+        onSearchQueryChange: noop,
+        filterTier: "ALL",
+        onFilterTierChange: noop,
+        sortedCustomers: FIXTURE_PROFILE_CUSTOMERS,
+        customerSort: { key: "score", dir: -1 },
+        onCustomerSort: noop,
+        selectedCustomer: null,
+        onSelectCustomer: noop,
+        copiedCliId: null,
+        onCopyCli: noop,
+        onClearForensicResult: noop,
+        onRunReverseLookup: noop,
+        onOpenTerminalProfile: noop,
+      }),
+    );
+    const liveBadgeMatch =
+      /<span[^>]*data-customers-formula-badge="true"[^>]*>/.exec(html)?.[0] ??
+      "";
+    expect(liveBadgeMatch).toContain("white-space:nowrap");
+    expect(html).toContain("white-space:nowrap");
+    expect(html).toContain("Hide Formulas ▲");
+  });
+
+  test("App places Workspace Telemetry and Tabs toolbar cleanly below the slim sticky header", () => {
+    const html = renderToStaticMarkup(React.createElement(App));
+    const headerCloseIdx = html.indexOf("</header>");
+    const toolbarIdx = html.indexOf(
+      'aria-label="Workspace Telemetry and Tabs"',
+    );
+    expect(headerCloseIdx).toBeGreaterThan(0);
+    expect(toolbarIdx).toBeGreaterThan(headerCloseIdx);
+    expect(html).toContain('class="sd-ops-toolbar"');
+    expect(html).toContain('class="sd-tab-btn"');
+  });
 });

@@ -6,6 +6,7 @@ import {
   profileApiPayloadToShowcase,
   selectProfileRows,
 } from "../packages/ui/src/profile_rows.ts";
+import { buildSharpnessDecomposition } from "../packages/ui/src/viz/SharpnessDecomposition.tsx";
 
 const row = {
   customer_id: "SYNTH_SYN_01",
@@ -397,5 +398,66 @@ describe("mergeProfileRows", () => {
     expect(hydrated?.clvBps).toBe(295);
     expect(hydrated?.source).toBe("book");
     expect(hydrated?.holdPct).toBe(-49.2);
+
+    const checkRadarConservation = (c: NonNullable<typeof hydrated>) =>
+      buildSharpnessDecomposition(
+        [
+          {
+            key: "clvScore",
+            label: "CLV Beat Margin",
+            value: c.clvScore,
+            cap: 3,
+          },
+          {
+            key: "skillScore",
+            label: "Bayesian Skill",
+            value: c.skillScore,
+            cap: 2.5,
+          },
+          {
+            key: "sizingScore",
+            label: "Sizing Discipline",
+            value: c.sizingScore,
+            cap: 1.5,
+          },
+          { key: "sigScore", label: "Sig", value: c.sigScore, cap: 2 },
+          { key: "timingScore", label: "Timing", value: c.timingScore, cap: 1 },
+        ],
+        c.score,
+      );
+
+    expect(() => checkRadarConservation(hydrated!)).not.toThrow();
+
+    const withComposite = profileApiPayloadToShowcase({
+      profile: {
+        customerId: "BCC2730",
+        agentId: "SPEN",
+        masterAgent: "NOLAWOLF",
+        compositeSharpness: {
+          overallScore: 4.1,
+          tier: "TIER_4_SEMI_SHARP",
+          components: {
+            clvScore: 1.8,
+            bayesianSkillScore: 0,
+            sizingDisciplineScore: 1.5,
+            signatureSpecializationScore: 0.8,
+            timingExploitationScore: 0,
+          },
+        },
+        riskForensics: {
+          lifetimeNetUsd: -7880,
+          lifetimeVolumeUsd: 0,
+          holdPct: 0,
+        },
+        stakeProfile: {
+          sampleCount: 4,
+          meanStakeUsd: 75,
+          giniCoefficient: 0.296,
+          sizingStrategy: "PENDING_TICKETS",
+        },
+      },
+    });
+    expect(withComposite?.score).toBe(4.1);
+    expect(() => checkRadarConservation(withComposite!)).not.toThrow();
   });
 });

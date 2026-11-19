@@ -560,4 +560,39 @@ describe("Enhanced Customer Profiling & Risk Forensics Engine", () => {
     expect(ansi.length).toBeGreaterThan(0);
     expect(ansi).toContain("BRT5229_1");
   });
+
+  it("scores positive CLV on single book aggregates (sampleCount === 1) and conserves component sum", () => {
+    const comp = buildComprehensiveCustomerProfile({
+      customer_id: "BYT107",
+      agent_id: "BILLYL",
+      master_agent: "NOLAWOLF",
+      status: "Active",
+      context_type: "VELOCITY_SNIPER",
+      lifetime_volume_usd: 0,
+      lifetime_net_usd: -6737,
+      hold_pct: 25,
+      clv_bps: 2541,
+      sharp_score: -7.6,
+      recent_tickets: [],
+    });
+
+    expect(comp.compositeSharpness.components.clvScore).toBeGreaterThan(0);
+    const {
+      clvScore,
+      bayesianSkillScore,
+      sizingDisciplineScore,
+      signatureSpecializationScore,
+      timingExploitationScore,
+    } = comp.compositeSharpness.components;
+    const sum =
+      Math.round(
+        (clvScore +
+          bayesianSkillScore +
+          sizingDisciplineScore +
+          signatureSpecializationScore +
+          timingExploitationScore) *
+          10,
+      ) / 10;
+    expect(sum).toBe(comp.compositeSharpness.overallScore);
+  });
 });

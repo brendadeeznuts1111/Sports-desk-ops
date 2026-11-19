@@ -1060,8 +1060,9 @@ export function LiveWagersTabPanel({
                   fontSize: "11px",
                   ...(paused
                     ? {
-                        color: "#f59e0b",
-                        borderColor: "rgba(245, 158, 11, 0.5)",
+                        backgroundColor: "rgba(245, 158, 11, 0.16)",
+                        color: "#fbbf24",
+                        border: "1px solid rgba(245, 158, 11, 0.5)",
                       }
                     : {}),
                 }}

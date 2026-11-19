@@ -22,6 +22,7 @@ import type {
   LiveWagersClvSummary,
   ProxyConduit30d,
   RankedPlayer30d,
+  ShowcaseCustomer,
   TierStyleConfig,
 } from "./types.ts";
 
@@ -62,7 +63,7 @@ export interface NormalizedLiveWagersResult {
   readonly clvSummary?: LiveWagersClvSummary | null;
 }
 
-export type CustomerCohortKpiId =
+export type LegacyCustomerCohortKpiId =
   | "backtest"
   | "key-number-sharps"
   | "hook-syndicates"
@@ -70,8 +71,30 @@ export type CustomerCohortKpiId =
   | "enriched-book"
   | "unique-surveillance";
 
+export type FormulaCustomerCohortKpiId =
+  | "powered-pos-clv"
+  | "profitable-clv"
+  | "key-number-buyers"
+  | "hook-syndicate-live"
+  | "clv-coverage"
+  | "billy666-universe";
+
+export type CustomerCohortKpiId =
+  LegacyCustomerCohortKpiId | FormulaCustomerCohortKpiId;
+
 export type CustomerCohortKpiTone =
   "sky" | "red" | "amber" | "slate" | "emerald" | "violet";
+
+export type CustomerCohortFilterTier =
+  | "ALL"
+  | "ELITE"
+  | "SYNDICATE"
+  | "POSITIVE_CLV"
+  | "POWERED_POS_CLV"
+  | "PROFITABLE_CLV"
+  | "KEY_NUMBER_BUYER"
+  | "HOOK_OR_SYNDICATE"
+  | null;
 
 export interface CustomerCohortKpiCard {
   readonly id: CustomerCohortKpiId;
@@ -82,10 +105,10 @@ export interface CustomerCohortKpiCard {
   readonly tone: CustomerCohortKpiTone;
   /** Exact raw count when ready; null when pending or unavailable (never faked as 0). */
   readonly count: number | null;
-  /** Percentage share of uniqueSurveillanceCount when ready and denominator > 0; null otherwise. */
+  /** Percentage share of denominator when ready and denominator > 0; null otherwise. */
   readonly sharePct: number | null;
   /** Optional profile tier filter activated when clicking this card in CustomersTabPanel. */
-  readonly filterTier: "ALL" | "ELITE" | "SYNDICATE" | null;
+  readonly filterTier: CustomerCohortFilterTier;
 }
 
 const KNOWN_PROVENANCE_KINDS = new Set<DashboardFeedProvenanceKind>([
@@ -678,7 +701,7 @@ export function normalizeLiveBetsV2Summary(
 }
 
 interface CustomerCohortKpiSpec {
-  readonly id: CustomerCohortKpiId;
+  readonly id: LegacyCustomerCohortKpiId;
   readonly label: string;
   readonly tone: CustomerCohortKpiTone;
   readonly filterTier: "ALL" | "ELITE" | "SYNDICATE" | null;
@@ -773,7 +796,7 @@ export function deriveCustomerCohortKpiCards(options: {
   const totalUnique = cohorts.uniqueSurveillanceCount;
 
   const readyRows: Record<
-    CustomerCohortKpiId,
+    LegacyCustomerCohortKpiId,
     { readonly count: number; readonly value: string; readonly sub: string }
   > = {
     backtest: {
@@ -822,6 +845,149 @@ export function deriveCustomerCohortKpiCards(options: {
       filterTier: spec.filterTier,
     };
   });
+}
+
+/**
+ * Derive all 6 formula-computed surveillance KPI cards dynamically from live customer records
+ * (DOD6 CLV gate, lifetime player net, Football spread key-number buys, ½-pt hook / proxy /
+ * multi-seat clusters, and BILLY666 agent-tree distribution — zero hardcoded counts).
+ */
+export function deriveLiveFormulaCohortKpiCards(
+  customers: readonly ShowcaseCustomer[],
+): readonly CustomerCohortKpiCard[] {
+  const total = customers.length;
+  let poweredPosClv = 0;
+  let elite100Bps = 0;
+  let profitablePosClv = 0;
+  let keyNumBuyers = 0;
+  let keyNumPosClv = 0;
+  let hookOrSyndicate = 0;
+  let halfPtHookBuyers = 0;
+  let proxyConduits = 0;
+  let multiSeat = 0;
+  let clvMeasured = 0;
+  let clvSum = 0;
+  let clvPos = 0;
+  let clvNonPos = 0;
+  let nolawolf = 0;
+
+  for (const c of customers) {
+    const hasClv = typeof c.clvBps === "number" && Number.isFinite(c.clvBps);
+    const clv = hasClv ? c.clvBps! : 0;
+    const isPowered =
+      c.sharpCandidateGatePassed === true || (c.clvLegs ?? 0) >= 5;
+    if (hasClv) {
+      clvMeasured += 1;
+      clvSum += clv;
+      if (clv > 0) {
+        clvPos += 1;
+        if (isPowered) {
+          poweredPosClv += 1;
+          if (clv >= 100) elite100Bps += 1;
+        }
+        if (!(c.unknown?.includes("ltv") ?? false) && c.ltvUsd > 0) {
+          profitablePosClv += 1;
+        }
+      } else {
+        clvNonPos += 1;
+      }
+    }
+    if (c.isKeyNumberBuyer === true) {
+      keyNumBuyers += 1;
+      if (hasClv && clv > 0) keyNumPosClv += 1;
+    }
+    const isHalf = c.isHalfPointHookBuyer === true;
+    const isProxy = c.isProxyConduit === true;
+    const isMulti = c.isMultiSeatCluster === true;
+    if (isHalf) halfPtHookBuyers += 1;
+    if (isProxy) proxyConduits += 1;
+    if (isMulti) multiSeat += 1;
+    if (isHalf || isProxy || isMulti || c.syndicateRisk === "HIGH") {
+      hookOrSyndicate += 1;
+    }
+    const masterUpper = c.masterAgent.trim().toUpperCase();
+    const agentUpper = c.agentId.trim().toUpperCase();
+    if (masterUpper === "NOLAWOLF" || agentUpper === "NOLAWOLF") {
+      nolawolf += 1;
+    }
+  }
+
+  const meanClv =
+    clvMeasured > 0 ? Math.round((clvSum / clvMeasured) * 10) / 10 : null;
+  const meanClvLabel =
+    meanClv === null
+      ? "—"
+      : `${meanClv > 0 ? "+" : ""}${meanClv.toFixed(1)} bps`;
+  const otherTreeCount = Math.max(0, total - nolawolf);
+
+  return [
+    {
+      id: "powered-pos-clv",
+      label: "Powered +CLV Sharps",
+      value: `${poweredPosClv.toLocaleString()} Accounts`,
+      sub: `clvLegs ≥ 5 ∧ CLV > 0 · ≥+100 bps: ${elite100Bps.toLocaleString()}`,
+      status: "ready",
+      tone: "emerald",
+      count: poweredPosClv,
+      sharePct: computeSharePct(poweredPosClv, total),
+      filterTier: "POWERED_POS_CLV",
+    },
+    {
+      id: "profitable-clv",
+      label: "Profitable +CLV Winners",
+      value: `${profitablePosClv.toLocaleString()} Accounts`,
+      sub: "CLV > 0 ∧ Lifetime Player Net > $0",
+      status: "ready",
+      tone: "red",
+      count: profitablePosClv,
+      sharePct: computeSharePct(profitablePosClv, total),
+      filterTier: "PROFITABLE_CLV",
+    },
+    {
+      id: "key-number-buyers",
+      label: "Key-Number Point Buyers",
+      value: `${keyNumBuyers.toLocaleString()} Accounts`,
+      sub: `Football buys on 3/7/10/14/21 ≥ 3 · +CLV: ${keyNumPosClv.toLocaleString()}`,
+      status: "ready",
+      tone: "amber",
+      count: keyNumBuyers,
+      sharePct: computeSharePct(keyNumBuyers, total),
+      filterTier: "KEY_NUMBER_BUYER",
+    },
+    {
+      id: "hook-syndicate-live",
+      label: "Hook & Syndicate Clusters",
+      value: `${hookOrSyndicate.toLocaleString()} Accounts`,
+      sub: `½-pt hook: ${halfPtHookBuyers.toLocaleString()} · Conduits: ${proxyConduits.toLocaleString()} · Multi-seat: ${multiSeat.toLocaleString()}`,
+      status: "ready",
+      tone: "violet",
+      count: hookOrSyndicate,
+      sharePct: computeSharePct(hookOrSyndicate, total),
+      filterTier: "HOOK_OR_SYNDICATE",
+    },
+    {
+      id: "clv-coverage",
+      label: "CLV Coverage (DOD6 + Book)",
+      value: `${clvMeasured.toLocaleString()} Accounts`,
+      sub: `Mean ${meanClvLabel} · +CLV: ${clvPos.toLocaleString()} / ≤0: ${clvNonPos.toLocaleString()}`,
+      status: "ready",
+      tone: "sky",
+      count: clvMeasured,
+      sharePct: computeSharePct(clvMeasured, total),
+      filterTier: "POSITIVE_CLV",
+    },
+    {
+      id: "billy666-universe",
+      label: "Active Universe (BILLY666 Tree)",
+      value: `${total.toLocaleString()} Accounts`,
+      sub: `NOLAWOLF: ${nolawolf.toLocaleString()} · BILLY667/RTEST5/SAINTS2009 & other: ${otherTreeCount.toLocaleString()}`,
+      status: "ready",
+      tone: "slate",
+      count: total,
+      sharePct: computeSharePct(total, total),
+      filterTier: "ALL",
+    },
+  ];
 }
 
 export type HydratedSliceResult<T> =
@@ -1001,6 +1167,27 @@ export function normalizeRankingsResponse(
       rejectedRows++;
       continue;
     }
+    const rawSc =
+      typeof row.scoreComponents === "object" && row.scoreComponents !== null
+        ? (row.scoreComponents as Record<string, unknown>)
+        : null;
+    const scClv = rawSc ? finiteOrNull(rawSc.clv) : null;
+    const scVolume = rawSc ? finiteOrNull(rawSc.volume) : null;
+    const scSizing = rawSc ? finiteOrNull(rawSc.sizing) : null;
+    const scTiming = rawSc ? finiteOrNull(rawSc.timing) : null;
+    const scCombo = rawSc ? finiteOrNull(rawSc.combo) : null;
+    const lastWagerAt = nonEmptyString(row.lastWagerAt);
+    const clvLegs = finiteOrNull(row.clvLegs);
+    const clvBps = row.clvBps === null ? null : finiteOrNull(row.clvBps);
+    const dodSharpScore =
+      row.dodSharpScore === null ? null : finiteOrNull(row.dodSharpScore);
+    const lifetimeNetUsd =
+      row.lifetimeNetUsd === null ? null : finiteOrNull(row.lifetimeNetUsd);
+    const keyNumberBuys30d = finiteOrNull(row.keyNumberBuys30d);
+    const halfPointBuys30d = finiteOrNull(row.halfPointBuys30d);
+    const halfPointBuyRatePct = finiteOrNull(row.halfPointBuyRatePct);
+    const seatCount = finiteOrNull(row.seatCount);
+
     players.push({
       rank,
       id,
@@ -1016,6 +1203,44 @@ export function normalizeRankingsResponse(
       dominantSport: nonEmptyString(row.dominantSport) ?? "",
       isProxy: row.isProxyConduit === true,
       limitUsd,
+      ...(lastWagerAt !== null ? { lastWagerAt } : {}),
+      ...(row.clvBps !== undefined ? { clvBps } : {}),
+      ...(clvLegs !== null && clvLegs >= 0 ? { clvLegs } : {}),
+      ...(row.dodSharpScore !== undefined ? { dodSharpScore } : {}),
+      ...(row.lifetimeNetUsd !== undefined ? { lifetimeNetUsd } : {}),
+      ...(typeof row.sharpCandidateGatePassed === "boolean"
+        ? { sharpCandidateGatePassed: row.sharpCandidateGatePassed }
+        : {}),
+      ...(keyNumberBuys30d !== null && keyNumberBuys30d > 0
+        ? { keyNumberBuys30d }
+        : {}),
+      ...(halfPointBuys30d !== null && halfPointBuys30d > 0
+        ? { halfPointBuys30d }
+        : {}),
+      ...(halfPointBuyRatePct !== null && halfPointBuyRatePct > 0
+        ? { halfPointBuyRatePct }
+        : {}),
+      ...(seatCount !== null && seatCount > 1 ? { seatCount } : {}),
+      ...(row.isKeyNumberBuyer === true ? { isKeyNumberBuyer: true } : {}),
+      ...(row.isHalfPointHookBuyer === true
+        ? { isHalfPointHookBuyer: true }
+        : {}),
+      ...(row.isMultiSeatCluster === true ? { isMultiSeatCluster: true } : {}),
+      ...(scClv !== null &&
+      scVolume !== null &&
+      scSizing !== null &&
+      scTiming !== null &&
+      scCombo !== null
+        ? {
+            scoreComponents: {
+              clv: scClv,
+              volume: scVolume,
+              sizing: scSizing,
+              timing: scTiming,
+              combo: scCombo,
+            },
+          }
+        : {}),
     });
   }
 

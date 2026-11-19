@@ -10,6 +10,7 @@ import { parseDashboardWsSignal } from "@sportsdesk-ops/contracts";
 import {
   CustomersTabPanel,
   deriveCustomerCohortKpiCards,
+  deriveLiveFormulaCohortKpiCards,
   formatProvenanceBadge,
   hydrateDashboardFeeds,
   LiveWagersTabPanel,
@@ -617,5 +618,53 @@ describe("sport and subsport projection", () => {
     expect(v2?.totalGames).toBe(3);
     expect(v2?.totalPending).toBe(8);
     expect(v2?.fallbackUsed).toBe(true);
+  });
+
+  test("deriveLiveFormulaCohortKpiCards computes dynamic CLV, key-number, hook/syndicate & BILLY666 counts with zero hardcoded values", () => {
+    const sample = FIXTURE_PROFILE_CUSTOMERS.slice(0, 3).map((c, idx) => ({
+      ...c,
+      agentId: idx === 0 ? "MOOSEM" : idx === 1 ? "TEXAS50" : "OTHERAG",
+      masterAgent:
+        idx === 0 ? "NOLAWOLF" : idx === 1 ? "NOLAWOLF" : "SAINTS2009",
+      clvBps: idx === 0 ? 250 : idx === 1 ? -45 : 110,
+      clvLegs: idx === 0 ? 12 : idx === 1 ? 8 : 6,
+      sharpCandidateGatePassed: true,
+      ltvUsd: idx === 0 ? 18_500 : idx === 1 ? -4_000 : 0,
+      unknown: idx === 2 ? ["ltv"] : [],
+      isKeyNumberBuyer: idx === 0,
+      isHalfPointHookBuyer: idx === 0,
+      isProxyConduit: idx === 1,
+      syndicateRisk: idx === 2 ? ("LOW" as const) : ("HIGH" as const),
+    }));
+
+    const cards = deriveLiveFormulaCohortKpiCards(sample);
+    expect(cards.map((c) => c.id)).toEqual([
+      "powered-pos-clv",
+      "profitable-clv",
+      "key-number-buyers",
+      "hook-syndicate-live",
+      "clv-coverage",
+      "billy666-universe",
+    ]);
+    // Both idx 0 (+250 bps, legs 12) and idx 2 (+110 bps, legs 6) satisfy powered +CLV & >= +100 bps
+    expect(cards[0]?.count).toBe(2);
+    expect(cards[0]?.sharePct).toBe(66.7);
+    expect(cards[0]?.filterTier).toBe("POWERED_POS_CLV");
+    // Only idx 0 has CLV > 0 AND measured ltvUsd > 0
+    expect(cards[1]?.count).toBe(1);
+    expect(cards[1]?.filterTier).toBe("PROFITABLE_CLV");
+    // Key-number point buyers
+    expect(cards[2]?.count).toBe(1);
+    expect(cards[2]?.filterTier).toBe("KEY_NUMBER_BUYER");
+    // Hook/Syndicates: idx 0 (half-pt) + idx 1 (proxy conduit) = 2
+    expect(cards[3]?.count).toBe(2);
+    expect(cards[3]?.filterTier).toBe("HOOK_OR_SYNDICATE");
+    // All 3 have finite clvBps; mean = (250 - 45 + 110) / 3 = 105.0 bps
+    expect(cards[4]?.count).toBe(3);
+    expect(cards[4]?.sub).toContain("Mean +105.0 bps");
+    // BILLY666 tree counts NOLAWOLF: 2, other: 1
+    expect(cards[5]?.count).toBe(3);
+    expect(cards[5]?.sub).toContain("NOLAWOLF: 2");
+    expect(cards[5]?.sub).toContain("other: 1");
   });
 });

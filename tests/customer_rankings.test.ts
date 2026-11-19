@@ -157,6 +157,64 @@ describe("runBatchedRanking", () => {
         const curr = res.topRankedPlayers[i]!;
         expect(prev.compositeScore).toBeGreaterThanOrEqual(curr.compositeScore);
       }
+      expect(res.formulaCohorts?.activeAccounts).toBe(res.activeCustomerCount);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("derives formula cohorts for Football key-number buyers, half-point hook buyers, and multi-seat clusters", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "sportsdesk-formula-cohorts-"));
+    try {
+      const corpusPath = join(dir, "f402-bets.jsonl");
+      const rows: string[] = [
+        // 5 Football spread half-point buys onto key number 3 -> qualifies for both Key# (>=3) and Half-Pt Hook (>=5 & >=5%), across 2 seats
+        ...Array.from({ length: 5 }, (_, idx) =>
+          JSON.stringify({
+            Login: "HOOK_SHARP",
+            CustomerID: idx < 2 ? "HOOK_SHARP_0" : "HOOK_SHARP_1",
+            AgentLogin: "MOOSEM",
+            AmountWagered: 50000,
+            ToWinAmount: 45450,
+            InsertDateTime: `2026-11-0${idx + 1} 12:00:00`,
+            WagerType: "S",
+            TicketWriter: "Internet",
+            ShortDesc: "S.Football #308 Buffalo -2½ -120 - buying ½ For Game",
+          }),
+        ),
+        JSON.stringify({
+          Login: "REC_PLAIN",
+          CustomerID: "REC_PLAIN",
+          AgentLogin: "AG2",
+          AmountWagered: 10000,
+          ToWinAmount: 9090,
+          InsertDateTime: "2026-11-05 12:00:00",
+          WagerType: "S",
+          TicketWriter: "Internet",
+          ShortDesc: "S.Basketball #558 Magic -4 -110 - For Game",
+        }),
+      ];
+      writeFileSync(corpusPath, `${rows.join("\n")}\n`, "utf8");
+
+      const res = await runBatchedRanking({
+        corpusPath,
+        windowCutoff: "2026-10-15",
+        limitPlayers: 20,
+      });
+      const hook = res.topRankedPlayers.find(
+        (p) => p.customerId === "HOOK_SHARP",
+      );
+      expect(hook?.keyNumberBuys30d).toBe(5);
+      expect(hook?.halfPointBuys30d).toBe(5);
+      expect(hook?.halfPointBuyRatePct).toBe(100);
+      expect(hook?.seatCount).toBe(2);
+      expect(hook?.isKeyNumberBuyer).toBe(true);
+      expect(hook?.isHalfPointHookBuyer).toBe(true);
+      expect(hook?.isMultiSeatCluster).toBe(true);
+      expect(res.formulaCohorts?.keyNumberBuyersCount).toBe(1);
+      expect(res.formulaCohorts?.halfPointHookBuyersCount).toBe(1);
+      expect(res.formulaCohorts?.multiSeatClustersCount).toBe(1);
+      expect(res.formulaCohorts?.hookOrSyndicateCount).toBe(1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

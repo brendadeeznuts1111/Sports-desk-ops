@@ -173,10 +173,30 @@ export interface ShowcaseCustomer {
     "book" | "fixture" | "backtest" | "rankings" | "live-open" | undefined;
   /** Human tier label when the API carried one (30d rankings). */
   readonly tierLabel?: string | undefined;
-  /** Measured CLV in basis points when present on book or backtest rows; null/omitted when unmeasured. */
+  /** Measured CLV in basis points when present on book, rankings, live-open, or backtest rows. */
   readonly clvBps?: number | null | undefined;
-  /** Open risk in USD when synthesized from the live wager tape (`?matrix=1` overlay). */
+  /** Number of CLV-matched legs behind `clvBps` (from DOD6 spine). */
+  readonly clvLegs?: number | undefined;
+  /** Open risk in USD when active on the live wager tape. */
   readonly openRiskUsd?: number | undefined;
+  /** True when the row came from synthetic demo data (`SYNTH_*`). */
+  readonly synthetic?: boolean | undefined;
+  /** Latest wager timestamp (`YYYY-MM-DD HH:MM:SS...` or `YYYY-MM-DD`). */
+  readonly lastWagerAt?: string | undefined;
+  /** Measured wager count when supplied (30d rankings or backtest). */
+  readonly totalWagers?: number | undefined;
+  /** Rolling 30-day handle in USD (kept separate from lifetime volume). */
+  readonly handle30dUsd?: number | undefined;
+  /** Formula-computed behavioral signals from 30d JSONL stream + DOD6 spine. */
+  readonly keyNumberBuys30d?: number | undefined;
+  readonly halfPointBuys30d?: number | undefined;
+  readonly halfPointBuyRatePct?: number | undefined;
+  readonly seatCount?: number | undefined;
+  readonly isKeyNumberBuyer?: boolean | undefined;
+  readonly isHalfPointHookBuyer?: boolean | undefined;
+  readonly isMultiSeatCluster?: boolean | undefined;
+  readonly isProxyConduit?: boolean | undefined;
+  readonly sharpCandidateGatePassed?: boolean | undefined;
 }
 
 export interface LiveBetsV2SummarySnapshot {
@@ -188,6 +208,14 @@ export interface LiveBetsV2SummarySnapshot {
   readonly totalToWinCents: number;
   readonly capturedAt: string | null;
   readonly generatedAt: string | null;
+}
+
+export interface RankedPlayerScoreComponents {
+  readonly clv: number;
+  readonly volume: number;
+  readonly sizing: number;
+  readonly timing: number;
+  readonly combo: number;
 }
 
 export interface RankedPlayer30d {
@@ -205,6 +233,20 @@ export interface RankedPlayer30d {
   readonly dominantSport: string;
   readonly isProxy: boolean;
   readonly limitUsd: number;
+  readonly lastWagerAt?: string | undefined;
+  readonly clvBps?: number | null | undefined;
+  readonly clvLegs?: number | undefined;
+  readonly dodSharpScore?: number | null | undefined;
+  readonly lifetimeNetUsd?: number | null | undefined;
+  readonly sharpCandidateGatePassed?: boolean | undefined;
+  readonly scoreComponents?: RankedPlayerScoreComponents | undefined;
+  readonly keyNumberBuys30d?: number | undefined;
+  readonly halfPointBuys30d?: number | undefined;
+  readonly halfPointBuyRatePct?: number | undefined;
+  readonly seatCount?: number | undefined;
+  readonly isKeyNumberBuyer?: boolean | undefined;
+  readonly isHalfPointHookBuyer?: boolean | undefined;
+  readonly isMultiSeatCluster?: boolean | undefined;
 }
 
 export interface ProxyConduit30d {
@@ -577,3 +619,32 @@ export interface TierSwatchStyle {
 }
 
 export type TierStyleConfig = Readonly<Record<string, TierSwatchStyle>>;
+
+export type CustomerAccountScope =
+  | "ALL_REAL"
+  | "ACTIVE_7D"
+  | "LIVE_OPEN"
+  | "WITH_CLV"
+  | "CURATED"
+  | "ALL_WITH_SYNTHETIC";
+
+export interface CustomerScopeCounts {
+  readonly allReal: number;
+  readonly active7d: number;
+  readonly liveOpen: number;
+  readonly withClv: number;
+  readonly curated: number;
+  readonly synthetic: number;
+}
+
+export type Billy666BranchFilter =
+  "ALL" | "NOLAWOLF" | "BILLY667" | "RTEST5" | "SAINTS2009" | "OTHER";
+
+export interface Billy666BranchCounts {
+  readonly all: number;
+  readonly NOLAWOLF: number;
+  readonly BILLY667: number;
+  readonly RTEST5: number;
+  readonly SAINTS2009: number;
+  readonly OTHER: number;
+}

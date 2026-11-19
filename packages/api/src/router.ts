@@ -524,7 +524,11 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
         if (denied) return denied;
         try {
           const url = new URL(req.url);
-          const limit = Number(url.searchParams.get("limit")) || 100;
+          const parsedLimit = Number(url.searchParams.get("limit"));
+          const limit =
+            Number.isFinite(parsedLimit) && parsedLimit > 0
+              ? Math.min(Math.trunc(parsedLimit), 25_000)
+              : 100;
           const { generatedAtIso, payload } = await deps.rankings.getAll(limit);
           return await encodeResponse(req, {
             version: `dev-rankings|${generatedAtIso}|${limit}`,

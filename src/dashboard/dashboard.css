@@ -432,6 +432,24 @@ blockquote {
 }
 
 /* Primary surveillance navigation (header lockup → section routes). */
+.sd-primary-nav {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sd-primary-nav::-webkit-scrollbar {
+  display: none;
+}
+
+[data-brand-lockup="true"]:hover {
+  text-decoration: none;
+}
+
+[data-brand-lockup="true"]:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
 .sd-primary-nav a {
   display: inline-flex;
   align-items: center;
@@ -441,6 +459,7 @@ blockquote {
   font-weight: 500;
   line-height: 1.2;
   white-space: nowrap;
+  flex-shrink: 0;
   text-decoration: none;
   color: #94a3b8;
   background-color: transparent;
@@ -453,12 +472,20 @@ blockquote {
 .sd-primary-nav a:hover {
   color: #f8fafc;
   background-color: rgba(255, 255, 255, 0.05);
+  text-decoration: none;
 }
 
 .sd-primary-nav a[aria-current="page"] {
   color: #38bdf8;
   background-color: rgba(56, 189, 248, 0.12);
   box-shadow: inset 0 -2px 0 #38bdf8;
+}
+
+.sd-primary-nav a[aria-current="page"]:hover {
+  color: #38bdf8;
+  background-color: rgba(56, 189, 248, 0.16);
+  box-shadow: inset 0 -2px 0 #38bdf8;
+  text-decoration: none;
 }
 
 .sd-primary-nav a:focus-visible {

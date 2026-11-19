@@ -13,6 +13,15 @@ import { existsSync, createReadStream } from "node:fs";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { resolveF402BetsJsonlPath } from "../lib/f402_bets_corpus_path.ts";
+import {
+  createDod6V54LifetimeReader,
+  type Dod6LifetimeLookupTarget,
+  type Dod6V54LifetimeReader,
+} from "../lib/dod6_v54_lifetime_reader.ts";
+import { parseBuyPointsFromDesc } from "../lib/f402_figure_date_enricher.ts";
+
+const FOOTBALL_KEY_NUMBER_SPREAD_RE =
+  /(?:^|\s)[+-]?(?:2\.5|2½|3|3\.5|3½|6\.5|6½|7|7\.5|7½|10|14|21)(?:\s|$)/;
 
 export interface RawBetRow {
   Login?: string;
@@ -30,15 +39,64 @@ export interface RawBetRow {
 interface CachedBatchedRanking {
   readonly baseResult: Omit<BatchedRankingResult, "topRankedPlayers">;
   readonly allRankedPlayers: readonly PlayerRankingRecord[];
+  readonly playerById: ReadonlyMap<string, PlayerRankingRecord>;
 }
 
 const RANKING_CACHE_MAX = 4;
 const batchedRankingCache = new Map<string, CachedBatchedRanking>();
 const inflightRankings = new Map<string, Promise<CachedBatchedRanking>>();
 
+let cachedDod6Entry: {
+  readonly stamp: string;
+  readonly reader: Dod6V54LifetimeReader | null;
+} | null = null;
+
+async function getCachedDod6Reader(
+  dodbinPath = resolve(
+    import.meta.dir,
+    "../data/sportsdesk_unified_baseline_v54.dodbin",
+  ),
+): Promise<Dod6V54LifetimeReader | null> {
+  const stamp = await fileStatStamp(dodbinPath);
+  if (cachedDod6Entry !== null && cachedDod6Entry.stamp === stamp) {
+    return cachedDod6Entry.reader;
+  }
+  if (stamp === "missing") {
+    cachedDod6Entry = { stamp, reader: null };
+    return null;
+  }
+  try {
+    const reader = await createDod6V54LifetimeReader(dodbinPath);
+    cachedDod6Entry = { stamp, reader };
+    return reader;
+  } catch {
+    cachedDod6Entry = { stamp, reader: null };
+    return null;
+  }
+}
+
 export function resetBatchedRankingCache(): void {
   batchedRankingCache.clear();
   inflightRankings.clear();
+  cachedDod6Entry = null;
+}
+
+/** Non-blocking O(1) lookup against already-computed 30d rankings cache (never scans disk cold). */
+export function peekCachedRankedPlayer(
+  customerId: string,
+): PlayerRankingRecord | null {
+  const norm = customerId.trim().toUpperCase();
+  if (!norm) return null;
+  const canonical = norm.replace(/_\d+$/, "");
+  for (const cached of batchedRankingCache.values()) {
+    const exact = cached.playerById.get(norm);
+    if (exact) return exact;
+    if (canonical && canonical !== norm) {
+      const fallback = cached.playerById.get(canonical);
+      if (fallback) return fallback;
+    }
+  }
+  return null;
 }
 
 // Memory pressure notification listener (Bun 1.4 native)
@@ -69,6 +127,9 @@ export interface CustomerAccumulator {
   sports: Record<string, number>;
   minDate: string;
   maxDate: string;
+  keyNumberBuysCount?: number;
+  halfPointBuysCount?: number;
+  seatIds?: Set<string>;
 }
 
 export interface PlayerRankingRecord {
@@ -94,7 +155,42 @@ export interface PlayerRankingRecord {
   recommendedLineShadeCents: number;
   shadowCopyRatio: number;
   isProxyConduit: boolean;
+  lastWagerAt?: string;
+  clvBps?: number | null;
+  clvLegs?: number;
+  dodSharpScore?: number | null;
+  lifetimeNetUsd?: number | null;
+  sharpCandidateGatePassed?: boolean;
+  scoreComponents?: {
+    readonly clv: number;
+    readonly volume: number;
+    readonly sizing: number;
+    readonly timing: number;
+    readonly combo: number;
+  };
+  keyNumberBuys30d?: number;
+  halfPointBuys30d?: number;
+  halfPointBuyRatePct?: number;
+  seatCount?: number;
+  isKeyNumberBuyer?: boolean;
+  isHalfPointHookBuyer?: boolean;
+  isMultiSeatCluster?: boolean;
   autoExecute: false;
+}
+
+export interface FormulaCohortSummary {
+  readonly activeAccounts: number;
+  readonly clvMeasuredCount: number;
+  readonly positiveClvCount: number;
+  readonly poweredPositiveClvCount: number;
+  readonly eliteClv100BpsCount: number;
+  readonly profitablePositiveClvCount: number;
+  readonly keyNumberBuyersCount: number;
+  readonly halfPointHookBuyersCount: number;
+  readonly proxyConduitPlayersCount: number;
+  readonly multiSeatClustersCount: number;
+  readonly hookOrSyndicateCount: number;
+  readonly meanClvBps: number | null;
 }
 
 export interface SubAgentRollup {
@@ -132,6 +228,7 @@ export interface BatchedRankingResult {
   topMasterAgents: MasterAgentRollup[];
   topSubAgents: SubAgentRollup[];
   topRankedPlayers: PlayerRankingRecord[];
+  formulaCohorts?: FormulaCohortSummary;
 }
 
 export function computeGini(values: number[]): number {
@@ -148,6 +245,14 @@ export function computeGini(values: number[]): number {
   return Math.max(0, Math.min(1, diffSum / (n * sum)));
 }
 
+export interface CompositeScoreComponents {
+  readonly clv: number;
+  readonly volume: number;
+  readonly sizing: number;
+  readonly timing: number;
+  readonly combo: number;
+}
+
 export function calculateCompositeScore(acc: CustomerAccumulator): {
   score: number;
   tier: "TIER_1" | "TIER_2" | "TIER_3" | "TIER_4" | "TIER_5";
@@ -156,6 +261,7 @@ export function calculateCompositeScore(acc: CustomerAccumulator): {
   delaySec: number;
   shadeCents: number;
   shadowCopy: number;
+  components: CompositeScoreComponents;
 } {
   const gini = computeGini(acc.stakesSample);
   const alertRate = acc.wagerCount > 0 ? acc.alertCount / acc.wagerCount : 0;
@@ -185,6 +291,51 @@ export function calculateCompositeScore(acc: CustomerAccumulator): {
   const rawScore = sClv + sStake + sGini + sTiming + sCombo;
   const score = Number(Math.max(0.5, Math.min(10.0, rawScore)).toFixed(2));
 
+  // Round component scores to 2dp while preserving exact integer-cents conservation against `score`.
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  let clv = r2(sClv);
+  let volume = r2(sStake);
+  let sizing = r2(sGini);
+  let timing = r2(sTiming);
+  let combo = r2(sCombo);
+  const targetUnits = Math.round(score * 100);
+  const deltaUnits =
+    targetUnits - Math.round((clv + volume + sizing + timing + combo) * 100);
+  if (deltaUnits !== 0) {
+    const entries: Array<{
+      key: "clv" | "volume" | "sizing" | "timing" | "combo";
+      val: number;
+      cap: number;
+    }> = [
+      { key: "clv", val: clv, cap: 3.0 },
+      { key: "volume", val: volume, cap: 2.5 },
+      { key: "sizing", val: sizing, cap: 1.5 },
+      { key: "timing", val: timing, cap: 2.0 },
+      { key: "combo", val: combo, cap: 1.0 },
+    ];
+    entries.sort((a, b) => b.val - a.val);
+    const chosen = entries.find(
+      (e) =>
+        Math.round(e.val * 100) + deltaUnits >= 0 &&
+        Math.round(e.val * 100) + deltaUnits <= Math.round(e.cap * 100),
+    );
+    if (chosen) {
+      const next = (Math.round(chosen.val * 100) + deltaUnits) / 100;
+      if (chosen.key === "clv") clv = next;
+      else if (chosen.key === "volume") volume = next;
+      else if (chosen.key === "sizing") sizing = next;
+      else if (chosen.key === "timing") timing = next;
+      else combo = next;
+    }
+  }
+  const components: CompositeScoreComponents = {
+    clv,
+    volume,
+    sizing,
+    timing,
+    combo,
+  };
+
   if (score >= 8.8) {
     return {
       score,
@@ -194,6 +345,7 @@ export function calculateCompositeScore(acc: CustomerAccumulator): {
       delaySec: 3.0,
       shadeCents: 15,
       shadowCopy: 1.0,
+      components,
     };
   } else if (score >= 8.0) {
     return {
@@ -204,6 +356,7 @@ export function calculateCompositeScore(acc: CustomerAccumulator): {
       delaySec: 2.0,
       shadeCents: 10,
       shadowCopy: 0.5,
+      components,
     };
   } else if (score >= 7.0) {
     return {
@@ -214,6 +367,7 @@ export function calculateCompositeScore(acc: CustomerAccumulator): {
       delaySec: 1.0,
       shadeCents: 5,
       shadowCopy: 0.0,
+      components,
     };
   } else if (score >= 5.5) {
     return {
@@ -224,6 +378,7 @@ export function calculateCompositeScore(acc: CustomerAccumulator): {
       delaySec: 0.0,
       shadeCents: 0,
       shadowCopy: 0.0,
+      components,
     };
   } else {
     return {
@@ -234,6 +389,7 @@ export function calculateCompositeScore(acc: CustomerAccumulator): {
       delaySec: 0.0,
       shadeCents: 0,
       shadowCopy: 0.0,
+      components,
     };
   }
 }
@@ -423,6 +579,9 @@ async function computeUncachedBatchedRanking(
         sports: {},
         minDate: dt,
         maxDate: dt,
+        keyNumberBuysCount: 0,
+        halfPointBuysCount: 0,
+        seatIds: new Set<string>(),
       };
       customerMap.set(login, c);
     }
@@ -455,6 +614,22 @@ async function computeUncachedBatchedRanking(
     else if (desc.includes("Hockey") || desc.includes("NHL")) sp = "HOCKEY";
     else if (desc.includes("Tennis")) sp = "TENNIS";
     c.sports[sp] = (c.sports[sp] || 0) + 1;
+
+    if (!isAlert && !isBlocked) {
+      const seatId = (rec.CustomerID || "").trim().toUpperCase();
+      if (seatId && c.seatIds) c.seatIds.add(seatId);
+      if (desc.includes("buying") || desc.includes("Buying")) {
+        const bp = parseBuyPointsFromDesc(desc);
+        if (bp > 0) {
+          if (bp === 0.5) {
+            c.halfPointBuysCount = (c.halfPointBuysCount ?? 0) + 1;
+          }
+          if (sp === "FOOTBALL" && FOOTBALL_KEY_NUMBER_SPREAD_RE.test(desc)) {
+            c.keyNumberBuysCount = (c.keyNumberBuysCount ?? 0) + 1;
+          }
+        }
+      }
+    }
 
     // Sub-Agent level
     let sa = subAgentMap.get(rawAgent);
@@ -614,7 +789,24 @@ async function computeUncachedBatchedRanking(
     })
     .sort((a, b) => b.totalHandleUsd - a.totalHandleUsd);
 
-  // Player scoring
+  // Player scoring (O(1) sub-agent & DOD6 lookup)
+  const subAgentById = new Map<string, SubAgentRollup>();
+  for (const sa of topSubAgents) {
+    subAgentById.set(sa.agentId, sa);
+  }
+  const dodReader = await getCachedDod6Reader();
+  const dodTarget: Dod6LifetimeLookupTarget = {
+    clvBps: null,
+    sharpScore: null,
+    lifetimeNetUsd: null,
+    clvLegs: 0,
+    avgClvPoints: null,
+    sharpCandidateGatePassed: false,
+    source: "lifetime_csv",
+    handleKind: "binary",
+    handleValue: null,
+  };
+
   const rankedPlayers: PlayerRankingRecord[] = [];
   for (const c of customerMap.values()) {
     const scoring = calculateCompositeScore(c);
@@ -648,11 +840,33 @@ async function computeUncachedBatchedRanking(
       }
     }
 
-    const saRollup = topSubAgents.find((s) => s.agentId === c.agentId);
+    const saRollup = subAgentById.get(c.agentId);
     const isProxyConduit =
       saRollup?.isProxyConduit && saRollup.topCustomer === c.login
         ? true
         : false;
+
+    const normLogin = c.login.trim().toUpperCase();
+    const canonicalLogin = normLogin.replace(/_\d+$/, "");
+    const dodMatched =
+      dodReader !== null &&
+      (dodReader.lookupInto(normLogin, dodTarget) ||
+        (canonicalLogin !== normLogin &&
+          dodReader.lookupInto(canonicalLogin, dodTarget)));
+
+    const keyNumberBuys = c.keyNumberBuysCount ?? 0;
+    const halfPointBuys = c.halfPointBuysCount ?? 0;
+    const halfPointRatePct =
+      c.wagerCount > 0 && halfPointBuys > 0
+        ? Math.round((halfPointBuys / c.wagerCount) * 1000) / 10
+        : 0;
+    const seatCount = c.seatIds ? c.seatIds.size : 1;
+    const isKeyNumberBuyer = keyNumberBuys >= 3;
+    const isHalfPointHookBuyer =
+      halfPointBuys >= 5 &&
+      c.wagerCount > 0 &&
+      halfPointBuys / c.wagerCount >= 0.05;
+    const isMultiSeatCluster = seatCount >= 2;
 
     rankedPlayers.push({
       rank: 0,
@@ -680,6 +894,28 @@ async function computeUncachedBatchedRanking(
       recommendedLineShadeCents: scoring.shadeCents,
       shadowCopyRatio: scoring.shadowCopy,
       isProxyConduit,
+      ...(c.maxDate ? { lastWagerAt: c.maxDate } : {}),
+      scoreComponents: scoring.components,
+      ...(keyNumberBuys > 0 ? { keyNumberBuys30d: keyNumberBuys } : {}),
+      ...(halfPointBuys > 0
+        ? {
+            halfPointBuys30d: halfPointBuys,
+            halfPointBuyRatePct: halfPointRatePct,
+          }
+        : {}),
+      ...(seatCount > 1 ? { seatCount } : {}),
+      ...(isKeyNumberBuyer ? { isKeyNumberBuyer: true } : {}),
+      ...(isHalfPointHookBuyer ? { isHalfPointHookBuyer: true } : {}),
+      ...(isMultiSeatCluster ? { isMultiSeatCluster: true } : {}),
+      ...(dodMatched
+        ? {
+            clvBps: dodTarget.clvBps,
+            clvLegs: dodTarget.clvLegs,
+            dodSharpScore: dodTarget.sharpScore,
+            lifetimeNetUsd: dodTarget.lifetimeNetUsd,
+            sharpCandidateGatePassed: dodTarget.sharpCandidateGatePassed,
+          }
+        : {}),
       autoExecute: false,
     });
   }
@@ -691,9 +927,71 @@ async function computeUncachedBatchedRanking(
     return b.handleUsd - a.handleUsd;
   });
 
+  const playerById = new Map<string, PlayerRankingRecord>();
   rankedPlayers.forEach((p, idx) => {
     (p as { rank: number }).rank = idx + 1;
+    const key = p.customerId.trim().toUpperCase();
+    if (key && !playerById.has(key)) playerById.set(key, p);
   });
+  for (const p of rankedPlayers) {
+    const canonical = p.customerId.trim().toUpperCase().replace(/_\d+$/, "");
+    if (canonical && !playerById.has(canonical)) playerById.set(canonical, p);
+  }
+
+  let clvMeasuredCount = 0;
+  let clvSum = 0;
+  let positiveClvCount = 0;
+  let poweredPositiveClvCount = 0;
+  let eliteClv100BpsCount = 0;
+  let profitablePositiveClvCount = 0;
+  let keyNumberBuyersCount = 0;
+  let halfPointHookBuyersCount = 0;
+  let proxyConduitPlayersCount = 0;
+  let multiSeatClustersCount = 0;
+  let hookOrSyndicateCount = 0;
+
+  for (const p of rankedPlayers) {
+    const hasClv = typeof p.clvBps === "number" && Number.isFinite(p.clvBps);
+    if (hasClv) {
+      clvMeasuredCount++;
+      clvSum += p.clvBps!;
+      if (p.clvBps! > 0) {
+        positiveClvCount++;
+        if (p.sharpCandidateGatePassed === true) {
+          poweredPositiveClvCount++;
+          if (p.clvBps! >= 100) eliteClv100BpsCount++;
+        }
+        if (typeof p.lifetimeNetUsd === "number" && p.lifetimeNetUsd > 0) {
+          profitablePositiveClvCount++;
+        }
+      }
+    }
+    if (p.isKeyNumberBuyer) keyNumberBuyersCount++;
+    if (p.isHalfPointHookBuyer) halfPointHookBuyersCount++;
+    if (p.isProxyConduit) proxyConduitPlayersCount++;
+    if (p.isMultiSeatCluster) multiSeatClustersCount++;
+    if (p.isHalfPointHookBuyer || p.isProxyConduit || p.isMultiSeatCluster) {
+      hookOrSyndicateCount++;
+    }
+  }
+
+  const formulaCohorts: FormulaCohortSummary = {
+    activeAccounts: rankedPlayers.length,
+    clvMeasuredCount,
+    positiveClvCount,
+    poweredPositiveClvCount,
+    eliteClv100BpsCount,
+    profitablePositiveClvCount,
+    keyNumberBuyersCount,
+    halfPointHookBuyersCount,
+    proxyConduitPlayersCount,
+    multiSeatClustersCount,
+    hookOrSyndicateCount,
+    meanClvBps:
+      clvMeasuredCount > 0
+        ? Math.round((clvSum / clvMeasuredCount) * 10) / 10
+        : null,
+  };
 
   const nowIso =
     typeof Temporal !== "undefined"
@@ -721,8 +1019,10 @@ async function computeUncachedBatchedRanking(
       conduitSubAgentCount,
       topMasterAgents: topMasters.slice(0, 15),
       topSubAgents: topSubAgents.slice(0, 25),
+      formulaCohorts,
     },
     allRankedPlayers: rankedPlayers,
+    playerById,
   };
 }
 

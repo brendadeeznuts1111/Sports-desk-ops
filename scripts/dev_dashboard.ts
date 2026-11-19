@@ -21,7 +21,10 @@ import {
   DashboardHealthTracker,
   DashboardMarkdownCache,
   DEFAULT_R2_PUBLIC_BASE,
+  harvestedCustomerRow,
   isDashboardAuthRequired,
+  profileDocumentRow,
+  type Dod6CustomerLookupHit,
 } from "@sportsdesk-ops/backend";
 import {
   createDashboardApi,
@@ -50,6 +53,11 @@ import {
   SPORTSDESK_CORE_HOSTS,
 } from "../lib/bun_dns.ts";
 import type { CustomerRow } from "../lib/customer_profile.ts";
+import { peekCachedRankedPlayer } from "../lib/customer_rankings.ts";
+import {
+  createDod6V54LifetimeReader,
+  type Dod6V54LifetimeReader,
+} from "../lib/dod6_v54_lifetime_reader.ts";
 import {
   handleLogin,
   handleLogout,
@@ -298,7 +306,55 @@ export function startDashboardServer(
   }
 
   const jsonReader = createCachedJsonReader(24);
-  const { findCustomerRow } = createCustomerRowFinder<CustomerRow>({ cwd });
+  const dodbinPath = resolve(
+    cwd,
+    "data/sportsdesk_unified_baseline_v54.dodbin",
+  );
+  let cachedDod6: {
+    readonly stamp: string;
+    readonly reader: Dod6V54LifetimeReader | null;
+  } | null = null;
+  const getDod6Reader = async (): Promise<Dod6V54LifetimeReader | null> => {
+    const st = await Bun.file(dodbinPath)
+      .stat()
+      .catch(() => null);
+    const stamp = st === null ? "missing" : `${st.mtimeMs}:${st.size}`;
+    if (cachedDod6 !== null && cachedDod6.stamp === stamp) {
+      return cachedDod6.reader;
+    }
+    if (st === null) {
+      cachedDod6 = { stamp, reader: null };
+      return null;
+    }
+    try {
+      const reader = await createDod6V54LifetimeReader(dodbinPath);
+      cachedDod6 = { stamp, reader };
+      return reader;
+    } catch {
+      cachedDod6 = { stamp, reader: null };
+      return null;
+    }
+  };
+  const lookupDod6 = async (
+    rawId: string,
+  ): Promise<Dod6CustomerLookupHit | null> => {
+    const reader = await getDod6Reader();
+    if (!reader) return null;
+    const norm = rawId.trim().toUpperCase();
+    if (!norm) return null;
+    const exact = reader.lookup(norm);
+    if (exact) return exact;
+    const canonical = norm.replace(/_\d+$/, "");
+    if (canonical && canonical !== norm) {
+      return reader.lookup(canonical);
+    }
+    return null;
+  };
+  const { findCustomerRow } = createCustomerRowFinder<CustomerRow>({
+    cwd,
+    dodLookup: lookupDod6,
+    rankedLookup: (id) => peekCachedRankedPlayer(id),
+  });
   const markdownCache = new DashboardMarkdownCache(dashboardMdPath);
   const r2PipelineService = createR2PipelineService({
     daemon4020Origin:
@@ -340,6 +396,7 @@ export function startDashboardServer(
           profilesCached,
           localBookCached,
           fixtureBookCached,
+          dodReader,
         ] = await Promise.all([
           import("../lib/live_wagers.ts"),
           import("../lib/customer_profile.ts"),
@@ -361,6 +418,7 @@ export function startDashboardServer(
               "tests/fixtures/backtest/enriched_customers_full.json",
             ),
           ),
+          getDod6Reader(),
         ]);
 
         const bookMetaMap = new Map<
@@ -435,11 +493,26 @@ export function startDashboardServer(
           customerBookLookup: (cid: string) => {
             const norm = cid.trim().toUpperCase();
             if (!norm) return null;
-            return (
+            const base = norm.replace(/_\d+$/, "");
+            const bookHit =
               bookMetaMap.get(norm) ??
-              bookMetaMap.get(norm.replace(/_\d+$/, "")) ??
-              null
-            );
+              (base !== norm ? bookMetaMap.get(base) : undefined);
+            if (bookHit) return bookHit;
+            if (dodReader) {
+              const dodHit =
+                dodReader.lookup(norm) ??
+                (base !== norm ? dodReader.lookup(base) : null);
+              if (
+                dodHit &&
+                (dodHit.clvBps !== null || dodHit.sharpScore !== null)
+              ) {
+                return {
+                  clvBps: dodHit.clvBps,
+                  sharpScore: dodHit.sharpScore,
+                };
+              }
+            }
+            return null;
           },
         };
       },
@@ -612,21 +685,32 @@ export function startDashboardServer(
       },
       customers: {
         getCohortReport: async () => {
-          const [backtestCached, fixtureCached, localBookCached] =
-            await Promise.all([
-              jsonReader.readCachedJson<{
-                customerLeaderboard?: Array<Record<string, unknown>>;
-              }>(resolve(cwd, "docs/backtest-4wk-cfb-nba.json")),
-              jsonReader.readCachedJson<Array<Record<string, unknown>>>(
-                resolve(
-                  cwd,
-                  "tests/fixtures/backtest/enriched_customers_full.json",
-                ),
+          const [
+            backtestCached,
+            fixtureCached,
+            localBookCached,
+            profilesCached,
+            harvestedCached,
+          ] = await Promise.all([
+            jsonReader.readCachedJson<{
+              customerLeaderboard?: Array<Record<string, unknown>>;
+            }>(resolve(cwd, "docs/backtest-4wk-cfb-nba.json")),
+            jsonReader.readCachedJson<Array<Record<string, unknown>>>(
+              resolve(
+                cwd,
+                "tests/fixtures/backtest/enriched_customers_full.json",
               ),
-              jsonReader.readCachedJson<Array<Record<string, unknown>>>(
-                resolve(cwd, "enriched_customers_full.json"),
-              ),
-            ]);
+            ),
+            jsonReader.readCachedJson<Array<Record<string, unknown>>>(
+              resolve(cwd, "enriched_customers_full.json"),
+            ),
+            jsonReader.readCachedJson<{
+              profiles?: Array<Record<string, unknown>>;
+            }>(resolve(cwd, "data/customer-profiles.json")),
+            jsonReader.readCachedJson<{
+              profiles?: Array<Record<string, unknown>>;
+            }>(resolve(cwd, "reports/harvested-live-profiles.json")),
+          ]);
           const backtestJson = backtestCached?.value ?? {
             customerLeaderboard: [],
           };
@@ -634,17 +718,88 @@ export function startDashboardServer(
           const {
             KEY_NUMBER_BUYER_PROFILES,
             HALF_POINT_HOOK_SYNDICATE_PROFILES,
+            isSyntheticCustomerId,
           } = await import("../lib/customer_profile.ts");
+
+          const mergedBook: Array<Record<string, unknown>> = [];
+          const seenBookIds = new Set<string>();
+          let hasRealProfilesOrHarvested = false;
+          const pushBookRow = (
+            row: Record<string, unknown> | null,
+            markReal = false,
+          ) => {
+            if (!row) return;
+            const rawId = row.customer_id ?? row.customerId;
+            if (typeof rawId !== "string") return;
+            const norm = rawId.trim().toUpperCase();
+            if (!norm || seenBookIds.has(norm)) return;
+            seenBookIds.add(norm);
+            const rawMaster =
+              typeof row.master_agent === "string"
+                ? row.master_agent
+                : typeof row.masterAgent === "string"
+                  ? row.masterAgent
+                  : "";
+            const synth =
+              isSyntheticCustomerId(norm) || isSyntheticCustomerId(rawMaster);
+            if (markReal && !synth) hasRealProfilesOrHarvested = true;
+            mergedBook.push(synth ? { ...row, synthetic: true } : row);
+          };
+
+          for (const rawProf of profilesCached?.value?.profiles ?? []) {
+            const lifted = profileDocumentRow(rawProf);
+            if (!lifted) continue;
+            const posList = Array.isArray(rawProf.positions)
+              ? rawProf.positions
+              : [];
+            const firstPos = posList[0] as Record<string, unknown> | undefined;
+            const placedAt =
+              firstPos && typeof firstPos.placed_at === "string"
+                ? firstPos.placed_at
+                : undefined;
+            pushBookRow(
+              placedAt && lifted.last_active_at === undefined
+                ? { ...lifted, last_active_at: placedAt }
+                : lifted,
+              true,
+            );
+          }
+          for (const rawHarv of harvestedCached?.value?.profiles ?? []) {
+            const lifted = harvestedCustomerRow(rawHarv);
+            if (!lifted) continue;
+            const tierStr =
+              typeof rawHarv.tier === "string" ? rawHarv.tier : undefined;
+            pushBookRow(
+              tierStr && lifted.tier === undefined
+                ? { ...lifted, tier: tierStr }
+                : lifted,
+              true,
+            );
+          }
+          for (const row of localBookCached?.value ?? []) {
+            pushBookRow(row, false);
+          }
 
           const payload = computeCustomersCohortPayload({
             backtestLeaderboard: backtestJson.customerLeaderboard ?? [],
             fixtures: fixtureJson,
-            localBookRows: localBookCached?.value,
+            localBookRows: mergedBook.length > 0 ? mergedBook : undefined,
             keyNumberBuyerIds: KEY_NUMBER_BUYER_PROFILES.keys(),
             hookSyndicateIds: HALF_POINT_HOOK_SYNDICATE_PROFILES.keys(),
+            ...(hasRealProfilesOrHarvested
+              ? {
+                  provenance: {
+                    kind: "capture" as const,
+                    label: "Live Customer Profiles + Harvested + Local Book",
+                    sourcePath:
+                      "data/customer-profiles.json + reports/harvested-live-profiles.json",
+                    observedAt: new Date().toISOString(),
+                  },
+                }
+              : {}),
           });
           return {
-            versionStamp: `dev-customers|${backtestCached?.stamp ?? "none"}|${fixtureCached?.stamp ?? "none"}|${localBookCached?.stamp ?? "none"}`,
+            versionStamp: `dev-customers|${backtestCached?.stamp ?? "none"}|${fixtureCached?.stamp ?? "none"}|${localBookCached?.stamp ?? "none"}|${profilesCached?.stamp ?? "none"}|${harvestedCached?.stamp ?? "none"}`,
             payload,
           };
         },

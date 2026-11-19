@@ -1,4 +1,4 @@
-import type React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { styles } from "../dashboard_styles.ts";
 import {
   type NormalizedRankingsResult,
@@ -98,6 +98,35 @@ export function RankingsTabPanel({
   const players = rankings?.players ?? [];
   const conduits = rankings?.conduits ?? [];
   const unmeasured = "—";
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(100);
+
+  const filteredPlayers = useMemo(() => {
+    const q = rankingsSearch.toLowerCase();
+    return players.filter((p) => {
+      const matchesSearch =
+        !q ||
+        p.id.toLowerCase().includes(q) ||
+        p.agentId.toLowerCase().includes(q) ||
+        p.masterAgent.toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+      if (rankingsFilter === "CONDUITS") return p.isProxy;
+      if (rankingsFilter === "TIER3") return p.tier === "TIER_3";
+      if (rankingsFilter === "WHALES") return p.handleUsd >= 1000000;
+      return true;
+    });
+  }, [players, rankingsSearch, rankingsFilter]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [rankingsSearch, rankingsFilter, players.length, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPlayers.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const pagedPlayers = filteredPlayers.slice(
+    safePage * pageSize,
+    (safePage + 1) * pageSize,
+  );
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       <RankingsSourceNotice
@@ -186,12 +215,93 @@ export function RankingsTabPanel({
       <div style={styles.tableCard}>
         <div style={styles.tableHeader}>
           <h3 style={styles.tableTitle}>
-            🏆 30-Day Sharp Bettor Rankings & Downline Profiling
+            🏆 30-Day Sharp Bettor Rankings & Downline Profiling (
+            {filteredPlayers.length.toLocaleString()})
           </h3>
           <span style={{ fontSize: "11px", color: "#64748b" }}>
             Streaming batched evaluation (50k lines/chunk) · autoExecute: false
           </span>
         </div>
+
+        {filteredPlayers.length > pageSize ? (
+          <div
+            data-rankings-pagination="true"
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+              padding: "6px 12px",
+              borderBottom: "1px solid #1e293b",
+              fontSize: "11px",
+              color: "#94a3b8",
+            }}
+          >
+            <span>
+              Showing {(safePage * pageSize + 1).toLocaleString()}–
+              {Math.min(
+                (safePage + 1) * pageSize,
+                filteredPlayers.length,
+              ).toLocaleString()}{" "}
+              of {filteredPlayers.length.toLocaleString()}
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <label style={{ color: "#64748b" }}>
+                Rows:{" "}
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value) || 100)}
+                  style={{
+                    backgroundColor: "#0f172a",
+                    color: "#e2e8f0",
+                    border: "1px solid #334155",
+                    borderRadius: "4px",
+                    padding: "2px 6px",
+                    fontSize: "11px",
+                  }}
+                >
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={250}>250</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                disabled={safePage === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                style={{
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid #334155",
+                  backgroundColor: "#1e293b",
+                  color: safePage === 0 ? "#475569" : "#e2e8f0",
+                  cursor: safePage === 0 ? "default" : "pointer",
+                }}
+              >
+                ← Prev
+              </button>
+              <span>
+                Page {safePage + 1} / {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={safePage >= totalPages - 1}
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                style={{
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid #334155",
+                  backgroundColor: "#1e293b",
+                  color: safePage >= totalPages - 1 ? "#475569" : "#e2e8f0",
+                  cursor: safePage >= totalPages - 1 ? "default" : "pointer",
+                }}
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <div style={styles.tableScroll}>
           <table style={styles.table}>
@@ -230,189 +340,188 @@ export function RankingsTabPanel({
                   </td>
                 </tr>
               ) : null}
-              {players
-                .filter((p) => {
-                  const q = rankingsSearch.toLowerCase();
-                  const matchesSearch =
-                    !q ||
-                    p.id.toLowerCase().includes(q) ||
-                    p.agentId.toLowerCase().includes(q) ||
-                    p.masterAgent.toLowerCase().includes(q);
-                  if (!matchesSearch) return false;
-                  if (rankingsFilter === "CONDUITS") return p.isProxy;
-                  if (rankingsFilter === "TIER3") return p.tier === "TIER_3";
-                  if (rankingsFilter === "WHALES")
-                    return p.handleUsd >= 1000000;
-                  return true;
-                })
-                .map((p) => (
-                  <tr key={p.id}>
-                    <td style={styles.td}>
-                      <span style={{ fontWeight: 700, color: "#38bdf8" }}>
-                        #{p.rank}
-                      </span>
-                    </td>
-                    <td style={styles.td}>
+              {pagedPlayers.map((p) => (
+                <tr key={p.id}>
+                  <td style={styles.td}>
+                    <span style={{ fontWeight: 700, color: "#38bdf8" }}>
+                      #{p.rank}
+                    </span>
+                  </td>
+                  <td style={styles.td}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <a
+                        href={getLocalCustomerHref(p.id)}
+                        onClick={(e) => {
+                          if (
+                            onSelectCustomerById &&
+                            !e.metaKey &&
+                            !e.ctrlKey &&
+                            e.button === 0
+                          ) {
+                            e.preventDefault();
+                            onSelectCustomerById(p.id);
+                          }
+                        }}
+                        style={{
+                          ...styles.custLogin,
+                          textDecoration: "none",
+                        }}
+                        title="Inspect Customer in SportsDesk Profiles"
+                      >
+                        {p.id}
+                      </a>
+                      <a
+                        href={`https://fantasy402.com/manager.html?customer=${p.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          color: "#64748b",
+                          textDecoration: "none",
+                          fontSize: "11px",
+                        }}
+                        title="Open in external Fantasy402 Manager Portal (requires active F402 session)"
+                      >
+                        ↗
+                      </a>
+                      {p.isProxy && (
+                        <span
+                          style={{
+                            fontSize: "9px",
+                            padding: "1px 5px",
+                            borderRadius: "3px",
+                            backgroundColor: "rgba(239, 68, 68, 0.2)",
+                            border: "1px solid #ef4444",
+                            color: "#ef4444",
+                            fontWeight: 700,
+                          }}
+                        >
+                          PROXY
+                        </span>
+                      )}
+                    </div>
+                    <div style={styles.custSub}>{p.dominantSport}</div>
+                  </td>
+                  <td style={styles.td}>
+                    <div style={{ fontWeight: 600 }}>
+                      <a
+                        href={getLocalAgentHref(p.agentId)}
+                        onClick={(e) => {
+                          if (
+                            onSelectAgent &&
+                            !e.metaKey &&
+                            !e.ctrlKey &&
+                            e.button === 0
+                          ) {
+                            e.preventDefault();
+                            onSelectAgent(p.agentId);
+                          }
+                        }}
+                        style={{
+                          color: "#38bdf8",
+                          textDecoration: "none",
+                        }}
+                        title="Open SportsDesk Agent Inspector"
+                      >
+                        {p.agentId} ↗
+                      </a>
+                    </div>
+                    <div style={styles.custSub}>Master: {p.masterAgent}</div>
+                  </td>
+                  <td style={styles.td}>
+                    <div style={{ fontWeight: 600 }}>
+                      ${p.handleUsd.toLocaleString()}
+                    </div>
+                    <div style={styles.custSub}>
+                      Avg:{" "}
+                      {p.wagers > 0
+                        ? `$${(p.handleUsd / p.wagers).toFixed(0)}`
+                        : "—"}
+                    </div>
+                  </td>
+                  <td style={styles.td}>
+                    <div>{p.wagers}</div>
+                  </td>
+                  <td style={styles.td}>
+                    <span
+                      style={{
+                        color: p.gini <= 0.15 ? "#4ade80" : "#f59e0b",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {p.gini.toFixed(3)}
+                    </span>
+                    <div style={styles.custSub}>
+                      {p.gini <= 0.15 ? "Flat-Unit" : "Variable"}
+                    </div>
+                  </td>
+                  <td style={styles.td}>
+                    <span
+                      style={{
+                        color: p.alertRate >= 50 ? "#ef4444" : "#94a3b8",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {p.alertRate}%
+                    </span>
+                  </td>
+                  <td style={styles.td}>
+                    <span
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: 700,
+                        color: p.score >= 7.0 ? "#f59e0b" : "#38bdf8",
+                      }}
+                    >
+                      {p.score.toFixed(2)}
+                    </span>
+                    {typeof p.clvBps === "number" &&
+                    Number.isFinite(p.clvBps) ? (
                       <div
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
+                          ...styles.custSub,
+                          color:
+                            p.clvBps > 0
+                              ? "#4ade80"
+                              : p.clvBps < 0
+                                ? "#f87171"
+                                : "#94a3b8",
                         }}
                       >
-                        <a
-                          href={getLocalCustomerHref(p.id)}
-                          onClick={(e) => {
-                            if (
-                              onSelectCustomerById &&
-                              !e.metaKey &&
-                              !e.ctrlKey &&
-                              e.button === 0
-                            ) {
-                              e.preventDefault();
-                              onSelectCustomerById(p.id);
-                            }
-                          }}
-                          style={{
-                            ...styles.custLogin,
-                            textDecoration: "none",
-                          }}
-                          title="Inspect Customer in SportsDesk Profiles"
-                        >
-                          {p.id}
-                        </a>
-                        <a
-                          href={`https://fantasy402.com/manager.html?customer=${p.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            color: "#64748b",
-                            textDecoration: "none",
-                            fontSize: "11px",
-                          }}
-                          title="Open in external Fantasy402 Manager Portal (requires active F402 session)"
-                        >
-                          ↗
-                        </a>
-                        {p.isProxy && (
-                          <span
-                            style={{
-                              fontSize: "9px",
-                              padding: "1px 5px",
-                              borderRadius: "3px",
-                              backgroundColor: "rgba(239, 68, 68, 0.2)",
-                              border: "1px solid #ef4444",
-                              color: "#ef4444",
-                              fontWeight: 700,
-                            }}
-                          >
-                            PROXY
-                          </span>
-                        )}
+                        CLV: {p.clvBps > 0 ? `+${p.clvBps}` : `${p.clvBps}`} bps
                       </div>
-                      <div style={styles.custSub}>{p.dominantSport}</div>
-                    </td>
-                    <td style={styles.td}>
-                      <div style={{ fontWeight: 600 }}>
-                        <a
-                          href={getLocalAgentHref(p.agentId)}
-                          onClick={(e) => {
-                            if (
-                              onSelectAgent &&
-                              !e.metaKey &&
-                              !e.ctrlKey &&
-                              e.button === 0
-                            ) {
-                              e.preventDefault();
-                              onSelectAgent(p.agentId);
-                            }
-                          }}
-                          style={{
-                            color: "#38bdf8",
-                            textDecoration: "none",
-                          }}
-                          title="Open SportsDesk Agent Inspector"
-                        >
-                          {p.agentId} ↗
-                        </a>
-                      </div>
-                      <div style={styles.custSub}>Master: {p.masterAgent}</div>
-                    </td>
-                    <td style={styles.td}>
-                      <div style={{ fontWeight: 600 }}>
-                        ${p.handleUsd.toLocaleString()}
-                      </div>
-                      <div style={styles.custSub}>
-                        Avg:{" "}
-                        {p.wagers > 0
-                          ? `$${(p.handleUsd / p.wagers).toFixed(0)}`
-                          : "—"}
-                      </div>
-                    </td>
-                    <td style={styles.td}>
-                      <div>{p.wagers}</div>
-                    </td>
-                    <td style={styles.td}>
-                      <span
-                        style={{
-                          color: p.gini <= 0.15 ? "#4ade80" : "#f59e0b",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {p.gini.toFixed(3)}
-                      </span>
-                      <div style={styles.custSub}>
-                        {p.gini <= 0.15 ? "Flat-Unit" : "Variable"}
-                      </div>
-                    </td>
-                    <td style={styles.td}>
-                      <span
-                        style={{
-                          color: p.alertRate >= 50 ? "#ef4444" : "#94a3b8",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {p.alertRate}%
-                      </span>
-                    </td>
-                    <td style={styles.td}>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: 700,
-                          color: p.score >= 7.0 ? "#f59e0b" : "#38bdf8",
-                        }}
-                      >
-                        {p.score.toFixed(2)}
-                      </span>
-                    </td>
-                    <td style={styles.td}>
-                      <span style={styles.tierBadge(p.tier)}>
-                        {p.tierLabel}
-                      </span>
-                    </td>
-                    <td style={styles.td}>
-                      <div style={{ fontSize: "11px", color: "#f87171" }}>
-                        Limit: ${p.limitUsd.toLocaleString()}
-                      </div>
-                      <div style={styles.custSub}>Live Delay: 2-3s</div>
-                    </td>
-                    <td style={styles.td}>
-                      <button
-                        type="button"
-                        style={{
-                          ...styles.actionBtn,
-                          padding: "4px 8px",
-                          fontSize: "11px",
-                          cursor: "pointer",
-                        }}
-                        onClick={() => onInspectPty(p.id)}
-                      >
-                        Inspect PTY
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                    ) : null}
+                  </td>
+                  <td style={styles.td}>
+                    <span style={styles.tierBadge(p.tier)}>{p.tierLabel}</span>
+                  </td>
+                  <td style={styles.td}>
+                    <div style={{ fontSize: "11px", color: "#f87171" }}>
+                      Limit: ${p.limitUsd.toLocaleString()}
+                    </div>
+                    <div style={styles.custSub}>Live Delay: 2-3s</div>
+                  </td>
+                  <td style={styles.td}>
+                    <button
+                      type="button"
+                      style={{
+                        ...styles.actionBtn,
+                        padding: "4px 8px",
+                        fontSize: "11px",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => onInspectPty(p.id)}
+                    >
+                      Inspect PTY
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

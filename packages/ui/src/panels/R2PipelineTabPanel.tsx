@@ -200,6 +200,16 @@ const METRIC_BOX_STYLE: React.CSSProperties = {
   border: "1px solid rgba(51, 65, 85, 0.7)",
 };
 
+const DAEMON_LINK_PILL_STYLE: React.CSSProperties = {
+  ...styles.actionBtn,
+  padding: "4px 10px",
+  fontSize: "11px",
+  textDecoration: "none",
+  backgroundColor: "rgba(56, 189, 248, 0.12)",
+  border: "1px solid rgba(56, 189, 248, 0.35)",
+  color: "#38bdf8",
+};
+
 function stateBadgeColors(state: R2SinkDetail["state"]): {
   readonly fg: string;
   readonly bg: string;
@@ -489,13 +499,7 @@ export function R2PipelineTabPanel({
             href="/live-bets"
             target="_blank"
             rel="noreferrer"
-            style={{
-              ...styles.actionBtn,
-              padding: "4px 10px",
-              fontSize: "11px",
-              textDecoration: "none",
-              color: "#38bdf8",
-            }}
+            style={DAEMON_LINK_PILL_STYLE}
           >
             📈 Live Bets / Scoreboard ↗
           </a>
@@ -503,13 +507,7 @@ export function R2PipelineTabPanel({
             href="/graph"
             target="_blank"
             rel="noreferrer"
-            style={{
-              ...styles.actionBtn,
-              padding: "4px 10px",
-              fontSize: "11px",
-              textDecoration: "none",
-              color: "#38bdf8",
-            }}
+            style={DAEMON_LINK_PILL_STYLE}
           >
             🕸️ Hierarchy Graph ↗
           </a>
@@ -517,13 +515,7 @@ export function R2PipelineTabPanel({
             href="/status"
             target="_blank"
             rel="noreferrer"
-            style={{
-              ...styles.actionBtn,
-              padding: "4px 10px",
-              fontSize: "11px",
-              textDecoration: "none",
-              color: "#38bdf8",
-            }}
+            style={DAEMON_LINK_PILL_STYLE}
           >
             🩺 Ops Status ↗
           </a>

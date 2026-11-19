@@ -21,6 +21,7 @@ export const styles = {
       "radial-gradient(rgba(56, 189, 248, 0.08) 1px, transparent 1px)",
     backgroundSize: "16px 16px",
     backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
     borderBottom: "1px solid #1e293b",
     display: "flex",
     flexDirection: "column" as const,
@@ -109,9 +110,12 @@ export const styles = {
     fontWeight: 600,
     whiteSpace: "nowrap" as const,
     cursor: "pointer",
-    backgroundColor: active ? "#38bdf8" : "#1e293b",
-    color: active ? "#0f172a" : "#94a3b8",
-    border: "none",
+    backgroundColor: active
+      ? "rgba(56, 189, 248, 0.16)"
+      : "rgba(15, 23, 42, 0.85)",
+    color: active ? "#38bdf8" : "#94a3b8",
+    border: active ? "1px solid rgba(56, 189, 248, 0.5)" : "1px solid #1e293b",
+    boxShadow: active ? "0 0 12px rgba(56, 189, 248, 0.12)" : "none",
     transition: "all 0.15s ease",
   }),
   keyShortcutBadge: {
@@ -217,10 +221,13 @@ export const styles = {
     marginBottom: "20px",
   },
   kpiCard: {
-    backgroundColor: "#0d1527",
+    backgroundColor: "#0b1120",
     border: "1px solid #1e293b",
-    borderRadius: "8px",
+    borderRadius: "10px",
     padding: "16px",
+    boxShadow: "0 2px 10px rgba(2, 6, 23, 0.28)",
+    transition:
+      "border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease",
   },
   kpiLabel: {
     fontSize: "12px",
@@ -249,12 +256,13 @@ export const styles = {
   searchInput: {
     flex: "1 1 300px",
     padding: "10px 14px",
-    backgroundColor: "#0d1527",
+    backgroundColor: "#0b1120",
     border: "1px solid #1e293b",
-    borderRadius: "6px",
+    borderRadius: "8px",
     color: "#f1f5f9",
     fontSize: "13px",
     outline: "none",
+    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
   },
   filterPills: {
     display: "flex",

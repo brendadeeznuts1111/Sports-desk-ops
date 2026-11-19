@@ -133,12 +133,96 @@ function tierFromRow(row: Row, score: number): ShowcaseCustomer["tier"] {
   return tierFor(score);
 }
 
+/** True when the row represents a synthetic demo fixture account (`SYNTH_*`). */
+export function isSyntheticShowcaseCustomer(
+  customer: Pick<ShowcaseCustomer, "id" | "masterAgent" | "synthetic">,
+): boolean {
+  if (customer.synthetic === true) return true;
+  const id = customer.id.trim().toUpperCase();
+  const master = customer.masterAgent.trim().toUpperCase();
+  return id.startsWith("SYNTH_") || master.startsWith("SYNTH_");
+}
+
+const RADAR_CAPS: readonly [number, number, number, number, number] = [
+  3.0, 2.5, 1.5, 2.0, 1.0,
+];
+
+/** Adjust 5 radar axes proportionally so integer-hundredths conserve `targetScore` within caps. */
+function conserveRadarAxes(
+  raw: readonly [number, number, number, number, number],
+  targetScore: number,
+): readonly [number, number, number, number, number] {
+  const targetUnits = Math.round(clamp(targetScore, 0, 10) * 100);
+  const maxUnits = RADAR_CAPS.map((cap) => Math.round(cap * 100));
+  const units = raw.map((val, i) =>
+    Math.min(maxUnits[i]!, Math.max(0, Math.round(val * 100))),
+  );
+  let sum = units.reduce((acc, u) => acc + u, 0);
+  if (sum !== targetUnits) {
+    if (sum < targetUnits) {
+      let need = targetUnits - sum;
+      const rooms = units.map((u, i) => maxUnits[i]! - u);
+      const totalRoom = rooms.reduce((acc, r) => acc + r, 0);
+      if (totalRoom > 0) {
+        for (let i = 0; i < 5 && need > 0; i++) {
+          const add = Math.min(
+            rooms[i]!,
+            Math.floor((need * rooms[i]!) / totalRoom),
+          );
+          units[i] = units[i]! + add;
+          need -= add;
+        }
+        for (let i = 0; i < 5 && need > 0; i++) {
+          const room = maxUnits[i]! - units[i]!;
+          if (room <= 0) continue;
+          const add = Math.min(room, need);
+          units[i] = units[i]! + add;
+          need -= add;
+        }
+      }
+    } else {
+      let excess = sum - targetUnits;
+      const origSum = sum;
+      if (origSum > 0) {
+        for (let i = 0; i < 5 && excess > 0; i++) {
+          const cut = Math.min(
+            units[i]!,
+            Math.floor((excess * units[i]!) / origSum),
+          );
+          units[i] = units[i]! - cut;
+          excess -= cut;
+        }
+        for (let i = 0; i < 5 && excess > 0; i++) {
+          if (units[i]! <= 0) continue;
+          const cut = Math.min(units[i]!, excess);
+          units[i] = units[i]! - cut;
+          excess -= cut;
+        }
+      }
+    }
+    sum = units.reduce((acc, u) => acc + u, 0);
+  }
+  return [
+    units[0]! / 100,
+    units[1]! / 100,
+    units[2]! / 100,
+    units[3]! / 100,
+    units[4]! / 100,
+  ] as const;
+}
+
 export function bookRowsToProfiles(
   rows: ReadonlyArray<Row>,
   source: "book" | "fixture" = "book",
 ): ShowcaseCustomer[] {
   return rows.map((row, idx) => {
     const id = String(row.customer_id ?? row.customerId ?? `BOOK-${idx}`);
+    const agentId = String(row.agent_id ?? row.agentId ?? "—");
+    const masterAgent = String(row.master_agent ?? row.masterAgent ?? "—");
+    const isSynth =
+      row.synthetic === true ||
+      id.trim().toUpperCase().startsWith("SYNTH_") ||
+      masterAgent.trim().toUpperCase().startsWith("SYNTH_");
     const tickets = Array.isArray(row.recent_tickets)
       ? (row.recent_tickets as Row[])
       : [];
@@ -157,6 +241,7 @@ export function bookRowsToProfiles(
     const rawClv = row.clv_bps ?? row.clvBps;
     const clvBps =
       typeof rawClv === "number" && Number.isFinite(rawClv) ? rawClv : null;
+    const rawClvLegs = nonNegativeFinite(row.clv_legs ?? row.clvLegs);
     const clvScore = clamp(num(row.clv_bps) / 100, -10, 10);
     const rawDelay = nonNegativeFinite(row.delay_seconds);
     const delayKnown = rawDelay !== null;
@@ -164,6 +249,11 @@ export function bookRowsToProfiles(
     const league = topKey(tickets, "league");
     const market = topKey(tickets, "market");
     const sizingKnown = stakes.length >= 2;
+    const rawLastActive =
+      typeof row.last_active_at === "string" && row.last_active_at.trim() !== ""
+        ? row.last_active_at.trim()
+        : undefined;
+    const rawTotalWagers = nonNegativeFinite(row.total_wagers);
 
     const unknown: string[] = [];
     if (!sharpKnown) unknown.push("sharpness");
@@ -184,8 +274,8 @@ export function bookRowsToProfiles(
     return {
       id,
       name: id,
-      agentId: String(row.agent_id ?? row.agentId ?? "—"),
-      masterAgent: String(row.master_agent ?? row.masterAgent ?? "—"),
+      agentId,
+      masterAgent,
       tier: tierFromRow(row, score),
       score: round(score, 2),
       clvScore: round(clvScore, 2),
@@ -220,6 +310,12 @@ export function bookRowsToProfiles(
       action: score >= 7 ? "ALERT_OPERATOR" : "ACCEPT_NORMAL",
       ipAddress: String(row.ip_subnet ?? "—"),
       ...(clvBps === null ? {} : { clvBps }),
+      ...(rawClvLegs !== null && rawClvLegs > 0 ? { clvLegs: rawClvLegs } : {}),
+      ...(isSynth ? { synthetic: true } : {}),
+      ...(rawLastActive !== undefined ? { lastWagerAt: rawLastActive } : {}),
+      ...(rawTotalWagers !== null && rawTotalWagers > 0
+        ? { totalWagers: rawTotalWagers }
+        : {}),
       unknown,
       source,
     };
@@ -346,10 +442,32 @@ export function rankingsPlayersToProfiles(
   players: readonly RankedPlayer30d[],
 ): ShowcaseCustomer[] {
   return players.map((player) => {
-    const score = clamp(player.score, 0, 10);
+    const score = round(clamp(player.score, 0, 10), 2);
     const mappedTier = mapRankingTierCode(player.tier) ?? tierFor(score);
-    const unknown: string[] = ["holdPct", "ltv", "tickets"];
+    const hasLifetimeNet =
+      typeof player.lifetimeNetUsd === "number" &&
+      Number.isFinite(player.lifetimeNetUsd);
+    const unknown: string[] = hasLifetimeNet
+      ? ["holdPct", "tickets"]
+      : ["holdPct", "ltv", "tickets"];
     if (player.handleUsd <= 0) unknown.push("meanStake");
+
+    const sc = player.scoreComponents;
+    const rawAxes: readonly [number, number, number, number, number] = sc
+      ? [sc.clv, sc.volume, sc.sizing, sc.timing, sc.combo]
+      : [
+          round(clamp(player.alertRate / 40, 0, 3), 2),
+          round(clamp(score * 0.26, 0, 2.5), 2),
+          round(clamp(1.5 - player.gini * 0.8, 0, 1.5), 2),
+          round(clamp(1 + player.alertRate / 100, 0, 2), 2),
+          player.isProxy ? 0.9 : 0.6,
+        ];
+    const [clvScore, skillScore, sizingScore, sigScore, timingScore] =
+      conserveRadarAxes(rawAxes, score);
+
+    const hasClvBps =
+      typeof player.clvBps === "number" && Number.isFinite(player.clvBps);
+
     return {
       id: player.id,
       name: player.id,
@@ -357,12 +475,12 @@ export function rankingsPlayersToProfiles(
       masterAgent: player.masterAgent,
       tier: mappedTier,
       tierLabel: player.tierLabel,
-      score: round(score, 2),
-      clvScore: round(clamp(player.alertRate / 40, 0, 3), 2),
-      skillScore: round(clamp(score * 0.26, 0, 2.5), 2),
-      sizingScore: round(clamp(1.5 - player.gini * 0.8, 0, 1.5), 2),
-      sigScore: round(clamp(1 + player.alertRate / 100, 0, 2), 2),
-      timingScore: player.isProxy ? 0.9 : 0.6,
+      score,
+      clvScore,
+      skillScore,
+      sizingScore,
+      sigScore,
+      timingScore,
       sizingStrategy: player.gini > 0.35 ? "VARIABLE_STAKE" : "FLAT_UNIT",
       gini: round(player.gini, 4),
       meanStake:
@@ -371,13 +489,18 @@ export function rankingsPlayersToProfiles(
       timingArchetype: player.tierLabel,
       correlatedRisk: player.isProxy ? "HIGH" : "MODERATE",
       correlatedExploitRate: round(player.alertRate / 100, 2),
-      syndicateRisk: player.isProxy ? "HIGH" : "ELEVATED",
-      syndicateProb: player.isProxy ? 0.75 : 0.35,
+      syndicateRisk:
+        player.isProxy || player.isMultiSeatCluster ? "HIGH" : "LOW",
+      syndicateProb: player.isProxy
+        ? 0.75
+        : player.isMultiSeatCluster
+          ? 0.6
+          : 0,
       subAccountIndex: null,
       var95Usd: round(Math.max(500, player.handleUsd * 0.05), 2),
       cvar95Usd: round(Math.max(750, player.handleUsd * 0.08), 2),
       holdPct: 0,
-      ltvUsd: 0,
+      ltvUsd: hasLifetimeNet ? round(player.lifetimeNetUsd!, 2) : 0,
       recommendedLimitUsd: player.limitUsd,
       inPlayDelaySec: 0,
       lineShadeCents: 0,
@@ -387,13 +510,46 @@ export function rankingsPlayersToProfiles(
           ? "ALERT_OPERATOR"
           : "MONITOR",
       ipAddress: "—",
+      ...(hasClvBps ? { clvBps: player.clvBps! } : {}),
+      ...(typeof player.clvLegs === "number" && player.clvLegs > 0
+        ? { clvLegs: player.clvLegs }
+        : {}),
+      ...(player.lastWagerAt ? { lastWagerAt: player.lastWagerAt } : {}),
+      ...(typeof player.keyNumberBuys30d === "number" &&
+      player.keyNumberBuys30d > 0
+        ? { keyNumberBuys30d: player.keyNumberBuys30d }
+        : {}),
+      ...(typeof player.halfPointBuys30d === "number" &&
+      player.halfPointBuys30d > 0
+        ? { halfPointBuys30d: player.halfPointBuys30d }
+        : {}),
+      ...(typeof player.halfPointBuyRatePct === "number" &&
+      player.halfPointBuyRatePct > 0
+        ? { halfPointBuyRatePct: player.halfPointBuyRatePct }
+        : {}),
+      ...(typeof player.seatCount === "number" && player.seatCount > 1
+        ? { seatCount: player.seatCount }
+        : {}),
+      ...(player.isKeyNumberBuyer === true ? { isKeyNumberBuyer: true } : {}),
+      ...(player.isHalfPointHookBuyer === true
+        ? { isHalfPointHookBuyer: true }
+        : {}),
+      ...(player.isMultiSeatCluster === true
+        ? { isMultiSeatCluster: true }
+        : {}),
+      ...(player.isProxy ? { isProxyConduit: true } : {}),
+      ...(typeof player.sharpCandidateGatePassed === "boolean"
+        ? { sharpCandidateGatePassed: player.sharpCandidateGatePassed }
+        : {}),
+      totalWagers: player.wagers,
+      handle30dUsd: round(player.handleUsd, 2),
       unknown,
       source: "rankings",
     };
   });
 }
 
-/** Open wager tape → one profile per active customer (matrix overlay). */
+/** Open wager tape → one profile per active customer (live-open overlay). */
 export function liveOpenWagersToProfiles(
   wagers: readonly LiveWager[],
 ): ShowcaseCustomer[] {
@@ -406,6 +562,8 @@ export function liveOpenWagersToProfiles(
       stakes: number[];
       sports: Map<string, number>;
       alerts: number;
+      clvBps: number | null;
+      latestTs: string;
     }
   >();
   for (const w of wagers) {
@@ -420,6 +578,12 @@ export function liveOpenWagersToProfiles(
         stakes: [],
         sports: new Map(),
         alerts: 0,
+        clvBps:
+          typeof w.customerClvBps === "number" &&
+          Number.isFinite(w.customerClvBps)
+            ? w.customerClvBps
+            : null,
+        latestTs: w.timestamp,
       };
       byCustomer.set(id, acc);
     }
@@ -428,6 +592,16 @@ export function liveOpenWagersToProfiles(
     const sp = w.sport.trim().toUpperCase() || "OTHER";
     acc.sports.set(sp, (acc.sports.get(sp) ?? 0) + 1);
     if (w.alertTier !== "BASELINE") acc.alerts += 1;
+    if (
+      acc.clvBps === null &&
+      typeof w.customerClvBps === "number" &&
+      Number.isFinite(w.customerClvBps)
+    ) {
+      acc.clvBps = w.customerClvBps;
+    }
+    if (w.timestamp && w.timestamp > acc.latestTs) {
+      acc.latestTs = w.timestamp;
+    }
   }
 
   const out: ShowcaseCustomer[] = [];
@@ -446,6 +620,10 @@ export function liveOpenWagersToProfiles(
     }
     const alertRate =
       acc.stakes.length > 0 ? acc.alerts / acc.stakes.length : 0;
+    const sizingScore = round(clamp(1.5 - g * 0.8, 0, 1.5), 2);
+    const sigScore = round(clamp(alertRate, 0, 2), 2);
+    const timingScore = 0.5;
+    const score = round(sizingScore + sigScore + timingScore, 2);
     const unknown: string[] = [
       "holdPct",
       "ltv",
@@ -463,12 +641,12 @@ export function liveOpenWagersToProfiles(
       masterAgent: acc.masterAgent,
       tier: "TIER_5_RECREATIONAL",
       tierLabel: "Open book — tier pending 30d rank",
-      score: round(clamp(alertRate * 6, 0, 10), 2),
+      score,
       clvScore: 0,
       skillScore: 0,
-      sizingScore: round(clamp(1.5 - g * 0.8, 0, 1.5), 2),
-      sigScore: round(alertRate, 2),
-      timingScore: 0.5,
+      sizingScore,
+      sigScore,
+      timingScore,
       sizingStrategy: g < 0.2 ? "FLAT_UNIT" : "VARIABLE_STAKE",
       gini: round(g, 4),
       meanStake: round(meanStake, 2),
@@ -490,11 +668,39 @@ export function liveOpenWagersToProfiles(
       action: alertRate > 0.25 ? "ALERT_OPERATOR" : "MONITOR",
       ipAddress: "—",
       openRiskUsd: round(acc.riskUsd, 2),
+      totalWagers: acc.stakes.length,
+      ...(acc.clvBps !== null ? { clvBps: acc.clvBps } : {}),
+      ...(acc.latestTs && acc.latestTs !== "—"
+        ? { lastWagerAt: acc.latestTs }
+        : {}),
       unknown,
       source: "live-open",
     });
   }
   return out;
+}
+
+/**
+ * Attaches live open risk (`openRiskUsd`) from tonight's wager tape onto existing rows without
+ * replacing richer book/backtest/ranked profiles when both match the same customer ID.
+ */
+export function mergeOpenRiskOverlay(
+  rows: readonly ShowcaseCustomer[],
+  liveWagers: readonly LiveWager[] | null | undefined,
+): ShowcaseCustomer[] {
+  if (!liveWagers?.length || rows.length === 0) return [...rows];
+  const openRiskById = new Map<string, number>();
+  for (const w of liveWagers) {
+    const id = w.customerId.trim().toUpperCase();
+    if (!id) continue;
+    openRiskById.set(id, (openRiskById.get(id) ?? 0) + w.riskUsd);
+  }
+  return rows.map((row) => {
+    if (row.openRiskUsd !== undefined) return row;
+    const risk = openRiskById.get(row.id.trim().toUpperCase());
+    if (risk === undefined || risk <= 0) return row;
+    return { ...row, openRiskUsd: round(risk, 2) };
+  });
 }
 
 /** `?matrix=1` overlay: live-open and 30d rankings under cohort fixtures (cohort wins on id clash). */
@@ -570,10 +776,6 @@ export function profileApiPayloadToShowcase(
       ? (prof.rating as unknown as CustomerRatingApiPayload)
       : null);
 
-  const score = round(
-    clamp(num(ratingObj?.score ?? composite.compositeScore), 0, 10),
-    2,
-  );
   const comp = ratingObj?.componentScores;
   const clvBps =
     typeof ratingObj?.clvBps === "number" && Number.isFinite(ratingObj.clvBps)
@@ -581,6 +783,33 @@ export function profileApiPayloadToShowcase(
       : null;
   const sampleCount = num(stake.sampleCount);
   const giniVal = num(stake.giniCoefficient);
+
+  // Decompose onto exact SharpnessDecomposition axis caps [3.0, 2.5, 1.5, 2.0, 1.0]
+  // so `score` always conserves `sum(axes)` (`ConservationError` delta === 0).
+  const cc =
+    typeof composite.components === "object" && composite.components !== null
+      ? (composite.components as Record<string, unknown>)
+      : null;
+  const clvScore = cc
+    ? round(clamp(num(cc.clvScore), 0, 3), 2)
+    : round(clamp((comp?.clvEdgeScore ?? 0) * 0.3, 0, 3), 2);
+  const skillScore = cc
+    ? round(clamp(num(cc.bayesianSkillScore), 0, 2.5), 2)
+    : round(clamp((comp?.keyNumberScore ?? 0) * 0.25, 0, 2.5), 2);
+  const sizingScore = cc
+    ? round(clamp(num(cc.sizingDisciplineScore), 0, 1.5), 2)
+    : round(clamp(1 - giniVal, 0, 1.5), 2);
+  const sigScore = cc
+    ? round(clamp(num(cc.signatureSpecializationScore), 0, 2), 2)
+    : round(clamp((comp?.steamLatencyScore ?? 0) * 0.2, 0, 2), 2);
+  const timingScore = cc
+    ? round(clamp(num(cc.timingExploitationScore), 0, 1), 2)
+    : round(clamp((comp?.timingDisciplineScore ?? 0) * 0.1, 0, 1), 2);
+  const score = round(
+    clamp(clvScore + skillScore + sizingScore + sigScore + timingScore, 0, 10),
+    2,
+  );
+
   const unknown: string[] = [];
   if (sampleCount === 0) unknown.push("meanStake");
   if (sampleCount < 2) unknown.push("sizing", "gini", "var95");
@@ -600,11 +829,11 @@ export function profileApiPayloadToShowcase(
     tier: mappedTier,
     tierLabel: ratingObj?.tier,
     score,
-    clvScore: round(comp?.clvEdgeScore ?? num(ratingObj?.clvBps) / 100, 2),
-    skillScore: round(comp?.keyNumberScore ?? score * 0.8, 2),
-    sizingScore: round(clamp(1 - giniVal, 0, 2), 2),
-    sigScore: round(comp?.steamLatencyScore ?? 0, 2),
-    timingScore: round(comp?.timingDisciplineScore ?? 0, 2),
+    clvScore,
+    skillScore,
+    sizingScore,
+    sigScore,
+    timingScore,
     sizingStrategy: String(stake.sizingStrategy ?? "PENDING_TICKETS"),
     gini: round(giniVal, 4),
     meanStake: round(num(stake.meanStakeUsd), 2),
