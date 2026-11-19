@@ -1,7 +1,7 @@
 # AGENTS.md — sportsdesk-ops
 
 Operator tooling for the Fantasy402 sports desk: ingestion, settlement, combo/CLV analytics, the R2
-portal and the VPS service. Bun **1.4.4** (`package.json` `engines.bun` / `.bun-version`).
+portal and the VPS service. Bun **1.4.5** (`package.json` `engines.bun` / `.bun-version`).
 
 ## Fast inner loop vs full main-branch gate chain
 
