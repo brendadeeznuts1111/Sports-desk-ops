@@ -128,10 +128,15 @@ export function requireSubprocessTerminal(proc: {
   return terminal as { write: (input: string) => number; close: () => void };
 }
 
-/** Strip CR and SGR escapes from PTY capture (assertions on plain text). */
+/**
+ * Strip CR and every ANSI sequence from PTY capture (assertions on plain text).
+ *
+ * `Bun.stripANSI` covers CSI beyond SGR (`\x1b[2K`) and OSC 8 hyperlinks, which the previous
+ * `/\x1b\[[0-9;]*m/` regex left in the capture; CR is not an ANSI sequence, so it is removed
+ * separately.
+ */
 export function stripPtyCapture(raw: string): string {
-  // eslint-disable-next-line no-control-regex -- PTY tests assert on plain text
-  return raw.replace(/\r/g, "").replace(/\x1b\[[0-9;]*m/g, "");
+  return Bun.stripANSI(raw).replace(/\r/g, "");
 }
 
 /** Runnable blog snippet — spawn bash PTY 80×24, write hello command, capture output. */

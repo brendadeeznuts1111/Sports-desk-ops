@@ -33,6 +33,7 @@ import {
   type CardCorpus,
   type ReconstructedCard,
 } from "./wager_card.ts";
+import { clipDisplay } from "./terminal_format.ts";
 
 export const CUSTOMER_WAGER_REVIEW_SCHEMA_VERSION = 1 as const;
 
@@ -917,7 +918,8 @@ function findReprice(
 }
 
 function truncateText(value: string, width: number): string {
-  return value.length <= width ? value : `${value.slice(0, width - 1)}…`;
+  // Columns, so a selection with emoji does not break the evidence line's width.
+  return clipDisplay(value, width);
 }
 
 function formatAmerican(value: number): string {

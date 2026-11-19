@@ -10,6 +10,7 @@
  */
 
 import { join } from "node:path";
+import { clipDisplay } from "./terminal_format.ts";
 
 export const CLI_README_BEGIN =
   "<!-- BEGIN GENERATED BUN X CATALOG (run bun run cli:readme) -->";
@@ -73,7 +74,8 @@ function cleanDescription(value: string): string | null {
     .replace(/`/g, "'")
     .trim();
   if (clean === "") return null;
-  return clean.length <= 120 ? clean : `${clean.slice(0, 117)}…`;
+  // 120 display columns; `slice(0, 117)` measured code units and produced 118 characters.
+  return clipDisplay(clean, 120);
 }
 
 /**

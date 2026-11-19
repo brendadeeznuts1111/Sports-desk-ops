@@ -25,6 +25,7 @@ import {
   wantsHelp,
 } from "../lib/cli_args.ts";
 import { loadCustomerWagerArtifacts } from "../lib/customer_wager_artifacts.ts";
+import { clipDisplay, wrapDisplay } from "../lib/terminal_format.ts";
 import {
   buildCustomerWagerReview,
   type CustomerWagerReview,
@@ -503,26 +504,23 @@ function formatPrice(american: number | null): string {
   return american > 0 ? `+${american}` : String(american);
 }
 
+/** Columns, not UTF-16 units, so a selection with emoji still fits its slot. */
 function truncate(value: string, width: number): string {
-  return value.length <= width ? value : `${value.slice(0, width - 1)}…`;
+  return clipDisplay(value, width);
 }
 
+/**
+ * Wrap prose to the report's column budget, continuing under `indent`.
+ *
+ * `Bun.wrapAnsi` preserves ANSI state and hard-breaks a token longer than the width; the previous
+ * hand-rolled loop counted `length` and left an over-wide URL on one line.
+ */
 function wrap(value: string, width: number, indent: string): string {
-  const words = value.split(/\s+/);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    if (current === "") {
-      current = word;
-    } else if (current.length + 1 + word.length <= width) {
-      current = `${current} ${word}`;
-    } else {
-      lines.push(current);
-      current = word;
-    }
-  }
-  if (current !== "") lines.push(current);
-  return lines.join(`\n${indent}`);
+  return wrapDisplay(value, width, {
+    hard: true,
+    wordWrap: true,
+    trim: true,
+  }).join(`\n${indent}`);
 }
 
 function compactEvidence(evidence: Readonly<Record<string, unknown>>): string {

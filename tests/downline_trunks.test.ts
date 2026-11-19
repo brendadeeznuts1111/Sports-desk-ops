@@ -115,6 +115,18 @@ describe("downline trunks", () => {
     expect(ansi).toContain("LIVE CORPUS");
   });
 
+  test("every table row is the same terminal width, SGR included", () => {
+    // The TRACKTHIS handle cell carries bold escapes. Padding it with `padStart` counted the
+    // escapes (17 code units, 9 columns) and left the column visibly short; a column measure
+    // keeps every row aligned.
+    const rows = formatDownlineTrunksAnsi(buildDownlineTrunkReport(mini))
+      .split("\n")
+      .filter((line) => line.startsWith("│"));
+    expect(rows.length).toBeGreaterThan(2);
+    const widths = new Set(rows.map((line) => Bun.stringWidth(line)));
+    expect([...widths]).toHaveLength(1);
+  });
+
   test("parseTrunksCliArgs understands detail and branch filters", () => {
     expect(parseTrunksCliArgs(["detail", "trackthis"]).detail).toBe(true);
     expect(parseTrunksCliArgs(["nolapph"]).branchFilter).toBe("NOLAPPH");

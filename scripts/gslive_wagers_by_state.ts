@@ -56,15 +56,11 @@ import {
   type DateFilterBy,
 } from "./fetch-bet-tally.ts";
 import {
-  JSONL,
-  argv,
-  env,
-  file as bunFile,
-  randomUUIDv7,
-  stringWidth,
-  wrapAnsi,
-  write,
-} from "bun";
+  displayWidth,
+  padDisplay,
+  wrapDisplay,
+} from "../lib/terminal_format.ts";
+import { JSONL, argv, env, file as bunFile, randomUUIDv7, write } from "bun";
 
 /** Observed GSLive wager states, in report order. */
 export const GSLIVE_STATE_ORDER = [
@@ -1412,44 +1408,31 @@ function countCell(value: number | null): string {
 }
 
 /**
- * One width rule for both padding and wrapping: ambiguous-width Unicode counts as one column.
- * Stating it explicitly keeps `Bun.stringWidth` and `Bun.wrapAnsi` in agreement instead of
- * relying on two separate defaults.
+ * One width rule for both padding and wrapping lives in `lib/terminal_format.ts` (ambiguous-width
+ * Unicode counts as one column), so this report, the downline tables and the CLI cards cannot
+ * measure with one rule and wrap with another.
  */
-const AMBIGUOUS_IS_NARROW = true;
-
-/** Display width in terminal columns (ANSI/emoji-safe), not UTF-16 units. */
-function displayWidth(text: string): number {
-  return stringWidth(text, { ambiguousIsNarrow: AMBIGUOUS_IS_NARROW });
-}
 
 function padCell(text: string, width: number, align: "left" | "right"): string {
-  const pad = Math.max(0, width - displayWidth(text));
-  return align === "right"
-    ? `${" ".repeat(pad)}${text}`
-    : `${text}${" ".repeat(pad)}`;
+  return padDisplay(text, width, align);
 }
 
 /** Prose cells (alert summaries, notes): wrap at word boundaries, breaking over-wide tokens. */
 export function wrapProseCell(text: string, width: number): string[] {
-  if (displayWidth(text) <= width) return [text];
-  return wrapAnsi(text, width, {
+  return wrapDisplay(text, width, {
     hard: true,
     wordWrap: true,
     trim: true,
-    ambiguousIsNarrow: AMBIGUOUS_IS_NARROW,
-  }).split("\n");
+  });
 }
 
 /** Unbroken tokens (source URLs, paths, ids): hard-break, never reword. */
 export function wrapTokenCell(text: string, width: number): string[] {
-  if (displayWidth(text) <= width) return [text];
-  return wrapAnsi(text, width, {
+  return wrapDisplay(text, width, {
     hard: true,
     wordWrap: false,
     trim: true,
-    ambiguousIsNarrow: AMBIGUOUS_IS_NARROW,
-  }).split("\n");
+  });
 }
 
 /**
@@ -1509,13 +1492,9 @@ function renderRowCells(cells: TableCell[]): string[] {
   for (let i = 0; i < height; i++) {
     out.push(
       cells
-        .map((cell, ci) => {
-          const text = wrapped[ci]?.[i] ?? "";
-          const pad = Math.max(0, cell.width - stringWidth(text));
-          return cell.align === "right"
-            ? `${" ".repeat(pad)}${text}`
-            : `${text}${" ".repeat(pad)}`;
-        })
+        .map((cell, ci) =>
+          padDisplay(wrapped[ci]?.[i] ?? "", cell.width, cell.align),
+        )
         .join(" "),
     );
   }
@@ -1528,13 +1507,9 @@ export function formatWagerTable(report: WagerReport): string {
   const stateWidth = Math.min(
     STATE_COLUMN_CAP,
     Math.max(
-      stringWidth("state", { ambiguousIsNarrow: AMBIGUOUS_IS_NARROW }),
-      stringWidth("TOTAL", { ambiguousIsNarrow: AMBIGUOUS_IS_NARROW }),
-      ...report.states.map((entry) =>
-        stringWidth(entry.state, {
-          ambiguousIsNarrow: AMBIGUOUS_IS_NARROW,
-        }),
-      ),
+      displayWidth("state"),
+      displayWidth("TOTAL"),
+      ...report.states.map((entry) => displayWidth(entry.state)),
     ),
   );
   const headerCells: TableCell[] = [
@@ -1548,10 +1523,7 @@ export function formatWagerTable(report: WagerReport): string {
     { text: "leg result", width: 15, align: "right" },
   ];
   const header = renderRowCells(headerCells)[0] ?? "";
-  const lines = [
-    header,
-    "-".repeat(stringWidth(header, { ambiguousIsNarrow: AMBIGUOUS_IS_NARROW })),
-  ];
+  const lines = [header, "-".repeat(displayWidth(header))];
   const pushEntry = (
     state: string,
     legs: number,

@@ -28,6 +28,7 @@ import {
   type ProbeOp,
 } from "./f402_probe.ts";
 import { buildArtifact, readPendingRows } from "./live_bets.ts";
+import { clipDisplay } from "./terminal_format.ts";
 import { betTickerFile } from "./live_wagers.ts";
 import { extractContests } from "./contests.ts";
 import { readBoardFile } from "./game_admin_board.ts";
@@ -539,7 +540,8 @@ export interface CaptureDeps {
 
 function safeError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message.length > 200 ? `${message.slice(0, 200)}…` : message;
+  // 200 display columns, never split through a wide character.
+  return clipDisplay(message, 200);
 }
 
 function sha256Hex(text: string): string {

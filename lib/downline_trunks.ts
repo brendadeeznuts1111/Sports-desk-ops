@@ -2,6 +2,7 @@ import type {
   BatchedRankingResult,
   PlayerRankingRecord,
 } from "./customer_rankings.ts";
+import { clipDisplay, padDisplay } from "./terminal_format.ts";
 
 export type DownlineTrunkId = "TRACKTHIS" | "NOLAPPH" | "OTHER";
 
@@ -237,14 +238,15 @@ export function formatDownlineTrunksAnsi(
         : branch.alertRatePct >= 8
           ? "\x1b[1;33m"
           : "\x1b[0m";
+    const handleValue = `$${branch.handleUsd.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    // Pad by columns, not code units: the TRACKTHIS cell carries SGR, so `padStart` counted the
+    // escapes and left it visibly short of the column it shares with the plain cells.
     const handle =
       branch.id === "TRACKTHIS"
-        ? `\x1b[1m$${branch.handleUsd.toLocaleString("en-US", { minimumFractionDigits: 2 })}\x1b[0m`
-        : `$${branch.handleUsd.toLocaleString("en-US", { minimumFractionDigits: 2 })}`.padStart(
-            18,
-          );
+        ? padDisplay(`\x1b[1m${handleValue}\x1b[0m`, 18, "right")
+        : padDisplay(handleValue, 18, "right");
     rows.push(
-      `│ ${color}${padCell(branch.label, 14)}\x1b[0m │ ${typeof handle === "string" && handle.startsWith("\x1b") ? handle.padStart(28) : handle} │ ${padNum(branch.wagers, 8)} │ ${padNum(branch.bettors, 9)} │ ${padMoney(branch.avgTicketUsd, 12)} │ ${alertColor}${padPct(branch.alertRatePct, 10)}\x1b[0m │ ${padNum(branch.subAgentCount, 8)} │ ${padCell(branch.role, 38)} │`,
+      `│ ${color}${padCell(branch.label, 14)}\x1b[0m │ ${handle} │ ${padNum(branch.wagers, 8)} │ ${padNum(branch.bettors, 9)} │ ${padMoney(branch.avgTicketUsd, 12)} │ ${alertColor}${padPct(branch.alertRatePct, 10)}\x1b[0m │ ${padNum(branch.subAgentCount, 8)} │ ${padCell(branch.role, 38)} │`,
     );
   }
 
@@ -258,8 +260,8 @@ export function formatDownlineTrunksAnsi(
 }
 
 function padCell(text: string, width: number): string {
-  const clipped = text.length > width ? `${text.slice(0, width - 1)}…` : text;
-  return clipped.padEnd(width);
+  // Columns, not UTF-16 units, and never cut through an escape sequence or a wide character.
+  return padDisplay(clipDisplay(text, width), width);
 }
 
 function padNum(n: number, width: number): string {

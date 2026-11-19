@@ -380,7 +380,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/wrapAnsi)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/render_docs.ts`, `lib/token_watch_native.ts`
+- **Here:** `lib/terminal_format.ts`, `scripts/render_docs.ts`
 - **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_url_native_utils.test.ts`, `test:tests/bun_v140_primitives.test.ts`, `test:tests/dashboard_build_and_markdown.test.ts`
 
 ## Data formats and parsing
