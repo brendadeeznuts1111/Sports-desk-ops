@@ -48,10 +48,13 @@ Commands & Options:
   --clean [target|all] Remove one or all downloaded PR binaries from ~/.bun/bin
   -h, --help           Show this help text
 
+Only --verify, --list and --clean are implemented here. The build-variant and debugger flags are
+the bun-pr package's: dx pr forwards them unchanged, so bun-pr owns their behaviour.
+
 Examples:
   ./bin/dx pr 16420
   ./bin/dx pr 16420 --verify
-  ./bin/dx pr 16420 -x run test tests/bun_cli_flags.test.ts
+  ./bin/dx pr 16420 -x run verify:fast
   ./bin/dx pr --list
   ./bin/dx pr --clean all
 `.trim();
