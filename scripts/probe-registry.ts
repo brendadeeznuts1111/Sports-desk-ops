@@ -16,30 +16,44 @@ function safeUrl(value: string): URL {
   return url;
 }
 
-async function configPaths() {
+export interface NpmrcContext {
+  source: "NPM_CONFIG_USERCONFIG" | "npm_config_userconfig" | "XDG_CONFIG_HOME" | "HOME";
+  rawEnv: string | null;
+  userConfigPath: string;
+  userConfigExists: boolean;
+  projectConfigPath: string;
+  projectConfigExists: boolean;
+}
+
+/** Resolve npmrc candidates without opening or printing credential values. */
+async function resolveNpmrcContext(): Promise<NpmrcContext> {
   const env = process.env;
   const home = homedir();
-  let source = "HOME";
-  let path = resolve(home, ".npmrc");
-  const explicit = env.NPM_CONFIG_USERCONFIG || env.npm_config_userconfig;
-  if (explicit) {
-    source = env.NPM_CONFIG_USERCONFIG
-      ? "NPM_CONFIG_USERCONFIG"
-      : "npm_config_userconfig";
-    path = explicit.startsWith("~/")
-      ? resolve(home, explicit.slice(2))
-      : resolve(explicit);
+  const rawEnv = env.NPM_CONFIG_USERCONFIG || env.npm_config_userconfig || null;
+  let source: NpmrcContext["source"] = "HOME";
+  let userConfigPath = resolve(home, ".npmrc");
+
+  if (rawEnv) {
+    source = env.NPM_CONFIG_USERCONFIG ? "NPM_CONFIG_USERCONFIG" : "npm_config_userconfig";
+    userConfigPath = rawEnv.startsWith("~/")
+      ? resolve(home, rawEnv.slice(2))
+      : resolve(process.cwd(), rawEnv);
   } else if (env.XDG_CONFIG_HOME) {
     const candidate = resolve(env.XDG_CONFIG_HOME, ".npmrc");
     if (await Bun.file(candidate).exists()) {
       source = "XDG_CONFIG_HOME";
-      path = candidate;
+      userConfigPath = candidate;
     }
   }
-  const cwdPath = resolve(".npmrc");
+
+  const projectConfigPath = resolve(process.cwd(), ".npmrc");
   return {
-    userConfig: { source, path, exists: await Bun.file(path).exists() },
-    cwdConfig: { path: cwdPath, exists: await Bun.file(cwdPath).exists() },
+    source,
+    rawEnv,
+    userConfigPath,
+    userConfigExists: await Bun.file(userConfigPath).exists(),
+    projectConfigPath,
+    projectConfigExists: await Bun.file(projectConfigPath).exists(),
   };
 }
 
@@ -57,7 +71,7 @@ async function main(): Promise<number> {
   if (values.help) {
     console.log(
       usage +
-        "\nChecks the tarball host advertised by bun info on every run. Latency includes Bun process startup and cache effects.",
+        "\nChecks the advertised tarball host, not the metadata request host. Reports .npmrc path presence, not effective registry precedence. Latency includes Bun startup and cache effects.",
     );
     return 0;
   }
@@ -83,10 +97,16 @@ async function main(): Promise<number> {
       env.ITERM_PROFILE ??
       env.WT_PROFILE_NAME ??
       "default",
-    configPath: env.NPM_CONFIG_USERCONFIG ?? env.npm_config_userconfig ?? null,
-    ...(await configPaths()),
+    npmrc: await resolveNpmrcContext(),
     registryOverride: override ? safeUrl(override).origin : null,
     expectedHost,
+  };
+  const { npmrc } = context;
+  const reportConfig = {
+    ...context,
+    // Keep existing keys for consumers of earlier JSON snapshots.
+    userConfig: { source: npmrc.source, path: npmrc.userConfigPath, exists: npmrc.userConfigExists },
+    cwdConfig: { path: npmrc.projectConfigPath, exists: npmrc.projectConfigExists },
   };
   const samples: {
     version: string;
@@ -120,7 +140,7 @@ async function main(): Promise<number> {
     } catch {
       console.error(
         JSON.stringify({
-          ...context,
+          ...reportConfig,
           ok: false,
           attempt,
           elapsedMs,
@@ -141,7 +161,7 @@ async function main(): Promise<number> {
   const ok =
     expectedHost === null || hosts.every((host) => host === expectedHost);
   const report = {
-    ...context,
+    ...reportConfig,
     ok,
     runs,
     samples,
@@ -159,7 +179,7 @@ async function main(): Promise<number> {
         ? Bun.color(ok ? "#22c55e" : "#ef4444", "ansi") + badge + "\x1b[0m"
         : badge;
     console.log(
-      `${label} [${context.profile}] ${pkg}\n  Tarball hosts: ${hosts.join(", ")}${expectedHost ? " (expected " + expectedHost + ")" : ""}\n  User config: ${context.userConfig.path} (${context.userConfig.source}, exists=${context.userConfig.exists})\n  CWD config: ${context.cwdConfig.path} (exists=${context.cwdConfig.exists})\n  bun info elapsed (ms): min ${sorted[0]!.toFixed(2)}, median ${medianMs.toFixed(2)}, max ${sorted.at(-1)!.toFixed(2)} (${runs} runs)`,
+      `${label} [${context.profile}] ${pkg}\n  Tarball hosts: ${hosts.join(", ")}${expectedHost ? " (expected " + expectedHost + ")" : ""}\n  User .npmrc: ${npmrc.userConfigPath} [${npmrc.source}: ${npmrc.userConfigExists ? "found" : "missing (skipped by Bun)"}]${npmrc.projectConfigExists ? `\n  Project .npmrc: ${npmrc.projectConfigPath} (may override user .npmrc on matching keys)` : ""}\n  bun info elapsed (ms): min ${sorted[0]!.toFixed(2)}, median ${medianMs.toFixed(2)}, max ${sorted.at(-1)!.toFixed(2)} (${runs} runs)`,
     );
   }
   return ok ? 0 : 2;
