@@ -150,6 +150,9 @@ jobs:
         run: bun ci --no-env-file
       - name: Lockfile dedupe check
         run: bun dedupe --check
+      - name: Check for orphaned node_modules
+        timeout-minutes: 1
+        run: bun run pm:prune:check
       # Optional native packages differ by target even though bun.lock does not; resolve the two
       # targets the desk ships to (Linux musl containers and Apple-silicon operators) without
       # installing them.
@@ -378,6 +381,9 @@ jobs:
         run: bun ci --no-env-file
       - name: Lockfile dedupe check
         run: bun dedupe --check
+      - name: Check for orphaned node_modules
+        timeout-minutes: 1
+        run: bun run pm:prune:check
       - name: Resolve optional natives for musl and Darwin
         timeout-minutes: 2
         run: |

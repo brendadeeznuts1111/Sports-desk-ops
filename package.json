@@ -401,6 +401,8 @@
     "audit:deps": "bun audit --ignore=GHSA-fc5q-39xc-vjpf",
     "audit:deps:json": "bun audit --json",
     "verify:licenses": "bun run scripts/verify_prod_licenses.ts",
+    "pm:prune:check": "bun prune --check --no-env-file",
+    "pm:cache:prune": "bun pm cache prune --max-age 7 --no-env-file",
     "validate:field-contract": "bun scripts/validate_wagers_field_contract.ts",
     "profiles:harvest": "bun run scripts/harvest_live_profiles.ts",
     "check:pm-state": "bun run scripts/check_pm_state.ts",
