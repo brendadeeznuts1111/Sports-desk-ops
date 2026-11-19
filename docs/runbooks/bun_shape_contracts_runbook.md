@@ -366,21 +366,21 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/stringWidth)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/wagers_report.ts`, `src/lib/terminal_links.ts`
+- **Here:** `lib/terminal_format.ts`
 - **Evidence:** `test:scripts/gslive_wagers_by_state.test.ts`, `test:tests/ansi_markdown_theme.test.ts`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_url_native_utils.test.ts`
 
 #### Bun.stripANSI
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/stripANSI)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/bun_cli_flags.ts`, `bin/bun_surface.ts`
+- **Here:** `bin/bun_surface.ts`, `lib/terminal_format.ts`
 - **Evidence:** `surface:stripANSI`, `test:lib/wagers_capture_config.test.ts`, `test:scripts/gslive_wagers_by_state.test.ts`, `test:tests/ansi_markdown_theme.test.ts`
 
 #### Bun.wrapAnsi
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/wrapAnsi)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/terminal_format.ts`, `scripts/render_docs.ts`
+- **Here:** `lib/terminal_format.ts`
 - **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_url_native_utils.test.ts`, `test:tests/bun_v140_primitives.test.ts`, `test:tests/dashboard_build_and_markdown.test.ts`
 
 ## Data formats and parsing

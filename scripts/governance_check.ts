@@ -19,6 +19,7 @@ import {
   renderStandaloneGovernanceHtml,
   type DeskRoleId,
 } from "../lib/rbac_governance.ts";
+import { padDisplay } from "../lib/terminal_format.ts";
 
 function flagValue(args: readonly string[], name: string): string | null {
   const idx = args.indexOf(name);
@@ -29,7 +30,8 @@ function flagValue(args: readonly string[], name: string): string | null {
 }
 
 function padRight(text: string, width: number): string {
-  return text.length >= width ? text : text + " ".repeat(width - text.length);
+  // Terminal columns, not code units: the governance table carries role labels and scores.
+  return padDisplay(text, width);
 }
 
 export function runGovernanceCli(argv: readonly string[]): number {

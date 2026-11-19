@@ -5,6 +5,7 @@
  */
 
 import { resolveBunSymbolReferenceUrl } from "./bun_urls.ts";
+import { padDisplay } from "./terminal_format.ts";
 
 type InspectOptions = NonNullable<Parameters<typeof Bun.inspect>[1]>;
 
@@ -66,11 +67,7 @@ function formatOsc8Symbol(label: string, enableColor: boolean): string {
 }
 
 function padGraphemeExact(text: string, targetCols: number): string {
-  const width = Bun.stringWidth(text, {
-    ambiguousIsNarrow: true,
-    countAnsiEscapeCodes: false,
-  });
-  return width >= targetCols ? text : text + " ".repeat(targetCols - width);
+  return padDisplay(text, targetCols);
 }
 
 function maskFilesystemPath(rawPath: string, role: RbacRole): string {

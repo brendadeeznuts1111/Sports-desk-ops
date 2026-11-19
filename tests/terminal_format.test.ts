@@ -58,8 +58,16 @@ describe("padDisplay", () => {
     expect(padDisplay("漢字", 2)).toBe("漢字");
   });
 
-  test("cli_inspect still exports the same helper", () => {
+  test("centers, with the odd column on the right", () => {
+    expect(padDisplay("ab", 6, "center")).toBe("  ab  ");
+    expect(padDisplay("ab", 5, "center")).toBe(" ab  ");
+    expect(displayWidth(padDisplay("漢", 5, "center"))).toBe(5);
+  });
+
+  test("cli_inspect and wagers_report re-export the same helper", async () => {
     expect(padDisplayFromInspect).toBe(padDisplay);
+    const { padDisplay: fromWagers } = await import("../lib/wagers_report.ts");
+    expect(fromWagers).toBe(padDisplay);
   });
 });
 

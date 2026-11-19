@@ -21,6 +21,7 @@
  */
 
 import { useColor } from "../lib/ansi_color.ts";
+import { padDisplay, wrapDisplay } from "../lib/terminal_format.ts";
 
 const IFRAME_TITLE = "Remaining tasks — SportsDesk ops";
 
@@ -152,7 +153,6 @@ if (outPath !== "") {
   console.error(`render: ${format} (${rendered.length} bytes)`);
 }
 
-const pad = (label: string, width: number): string =>
-  label + " ".repeat(Math.max(0, width - Bun.stringWidth(label)));
+const pad = (label: string, width: number): string => padDisplay(label, width);
 const summary = `${pad("open", 5)} ${mdOpen}   ${pad("done", 5)} ${mdDone}   (${mdOpen + mdDone} checkboxes)`;
-console.error(Bun.wrapAnsi(summary, columns || 80));
+console.error(wrapDisplay(summary, columns || 80, { hard: false }).join("\n"));

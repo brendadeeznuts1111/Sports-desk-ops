@@ -4,6 +4,8 @@
  * receives (after the file) is not Bun's flag and is not checked here.
  */
 
+import { stripDisplayAnsi } from "./terminal_format.ts";
+
 /** Flags our tooling relies on; a runtime upgrade/downgrade must keep them. */
 export const REQUIRED_BUN_CLI_FLAGS = [
   "--eval",
@@ -91,7 +93,7 @@ export interface BunRunCliSurface {
  */
 export function parseBunHelpFlags(helpText: string): ReadonlySet<string> {
   const flags = new Set<string>();
-  for (const line of Bun.stripANSI(helpText).split("\n")) {
+  for (const line of stripDisplayAnsi(helpText).split("\n")) {
     const match = line.match(
       /^\s{2,}(?:-\w,\s*)?(--[a-z0-9][a-z0-9.-]*)(?:=\S+)?\s{2,}\S/i,
     );
@@ -211,7 +213,7 @@ export function parseBunRunHelpEntries(
   helpText: string,
 ): readonly BunRunHelpEntry[] {
   const entries: BunRunHelpEntry[] = [];
-  for (const line of Bun.stripANSI(helpText).split("\n")) {
+  for (const line of stripDisplayAnsi(helpText).split("\n")) {
     const longMatch = line.match(
       /^\s{2,}(?:(-\w),\s*)?(--[a-z0-9][a-z0-9.-]*)(?:=(\S+))?\s{2,}(.+)$/i,
     );
@@ -263,7 +265,7 @@ export function readBunHelpFlags(
       `${bunPath} ${args.join(" ")} exited ${result.exitCode}: ${result.stderr.toString().slice(0, 200)}`,
     );
   }
-  return parseBunHelpFlags(Bun.stripANSI(result.stdout.toString()));
+  return parseBunHelpFlags(stripDisplayAnsi(result.stdout.toString()));
 }
 
 /** Read the runtime's own help once; never hand-maintain the flag list. */
@@ -278,7 +280,7 @@ export function readBunCliSurface(bunPath = process.execPath): BunCliSurface {
       `${bunPath} --help exited ${result.exitCode}: ${result.stderr.toString().slice(0, 200)}`,
     );
   }
-  const helpText = Bun.stripANSI(result.stdout.toString());
+  const helpText = stripDisplayAnsi(result.stdout.toString());
   return { version: Bun.version, helpText, flags: parseBunHelpFlags(helpText) };
 }
 
@@ -325,7 +327,7 @@ export function readBunRunCliSurface(
       `${bunPath} run --help exited ${result.exitCode}: ${result.stderr.toString().slice(0, 200)}`,
     );
   }
-  const helpText = Bun.stripANSI(result.stdout.toString());
+  const helpText = stripDisplayAnsi(result.stdout.toString());
   const usageLine =
     helpText
       .split("\n")

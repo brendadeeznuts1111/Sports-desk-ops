@@ -1,7 +1,16 @@
 /**
  * @file src/lib/terminal_links.ts
- * @description OSC-8 terminal hyperlink and escaped HTML anchor helpers backed by native `Bun.wrapAnsi`, `Bun.stringWidth`, `Bun.stripANSI`, and `Bun.escapeHTML`.
+ * @description OSC-8 terminal hyperlink and escaped HTML anchor helpers. Width, wrap, clip and pad
+ * come from `lib/terminal_format.ts`, so a link cell is measured by the same rule as every other
+ * table cell in the reports.
  */
+
+import {
+  clipDisplay,
+  displayWidth,
+  padDisplay,
+  wrapDisplay,
+} from "../../lib/terminal_format.ts";
 
 /** Build an OSC-8 terminal hyperlink without mutating or slicing `url.href`. */
 export function osc8Link(url: URL, label: string): string {
@@ -16,27 +25,26 @@ export function renderWrappedLinkCell(
   maxCols: number,
 ): string {
   const linked = osc8Link(url, label);
-  return Bun.wrapAnsi(linked, maxCols, {
+  return wrapDisplay(linked, maxCols, {
     hard: true,
     wordWrap: true,
     trim: false,
-  });
+  }).join("\n");
 }
 
-/** Return visible terminal cell width after stripping ANSI SGR colors and OSC-8 sequences. */
+/** Visible terminal cell width; OSC-8 and SGR are zero-width to `Bun.stringWidth`. */
 export function visibleLinkWidth(rendered: string): number {
-  return Bun.stringWidth(Bun.stripANSI(rendered));
+  return displayWidth(rendered);
 }
 
 /** Clip or pad an ANSI/OSC-8 string to exactly `targetCols` visible columns. */
 export function fitAnsiCols(text: string, targetCols: number): string {
   const target = Math.max(0, Math.floor(targetCols));
   if (target === 0) return "";
-  const width = Bun.stringWidth(text);
+  const width = displayWidth(text);
   if (width === target) return text;
-  if (width < target) return text + " ".repeat(target - width);
-  if (target === 1) return "…";
-  return `${Bun.sliceAnsi(text, 0, target - 1)}…`;
+  if (width < target) return padDisplay(text, target);
+  return clipDisplay(text, target);
 }
 
 /** Render an HTML anchor safely escaping query/fragment characters via `Bun.escapeHTML`. */

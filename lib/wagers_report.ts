@@ -565,15 +565,15 @@ export function renderTable(
   }
 
   const maxStateLen = Math.max(
-    ...sorted.map((b) => Bun.stringWidth(b.state)),
-    Bun.stringWidth(unknownStateLabel),
-    Bun.stringWidth(groupLabel),
+    ...sorted.map((b) => displayWidth(b.state)),
+    displayWidth(unknownStateLabel),
+    displayWidth(groupLabel),
   );
   colWidths.state = Math.max(colWidths.state ?? 0, maxStateLen);
 
   for (const col of output.columns) {
     if (col.key === "state") continue;
-    const headerLen = Bun.stringWidth(col.label);
+    const headerLen = displayWidth(col.label);
     let maxValLen = 0;
     for (const b of sorted) {
       const val =
@@ -588,7 +588,7 @@ export function renderTable(
                 : col.key === "resultDollars"
                   ? usd(b.resultDollars).replace(/[$,]/g, "")
                   : "";
-      maxValLen = Math.max(maxValLen, Bun.stringWidth(val));
+      maxValLen = Math.max(maxValLen, displayWidth(val));
     }
     colWidths[col.key] = Math.max(col.width, headerLen, maxValLen);
   }
@@ -596,7 +596,7 @@ export function renderTable(
   const buildRow = (values: Record<string, string>): string => {
     const cells = output.columns.map((col) => {
       const val = values[col.key] ?? "";
-      return padDisplay(val, colWidths[col.key] ?? 0, col.align);
+      return padColumns(val, colWidths[col.key] ?? 0, col.align);
     });
     return ` ${cells.join(" │ ")}`;
   };
@@ -640,17 +640,13 @@ export function renderTable(
   return { lines, grand };
 }
 
-/** Pad to a display width using terminal column count (ANSI/emoji-safe). */
-export function padDisplay(
-  text: string,
-  width: number,
-  align: "left" | "right",
-): string {
-  const pad = Math.max(0, width - Bun.stringWidth(text));
-  return align === "right"
-    ? `${" ".repeat(pad)}${text}`
-    : `${text}${" ".repeat(pad)}`;
-}
+/**
+ * Pad to terminal columns. Re-exported from `lib/terminal_format.ts` so this report, the downline
+ * tables and the CLI cards all measure by the same rule; the name stays for existing importers.
+ */
+import { displayWidth, padDisplay as padColumns } from "./terminal_format.ts";
+
+export { padDisplay } from "./terminal_format.ts";
 /** Box-drawing grid via Bun's native table printer (colors on TTY). */
 export function renderGrid(
   sorted: StateBucket[],

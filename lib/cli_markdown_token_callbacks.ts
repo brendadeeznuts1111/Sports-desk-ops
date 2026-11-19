@@ -33,6 +33,7 @@ import {
   SD_ANSI_THEMES,
   type AnsiProfileKey,
 } from "./tokens_ansi.generated.ts";
+import { displayWidth, padDisplay } from "./terminal_format.ts";
 
 const FG_RESET = "\x1b[39m";
 const FG_BG_RESET = "\x1b[39;49m";
@@ -104,24 +105,17 @@ let ctx: RenderContext = {
   table: null,
 };
 
-function visibleWidth(value: string): number {
-  // Same primitive the tests verify with, so padding and measurement cannot
-  // disagree on wide glyphs, emoji sequences or OSC-8 links.
-  return Bun.stringWidth(value, {
-    ambiguousIsNarrow: true,
-    countAnsiEscapeCodes: false,
-  });
-}
-
+/**
+ * Markdown tables accept an alignment string from the source table; anything that is not a known
+ * alignment falls back to left. The measure and the pad are the shared ones, so a cell cannot be
+ * measured by one rule and padded by another.
+ */
 function pad(value: string, width: number, align: string): string {
-  const gap = width - visibleWidth(value);
-  if (gap <= 0) return value;
-  if (align === "right") return " ".repeat(gap) + value;
-  if (align === "center") {
-    const left = Math.floor(gap / 2);
-    return " ".repeat(left) + value + " ".repeat(gap - left);
-  }
-  return value + " ".repeat(gap);
+  return padDisplay(
+    value,
+    width,
+    align === "right" || align === "center" ? align : "left",
+  );
 }
 
 /** Renders the accumulated grid. Called once per table, after every `tr`. */
@@ -133,7 +127,7 @@ function renderTable(table: TableState): string {
   for (let column = 0; column < columns; column++) {
     widths.push(
       table.rows.reduce(
-        (max, row) => Math.max(max, visibleWidth(row[column] ?? "")),
+        (max, row) => Math.max(max, displayWidth(row[column] ?? "")),
         0,
       ),
     );
@@ -248,7 +242,7 @@ export const SD_MARKDOWN_TOKEN_CALLBACKS = Object.freeze({
     }
 
     const width = lines.reduce(
-      (max, line) => Math.max(max, visibleWidth(line)),
+      (max, line) => Math.max(max, displayWidth(line)),
       0,
     );
     const out: string[] = [];
@@ -258,7 +252,7 @@ export const SD_MARKDOWN_TOKEN_CALLBACKS = Object.freeze({
       );
     }
     for (const line of lines) {
-      const padding = " ".repeat(Math.max(0, width - visibleWidth(line)));
+      const padding = " ".repeat(Math.max(0, width - displayWidth(line)));
       out.push(
         `${SGR.codeBg}${SGR.textPrimary} ${line}${padding} ${FG_BG_RESET}`,
       );

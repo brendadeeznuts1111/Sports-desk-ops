@@ -13,6 +13,7 @@
  */
 
 import { bunUrl, textFragment } from "./bun_urls.ts";
+import { stripDisplayAnsi } from "./terminal_format.ts";
 import {
   type Feature,
   type BuildTarget,
@@ -136,7 +137,7 @@ export function requireSubprocessTerminal(proc: {
  * separately.
  */
 export function stripPtyCapture(raw: string): string {
-  return Bun.stripANSI(raw).replace(/\r/g, "");
+  return stripDisplayAnsi(raw).replace(/\r/g, "");
 }
 
 /** Runnable blog snippet — spawn bash PTY 80×24, write hello command, capture output. */

@@ -43,7 +43,7 @@ import {
   renderAnsiMarkdown,
 } from "./canonical_osc8_links.ts";
 import { formatHalfPointLine } from "../design/domain-branded-types.ts";
-import { padDisplay } from "./cli_inspect.ts";
+import { padDisplay } from "./terminal_format.ts";
 import {
   buildDownlineTrunkDetailRows,
   buildDownlineTrunkReport,

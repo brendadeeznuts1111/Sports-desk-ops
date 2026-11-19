@@ -23,6 +23,7 @@ import {
   inspectReport,
   padDisplay,
 } from "../lib/cli_inspect.ts";
+import { stripDisplayAnsi } from "../lib/terminal_format.ts";
 import { resolveDeskOrigin } from "../packages/nsh-desk/desk_model.ts";
 
 export interface ResolvedNshBinary {
@@ -242,7 +243,7 @@ export const PINNED_NSH_RELEASE = {
 } as const;
 
 function stripAnsi(text: string): string {
-  return Bun.stripANSI(text);
+  return stripDisplayAnsi(text);
 }
 
 export interface NshModuleGraphAudit {

@@ -8,6 +8,7 @@
  * byte-for-byte).
  */
 import type { RegistryColorRow } from "./token_automation.ts";
+import { displayWidth, wrapDisplay } from "./terminal_format.ts";
 
 /** Deterministic tarball of the emitted theme contract, built without a tar dependency. */
 export async function exportThemeArchive(
@@ -82,10 +83,10 @@ export function fitAnsiCols(text: string, columns: number): string {
   if (!Number.isInteger(columns) || columns < 1) {
     throw new RangeError(`ERR_TOKEN_WATCH_COLUMNS: ${columns}`);
   }
-  return Bun.wrapAnsi(text, columns);
+  return wrapDisplay(text, columns, { hard: false }).join("\n");
 }
 
-export const ansiWidth = Bun.stringWidth;
+export const ansiWidth = displayWidth;
 export const sliceAnsi = Bun.sliceAnsi;
 
 /** Avatar bytes are a cache, never a source of truth: a pressure event drops all of it. */

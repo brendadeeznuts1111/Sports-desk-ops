@@ -18,6 +18,7 @@
 import { statSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { toLocalPath } from "../lib/local_path.ts";
+import { wrapDisplay } from "../lib/terminal_format.ts";
 import { UsageError } from "../lib/usage_error.ts";
 import {
   blobKeyFromPath,
@@ -108,7 +109,10 @@ backend that signed in.`;
 const HELP =
   process.stdout.columns === undefined
     ? RAW_HELP
-    : Bun.wrapAnsi(RAW_HELP, process.stdout.columns, { wordWrap: true });
+    : wrapDisplay(RAW_HELP, process.stdout.columns, {
+        wordWrap: true,
+        hard: false,
+      }).join("\n");
 
 interface Options {
   url: string | null;

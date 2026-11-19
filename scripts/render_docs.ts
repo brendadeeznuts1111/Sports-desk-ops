@@ -23,6 +23,7 @@ import {
   renderDocsTree,
   writeDocsManifest,
 } from "../lib/docs_render_cache.ts";
+import { wrapDisplay } from "../lib/terminal_format.ts";
 
 function flag(args: readonly string[], name: string, fallback: string): string {
   const index = args.indexOf(name);
@@ -77,14 +78,18 @@ for (const entry of rendered) {
   const state = entry.cached ? "cached" : check ? "stale" : "rendered";
   const line = `${entry.rel}  ${entry.sourceBytes} B -> ${entry.htmlBytes} B (zst ${entry.zstdBytes} B)  ${state}`;
   process.stdout.write(
-    width > 0 ? `${Bun.wrapAnsi(line, width)}\n` : `${line}\n`,
+    width > 0
+      ? `${wrapDisplay(line, width, { hard: false }).join("\n")}\n`
+      : `${line}\n`,
   );
 }
 
 const total = (pick: (entry: RenderedDoc) => number): number =>
   rendered.reduce((sum, entry) => sum + pick(entry), 0);
 const summary = `${rendered.length} files · src ${total((e) => e.sourceBytes)} B · html ${total((e) => e.htmlBytes)} B · zst ${total((e) => e.zstdBytes)} B · ${rendered.length - stale} cached`;
-process.stderr.write(`${Bun.wrapAnsi(summary, width || 80)}\n`);
+process.stderr.write(
+  `${wrapDisplay(summary, width || 80, { hard: false }).join("\n")}\n`,
+);
 process.stderr.write(
   `docs:render: ${cacheDir} · manifest ${manifestStatus} · Bun ${Bun.version} · ${JSON.stringify(DOCS_RENDER_OPTIONS).length} B options\n`,
 );

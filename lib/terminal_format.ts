@@ -47,12 +47,16 @@ export function stripDisplayAnsi(text: string): string {
 export function padDisplay(
   text: string,
   width: number,
-  align: "left" | "right" = "left",
+  align: "left" | "right" | "center" = "left",
 ): string {
   const pad = Math.max(0, width - displayWidth(text));
-  return align === "right"
-    ? `${" ".repeat(pad)}${text}`
-    : `${text}${" ".repeat(pad)}`;
+  if (align === "right") return `${" ".repeat(pad)}${text}`;
+  if (align === "center") {
+    // An odd gap gives the extra column to the right, matching the markdown tables.
+    const left = Math.floor(pad / 2);
+    return `${" ".repeat(left)}${text}${" ".repeat(pad - left)}`;
+  }
+  return `${text}${" ".repeat(pad)}`;
 }
 
 export interface WrapDisplayOptions {

@@ -40,6 +40,7 @@ import {
   parseCliArgs,
   type ParsedArgs,
 } from "../lib/cli_args.ts";
+import { padDisplay } from "../lib/terminal_format.ts";
 
 const VALUE_FLAGS = ["--url", "--max-age", "--timeout"] as const;
 const SWITCH_FLAGS = ["--json", "--check", "--strict", "--help", "-h"] as const;
@@ -178,9 +179,8 @@ export function parseDeskDoctorArgs(argv: readonly string[]): DeskDoctorParse {
 }
 
 function pad(value: string, width: number): string {
-  return value.length >= width
-    ? value
-    : value + " ".repeat(width - value.length);
+  // Terminal columns, so a wide or emoji-bearing label keeps the table aligned.
+  return padDisplay(value, width);
 }
 
 /** Human report: service line, verdict, panel table, issues, next commands. */

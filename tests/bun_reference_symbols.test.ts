@@ -43,6 +43,15 @@ const SKIP_DIRS = [
   "reports/",
 ];
 
+/**
+ * Every `.ts` path this checkout holds, read defensively.
+ *
+ * `tests/audit_filehandle_read_stream.test.ts` writes a fixture **inside `tests/`** for the
+ * duration of one test. Bun's runner has several test files in flight, so a repo-wide glob can
+ * list that path a moment before the fixture's `finally` removes it; the file is a transient
+ * artifact, not a source file, and skipping it is correct rather than a workaround. Observed as
+ * `ENOENT … tests/audit-filehandle-fixture.ts` on main 2026-11-19.
+ */
 function repoTypeScriptFiles(): string[] {
   const files: string[] = [];
   for (const rel of new Bun.Glob("**/*.ts").scanSync({
@@ -54,6 +63,22 @@ function repoTypeScriptFiles(): string[] {
     files.push(rel);
   }
   return files;
+}
+
+/** `null` when the path vanished between the glob and the read. */
+function readRepoFile(rel: string): string | null {
+  try {
+    return readFileSync(join(ROOT, rel), "utf8");
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      (error as { code?: unknown }).code === "ENOENT"
+    ) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 function nodeCryptoNames(text: string): string[] {
@@ -140,7 +165,8 @@ describe("Bun reference symbol baseline", () => {
     const documented = new Set(reference.sources.archive.symbols);
     const missing = new Map<string, string[]>();
     for (const rel of repoTypeScriptFiles()) {
-      const text = readFileSync(join(ROOT, rel), "utf8");
+      const text = readRepoFile(rel);
+      if (text === null) continue;
       for (const match of text.matchAll(
         /\bBun\.Archive\.([A-Za-z_$][\w$]*)/g,
       )) {
