@@ -11,6 +11,10 @@ import { join } from "node:path";
  * - `--filter 'ba*' typecheck`             exit 1, `Script "typecheck" not found in package "ba-example"`
  * - `--filter 'ba*' --if-present typecheck` exit 0, nothing to run
  * - `--filter 'packages/ba*' schema`       exit 1, `No workspace packages matched the filter`
+ *
+ * Re-measured 2026-11-19: a directory path *does* match, but only with a leading `./` —
+ * `--filter './packages/ba*'` and `--filter './packages/ba-example'` both run the workspace,
+ * while the bare form above stays unmatched. The prefix is the rule, not whether paths work.
  */
 
 const ROOT = join(import.meta.dir, "..");
@@ -54,9 +58,19 @@ describe("bun run --filter on the ba-example reference workspace", () => {
     expect(result.err).toBe("");
   }, 30_000);
 
-  test("the pattern is a package name, not a directory path", () => {
-    const result = runFilter(["--filter", "packages/ba*", "schema"]);
-    expect(result.code).toBe(1);
-    expect(result.err).toContain("No workspace packages matched");
+  test("a directory path matches only when it carries the leading ./", () => {
+    // The rule is the prefix, not path support: `packages/ba*` is neither a package name nor a
+    // path Bun resolves, while `./packages/ba*` is a path it does.
+    const bare = runFilter(["--filter", "packages/ba*", "schema"]);
+    expect(bare.code).toBe(1);
+    expect(bare.err).toContain("No workspace packages matched");
+
+    const globbed = runFilter(["--filter", "./packages/ba*", "schema"]);
+    expect(globbed.code).toBe(0);
+    expect(globbed.out.split("\n")[0]).toStartWith("ba-example schema:");
+
+    const exact = runFilter(["--filter", "./packages/ba-example", "schema"]);
+    expect(exact.code).toBe(0);
+    expect(exact.out.split("\n")[0]).toStartWith("ba-example schema:");
   }, 30_000);
 });

@@ -321,11 +321,14 @@ bun run --filter 'ba*' schema                   # runs only ba-example; output i
 bun run --filter 'ba*' --if-present typecheck   # exit 0, nothing to run
 ```
 
-`--filter` matches package **names**, not directory paths (`--filter 'packages/ba*'` matches
-nothing — exit 1, `No workspace packages matched the filter`). A matched package without the
-script fails the whole run — `error: Script "typecheck" not found in package "ba-example"`, exit 1
-— so add `--if-present` when the glob can include a package that does not declare it. Measured on
-Bun 1.4.4, 2026-11-18.
+`--filter` matches package **names** (and name globs) and also directory **paths**, but a path
+must carry a leading `./`: `--filter './packages/ba*'` and `--filter './packages/ba-example'`
+both run `ba-example`, while `--filter 'packages/ba*'` matches nothing — exit 1, `No workspace
+packages matched the filter`. The missing prefix is the whole difference; a bare path is neither
+a package name nor a path Bun resolves. A matched package without the script fails the whole run —
+`error: Script "typecheck" not found in package "ba-example"`, exit 1 — so add `--if-present` when
+the glob can include a package that does not declare it. Measured on Bun 1.4.4, 2026-11-18; the
+`./packages/…` forms re-measured 2026-11-19.
 
 **Workspace Dev Control CLI (`scripts/dx_workspaces.ts` / `./bin/dx workspaces`):**
 
