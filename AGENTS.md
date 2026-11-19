@@ -14,7 +14,7 @@ so. Re-check any version-scoped claim against the pin before relying on it.
 Pull requests run **`verify-changed`** (`bun fmt --check --changed`, `typecheck`,
 `check:derived-contracts`, `verify:docs`, `test:changed`, `test:pm-contracts`,
 `test-changed-plugins`, `test-changed-nsh`, and `check:profile-code-mode-host-seal`) plus the
-required **`lint-native`** job (canary), not the full `main`-branch ratchet. Never run the whole suite (`bun test` / `bun test tests/`) on iterative
+required **`lint-native`** job (pinned Bun with standalone oxlint), not the full `main`-branch ratchet. Never run the whole suite (`bun test` / `bun test tests/`) on iterative
 edits; use **`bun run verify:fast`**:
 
 ```sh
