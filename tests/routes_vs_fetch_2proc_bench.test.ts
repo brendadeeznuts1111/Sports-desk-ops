@@ -120,3 +120,15 @@ describe("two-process benchmark contract (pure math)", () => {
     expect(routeImprovementPct(routes, { ...manual, p50_us: 0 })).toBeNull();
   });
 });
+
+test("both HTTP handlers satisfy the parameter and error contract", () => {
+  const bench = new URL("../bench/routes-vs-fetch-2proc.bench.ts", import.meta.url);
+  const result = Bun.spawnSync([
+    process.execPath, "--no-env-file", "run", Bun.fileURLToPath(bench),
+    "--rounds=1", "--warmup=0", "--latency=1", "--heap=1", "--timeout-ms=3000", "--json",
+  ]);
+  if (!result.success) throw new Error(result.stderr.toString());
+  const report = JSON.parse(result.stdout.toString());
+  expect(report.runs.map((run: RunResult) => run.mode)).toEqual(["routes", "fetch"]);
+  expect(report.settings.preflight_cases_per_child).toBe(16);
+}, 15000);

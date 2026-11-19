@@ -17,14 +17,24 @@ import {
   type RunResult,
 } from "./routes-vs-fetch-2proc.core";
 
+// Independent wire expectations: status, text body, and optional machine-readable error.
 const CASES = [
-  ["/api/customers/AGT%20402/wagers/G99120488", 200, "AGT 402:G99120488"],
-  ["/api/customers/AGT-42/wagers/G8?limit=1", 200, "AGT-42:G8"],
-  ["/api/customers/AGT%2F42/wagers/G8", 400, "Invalid identifier"],
-  ["/api/customers/AGT%FF/wagers/G8", 400, "Invalid identifier"],
-  ["/api/customers/AGT%ZZ/wagers/G8", 400, "Invalid identifier"],
-  ["/api/accounts/AGT-42/wagers/G8", 404, "Not found"],
-  ["/api/customers/AGT-42/wagers/G8/extra", 404, "Not found"],
+  ["/api/customers/AGT%20402/wagers/G99120488", 200, "AGT 402:G99120488", null],
+  ["/api/customers/AGT-42/wagers/G8?limit=1", 200, "AGT-42:G8", null],
+  ["/api/customers/a_1/wagers/%47-8_9?wagerId=other&agentId=other", 200, "a_1:G-8_9", null],
+  ["/api/customers/AGT%2F42/wagers/G8", 400, "Invalid identifier", "INVALID_AGENT_ID"],
+  ["/api/customers/AGT%FF/wagers/G8", 400, "Invalid identifier", "INVALID_AGENT_ID"],
+  ["/api/customers/AGT%ZZ/wagers/G8", 400, "Invalid identifier", "INVALID_AGENT_ID"],
+  ["/api/customers/AGT/wagers/G%208", 400, "Invalid identifier", "INVALID_WAGER_ID"],
+  ["/api/customers/AGT/wagers/G%2F8", 400, "Invalid identifier", "INVALID_WAGER_ID"],
+  ["/api/customers/AGT/wagers/G%FF", 400, "Invalid identifier", "INVALID_WAGER_ID"],
+  ["/api/customers/AGT/wagers/G%ZZ", 400, "Invalid identifier", "INVALID_WAGER_ID"],
+  ["/api/customers/AGT/wagers/%2547", 400, "Invalid identifier", "INVALID_WAGER_ID"],
+  ["/api/customers/A%21/wagers/G%ZZ", 400, "Invalid identifier", "INVALID_AGENT_ID"],
+  ["/api/customers//wagers/G8", 404, "Not found", "ROUTE_NOT_FOUND"],
+  ["/api/customers/AGT/wagers/", 404, "Not found", "ROUTE_NOT_FOUND"],
+  ["/api/accounts/AGT-42/wagers/G8", 404, "Not found", "ROUTE_NOT_FOUND"],
+  ["/api/customers/AGT-42/wagers/G8/extra", 404, "Not found", "ROUTE_NOT_FOUND"],
 ] as const;
 const [WAGER_PATH, , EXPECTED_BODY] = CASES[0];
 const STARTUP_TIMEOUT_MS = 8_000;
@@ -86,15 +96,28 @@ function parseSettings(argv: string[]): Settings {
   return settings;
 }
 
-const notFound = () => new Response("Not found", { status: 404 });
-const badIdentifier = () => new Response("Invalid identifier", { status: 400 });
+const notFound = () =>
+  new Response("Not found", { status: 404, headers: { "X-Error-Code": "ROUTE_NOT_FOUND" } });
 
-// Shared synthetic endpoint policy: a decoded slash, replacement character, or
-// literal percent isn't a valid ID. This is not a change to SportsDesk's ID rules.
+function badIdentifier(code: "INVALID_AGENT_ID" | "INVALID_WAGER_ID"): Response {
+  return new Response("Invalid identifier", { status: 400, headers: { "X-Error-Code": code } });
+}
+
+// A malformed escape becomes an invalid identifier, preserving left-to-right validation.
+function decodeSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch (error) {
+    if (error instanceof URIError) return "\uFFFD";
+    throw error;
+  }
+}
+
 function respond(agentId: string, wagerId: string): Response {
-  return /^[A-Za-z0-9_ -]+$/.test(agentId) && /^[A-Za-z0-9_-]+$/.test(wagerId)
-    ? new Response(`${agentId}:${wagerId}`)
-    : badIdentifier();
+  if (!agentId || !wagerId) return notFound();
+  if (/[^A-Za-z0-9_ -]/.test(agentId)) return badIdentifier("INVALID_AGENT_ID");
+  if (/[^A-Za-z0-9_-]/.test(wagerId)) return badIdentifier("INVALID_WAGER_ID");
+  return new Response(agentId + ":" + wagerId);
 }
 
 /** Both server modes bind loopback only; memory control calls cannot be remote. */
@@ -139,12 +162,7 @@ function startChildServer(mode: BenchMode): void {
             ) {
               return notFound();
             }
-            try {
-              return respond(decodeURIComponent(parts[3]), decodeURIComponent(parts[5]));
-            } catch (error) {
-              if (error instanceof URIError) return badIdentifier();
-              throw error;
-            }
+            return respond(decodeSegment(parts[3]), decodeSegment(parts[5]));
           },
         });
 
@@ -282,11 +300,12 @@ async function runOnce(
       }
     };
 
-    for (const [path, status, expected] of CASES) {
+    for (const [path, status, expected, errorCode] of CASES) {
       const response = await fetch(origin + path, init);
       const body = await response.text();
-      if (response.status !== status || body !== expected) {
-        throw new Error(`${mode} ${path}: expected ${status} ${JSON.stringify(expected)}, got ${response.status} ${JSON.stringify(body)}`);
+      const actualCode = response.headers.get("X-Error-Code");
+      if (response.status !== status || body !== expected || actualCode !== errorCode) {
+        throw new Error(`${mode} ${path}: expected ${status} ${JSON.stringify(expected)} code=${errorCode}, got ${response.status} ${JSON.stringify(body)} code=${actualCode}`);
       }
     }
     for (let i = 0; i < settings.warmup; i++) await get(target);
@@ -406,6 +425,7 @@ async function main(): Promise<void> {
       heap_requests_per_run: settings.heap,
       timeout_ms_per_process: settings.timeoutMs,
       concurrency: 1,
+      preflight_cases_per_child: CASES.length,
       request_path: WAGER_PATH,
       expected_body: EXPECTED_BODY,
     },

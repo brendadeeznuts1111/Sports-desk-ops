@@ -51,7 +51,16 @@ The server control endpoint invokes `fullGC()` **before both snapshots** and the
 
 This benchmark can establish a **repeatable directional difference** in this narrow handler workload. It does **not** establish a server-only allocation rate, end-to-end SportsDesk production speedup, memory safety, concurrency scaling, or the latency of the actual customer/wager backend.
 
-Each child checks the expected status and body for seven GET cases before warmup. The synthetic identifier policy rejects encoded slashes and malformed escapes with HTTP 400. Confirm the application contract separately before proposing a routing change.
+Each child runs 16 GET preflight cases and compares the HTTP status, exact text body and `X-Error-Code` header. The focused test command runs this check over loopback against both routing implementations.
+
+| Condition | Status | Body | X-Error-Code |
+| --- | --- | --- | --- |
+| Valid identifiers | 200 | Decoded agent and wager IDs joined by a colon | Absent |
+| Invalid agent ID | 400 | Invalid identifier | INVALID_AGENT_ID |
+| Invalid wager ID | 400 | Invalid identifier | INVALID_WAGER_ID |
+| Missing path segment or unmatched path | 404 | Not found | ROUTE_NOT_FOUND |
+
+The benchmark decodes each segment once. Both IDs accept ASCII letters, digits, hyphens and underscores. Only the agent ID accepts spaces. Path shape is checked first, then the agent ID, then the wager ID. Query parameters cannot override either path parameter. These are synthetic benchmark rules. Production routing requires a separate application contract.
 
 Use an even number of rounds for balanced ordering. The JSON `paired` rows report manual minus native latency by round, the median and range of those differences, and native wins. Treat the pair as the repeat unit. The `runs` rows include signed whole-batch retained cells and bytes alongside the underlying snapshots. Repeat under representative application and network conditions before drawing a SportsDesk performance conclusion.
 
