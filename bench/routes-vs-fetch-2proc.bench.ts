@@ -18,7 +18,6 @@ import {
 
 const WAGER_PATH = "/api/customers/AGT%20402/wagers/G99120488";
 const EXPECTED_BODY = "AGT 402:G99120488";
-const ROUTE = "/api/customers/:agentId/wagers/:wagerId";
 const STARTUP_TIMEOUT_MS = 8_000;
 const SHUTDOWN_TIMEOUT_MS = 2_000;
 
@@ -98,7 +97,7 @@ function startChildServer(mode: BenchMode): void {
           port: 0,
           routes: {
             "/__gc": snapshot,
-            [ROUTE]: (req) => {
+            "/api/customers/:agentId/wagers/:wagerId": (req) => {
               const { agentId, wagerId } = req.params;
               return new Response(agentId + ":" + wagerId);
             },
