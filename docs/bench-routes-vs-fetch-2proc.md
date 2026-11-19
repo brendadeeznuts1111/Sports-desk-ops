@@ -112,4 +112,17 @@ The tests call `fetch(input)` for each URL representation below. The first argum
 | `blob` | `fetch` | `url` | Omitted |
 | `blob` | `fetch` | `href` from `URL.createObjectURL(blob)` | Omitted |
 
+## UUID result snapshot
+
+[Recorded JSON](benchmarks/bun-1.4.4-uuid.snapshot.json) · [Executable checks](../bench/uuid-contract.snapshot.ts)
+
+| Section | Input | Verified result |
+| --- | --- | --- |
+| `v4` | `crypto.randomUUID()` | Version 4, 16 bytes, RFC variant bits `10`. |
+| `v5` | Name `www.example.com` and a namespace | Alias, canonical UUID and 16-byte namespace agree for DNS, URL, OID and X.500. All DNS output encodings decode to the same bytes. |
+| `v7` | Unix timestamp `1700000000000` as milliseconds and as a Date | Every sample embeds that exact millisecond in its first six bytes. Six successive calls yielded distinct, increasing values. Each encoding row comes from its own call. |
+| `blobURL` | `URL.createObjectURL(blob)` | The complete URL, scheme, protocol and pathname are recorded independently. The observed pathname had v4 layout. The object URL was revoked after capture. |
+
+Run `bun --no-env-file run bench/uuid-contract.snapshot.ts` from the repository root. The command checks the repository Bun pin and emits JSON only after validating the samples. The snapshot separates runtime type, object class, returned string, decoded byte length and raw bytes in hex. Repeated captures can produce new v4, v7 and Blob URL values.
+
 [Bun fetch reference](https://bun.com/docs/runtime/networking/fetch)
