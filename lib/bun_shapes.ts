@@ -168,17 +168,23 @@ export interface BunWebGlobalShape {
 /** Exact set of Window-adjacent Web globals tracked by the AST scanner. */
 export const TRACKED_WEB_GLOBAL_NAMES: ReadonlySet<string> = new Set([
   "URL",
+  "URLPattern",
   "URLSearchParams",
   "Blob",
   "File",
+  "CompressionStream",
+  "DecompressionStream",
   "ReadableStream",
+  "ReadableStreamDefaultReader",
   "WritableStream",
   "TransformStream",
+  "TextDecoderStream",
   "TextEncoder",
   "TextDecoder",
   "atob",
   "btoa",
   "fetch",
+  "HTMLRewriter",
   "Request",
   "Response",
   "Headers",
@@ -190,14 +196,20 @@ export const TRACKED_WEB_GLOBAL_NAMES: ReadonlySet<string> = new Set([
   "MessagePort",
   "MessageChannel",
   "BroadcastChannel",
+  "postMessage",
+  "self",
   "structuredClone",
   "crypto",
   "SubtleCrypto",
   "CryptoKey",
   "performance",
+  "Temporal",
   "console",
+  "navigator",
   "setTimeout",
+  "clearTimeout",
   "setInterval",
+  "clearInterval",
   "queueMicrotask",
   "alert",
   "confirm",
@@ -290,6 +302,7 @@ export function surfacePrototypeMembers(value: unknown): string[] {
  */
 export function webGlobalSurfaceMembers(value: unknown): string[] {
   if (
+    value === globalThis ||
     (typeof value !== "object" && typeof value !== "function") ||
     value === null
   ) {

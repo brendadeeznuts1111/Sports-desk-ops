@@ -341,13 +341,17 @@ export async function renderBunShapeContractsCatalog(
   for (const entry of BUN_WEB_GLOBAL_SHAPES) {
     const title = WEB_GLOBAL_SECTIONS[entry.category];
     const val = g[entry.name];
+    const isGlobalAlias = val === globalThis;
     const statics =
-      (typeof val === "object" || typeof val === "function") && val !== null
+      !isGlobalAlias &&
+      (typeof val === "object" || typeof val === "function") &&
+      val !== null
         ? surfaceMembers(val)
         : [];
-    const protos = surfacePrototypeMembers(val);
-    const staticCell =
-      statics.length === 0
+    const protos = isGlobalAlias ? [] : surfacePrototypeMembers(val);
+    const staticCell = isGlobalAlias
+      ? "`globalThis` alias"
+      : statics.length === 0
         ? "—"
         : statics.length <= 5
           ? statics.map((m) => `\`${m}\``).join(", ")

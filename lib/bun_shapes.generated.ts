@@ -1524,6 +1524,13 @@ export const BUN_WEB_GLOBAL_SHAPES: readonly BunWebGlobalShape[] = [
     note: 'Full WHATWG URL (`URL.canParse`, `URL.parse`). `Bun.file(url)` accepts `file:` `URL` instances only (`new URL("s3://...")` throws `ERR_INVALID_URL_SCHEME`, whereas string `Bun.file("s3://bucket/key")` or `Bun.s3.file(...)` works) and ignores query strings.',
   },
   {
+    name: "URLPattern",
+    category: "url",
+    topic: "URL routing",
+    expectedTypeof: "function",
+    note: "WHATWG URLPattern matcher (`exec`, `test`).",
+  },
+  {
     name: "URLSearchParams",
     category: "url",
     topic: "Query params",
@@ -1545,11 +1552,32 @@ export const BUN_WEB_GLOBAL_SHAPES: readonly BunWebGlobalShape[] = [
     note: "Web File constructor; base alongside `Blob`.",
   },
   {
+    name: "CompressionStream",
+    category: "streams",
+    topic: "Stream compression",
+    expectedTypeof: "function",
+    note: "WHATWG streaming compressor (`gzip`, `deflate`, `deflate-raw`).",
+  },
+  {
+    name: "DecompressionStream",
+    category: "streams",
+    topic: "Stream compression",
+    expectedTypeof: "function",
+    note: "WHATWG streaming decompressor (`gzip`, `deflate`, `deflate-raw`).",
+  },
+  {
     name: "ReadableStream",
     category: "streams",
     topic: "Byte streams",
     expectedTypeof: "function",
     note: "Direct and byte streams (`ReadableStream.from`).",
+  },
+  {
+    name: "ReadableStreamDefaultReader",
+    category: "streams",
+    topic: "Byte streams",
+    expectedTypeof: "function",
+    note: "Default stream reader (`read`, `readMany`, `cancel`, `releaseLock`).",
   },
   {
     name: "TransformStream",
@@ -1587,6 +1615,13 @@ export const BUN_WEB_GLOBAL_SHAPES: readonly BunWebGlobalShape[] = [
     topic: "Text encoding",
     expectedTypeof: "function",
     note: "UTF-8 / text decoder.",
+  },
+  {
+    name: "TextDecoderStream",
+    category: "encoding",
+    topic: "Streaming decode",
+    expectedTypeof: "function",
+    note: "WHATWG streaming text decoder.",
   },
   {
     name: "TextEncoder",
@@ -1630,6 +1665,13 @@ export const BUN_WEB_GLOBAL_SHAPES: readonly BunWebGlobalShape[] = [
     topic: "HTTP primitives",
     expectedTypeof: "function",
     note: "Case-insensitive HTTP headers map.",
+  },
+  {
+    name: "HTMLRewriter",
+    category: "http",
+    topic: "HTML streaming",
+    expectedTypeof: "function",
+    note: "Cloudflare-compatible streaming HTML transformer (`on`, `onDocument`, `transform`).",
   },
   {
     name: "Request",
@@ -1677,6 +1719,21 @@ export const BUN_WEB_GLOBAL_SHAPES: readonly BunWebGlobalShape[] = [
     note: "Cross-worker messaging endpoint.",
   },
   {
+    name: "postMessage",
+    category: "workers",
+    topic: "Worker IPC",
+    expectedTypeof: "function",
+    status: "declared-only",
+    note: "Worker global message dispatch.",
+  },
+  {
+    name: "self",
+    category: "workers",
+    topic: "Global alias",
+    expectedTypeof: "object",
+    note: "Worker-compatible alias for `globalThis` (`self === globalThis`).",
+  },
+  {
     name: "structuredClone",
     category: "workers",
     topic: "Deep clone",
@@ -1713,6 +1770,20 @@ export const BUN_WEB_GLOBAL_SHAPES: readonly BunWebGlobalShape[] = [
     note: "WebCrypto subtle operations (`SubtleCrypto.supports`).",
   },
   {
+    name: "clearInterval",
+    category: "timing",
+    topic: "Timers & microtasks",
+    expectedTypeof: "function",
+    note: "Cancels a `setInterval` handle.",
+  },
+  {
+    name: "clearTimeout",
+    category: "timing",
+    topic: "Timers & microtasks",
+    expectedTypeof: "function",
+    note: "Cancels a `setTimeout` handle.",
+  },
+  {
     name: "performance",
     category: "timing",
     topic: "High-res timing",
@@ -1741,6 +1812,13 @@ export const BUN_WEB_GLOBAL_SHAPES: readonly BunWebGlobalShape[] = [
     note: "Standard timer.",
   },
   {
+    name: "Temporal",
+    category: "timing",
+    topic: "Date & time",
+    expectedTypeof: "object",
+    note: "TC39 `Temporal` namespace (`Instant`, `PlainDate`, `ZonedDateTime`, `Duration`).",
+  },
+  {
     name: "alert",
     category: "cli",
     topic: "CLI prompts",
@@ -1760,6 +1838,13 @@ export const BUN_WEB_GLOBAL_SHAPES: readonly BunWebGlobalShape[] = [
     topic: "Structured logging",
     expectedTypeof: "object",
     note: "Structured console (`log`, `warn`, `error`, `table`, `write`).",
+  },
+  {
+    name: "navigator",
+    category: "cli",
+    topic: "Runtime info",
+    expectedTypeof: "object",
+    note: "Runtime hardware/platform info (`hardwareConcurrency`, `platform`, `userAgent`).",
   },
   {
     name: "prompt",

@@ -31,6 +31,11 @@ export const WEB_GLOBAL_SPECS_BY_NAME: Readonly<
     topic: "WHATWG URL",
     note: 'Full WHATWG URL (`URL.canParse`, `URL.parse`). `Bun.file(url)` accepts `file:` `URL` instances only (`new URL("s3://...")` throws `ERR_INVALID_URL_SCHEME`, whereas string `Bun.file("s3://bucket/key")` or `Bun.s3.file(...)` works) and ignores query strings.',
   },
+  URLPattern: {
+    category: "url",
+    topic: "URL routing",
+    note: "WHATWG URLPattern matcher (`exec`, `test`).",
+  },
   URLSearchParams: {
     category: "url",
     topic: "Query params",
@@ -48,10 +53,25 @@ export const WEB_GLOBAL_SPECS_BY_NAME: Readonly<
     note: "Web File constructor; base alongside `Blob`.",
   },
   // Web Streams
+  CompressionStream: {
+    category: "streams",
+    topic: "Stream compression",
+    note: "WHATWG streaming compressor (`gzip`, `deflate`, `deflate-raw`).",
+  },
+  DecompressionStream: {
+    category: "streams",
+    topic: "Stream compression",
+    note: "WHATWG streaming decompressor (`gzip`, `deflate`, `deflate-raw`).",
+  },
   ReadableStream: {
     category: "streams",
     topic: "Byte streams",
     note: "Direct and byte streams (`ReadableStream.from`).",
+  },
+  ReadableStreamDefaultReader: {
+    category: "streams",
+    topic: "Byte streams",
+    note: "Default stream reader (`read`, `readMany`, `cancel`, `releaseLock`).",
   },
   WritableStream: {
     category: "streams",
@@ -64,6 +84,11 @@ export const WEB_GLOBAL_SPECS_BY_NAME: Readonly<
     note: "WHATWG transform stream.",
   },
   // Encoding
+  TextDecoderStream: {
+    category: "encoding",
+    topic: "Streaming decode",
+    note: "WHATWG streaming text decoder.",
+  },
   TextEncoder: {
     category: "encoding",
     topic: "Text encoding",
@@ -89,6 +114,11 @@ export const WEB_GLOBAL_SPECS_BY_NAME: Readonly<
     category: "http",
     topic: "Fetch client",
     note: "Standard Fetch API (`fetch.preconnect` extension in Bun).",
+  },
+  HTMLRewriter: {
+    category: "http",
+    topic: "HTML streaming",
+    note: "Cloudflare-compatible streaming HTML transformer (`on`, `onDocument`, `transform`).",
   },
   Request: {
     category: "http",
@@ -146,6 +176,16 @@ export const WEB_GLOBAL_SPECS_BY_NAME: Readonly<
     topic: "Worker IPC",
     note: "Pub/sub channel across workers in the same process.",
   },
+  postMessage: {
+    category: "workers",
+    topic: "Worker IPC",
+    note: "Worker global message dispatch.",
+  },
+  self: {
+    category: "workers",
+    topic: "Global alias",
+    note: "Worker-compatible alias for `globalThis` (`self === globalThis`).",
+  },
   structuredClone: {
     category: "workers",
     topic: "Deep clone",
@@ -173,15 +213,30 @@ export const WEB_GLOBAL_SPECS_BY_NAME: Readonly<
     topic: "High-res timing",
     note: "High-resolution timing (`now`, `mark`, `measure`, `eventLoopUtilization`).",
   },
+  Temporal: {
+    category: "timing",
+    topic: "Date & time",
+    note: "TC39 `Temporal` namespace (`Instant`, `PlainDate`, `ZonedDateTime`, `Duration`).",
+  },
   setTimeout: {
     category: "timing",
     topic: "Timers & microtasks",
     note: "Standard timer.",
   },
+  clearTimeout: {
+    category: "timing",
+    topic: "Timers & microtasks",
+    note: "Cancels a `setTimeout` handle.",
+  },
   setInterval: {
     category: "timing",
     topic: "Timers & microtasks",
     note: "Standard repeating timer.",
+  },
+  clearInterval: {
+    category: "timing",
+    topic: "Timers & microtasks",
+    note: "Cancels a `setInterval` handle.",
   },
   queueMicrotask: {
     category: "timing",
@@ -193,6 +248,11 @@ export const WEB_GLOBAL_SPECS_BY_NAME: Readonly<
     category: "cli",
     topic: "Structured logging",
     note: "Structured console (`log`, `warn`, `error`, `table`, `write`).",
+  },
+  navigator: {
+    category: "cli",
+    topic: "Runtime info",
+    note: "Runtime hardware/platform info (`hardwareConcurrency`, `platform`, `userAgent`).",
   },
   alert: {
     category: "cli",

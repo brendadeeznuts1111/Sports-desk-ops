@@ -459,6 +459,19 @@
       "prototype.toJSON",
       "prototype.username"
     ],
+    "URLPattern": [
+      "prototype.exec",
+      "prototype.hasRegExpGroups",
+      "prototype.hash",
+      "prototype.hostname",
+      "prototype.password",
+      "prototype.pathname",
+      "prototype.port",
+      "prototype.protocol",
+      "prototype.search",
+      "prototype.test",
+      "prototype.username"
+    ],
     "URLSearchParams": [
       "prototype.append",
       "prototype.delete",
@@ -512,6 +525,8 @@
       "prototype.write",
       "prototype.writer"
     ],
+    "CompressionStream": ["prototype.readable", "prototype.writable"],
+    "DecompressionStream": ["prototype.readable", "prototype.writable"],
     "ReadableStream": [
       "from",
       "prototype.blob",
@@ -526,6 +541,13 @@
       "prototype.text",
       "prototype.values"
     ],
+    "ReadableStreamDefaultReader": [
+      "prototype.cancel",
+      "prototype.closed",
+      "prototype.read",
+      "prototype.readMany",
+      "prototype.releaseLock"
+    ],
     "TransformStream": ["prototype.readable", "prototype.writable"],
     "WritableStream": [
       "prototype.abort",
@@ -538,6 +560,13 @@
       "prototype.encoding",
       "prototype.fatal",
       "prototype.ignoreBOM"
+    ],
+    "TextDecoderStream": [
+      "prototype.encoding",
+      "prototype.fatal",
+      "prototype.ignoreBOM",
+      "prototype.readable",
+      "prototype.writable"
     ],
     "TextEncoder": [
       "prototype.encode",
@@ -586,6 +615,11 @@
       "prototype.set",
       "prototype.toJSON",
       "prototype.values"
+    ],
+    "HTMLRewriter": [
+      "prototype.on",
+      "prototype.onDocument",
+      "prototype.transform"
     ],
     "Request": [
       "prototype.arrayBuffer",
@@ -758,6 +792,17 @@
       "timing",
       "toJSON"
     ],
+    "Temporal": [
+      "Duration",
+      "Instant",
+      "Now",
+      "PlainDate",
+      "PlainDateTime",
+      "PlainMonthDay",
+      "PlainTime",
+      "PlainYearMonth",
+      "ZonedDateTime"
+    ],
     "console": [
       "Console",
       "_stderr",
@@ -790,6 +835,7 @@
       "warn",
       "write"
     ],
+    "navigator": ["hardwareConcurrency", "platform", "userAgent"],
     "CloseEvent": [
       "AT_TARGET",
       "BUBBLING_PHASE",
