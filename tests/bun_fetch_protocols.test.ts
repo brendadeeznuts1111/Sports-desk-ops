@@ -31,6 +31,9 @@ test("file URLs accept empty and localhost authorities", async () => {
 
 test("data: decodes a base64 payload and preserves its media type", async () => {
   const url = new URL("data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==");
+  expect(typeof url).toBe("object");
+  expect(url).toBeInstanceOf(URL);
+  expect(typeof url.href).toBe("string");
   expect(url.protocol).toBe("data:");
   for (const input of [url, url.href]) {
     const response = await fetch(input);
@@ -45,6 +48,8 @@ test("blob: reads the registered object and preserves its media type", async () 
   try {
     expect(typeof href).toBe("string");
     const url = new URL(href);
+    expect(typeof url).toBe("object");
+    expect(url).toBeInstanceOf(URL);
     expect(url.protocol).toBe("blob:");
     for (const input of [url, href]) {
       const response = await fetch(input);
