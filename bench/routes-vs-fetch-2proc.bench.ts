@@ -318,6 +318,25 @@ async function runOnce(
   }
 }
 
+function gitProvenance(): { commit: string | null; dirty: boolean | null } {
+  try {
+    const commit = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    const status = Bun.spawnSync(["git", "status", "--porcelain"], {
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    return {
+      commit: commit.success ? commit.stdout?.toString().trim() || null : null,
+      dirty: status.success ? Boolean(status.stdout?.toString().trim()) : null,
+    };
+  } catch {
+    return { commit: null, dirty: null };
+  }
+}
+
 async function main(): Promise<void> {
   const settings = parseSettings(process.argv.slice(2));
   process.on("SIGINT", () => onSignal("SIGINT"));
@@ -349,6 +368,7 @@ async function main(): Promise<void> {
   const report = {
     schema_version: 1,
     generated_at: new Date().toISOString(),
+    git: gitProvenance(),
     runtime: {
       bun: Bun.version,
       platform: process.platform,
