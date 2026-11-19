@@ -234,7 +234,11 @@ async function runOnce(
     settings.timeoutMs,
   );
   const onAbort = () => timed.abort(globalAbort.signal.reason);
+  const onTimedAbort = () => {
+    if (proc.exitCode === null) proc.kill("SIGTERM");
+  };
   globalAbort.signal.addEventListener("abort", onAbort, { once: true });
+  timed.signal.addEventListener("abort", onTimedAbort, { once: true });
 
   try {
     const origin = await readOrigin(proc);
@@ -308,6 +312,7 @@ async function runOnce(
   } finally {
     clearTimeout(timer);
     globalAbort.signal.removeEventListener("abort", onAbort);
+    timed.signal.removeEventListener("abort", onTimedAbort);
     await stopChild(proc);
     children.delete(proc);
   }
