@@ -121,14 +121,32 @@ describe("two-process benchmark contract (pure math)", () => {
   });
 });
 
-test("both HTTP handlers satisfy the parameter and error contract", () => {
+test("both HTTP handlers satisfy the protocol, parameter and error contract", () => {
   const bench = new URL("../bench/routes-vs-fetch-2proc.bench.ts", import.meta.url);
   const result = Bun.spawnSync([
     process.execPath, "--no-env-file", "run", Bun.fileURLToPath(bench),
     "--rounds=1", "--warmup=0", "--latency=1", "--heap=1", "--timeout-ms=3000", "--json",
-  ]);
+  ], { env: { ...process.env, BUN_CONFIG_VERBOSE_FETCH: "true" } });
   if (!result.success) throw new Error(result.stderr.toString());
   const report = JSON.parse(result.stdout.toString());
   expect(report.runs.map((run: RunResult) => run.mode)).toEqual(["routes", "fetch"]);
   expect(report.settings.preflight_cases_per_child).toBe(16);
+  expect(report.settings.protocol).toEqual({
+    method: "GET", http_version: "1.1", scheme: "http", transport: "TCP",
+    address_family: "IPv4", hostname: "127.0.0.1", tls: false,
+  });
+
+  // Read the client trace independently of the protocol declared in the report.
+  const trials = result.stderr.toString().split(/^Benchmark 1\/1: (?:routes|fetch)\r?$/m).slice(1);
+  expect(trials).toHaveLength(2);
+  for (const trial of trials) {
+    const requests = trial.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("HTTP/"));
+    const paths = new Set<string>();
+    for (const request of requests) {
+      expect(request).toMatch(/^HTTP\/1\.1 GET http:\/\/127\.0\.0\.1:\d+\//);
+      paths.add(new URL(request.split(" ")[2]!).pathname);
+    }
+    paths.delete("/__gc");
+    expect(paths.size).toBe(report.settings.preflight_cases_per_child);
+  }
 }, 15000);

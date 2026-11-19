@@ -37,6 +37,15 @@ const CASES = [
   ["/api/customers/AGT-42/wagers/G8/extra", 404, "Not found", "ROUTE_NOT_FOUND"],
 ] as const;
 const [WAGER_PATH, , EXPECTED_BODY] = CASES[0];
+const PROTOCOL = {
+  method: "GET",
+  http_version: "1.1",
+  scheme: "http",
+  transport: "TCP",
+  address_family: "IPv4",
+  hostname: "127.0.0.1",
+  tls: false,
+} as const;
 const STARTUP_TIMEOUT_MS = 8_000;
 const SHUTDOWN_TIMEOUT_MS = 2_000;
 
@@ -131,7 +140,7 @@ function startChildServer(mode: BenchMode): void {
       headers: { "Cache-Control": "no-store" },
     });
   };
-  const listen = { hostname: "127.0.0.1", port: 0, development: false } as const;
+  const listen = { hostname: PROTOCOL.hostname, port: 0, development: false } as const;
 
   const server =
     mode === "routes"
@@ -285,6 +294,7 @@ async function runOnce(
     // One controller per process avoids per-request timer allocations in the
     // client loop. Bun fetch.timeout guards a stalled socket, not total duration.
     const init = {
+      method: PROTOCOL.method,
       signal: timed.signal,
       timeout: 5_000,
     };
@@ -425,6 +435,7 @@ async function main(): Promise<void> {
       heap_requests_per_run: settings.heap,
       timeout_ms_per_process: settings.timeoutMs,
       concurrency: 1,
+      protocol: PROTOCOL,
       preflight_cases_per_child: CASES.length,
       request_path: WAGER_PATH,
       expected_body: EXPECTED_BODY,
@@ -450,6 +461,7 @@ async function main(): Promise<void> {
   } else {
     const columns = [
       "mode",
+      "protocol",
       "p50_us",
       "p95_us",
       "p99_us",
@@ -457,8 +469,10 @@ async function main(): Promise<void> {
       "retained_cells_per_request",
       "retained_bytes_per_request",
     ];
+    const protocol = `${PROTOCOL.method} HTTP/${PROTOCOL.http_version} · ${PROTOCOL.transport}/${PROTOCOL.address_family} loopback · cleartext`;
+    const rows = [routes, manual, delta].map((row) => ({ ...row, protocol }));
     console.log(
-      Bun.inspect.table([routes, manual, delta], columns, {
+      Bun.inspect.table(rows, columns, {
         colors: Boolean(process.stdout.isTTY),
       }),
     );

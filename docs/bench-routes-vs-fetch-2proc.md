@@ -53,12 +53,14 @@ This benchmark can establish a **repeatable directional difference** in this nar
 
 Each child runs 16 GET preflight cases and compares the HTTP status, exact text body and `X-Error-Code` header. The focused test command runs this check over loopback against both routing implementations.
 
-| Condition | Status | Body | X-Error-Code |
-| --- | --- | --- | --- |
-| Valid identifiers | 200 | Decoded agent and wager IDs joined by a colon | Absent |
-| Invalid agent ID | 400 | Invalid identifier | INVALID_AGENT_ID |
-| Invalid wager ID | 400 | Invalid identifier | INVALID_WAGER_ID |
-| Missing path segment or unmatched path | 404 | Not found | ROUTE_NOT_FOUND |
+| Condition | Protocol | Status | Body | X-Error-Code |
+| --- | --- | --- | --- | --- |
+| Valid identifiers | GET · HTTP/1.1 · TCP/IPv4 loopback · cleartext | 200 | Decoded agent and wager IDs joined by a colon | Absent |
+| Invalid agent ID | GET · HTTP/1.1 · TCP/IPv4 loopback · cleartext | 400 | Invalid identifier | INVALID_AGENT_ID |
+| Invalid wager ID | GET · HTTP/1.1 · TCP/IPv4 loopback · cleartext | 400 | Invalid identifier | INVALID_WAGER_ID |
+| Missing path segment or unmatched path | GET · HTTP/1.1 · TCP/IPv4 loopback · cleartext | 404 | Not found | ROUTE_NOT_FOUND |
+
+The terminal summary includes a protocol column. JSON records the protocol properties in `settings.protocol`. The focused test enables Bun’s fetch trace for the smoke run and checks the method, HTTP version, scheme and loopback address for both modes.
 
 The benchmark decodes each segment once. Both IDs accept ASCII letters, digits, hyphens and underscores. Only the agent ID accepts spaces. Path shape is checked first, then the agent ID, then the wager ID. Query parameters cannot override either path parameter. These are synthetic benchmark rules. Production routing requires a separate application contract.
 
