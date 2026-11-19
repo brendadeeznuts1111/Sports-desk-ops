@@ -453,6 +453,72 @@ const FIXTURE_KPIS = {
         dataStale: false,
       },
     },
+    r2Manifests: {
+      "wagers-by-state": {
+        state: "fresh",
+        stale: false,
+        ageSeconds: 120,
+        reason: "2m old (SLA 1h)",
+        dataAgeSeconds: 900,
+        dataStale: false,
+        generation: 2,
+        merkleRoot:
+          "762d82a5191e06e2437b456e5fe6282434319fbe0e442ebdf49cc4e5a08de392",
+        circuitState: "CLOSED",
+        unresolvedGapCents: "0",
+        identityOk: true,
+        manifestKey: "manifests/wagers-by-state/latest",
+        publishedAt: "2026-11-04T18:11:39.599Z",
+      },
+      "syndicate-rings": {
+        state: "fresh",
+        stale: false,
+        ageSeconds: 300,
+        reason: "5m old (SLA 1h)",
+        dataAgeSeconds: 1_200,
+        dataStale: false,
+        generation: 1,
+        merkleRoot:
+          "b1128b66f0c6d8155b428b7112802f506f02783f78c75dca0ac2b6962f46da2d",
+        circuitState: "CLOSED",
+        unresolvedGapCents: "0",
+        identityOk: true,
+        manifestKey: "manifests/syndicate-rings/latest",
+        publishedAt: "2026-11-04T18:11:59.599Z",
+      },
+      "ops-supervisor": {
+        state: "fresh",
+        stale: false,
+        ageSeconds: 90,
+        reason: "1m old (SLA 1h)",
+        dataAgeSeconds: 600,
+        dataStale: false,
+        generation: 1,
+        merkleRoot:
+          "ab2fba43fb87506793b448b0986170cd21420826c5698da456e9312ec1e2ded6",
+        circuitState: "CLOSED",
+        unresolvedGapCents: "0",
+        identityOk: true,
+        manifestKey: "manifests/ops-supervisor/latest",
+        publishedAt: "2026-11-04T18:12:19.599Z",
+      },
+      "edge-topology": {
+        state: "fresh",
+        stale: false,
+        ageSeconds: 60,
+        reason: "1m old (SLA 1h)",
+        dataAgeSeconds: 300,
+        dataStale: false,
+        generation: 1,
+        merkleRoot:
+          "0a64e1e196dfddb6c79c73774c043aa15bb5ba6283ae615bb70f6132f0ac216e",
+        circuitState: "CLOSED",
+        unresolvedGapCents: "0",
+        identityOk: true,
+        manifestKey: "manifests/edge-topology/latest",
+        publishedAt: "2026-11-04T18:11:19.599Z",
+      },
+    },
   },
 };
 
@@ -1139,6 +1205,12 @@ await checkAsync(
       "Ticker (F402 · 3a)",
       "GSLive tally (3c)",
       "Wagers aggregate",
+      "R2 canonical manifests (CAS)",
+      "Wagers by state",
+      "Syndicate rings",
+      "Ops supervisor",
+      "Edge topology",
+      "gen 2",
     ]) {
       assert(text.includes(expected), `overview page is missing ${expected}`);
     }
@@ -1154,6 +1226,80 @@ await checkAsync(
     assert(
       text.includes("R2 sink"),
       "stale R2 pipeline sink is not called out in attention",
+    );
+    harness.dispose();
+  },
+);
+
+await checkAsync(
+  "canonical manifests surface lineage, lineage faults and pointer faults",
+  async () => {
+    const base = FIXTURE_KPIS.pipeline.r2Manifests;
+    const kpisBody = {
+      ...FIXTURE_KPIS,
+      pipeline: {
+        r2: FIXTURE_KPIS.pipeline.r2,
+        r2Manifests: {
+          "wagers-by-state": base["wagers-by-state"],
+          "syndicate-rings": {
+            ...base["syndicate-rings"],
+            state: "stale",
+            stale: true,
+            ageSeconds: 200_000,
+            reason: "55h old (SLA 1h)",
+          },
+          "ops-supervisor": {
+            ...base["ops-supervisor"],
+            circuitState: "OPEN",
+            unresolvedGapCents: "500",
+            identityOk: false,
+          },
+          "edge-topology": {
+            ...base["edge-topology"],
+            state: "missing",
+            stale: true,
+            ageSeconds: null,
+            dataAgeSeconds: null,
+            reason: "404 (key does not exist)",
+            generation: null,
+            merkleRoot: null,
+            circuitState: null,
+            unresolvedGapCents: null,
+            identityOk: null,
+          },
+        },
+      },
+    };
+    const harness = bootClient(async (url) => {
+      const text = String(url);
+      if (text.endsWith("/kpis") || text.endsWith("/api/kpis")) {
+        return proxiedResponse(url, kpisBody);
+      }
+      return proxiedResponse(url, fixtureFor(url));
+    });
+    harness.render("main");
+    await settle();
+    const tree = harness.render("main");
+    const text = textOf(tree);
+    for (const expected of [
+      "R2 canonical manifests (CAS)",
+      "Wagers by state",
+      "Syndicate rings",
+      "gen 2",
+      "circuit OPEN",
+      "manifest mismatch",
+      "gap 500¢",
+      "R2 canonical Syndicate rings is stale",
+      "R2 canonical Edge topology is missing",
+      "R2 canonical Ops supervisor integrity: circuit OPEN; manifest mismatch; gap 500¢",
+    ]) {
+      assert(text.includes(expected), `canonical block is missing ${expected}`);
+    }
+    const attention = findOne(tree, "spsd-attention");
+    assert(attention !== undefined, "no attention banner for canonical faults");
+    assert(
+      Number(attention.props["data-count"]) >= 3,
+      `attention count ${attention.props["data-count"]} (canonical faults)`,
     );
     harness.dispose();
   },

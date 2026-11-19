@@ -646,6 +646,7 @@ export interface EdgeTopologyManifest {
 export interface CanonicalManifestRecord {
   readonly domain?: string;
   readonly sink_id?: string;
+  readonly manifest_key?: string;
   readonly r2_bucket?: string;
   readonly generation_u32?: number;
   readonly snapshot_gen_u32?: number;

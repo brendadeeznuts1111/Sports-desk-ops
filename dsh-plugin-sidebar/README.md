@@ -200,6 +200,26 @@ convert to USD. Each block renders its own `provenance` age beside it, with a
 warn chip when that provenance says `stale`; a stale block also makes the card
 chip `stale`. A block that is absent is omitted, never zeroed.
 
+The same payload carries two R2 evidence blocks, read from the public gateway so
+the panel needs no R2 credentials:
+
+- **R2 pipelines**, from `pipeline.r2` — the four public `*/latest.json` bridge
+  pointers (ticker, weblog, GSLive tally, wagers aggregate). Each row states the
+  pointer state and publish age, then the covered data-window age with a warn
+  chip when that data is older than a day.
+- **R2 canonical manifests (CAS)**, from `pipeline.r2Manifests` — the four
+  canonical CAS sinks (`wagers-by-state`, `syndicate-rings`, `ops-supervisor`,
+  `edge-topology`) read from `manifests/<sink>/latest`. Each row states the
+  pointer state and publish age, the manifest generation (when the body answers)
+  and the data-window age, and carries integrity chips for an open circuit, a
+  manifest read from the wrong key, or a non-zero reconciliation gap. The row's
+  tooltip holds the manifest key, the truncated merkle root and the promotion
+  time, so the row stays readable but auditable.
+
+A stale canonical manifest makes the Book card `stale`; integrity faults are
+reported even when the pointer is fresh, because freshness and integrity are
+different measurements.
+
 **Paper execution**, from `GET /api/execution/plan` (`execution`):
 
 - `mode` and `killSwitch` (kill switch on is an error-tone value), and
@@ -226,6 +246,10 @@ item names its source (and age when known):
   `"ingested"` (one combined "Market feed:" item);
 - `killSwitch === true`, `mode !== "paper"`, or `policy.liveEnabled === true`
   (one item each, prefixed "Paper execution:");
+- a stale public R2 bridge pointer (one item per sink, prefixed "R2 pipelines:");
+- a stale or missing canonical CAS manifest, or a canonical manifest whose body
+  reports an open circuit, identity drift or a non-zero reconciliation gap (one
+  item per sink, prefixed "R2 canonical manifests (CAS):");
 - a failed or missing overview source (one item per source, with its reason).
 
 Absent data is rendered as unknown by the card, never as an alert, and a fully
@@ -464,6 +488,10 @@ checks:
 - the attention banner derives the feed/kill-switch/mode/live-execution
   conditions from the payloads, is quiet for a fully healthy desk, and Retry
   re-probes the whole snapshot and recovers a failed source;
+- **canonical R2 manifests**: the four CAS sinks render their pointer state,
+  generation, data-window age and integrity chips; a stale or missing pointer,
+  and a body-reported open circuit, identity drift or non-zero reconciliation
+  gap, each raise their own attention item;
 - a stale service renders "stale build", the missing route/`ingress` items and
   `PORT=4020 bun run serve`; a refused health probe renders "service down"; an
   `/api/status` 5xx is unknown;

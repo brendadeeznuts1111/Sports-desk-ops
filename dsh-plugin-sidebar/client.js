@@ -332,6 +332,17 @@ window.__ModuleLoader__.load({
         r2SinkState: "{state} · publish {age}",
         r2SinkDataAge: "data {age}",
         attentionR2Stale: "R2 sink {sink} is stale ({reason})",
+        r2ManifestsBlock: "R2 canonical manifests (CAS)",
+        r2ManWagersByState: "Wagers by state",
+        r2ManSyndicateRings: "Syndicate rings",
+        r2ManOpsSupervisor: "Ops supervisor",
+        r2ManEdgeTopology: "Edge topology",
+        r2ManifestGeneration: "gen {generation}",
+        r2ManifestCircuit: "circuit {state}",
+        r2ManifestMismatch: "manifest mismatch",
+        r2ManifestGap: "gap {gap}¢",
+        attentionR2Manifest: "R2 canonical {sink} is {state} ({reason})",
+        attentionR2ManifestIntegrity: "R2 canonical {sink} integrity: {detail}",
         liveField: "Live",
         risk: "Risk",
         volume: "Volume",
@@ -558,6 +569,17 @@ window.__ModuleLoader__.load({
         r2SinkState: "{state} · 发布 {age}",
         r2SinkDataAge: "数据 {age}",
         attentionR2Stale: "R2 接收端 {sink} 已过期（{reason}）",
+        r2ManifestsBlock: "R2 规范清单（CAS）",
+        r2ManWagersByState: "分状态清单",
+        r2ManSyndicateRings: "集团环",
+        r2ManOpsSupervisor: "运维监督",
+        r2ManEdgeTopology: "边缘拓扑",
+        r2ManifestGeneration: "第 {generation} 代",
+        r2ManifestCircuit: "回路 {state}",
+        r2ManifestMismatch: "清单不匹配",
+        r2ManifestGap: "缺口 {gap}¢",
+        attentionR2Manifest: "R2 规范清单 {sink} 为 {state}（{reason}）",
+        attentionR2ManifestIntegrity: "R2 规范清单 {sink} 完整性：{detail}",
         liveField: "进行中",
         risk: "风险",
         volume: "成交量",
@@ -1072,11 +1094,58 @@ window.__ModuleLoader__.load({
       return sinks.length === 0 ? null : sinks;
     }
 
+    /**
+     * Canonical sinks the desk publishes as CAS manifests (`manifests/<id>/latest`).
+     * Labels stay in the panel so the payload carries ids and measurements only.
+     */
+    const R2_MANIFEST_SPECS = [
+      { id: "wagers-by-state", labelKey: "r2ManWagersByState" },
+      { id: "syndicate-rings", labelKey: "r2ManSyndicateRings" },
+      { id: "ops-supervisor", labelKey: "r2ManOpsSupervisor" },
+      { id: "edge-topology", labelKey: "r2ManEdgeTopology" },
+    ];
+
+    /**
+     * `/api/kpis.pipeline.r2Manifests` — canonical CAS manifest lineage read
+     * through the public gateway. Pointer freshness, lineage and integrity stay
+     * separate fields so a fresh pointer never hides an open circuit or drift.
+     * @param {unknown} body
+     */
+    function readR2ManifestSinks(body) {
+      if (!isRecord(body) || !isRecord(body.pipeline)) return null;
+      const manifests = body.pipeline.r2Manifests;
+      if (!isRecord(manifests)) return null;
+      const sinks = [];
+      for (const spec of R2_MANIFEST_SPECS) {
+        const raw = manifests[spec.id];
+        if (!isRecord(raw)) continue;
+        sinks.push({
+          id: spec.id,
+          labelKey: spec.labelKey,
+          stale: readBoolean(raw.stale) === true,
+          dataStale: readBoolean(raw.dataStale) === true,
+          state: readText(raw.state),
+          reason: readText(raw.reason),
+          ageSeconds: readNumber(raw.ageSeconds),
+          dataAgeSeconds: readNumber(raw.dataAgeSeconds),
+          generation: readNumber(raw.generation),
+          merkleRoot: readText(raw.merkleRoot),
+          circuitState: readText(raw.circuitState),
+          unresolvedGapCents: readText(raw.unresolvedGapCents),
+          identityOk: readBoolean(raw.identityOk),
+          manifestKey: readText(raw.manifestKey),
+          publishedAt: readText(raw.publishedAt),
+        });
+      }
+      return sinks.length === 0 ? null : sinks;
+    }
+
     function readKpisPayload(body) {
       if (!isRecord(body)) return null;
       const raw = isRecord(body.kpis) ? body.kpis : null;
       const r2Sinks = readR2PipelineSinks(body);
-      if (raw === null && r2Sinks === null) return null;
+      const r2Manifests = readR2ManifestSinks(body);
+      if (raw === null && r2Sinks === null && r2Manifests === null) return null;
       const payload = {
         agents:
           raw === null
@@ -1109,13 +1178,15 @@ window.__ModuleLoader__.load({
                 "customerNetCents",
               ]),
         r2Sinks,
+        r2Manifests,
       };
       if (
         payload.agents === null &&
         payload.pending === null &&
         payload.ticker === null &&
         payload.customerBook === null &&
-        payload.r2Sinks === null
+        payload.r2Sinks === null &&
+        payload.r2Manifests === null
       ) {
         return null;
       }
@@ -3912,7 +3983,8 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Any KPI block's provenance stale flag makes the book card stale.
+     * Any KPI block's provenance, bridge pointer or canonical manifest staleness
+     * makes the book card stale.
      * @param {ReturnType<typeof readKpisPayload>} payload
      */
     function isKpisStale(payload) {
@@ -3933,8 +4005,16 @@ window.__ModuleLoader__.load({
       ) {
         return true;
       }
-      if (payload.r2Sinks === null) return false;
-      return payload.r2Sinks.some((sink) => sink.stale === true);
+      if (
+        payload.r2Sinks !== null &&
+        payload.r2Sinks.some((sink) => sink.stale === true)
+      ) {
+        return true;
+      }
+      return (
+        payload.r2Manifests !== null &&
+        payload.r2Manifests.some((sink) => sink.stale === true)
+      );
     }
 
     /**
@@ -3964,6 +4044,78 @@ window.__ModuleLoader__.load({
         );
       }
       return h("span", { className: "spsd-kv-inline" }, children);
+    }
+
+    /**
+     * Integrity faults the canonical manifest body reports, independent of pointer
+     * freshness: an open circuit, identity drift or a non-zero reconciliation gap.
+     * @param {(key: string, params?: object) => string} t
+     * @param {NonNullable<ReturnType<typeof readR2ManifestSinks>>[number]} sink
+     * @returns {string[]}
+     */
+    function r2ManifestIntegrityParts(t, sink) {
+      const parts = [];
+      if (sink.circuitState !== null && sink.circuitState !== "CLOSED") {
+        parts.push(t("r2ManifestCircuit", { state: sink.circuitState }));
+      }
+      if (sink.identityOk === false) parts.push(t("r2ManifestMismatch"));
+      if (sink.unresolvedGapCents !== null && sink.unresolvedGapCents !== "0") {
+        parts.push(t("r2ManifestGap", { gap: sink.unresolvedGapCents }));
+      }
+      return parts;
+    }
+
+    /**
+     * One canonical manifest row: pointer state and publish age, then generation
+     * and data age when measured, then integrity chips. The tooltip carries the
+     * key, merkle root and promotion time so the row stays readable but auditable.
+     * @param {(key: string, params?: object) => string} t
+     * @param {NonNullable<ReturnType<typeof readR2ManifestSinks>>[number]} sink
+     */
+    function formatR2ManifestValue(t, sink) {
+      const age =
+        sink.ageSeconds !== null
+          ? formatAgeSeconds(t, sink.ageSeconds)
+          : t("never");
+      const state =
+        sink.state ?? (sink.stale ? t("r2SinkStale") : t("r2SinkFresh"));
+      const parts = [t("r2SinkState", { state, age })];
+      if (sink.generation !== null) {
+        parts.push(t("r2ManifestGeneration", { generation: sink.generation }));
+      }
+      if (sink.dataAgeSeconds !== null) {
+        parts.push(
+          t("r2SinkDataAge", {
+            age: formatAgeSeconds(t, sink.dataAgeSeconds),
+          }),
+        );
+      }
+      const children = [h("span", { key: "r2m-text" }, parts.join(" · "))];
+      if (sink.dataStale === true) {
+        children.push(
+          chip(t("r2SinkStaleData"), "warn", `r2m-data-stale-${sink.id}`),
+        );
+      }
+      const integrity = r2ManifestIntegrityParts(t, sink);
+      integrity.forEach((part, index) => {
+        children.push(chip(part, "warn", `r2m-integrity-${sink.id}-${index}`));
+      });
+      const titleParts = [];
+      if (sink.manifestKey !== null) titleParts.push(sink.manifestKey);
+      if (sink.merkleRoot !== null) {
+        titleParts.push(`sha256 ${sink.merkleRoot.slice(0, 16)}…`);
+      }
+      if (sink.publishedAt !== null) {
+        titleParts.push(`published ${sink.publishedAt}`);
+      }
+      return h(
+        "span",
+        {
+          className: "spsd-kv-inline",
+          title: titleParts.length === 0 ? undefined : titleParts.join(" · "),
+        },
+        children,
+      );
     }
 
     /**
@@ -4524,6 +4676,27 @@ window.__ModuleLoader__.load({
           ),
         );
       }
+      if (payload.r2Manifests !== null) {
+        const rows = payload.r2Manifests.map((sink) =>
+          kvRow(
+            t(sink.labelKey),
+            formatR2ManifestValue(t, sink),
+            `r2m-${sink.id}`,
+            sink.stale ||
+              sink.dataStale ||
+              r2ManifestIntegrityParts(t, sink).length > 0
+              ? "warn"
+              : undefined,
+          ),
+        );
+        blocks.push(
+          subSection(
+            t("r2ManifestsBlock"),
+            [kvList(rows, "r2-manifests-kv")],
+            "r2-manifests-block",
+          ),
+        );
+      }
       return blocks;
     }
 
@@ -4858,6 +5031,32 @@ window.__ModuleLoader__.load({
               detail: t("attentionR2Stale", {
                 sink: t(sink.labelKey),
                 reason: sink.reason ?? t("r2SinkStale"),
+              }),
+            });
+          }
+        }
+        if (kpisPayload.r2Manifests !== null) {
+          for (const sink of kpisPayload.r2Manifests) {
+            if (sink.stale === true) {
+              items.push({
+                key: `r2m-${sink.id}`,
+                source: t("r2ManifestsBlock"),
+                detail: t("attentionR2Manifest", {
+                  sink: t(sink.labelKey),
+                  state: sink.state ?? t("r2SinkStale"),
+                  reason: sink.reason ?? t("r2SinkStale"),
+                }),
+              });
+              continue;
+            }
+            const integrity = r2ManifestIntegrityParts(t, sink);
+            if (integrity.length === 0) continue;
+            items.push({
+              key: `r2m-integrity-${sink.id}`,
+              source: t("r2ManifestsBlock"),
+              detail: t("attentionR2ManifestIntegrity", {
+                sink: t(sink.labelKey),
+                detail: integrity.join(t("attentionJoin")),
               }),
             });
           }

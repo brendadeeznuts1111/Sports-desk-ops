@@ -101,6 +101,7 @@ import {
 } from "../lib/desk_kpis.ts";
 import { buildDeskEnhancedHealth } from "../lib/desk_enhanced_health.ts";
 import { probeR2PipelineKpis } from "../lib/r2_pipeline_kpis.ts";
+import { probeCanonicalManifestKpis } from "../lib/r2_canonical_manifests.ts";
 import { ReportingSchedulerService } from "./reporting_scheduler_service.ts";
 import {
   describeSource,
@@ -3207,14 +3208,19 @@ export function startServer(options?: ServerOptions) {
 
       // Headline KPIs: counts and sums only, so public like the dashboard that shows them.
       if (pathname === "/api/kpis") {
-        const [agentTree, liveInputs, customerBook, r2Pipeline] =
+        const now = new Date();
+        const [agentTree, liveInputs, customerBook, r2Pipeline, r2Manifests] =
           await Promise.all([
             kpiInput(AGENT_TREE_PATH, agentTreeArtifact),
             deskLive.kpiLiveInputs(),
             kpiInput(CUSTOMER_PROFILES_PATH, customerBookArtifact),
-            probeR2PipelineKpis(new Date()).catch(() => null),
+            probeR2PipelineKpis(now).catch(() => null),
+            probeCanonicalManifestKpis(now).catch(() => null),
           ]);
-        const now = new Date();
+        const pipeline = {
+          ...(r2Pipeline === null ? {} : { r2: r2Pipeline }),
+          ...(r2Manifests === null ? {} : { r2Manifests }),
+        };
         return Response.json(
           await withWeblog({
             success: true,
@@ -3229,7 +3235,7 @@ export function startServer(options?: ServerOptions) {
             ),
             live: liveInputs.live,
             livePending: liveInputs.livePending,
-            ...(r2Pipeline === null ? {} : { pipeline: { r2: r2Pipeline } }),
+            ...(Object.keys(pipeline).length === 0 ? {} : { pipeline }),
             generatedAt: now.toISOString(),
           }),
           { headers: { ...cors, "Cache-Control": "no-store" } },

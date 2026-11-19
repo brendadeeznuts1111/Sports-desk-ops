@@ -80,14 +80,16 @@ Only **weblog** uses an empty `requiredEnv` array; credentials are **corpus pres
 
 ## Operator triage matrix
 
-| If you see this…                         | It usually means…                                   | Do this…                                                                                                                       |
-| ---------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `[not live]` on dashboard                | Fixture or scratch capture, not live ajax           | Check `source` / tooltip; verify cron and auth if live expected                                                                |
-| `bridge3c` exit 1                        | Read stderr: `HTTP 401` vs `ECONNRESET` / timeout   | 401 → refresh GSID (`secrets:gslive set` / `login`); timeout/big payload → narrow `--open-from`/`--open-to`, raise `--timeout` |
-| `pipeline.r2` sink `stale`               | Local artifact may exist but R2 pointer not updated | Run publish step (`wagers:publish-snapshot`, bridge rollup with R2); check R2 credentials                                      |
-| `getBetReport returned HTTP 401`         | GSID expired or wrong keychain name                 | `bun run secrets:gslive status`; store under `GSLIVE_SESSION_ID`                                                               |
-| `bearer source=session`                  | No env bearer; using session file                   | OK for dev; set keychain/env bearer for cron                                                                                   |
-| Weblog cron “fresh” KPI, old desk window | Republish of stale corpus                           | Tail cron for `weblog: published rollup for data window … (Nd old)`                                                            |
+| If you see this…                         | It usually means…                                                     | Do this…                                                                                                                        |
+| ---------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `[not live]` on dashboard                | Fixture or scratch capture, not live ajax                             | Check `source` / tooltip; verify cron and auth if live expected                                                                 |
+| `bridge3c` exit 1                        | Read stderr: `HTTP 401` vs `ECONNRESET` / timeout                     | 401 → refresh GSID (`secrets:gslive set` / `login`); timeout/big payload → narrow `--open-from`/`--open-to`, raise `--timeout`  |
+| `pipeline.r2` sink `stale`               | Local artifact may exist but R2 pointer not updated                   | Run publish step (`wagers:publish-snapshot`, bridge rollup with R2); check R2 credentials                                       |
+| `pipeline.r2Manifests` sink `stale`      | Canonical CAS pointer older than its 1h SLA, or never promoted        | `SPORTSDESK_LIVE_INGEST=1 bun x sportsdesk r2 --sync --json`, then `bun x sportsdesk stale --json`; check R2 credentials        |
+| `pipeline.r2Manifests` integrity fault   | Open circuit, manifest identity drift, or non-zero reconciliation gap | Fix the originating publish before refreshing the pointer; the gap aborts promotion with `ERR_OPS_RECONCILIATION_GAP` (exit 65) |
+| `getBetReport returned HTTP 401`         | GSID expired or wrong keychain name                                   | `bun run secrets:gslive status`; store under `GSLIVE_SESSION_ID`                                                                |
+| `bearer source=session`                  | No env bearer; using session file                                     | OK for dev; set keychain/env bearer for cron                                                                                    |
+| Weblog cron “fresh” KPI, old desk window | Republish of stale corpus                                             | Tail cron for `weblog: published rollup for data window … (Nd old)`                                                             |
 
 ## References
 
