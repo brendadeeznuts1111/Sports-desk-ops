@@ -998,3 +998,55 @@ describe("/api/config/tiers native formats", () => {
     );
   });
 });
+
+describe("server telemetry (Bun.serve counters)", () => {
+  const telemetry = {
+    pendingRequests: 2,
+    pendingWebSockets: 3,
+    subscriberCounts: { dashboard: 1, "live-bets": 0, "syndicate-alerts": 2 },
+  };
+  const api = createDashboardApi(
+    buildMockDeps({ getServerTelemetry: () => telemetry }),
+  );
+  const call = (path: string) =>
+    api.fetch(new Request(`http://dashboard.local${path}`));
+
+  test("/health reports the in-flight request and socket counts", async () => {
+    const body = (await (await call("/health")).json()) as Record<
+      string,
+      unknown
+    >;
+    expect(body.status).toBe("ok");
+    expect(body.pendingRequests).toBe(2);
+    expect(body.pendingWebSockets).toBe(3);
+    // Health carries load, not topic detail.
+    expect(body.serverSubscriberCounts).toBeUndefined();
+  });
+
+  test("/api/ws/status reports the counters and uWS's own subscriber table", async () => {
+    const body = (await (await call("/api/ws/status")).json()) as Record<
+      string,
+      unknown
+    >;
+    expect(body.pendingRequests).toBe(2);
+    expect(body.pendingWebSockets).toBe(3);
+    expect(body.serverSubscriberCounts).toEqual(telemetry.subscriberCounts);
+    // The client-derived distribution stays separate, so drift is visible.
+    expect(body.topicDistribution).toEqual({});
+  });
+
+  test("without the callback the counters are absent, never fabricated zeros", async () => {
+    const plain = createDashboardApi(buildMockDeps());
+    const health = (await (
+      await plain.fetch(new Request("http://dashboard.local/health"))
+    ).json()) as Record<string, unknown>;
+    expect(health.pendingRequests).toBeUndefined();
+    expect(health.pendingWebSockets).toBeUndefined();
+
+    const status = (await (
+      await plain.fetch(new Request("http://dashboard.local/api/ws/status"))
+    ).json()) as Record<string, unknown>;
+    expect(status.pendingRequests).toBeUndefined();
+    expect(status.serverSubscriberCounts).toBeUndefined();
+  });
+});

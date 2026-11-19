@@ -281,7 +281,14 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
   const staticRoutes = {
     "/health": {
       GET: async (): Promise<Response> => {
-        return Response.json(await deps.getHealthPayload());
+        const payload = await deps.getHealthPayload();
+        const telemetry = deps.getServerTelemetry?.();
+        if (telemetry === undefined) return Response.json(payload);
+        return Response.json({
+          ...payload,
+          pendingRequests: telemetry.pendingRequests,
+          pendingWebSockets: telemetry.pendingWebSockets,
+        });
       },
     },
 
@@ -787,7 +794,7 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
       GET: async (req: Request): Promise<Response> => {
         const denied = await enforceAuth(req);
         if (denied) return denied;
-        return json(req, buildWsStatusPayload());
+        return json(req, buildWsStatusPayload(deps.getServerTelemetry?.()));
       },
     },
 

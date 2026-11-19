@@ -25,6 +25,7 @@ import {
 } from "@sportsdesk-ops/backend";
 import {
   createDashboardApi,
+  DASHBOARD_WS_TOPICS,
   type EncodedResponseSpec,
 } from "@sportsdesk-ops/api";
 import type { AgentDetailApiResponse } from "@sportsdesk-ops/contracts";
@@ -577,6 +578,16 @@ export function startDashboardServer(
           ...(spec.cache === undefined ? {} : { cache: spec.cache }),
         }),
       getHealthPayload: () => healthTracker.sample(),
+      getServerTelemetry: () => ({
+        pendingRequests: serverRef?.pendingRequests ?? 0,
+        pendingWebSockets: serverRef?.pendingWebSockets ?? 0,
+        subscriberCounts: Object.fromEntries(
+          DASHBOARD_WS_TOPICS.map((topic) => [
+            topic,
+            serverRef?.subscriberCount(topic) ?? 0,
+          ]),
+        ),
+      }),
       loadDashboardMarkdown: () => markdownCache.load(),
       dns: {
         getTelemetryPayload: () => {

@@ -7,6 +7,7 @@ import {
   DASHBOARD_WS_TOPICS,
   type DashboardWsTopic,
 } from "@sportsdesk-ops/contracts";
+import type { DashboardServerTelemetry } from "./types.ts";
 
 export { DASHBOARD_WS_TOPICS, type DashboardWsTopic };
 
@@ -28,6 +29,11 @@ export interface DashboardWsStatusPayload {
   }>;
   readonly serverTopics: readonly string[];
   readonly timestamp: string;
+  /** Present only when the host supplied `getServerTelemetry`. */
+  readonly pendingRequests?: number;
+  readonly pendingWebSockets?: number;
+  /** Present only when the host supplied `subscriberCounts`. */
+  readonly serverSubscriberCounts?: Readonly<Record<string, number>>;
 }
 
 export function createDashboardWebSocketHandler<TWs extends WsLike>(
@@ -118,7 +124,9 @@ export function createDashboardWebSocketHandler<TWs extends WsLike>(
     },
   };
 
-  const buildWsStatusPayload = (): DashboardWsStatusPayload => {
+  const buildWsStatusPayload = (
+    telemetry?: DashboardServerTelemetry,
+  ): DashboardWsStatusPayload => {
     const topicCounts: Record<string, number> = {};
     const clientSummaries: Array<{ id: number; topics: readonly string[] }> =
       [];
@@ -138,6 +146,15 @@ export function createDashboardWebSocketHandler<TWs extends WsLike>(
       clients: clientSummaries,
       serverTopics: [...DASHBOARD_WS_TOPICS],
       timestamp: new Date().toISOString(),
+      ...(telemetry === undefined
+        ? {}
+        : {
+            pendingRequests: telemetry.pendingRequests,
+            pendingWebSockets: telemetry.pendingWebSockets,
+            ...(telemetry.subscriberCounts === undefined
+              ? {}
+              : { serverSubscriberCounts: telemetry.subscriberCounts }),
+          }),
     };
   };
 

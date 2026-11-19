@@ -266,6 +266,32 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
     });
   });
 
+  describe("Server telemetry", () => {
+    it("reports Bun.serve's counters and uWS's subscriber table", async () => {
+      const health = (await (await fetch(`${baseUrl}/health`)).json()) as {
+        pendingRequests?: number;
+        pendingWebSockets?: number;
+      };
+      expect(typeof health.pendingRequests).toBe("number");
+      expect(typeof health.pendingWebSockets).toBe("number");
+
+      const status = (await (
+        await fetch(`${baseUrl}/api/ws/status`)
+      ).json()) as {
+        pendingRequests?: number;
+        serverSubscriberCounts?: Record<string, number>;
+      };
+      expect(typeof status.pendingRequests).toBe("number");
+      expect(status.serverSubscriberCounts).toBeTypeOf("object");
+      expect(Object.keys(status.serverSubscriberCounts ?? {})).toContain(
+        "dashboard",
+      );
+      for (const count of Object.values(status.serverSubscriberCounts ?? {})) {
+        expect(typeof count).toBe("number");
+      }
+    });
+  });
+
   describe("Live Wagers Ingestion Feed", () => {
     it("dynamically loads and projects wagers on GET /api/wagers", async () => {
       const res = await fetch(`${baseUrl}/api/wagers`);

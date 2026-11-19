@@ -92,6 +92,17 @@ export interface ShadowPricingQueryParams {
   readonly routerAuditMode?: RouterAuditMode | undefined;
 }
 
+/** Live load counters straight off the `Bun.serve` server object. */
+export interface DashboardServerTelemetry {
+  readonly pendingRequests: number;
+  readonly pendingWebSockets: number;
+  /**
+   * `server.subscriberCount(topic)` per dashboard topic. uWS's own table, so it can disagree with
+   * the client-derived distribution when a socket is subscribed but not tracked.
+   */
+  readonly subscriberCounts?: Readonly<Record<string, number>> | undefined;
+}
+
 export interface DashboardApiDeps {
   readonly enforceAuth?:
     ((req: Request) => Promise<Response | null>) | undefined;
@@ -107,6 +118,11 @@ export interface DashboardApiDeps {
       ) => Response | Promise<Response>)
     | undefined;
   readonly getHealthPayload: () => Promise<object> | object;
+  /**
+   * Live `Bun.serve` counters. Optional: a host without the `Server` reference (or the in-memory
+   * test harness) omits them rather than reporting a fabricated zero.
+   */
+  readonly getServerTelemetry?: (() => DashboardServerTelemetry) | undefined;
   readonly loadDashboardMarkdown: () => Promise<{
     readonly stamp: string;
     readonly markdown: string;
