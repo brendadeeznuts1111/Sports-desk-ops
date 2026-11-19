@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-11-19T15:46:45.260Z",
+  "runtime": {
+    "name": "Bun",
+    "version": "1.4.4",
+    "revision": "38afee6c84fcf48c0edb2466aa4b27d287a59c30",
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "command": "bun --no-env-file run bench/uuid-contract.snapshot.ts",
+  "v4": {
+    "api": "crypto.randomUUID",
+    "sample": {
+      "version": 4,
+      "variantBits": "10",
+      "encoding": "default",
+      "jsType": "string",
+      "objectClass": null,
+      "stringLength": 36,
+      "byteLength": 16,
+      "returnedString": "92132995-0cf9-4e94-940d-688a4451f872",
+      "bytesHex": "921329950cf94e94940d688a4451f872"
+    }
+  },
+  "v5": {
+    "api": "Bun.randomUUIDv5",
+    "name": "www.example.com",
+    "namespace": "dns",
+    "namespaceChecks": [
+      {
+        "alias": "dns",
+        "namespaceUUID": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+        "namespaceBytesHex": "6ba7b8109dad11d180b400c04fd430c8",
+        "uuid": "2ed6657d-e927-568b-95e1-2665a8aea6a2"
+      },
+      {
+        "alias": "url",
+        "namespaceUUID": "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
+        "namespaceBytesHex": "6ba7b8119dad11d180b400c04fd430c8",
+        "uuid": "b63cdfa4-3df9-568e-97ae-006c5b8fd652"
+      },
+      {
+        "alias": "oid",
+        "namespaceUUID": "6ba7b812-9dad-11d1-80b4-00c04fd430c8",
+        "namespaceBytesHex": "6ba7b8129dad11d180b400c04fd430c8",
+        "uuid": "a5e87d3b-479e-52da-b98a-db251a851854"
+      },
+      {
+        "alias": "x500",
+        "namespaceUUID": "6ba7b814-9dad-11d1-80b4-00c04fd430c8",
+        "namespaceBytesHex": "6ba7b8149dad11d180b400c04fd430c8",
+        "uuid": "a1d3adb1-15b7-5395-a05f-9051a08769a2"
+      }
+    ],
+    "encodings": [
+      {
+        "version": 5,
+        "variantBits": "10",
+        "encoding": "default",
+        "jsType": "string",
+        "objectClass": null,
+        "stringLength": 36,
+        "byteLength": 16,
+        "returnedString": "2ed6657d-e927-568b-95e1-2665a8aea6a2",
+        "bytesHex": "2ed6657de927568b95e12665a8aea6a2"
+      },
+      {
+        "version": 5,
+        "variantBits": "10",
+        "encoding": "hex",
+        "jsType": "string",
+        "objectClass": null,
+        "stringLength": 36,
+        "byteLength": 16,
+        "returnedString": "2ed6657d-e927-568b-95e1-2665a8aea6a2",
+        "bytesHex": "2ed6657de927568b95e12665a8aea6a2"
+      },
+      {
+        "version": 5,
+        "variantBits": "10",
+        "encoding": "base64",
+        "jsType": "string",
+        "objectClass": null,
+        "stringLength": 24,
+        "byteLength": 16,
+        "returnedString": "LtZlfeknVouV4SZlqK6mog==",
+        "bytesHex": "2ed6657de927568b95e12665a8aea6a2"
+      },
+      {
+        "version": 5,
+        "variantBits": "10",
+        "encoding": "base64url",
+        "jsType": "string",
+        "objectClass": null,
+        "stringLength": 22,
+        "byteLength": 16,
+        "returnedString": "LtZlfeknVouV4SZlqK6mog",
+        "bytesHex": "2ed6657de927568b95e12665a8aea6a2"
+      },
+      {
+        "version": 5,
+        "variantBits": "10",
+        "encoding": "buffer",
+        "jsType": "object",
+        "objectClass": "Buffer",
+        "stringLength": null,
+        "byteLength": 16,
+        "returnedString": null,
+        "bytesHex": "2ed6657de927568b95e12665a8aea6a2"
+      }
+    ]
+  },
+  "v7": {
+    "api": "Bun.randomUUIDv7",
+    "timestampMs": 1700000000000,
+    "timestampISO": "2023-11-14T22:13:20.000Z",
+    "encodings": [
+      {
+        "version": 7,
+        "variantBits": "10",
+        "encoding": "default",
+        "jsType": "string",
+        "objectClass": null,
+        "stringLength": 36,
+        "byteLength": 16,
+        "returnedString": "018bcfe5-6800-7443-8671-c1bdda298ed8",
+        "bytesHex": "018bcfe5680074438671c1bdda298ed8"
+      },
+      {
+        "version": 7,
+        "variantBits": "10",
+        "encoding": "hex",
+        "jsType": "string",
+        "objectClass": null,
+        "stringLength": 36,
+        "byteLength": 16,
+        "returnedString": "018bcfe5-6800-7444-90db-39626d50ac35",
+        "bytesHex": "018bcfe56800744490db39626d50ac35"
+      },
+      {
+        "version": 7,
+        "variantBits": "10",
+        "encoding": "base64",
+        "jsType": "string",
+        "objectClass": null,
+        "stringLength": 24,
+        "byteLength": 16,
+        "returnedString": "AYvP5WgAdEWciYrji7/EQA==",
+        "bytesHex": "018bcfe5680074459c898ae38bbfc440"
+      },
+      {
+        "version": 7,
+        "variantBits": "10",
+        "encoding": "base64url",
+        "jsType": "string",
+        "objectClass": null,
+        "stringLength": 22,
+        "byteLength": 16,
+        "returnedString": "AYvP5WgAdEa2QTkIecGX4Q",
+        "bytesHex": "018bcfe568007446b641390879c197e1"
+      },
+      {
+        "version": 7,
+        "variantBits": "10",
+        "encoding": "buffer",
+        "jsType": "object",
+        "objectClass": "Buffer",
+        "stringLength": null,
+        "byteLength": 16,
+        "returnedString": null,
+        "bytesHex": "018bcfe5680074478e746aecb07434de"
+      }
+    ],
+    "dateSample": {
+      "version": 7,
+      "variantBits": "10",
+      "encoding": "default",
+      "jsType": "string",
+      "objectClass": null,
+      "stringLength": 36,
+      "byteLength": 16,
+      "returnedString": "018bcfe5-6800-7448-ab1c-53373ec94336",
+      "bytesHex": "018bcfe568007448ab1c53373ec94336"
+    },
+    "distinctIncreasingSamples": 6
+  },
+  "blobURL": {
+    "api": "URL.createObjectURL",
+    "scheme": "blob",
+    "protocol": "blob:",
+    "href": "blob:383e6b95-ea84-45df-8a88-8cabc1a86cfb",
+    "pathname": "383e6b95-ea84-45df-8a88-8cabc1a86cfb",
+    "observedIdentifier": {
+      "version": 4,
+      "variantBits": "10",
+      "encoding": "default",
+      "jsType": "string",
+      "objectClass": null,
+      "stringLength": 36,
+      "byteLength": 16,
+      "returnedString": "383e6b95-ea84-45df-8a88-8cabc1a86cfb",
+      "bytesHex": "383e6b95ea8445df8a888cabc1a86cfb"
+    }
+  }
+}
