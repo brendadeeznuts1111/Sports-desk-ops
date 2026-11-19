@@ -281,6 +281,7 @@
     "r2:verify:local": "bun run scripts/r2_verify.ts",
     "env:audit": "bun run scripts/env_audit.ts",
     "registry:check": "bun run scripts/registry_check.ts",
+    "registry:probe": "bun run scripts/probe-registry.ts",
     "artifacts:cron": "bun --no-orphans run scripts/artifacts_cron.ts",
     "health:watcher": "bun --no-orphans run workers/health_watcher.ts",
     "weblog:sentinel": "bun --no-orphans run workers/weblog_sentinel.ts",
