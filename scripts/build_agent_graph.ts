@@ -5,6 +5,7 @@
  *   bun run graph:agent
  *   bun run graph:agent -- --envelope scratch/raw-f402-list-agents.json
  */
+import { hierarchyBunHelp } from "../lib/agent_graph_cli_help.ts";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -54,6 +55,8 @@ if (values.help) {
 
 ${F402_AGENT_SECURITY_WARNING_MARKDOWN}
 
+Usage: bun run graph:agent [script flags]
+
 Options:
   --envelope <path>   Offline envelope (default: F402_RAW_ENVELOPE or scratch/raw-f402-list-agents.json)
   --live              Live: FetchSession / WebView profile (requires --account fixture). Saves the
@@ -64,12 +67,15 @@ Options:
   --out <path>        Graph JSON (default scratch/agent-graph.json)
   --force             Rebuild even when manifest matches envelope sha256
   --weekly            Also fetch getWeeklyFigureByAgentLite for root agent (live only)
-  --master-id         Parser context (default MASTER1)
-  --master-login      Parser context (default MASTER1)
+  --master-id <id>    Parser context (default MASTER1)
+  --master-login <login> Parser context (default MASTER1)
+  --show-security-notice     Show security banner (default)
   --no-show-security-notice  Omit security banner on stderr
   -h, --help
 
 Idempotent: skips when scratch/agent-graph.manifest.json matches envelope SHA-256 and outputs exist.
+
+${hierarchyBunHelp}
 
 Doc: docs/evidence/agent-graph-operator.md
 `);

@@ -12,6 +12,7 @@
  * channel proxy for "live", not a verified live flag.
  */
 
+import { hierarchyBunHelp } from "../lib/agent_graph_cli_help.ts";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -35,8 +36,25 @@ const { values } = parseArgs({
       default: join(REPO, "data", "customer-profiles.json"),
     },
     json: { type: "boolean", default: false },
+    help: { type: "boolean", short: "h" },
   },
 });
+
+if (values.help) {
+  console.log(
+    [
+      "Usage: bun run customers:profiles [script flags]",
+      "  --book <path>  Customer book (default enriched_customers_full.json)",
+      "  --tree <path>  Saved hierarchy (default data/agent-tree.json)",
+      "  --out <path>   Profile output (default data/customer-profiles.json)",
+      "  --json         Also print the summary and profiles as JSON",
+      "  --help, -h     Show this help",
+      "",
+      hierarchyBunHelp,
+    ].join("\n"),
+  );
+  process.exit(0);
+}
 
 const bookPath = resolve(values.book ?? "");
 const rows = (await Bun.file(bookPath)

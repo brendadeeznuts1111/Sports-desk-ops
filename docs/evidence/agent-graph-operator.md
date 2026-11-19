@@ -57,6 +57,48 @@ root and is not in the tree. `/views` shows it; `/agent/<id>` shows it only when
 
 ### Safe execution in Bun
 
+#### CLI reference
+
+Place native run flags before the package script and script flags after it.
+For example, `bun run --silent customers:profiles --help` prints profile help.
+The alias column names alternate spellings of the Bun command. A dash means no
+alias or short spelling is listed here. Installation is a separate operation.
+
+| Runtime | Command | Command alias | Package script | Long flag | Short flag | Value | Purpose |
+|---|---|---|---|---|---|---|---|
+| `bun` | `install` | `i` | — | `--config` | `-c` | `path` | Select bunfig.toml |
+| `bun` | `install` | `i` | — | `--registry` | — | `url` | Override the default registry |
+| `bun` | `install` | `i` | — | `--filter` | `-F` | `pattern` | Select matching workspaces |
+| `bun` | `install` | `i` | — | `--offline` | — | — | Use only the local cache |
+| `bun` | `install` | `i` | — | `--frozen-lockfile` | — | — | Require an unchanged lockfile |
+| `bun` | `install` | `i` | — | `--ignore-scripts` | — | — | Skip lifecycle scripts |
+| `bun` | `install` | `i` | — | `--dry-run` | — | — | Preview installation |
+| `bun` | `install` | `i` | — | `--help` | `-h` | — | List every native install flag |
+| `bun` | `run` | — | — | `--silent` | — | — | Hide the script command line |
+| `bun` | `run` | — | `graph:agent` | `--live` | — | — | Fetch the hierarchy using the session |
+| `bun` | `run` | — | `graph:agent` | `--account` | — | `path` | Account context required for live capture |
+| `bun` | `run` | — | `graph:agent` | `--envelope` | — | `path` | Read a saved response offline |
+| `bun` | `run` | — | `graph:agent` | `--db` | — | `path` | SQLite output |
+| `bun` | `run` | — | `graph:agent` | `--out` | — | `path` | Graph output |
+| `bun` | `run` | — | `graph:agent` | `--weekly` | — | — | Fetch weekly figures during live capture |
+| `bun` | `run` | — | `graph:agent` | `--force` | — | — | Rebuild despite a matching manifest |
+| `bun` | `run` | — | `graph:agent` | `--master-id` | — | `id` | Parser master ID |
+| `bun` | `run` | — | `graph:agent` | `--master-login` | — | `login` | Parser master login |
+| `bun` | `run` | — | `graph:agent` | `--show-security-notice` | — | — | Show security banner |
+| `bun` | `run` | — | `graph:agent` | `--no-show-security-notice` | — | — | Suppress security banner |
+| `bun` | `run` | — | `graph:agent` | `--help` | `-h` | — | Show script help |
+| `bun` | `run` | — | `build:agent-tree` | `--graph` | — | `path` | Read a saved graph |
+| `bun` | `run` | — | `build:agent-tree` | `--hierarchy` | — | `path` | Read supplementary hierarchy rows |
+| `bun` | `run` | — | `build:agent-tree` | `--out` | — | `path` | Tree output |
+| `bun` | `run` | — | `build:agent-tree` | `--index-out` | — | `path` | Identity index output |
+| `bun` | `run` | — | `build:agent-tree` | `--no-index` | — | — | Skip identity index |
+| `bun` | `run` | — | `build:agent-tree` | `--help` | `-h` | — | Show script help |
+| `bun` | `run` | — | `customers:profiles` | `--book` | — | `path` | Read customer book |
+| `bun` | `run` | — | `customers:profiles` | `--tree` | — | `path` | Read saved agent tree |
+| `bun` | `run` | — | `customers:profiles` | `--out` | — | `path` | Profile output |
+| `bun` | `run` | — | `customers:profiles` | `--json` | — | — | Also print summary and profiles |
+| `bun` | `run` | — | `customers:profiles` | `--help` | `-h` | — | Show script help |
+
 **Offline (no session):** envelope JSON already captured and redacted:
 
 ```bash

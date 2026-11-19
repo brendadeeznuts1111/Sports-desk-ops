@@ -18,6 +18,7 @@
  *   bun run build:agent-tree --graph scratch/agent-graph.json --hierarchy scratch/raw-f402-list-agents.json
  */
 
+import { hierarchyBunHelp } from "../lib/agent_graph_cli_help.ts";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { agentKeyOf, readHierarchyRows } from "../lib/live_bets.ts";
@@ -80,6 +81,9 @@ function parseArgs(argv: readonly string[]): Args {
             "  --out <path>        output (default data/agent-tree.json)",
             "  --index-out <path>  identity index (default data/agent-index.json)",
             "  --no-index          skip the identity index",
+            "  --help, -h          show this help",
+            "",
+            hierarchyBunHelp,
           ].join("\n"),
         );
         process.exit(0);
