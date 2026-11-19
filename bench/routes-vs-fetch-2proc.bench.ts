@@ -258,6 +258,13 @@ async function runOnce(
     };
 
     await verify();
+    // Semantic parity also requires a 404 on unmatched paths, not just a
+    // correct positive response. Keep this out of the timed phase.
+    const miss = await fetch(target + "/extra", init);
+    if (miss.status !== 404) {
+      throw new Error(mode + " incorrectly routed unmatched path (HTTP " + miss.status + ")");
+    }
+    await miss.text();
     for (let i = 0; i < settings.warmup; i++) await get(target);
     await verify();
 
