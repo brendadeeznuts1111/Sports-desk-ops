@@ -42,19 +42,53 @@ type IdParamMethodHandlers = {
   ) => Response | Promise<Response>;
 };
 
+/**
+ * A strong validator for the response bytes. Mirrors `etagForBytes` in `lib/http_compression.ts`
+ * (this package has no dependency on the repo root), so both adapters behave the same for
+ * `If-None-Match`.
+ */
+function etagForBytes(bytes: Uint8Array<ArrayBuffer>): string {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(bytes);
+  return `"${hasher.digest("hex").slice(0, 32)}"`;
+}
+
+/** RFC 9110 §13.1.2: a comma list, `*`, and the weak `W/` form compare weakly for a GET. */
+function ifNoneMatchMatches(header: string | null, etag: string): boolean {
+  if (header === null || header === "") return false;
+  for (const part of header.split(",")) {
+    const candidate = part.trim();
+    if (candidate === "*") return true;
+    const normalized = candidate.startsWith("W/")
+      ? candidate.slice(2).trim()
+      : candidate;
+    if (normalized === etag) return true;
+  }
+  return false;
+}
+
 function defaultEncodeResponse(
-  _req: Request,
+  req: Request,
   spec: EncodedResponseSpec,
 ): Response {
   const bytes = spec.produce();
   const body = new Uint8Array(bytes.byteLength);
   body.set(bytes);
-  return new Response(body, {
-    headers: {
-      "Content-Type": spec.contentType,
-      ...spec.headers,
-    },
+  const etag = etagForBytes(body);
+  const headers = new Headers({
+    "Content-Type": spec.contentType,
+    ...spec.headers,
   });
+  headers.set("ETag", etag);
+  if (!headers.has("Cache-Control")) {
+    // Operator payloads must revalidate; a shared cache must not store them.
+    headers.set("Cache-Control", "private, no-cache");
+  }
+  if (ifNoneMatchMatches(req.headers.get("if-none-match"), etag)) {
+    headers.delete("Content-Type");
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(body, { headers });
 }
 
 /**
@@ -141,6 +175,27 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
   };
 
   const textEncoder = new TextEncoder();
+
+  /**
+   * JSON through the injected encoder, keyed by a hash of its own bytes.
+   *
+   * Using the payload hash as the cache version means every host gets the same behaviour: the
+   * adapter may compress the body, the default implementation adds an `ETag`, and a matching
+   * `If-None-Match` answers 304 with no body. Assembly happens per request either way.
+   */
+  const json = (
+    req: Request,
+    payload: unknown,
+  ): Response | Promise<Response> => {
+    const bytes = textEncoder.encode(JSON.stringify(payload));
+    return encodeResponse(req, {
+      version: `json|${etagForBytes(bytes).slice(1, -1)}`,
+      contentType: "application/json; charset=utf-8",
+      produce: () => bytes,
+      // Assembled per request: keep the cache for the versioned artifacts instead.
+      cache: false,
+    });
+  };
 
   const staticRoutes = {
     "/health": {
@@ -248,14 +303,14 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
       GET: async (req: Request): Promise<Response> => {
         const denied = await enforceAuth(req);
         if (denied) return denied;
-        return Response.json(deps.dns.getTelemetryPayload());
+        return json(req, deps.dns.getTelemetryPayload());
       },
     },
     "/api/dns/telemetry": {
       GET: async (req: Request): Promise<Response> => {
         const denied = await enforceAuth(req);
         if (denied) return denied;
-        return Response.json(deps.dns.getTelemetryPayload());
+        return json(req, deps.dns.getTelemetryPayload());
       },
     },
     "/api/dns/benchmark": {
@@ -417,7 +472,8 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
       GET: async (req: Request): Promise<Response> => {
         const denied = await enforceAuth(req);
         if (denied) return denied;
-        return Response.json(
+        return json(
+          req,
           await withWagersTabPolicy(deps, await deps.getLiveWagersPayload()),
         );
       },
@@ -426,7 +482,8 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
       GET: async (req: Request): Promise<Response> => {
         const denied = await enforceAuth(req);
         if (denied) return denied;
-        return Response.json(
+        return json(
+          req,
           await withWagersTabPolicy(deps, await deps.getLiveWagersPayload()),
         );
       },
@@ -616,7 +673,7 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
       GET: async (req: Request): Promise<Response> => {
         const denied = await enforceAuth(req);
         if (denied) return denied;
-        return Response.json(buildWsStatusPayload());
+        return json(req, buildWsStatusPayload());
       },
     },
 
@@ -696,9 +753,7 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
             },
           });
         }
-        return Response.json(
-          await deps.getBetTickerPayload({ writer, wagerType }),
-        );
+        return json(req, await deps.getBetTickerPayload({ writer, wagerType }));
       },
     },
 
@@ -730,7 +785,7 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
             },
           });
         }
-        return Response.json(await deps.getR2PipelinePayload({ refresh }));
+        return json(req, await deps.getR2PipelinePayload({ refresh }));
       },
     },
 
@@ -755,7 +810,8 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
             sinks: [],
           });
         }
-        return Response.json(
+        return json(
+          req,
           await deps.getR2PipelineHistoryPayload({
             refresh,
             ...(limit === undefined ? {} : { limit }),
@@ -823,7 +879,7 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
             reason: "Daemon probe not configured",
           });
         }
-        return Response.json(await deps.getDaemonStatusPayload());
+        return json(req, await deps.getDaemonStatusPayload());
       },
     },
 
@@ -962,7 +1018,7 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
             autoExecute: false,
           });
         }
-        return Response.json(await deps.getAgentDetailPayload(agentId));
+        return json(req, await deps.getAgentDetailPayload(agentId));
       },
     },
 
@@ -989,7 +1045,7 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
             autoExecute: false,
           });
         }
-        return Response.json(await deps.getAgentDetailPayload(agentId));
+        return json(req, await deps.getAgentDetailPayload(agentId));
       },
     },
   } satisfies Record<string, IdParamMethodHandlers>;

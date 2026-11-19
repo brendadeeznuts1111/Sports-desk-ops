@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   negotiateEncoding,
+  encodedJsonResponse,
   encodedResponse,
   forwardProxiedResponse,
   prepareProxyRequestHeaders,
@@ -209,5 +210,162 @@ describe("encodedResponse", () => {
       proxyServer.stop(true);
       apiServer.stop(true);
     }
+  });
+});
+
+describe("ETag and conditional GET", () => {
+  const body = new TextEncoder().encode("t".repeat(4000));
+  const req = (headers: Record<string, string> = {}): Request =>
+    new Request("http://localhost/x", { headers });
+
+  test("a strong ETag is set, and Cache-Control defaults to private, no-cache", () => {
+    resetEncodedBodies();
+    const response = encodedResponse(req({ "accept-encoding": "gzip" }), {
+      version: "etag-v1",
+      contentType: "application/json",
+      produce: () => body,
+    });
+    expect(response.headers.get("etag")).toMatch(/^"[0-9a-f]{32}"$/);
+    expect(response.headers.get("cache-control")).toBe("private, no-cache");
+  });
+
+  test("a caller's Cache-Control is kept", () => {
+    resetEncodedBodies();
+    const response = encodedResponse(req(), {
+      version: "etag-v2",
+      contentType: "text/plain",
+      produce: () => body,
+      headers: { "Cache-Control": "no-store" },
+    });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  test("If-None-Match answers 304 with no body and the validator", async () => {
+    resetEncodedBodies();
+    let produced = 0;
+    const call = (headers: Record<string, string> = {}) =>
+      encodedResponse(req(headers), {
+        version: "etag-v3",
+        contentType: "application/json",
+        produce: () => {
+          produced += 1;
+          return body;
+        },
+      });
+    const first = call({ "accept-encoding": "zstd" });
+    const etag = first.headers.get("etag")!;
+    expect(first.status).toBe(200);
+
+    const second = call({ "accept-encoding": "zstd", "if-none-match": etag });
+    expect(second.status).toBe(304);
+    expect(second.headers.get("etag")).toBe(etag);
+    expect(second.headers.get("content-type")).toBeNull();
+    expect(second.headers.get("content-encoding")).toBeNull();
+    expect((await second.arrayBuffer()).byteLength).toBe(0);
+    // The body was produced once: the 304 is answered from the version cache.
+    expect(produced).toBe(1);
+  });
+
+  test("the weak, list and wildcard forms all match", () => {
+    resetEncodedBodies();
+    const etag = encodedResponse(req(), {
+      version: "etag-v4",
+      contentType: "text/plain",
+      produce: () => body,
+    }).headers.get("etag")!;
+    for (const header of [
+      `W/${etag}`,
+      `"nope", ${etag}`,
+      "*",
+      ` "other" , W/${etag} `,
+    ]) {
+      const response = encodedResponse(req({ "if-none-match": header }), {
+        version: "etag-v4",
+        contentType: "text/plain",
+        produce: () => body,
+      });
+      expect(response.status).toBe(304);
+    }
+    const miss = encodedResponse(req({ "if-none-match": '"different"' }), {
+      version: "etag-v4",
+      contentType: "text/plain",
+      produce: () => body,
+    });
+    expect(miss.status).toBe(200);
+  });
+
+  test("a changed body changes the ETag even under the same version", () => {
+    resetEncodedBodies();
+    const first = encodedResponse(req(), {
+      version: "same-version",
+      contentType: "text/plain",
+      produce: () => body,
+    });
+    // Reset simulates a new process; same version, different bytes must not reuse the old
+    // validator, otherwise a client would 304 against content it has never seen.
+    resetEncodedBodies();
+    const second = encodedResponse(req(), {
+      version: "same-version",
+      contentType: "text/plain",
+      produce: () => new TextEncoder().encode("u".repeat(4000)),
+    });
+    expect(second.headers.get("etag")).not.toBe(first.headers.get("etag"));
+  });
+
+  test("encodedJsonResponse carries the same validator behaviour", async () => {
+    const first = encodedJsonResponse(req(), { rows: [1, 2, 3] });
+    expect(first.headers.get("content-type")).toBe(
+      "application/json; charset=utf-8",
+    );
+    const etag = first.headers.get("etag")!;
+    expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
+
+    const conditional = encodedJsonResponse(req({ "if-none-match": etag }), {
+      rows: [1, 2, 3],
+    });
+    expect(conditional.status).toBe(304);
+    expect((await conditional.arrayBuffer()).byteLength).toBe(0);
+
+    const changed = encodedJsonResponse(req(), { rows: [1, 2, 3, 4] });
+    expect(changed.headers.get("etag")).not.toBe(etag);
+    expect(changed.status).toBe(200);
+  });
+
+  test("encodedJsonResponse compresses a large payload when asked", async () => {
+    const payload = { rows: Array.from({ length: 500 }, (_, i) => ({ i })) };
+    const plain = encodedJsonResponse(req(), payload);
+    const encoded = encodedJsonResponse(
+      req({ "accept-encoding": "gzip" }),
+      payload,
+    );
+    expect(encoded.headers.get("content-encoding")).toBe("gzip");
+    expect(encoded.headers.get("vary")).toBe("Accept-Encoding");
+    const wire = new Uint8Array(await encoded.arrayBuffer());
+    const identity = new Uint8Array(await plain.arrayBuffer());
+    expect(wire.byteLength).toBeLessThan(identity.byteLength);
+    expect(new TextDecoder().decode(Bun.gunzipSync(wire))).toBe(
+      new TextDecoder().decode(identity),
+    );
+  });
+});
+
+describe("cache opt-out", () => {
+  test("cache:false produces per request and keeps the validator honest", () => {
+    resetEncodedBodies();
+    let produced = 0;
+    const call = () =>
+      encodedResponse(new Request("http://localhost/x"), {
+        version: "volatile",
+        cache: false,
+        contentType: "text/plain",
+        produce: () => {
+          produced += 1;
+          return new TextEncoder().encode(`v${produced}`.padEnd(4000, "x"));
+        },
+      });
+    const first = call();
+    const second = call();
+    expect(produced).toBe(2);
+    expect(first.headers.get("etag")).not.toBe(second.headers.get("etag"));
   });
 });

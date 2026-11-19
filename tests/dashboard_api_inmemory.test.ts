@@ -777,3 +777,75 @@ describe("@sportsdesk-ops/api in-memory router (zero port bind)", () => {
     ).toBe(false);
   });
 });
+
+describe("conditional GET (ETag / If-None-Match)", () => {
+  const call = (
+    api: ReturnType<typeof createDashboardApi>,
+    path: string,
+    headers: Record<string, string> = {},
+  ) => api.fetch(new Request(`http://dashboard.local${path}`, { headers }));
+
+  test("an encoded route answers a matching validator with 304 and no body", async () => {
+    const api = createDashboardApi(buildMockDeps());
+    const first = await call(api, "/api/customers");
+    expect(first.status).toBe(200);
+    const etag = first.headers.get("etag");
+    expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
+
+    const second = await call(api, "/api/customers", {
+      "if-none-match": etag!,
+    });
+    expect(second.status).toBe(304);
+    expect(second.headers.get("etag")).toBe(etag);
+    expect((await second.arrayBuffer()).byteLength).toBe(0);
+  });
+
+  test("a JSON route gets the same validator, and a changed payload changes it", async () => {
+    let wagers = [{ ticketId: "W-1" }];
+    const api = createDashboardApi(
+      buildMockDeps({
+        getLiveWagersPayload: async () => ({ wagers, autoExecute: false }),
+      }),
+    );
+
+    const first = await call(api, "/api/wagers");
+    expect(first.status).toBe(200);
+    const etag = first.headers.get("etag")!;
+    expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
+    expect(first.headers.get("cache-control")).toBe("private, no-cache");
+
+    const revalidated = await call(api, "/api/wagers", {
+      "if-none-match": etag,
+    });
+    expect(revalidated.status).toBe(304);
+
+    wagers = [{ ticketId: "W-1" }, { ticketId: "W-2" }];
+    const changed = await call(api, "/api/wagers", {
+      "if-none-match": etag,
+    });
+    expect(changed.status).toBe(200);
+    expect(changed.headers.get("etag")).not.toBe(etag);
+    expect(
+      ((await changed.json()) as { wagers: unknown[] }).wagers,
+    ).toHaveLength(2);
+  });
+
+  test("a weak validator matches and an unrelated one does not", async () => {
+    const api = createDashboardApi(buildMockDeps());
+    const etag = (await call(api, "/api/ws/status")).headers.get("etag")!;
+    expect(
+      (
+        await call(api, "/api/ws/status", {
+          "if-none-match": `W/${etag}`,
+        })
+      ).status,
+    ).toBe(304);
+    expect(
+      (
+        await call(api, "/api/ws/status", {
+          "if-none-match": '"stale-validator"',
+        })
+      ).status,
+    ).toBe(200);
+  });
+});

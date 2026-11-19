@@ -213,6 +213,22 @@ describe("Dev Dashboard Endpoints (scripts/dev_dashboard.ts)", () => {
     });
   });
 
+  it("supports conditional GET on the polled payloads (ETag → 304)", async () => {
+    // `/api/customers` is versioned by the corpus file stamps, so its validator is stable.
+    // `/api/wagers` and `/api/rankings/all` carry per-call timestamps and honestly re-ETag.
+    const first = await fetch(`${baseUrl}/api/customers`);
+    expect(first.status).toBe(200);
+    const etag = first.headers.get("etag");
+    expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
+    expect(first.headers.get("cache-control")).toContain("no-cache");
+
+    const second = await fetch(`${baseUrl}/api/customers`, {
+      headers: { "if-none-match": etag! },
+    });
+    expect(second.status).toBe(304);
+    expect((await second.arrayBuffer()).byteLength).toBe(0);
+  });
+
   describe("Live Wagers Ingestion Feed", () => {
     it("dynamically loads and projects wagers on GET /api/wagers", async () => {
       const res = await fetch(`${baseUrl}/api/wagers`);

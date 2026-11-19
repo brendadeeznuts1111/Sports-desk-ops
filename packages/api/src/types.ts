@@ -71,6 +71,8 @@ export interface EncodedResponseSpec {
   readonly contentType: string;
   readonly produce: () => Uint8Array<ArrayBuffer>;
   readonly headers?: Record<string, string> | undefined;
+  /** `false` when the payload is assembled per request and must not occupy the body cache. */
+  readonly cache?: boolean | undefined;
 }
 
 export interface ShadowPricingQueryParams {

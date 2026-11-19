@@ -574,6 +574,7 @@ export function startDashboardServer(
           contentType: spec.contentType,
           produce: spec.produce,
           ...(spec.headers ? { headers: spec.headers } : {}),
+          ...(spec.cache === undefined ? {} : { cache: spec.cache }),
         }),
       getHealthPayload: () => healthTracker.sample(),
       loadDashboardMarkdown: () => markdownCache.load(),
