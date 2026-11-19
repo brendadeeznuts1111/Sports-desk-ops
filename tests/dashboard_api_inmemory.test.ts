@@ -914,3 +914,87 @@ describe("HEAD and Allow", () => {
     expect(getAck.headers.get("allow")).toBe("POST");
   });
 });
+
+describe("/api/config/tiers native formats", () => {
+  const CONFIG = {
+    tiers: { CRITICAL: { fg: "#fff", weight: 3 }, LOW: { fg: "#94a3b8" } },
+    order: ["CRITICAL", "LOW"],
+    live: true,
+  };
+  const api = createDashboardApi(
+    buildMockDeps({ getTiersConfig: async () => CONFIG }),
+  );
+  const call = (query = "", headers: Record<string, string> = {}) =>
+    api.fetch(
+      new Request(`http://dashboard.local/api/config/tiers${query}`, {
+        headers,
+      }),
+    );
+
+  test("defaults to JSON with a validator", async () => {
+    const response = await call();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "application/json; charset=utf-8",
+    );
+    expect(response.headers.get("etag")).toMatch(/^"[0-9a-f]{32}"$/);
+    expect(await response.json()).toEqual(CONFIG);
+  });
+
+  test("?format=yaml emits YAML that parses back to the config", async () => {
+    const response = await call("?format=yaml");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "application/yaml; charset=utf-8",
+    );
+    const body = await response.text();
+    expect(body.endsWith("\n")).toBe(true);
+    expect(Bun.YAML.parse(body)).toEqual(CONFIG);
+  });
+
+  test("?format=toml emits TOML that parses back to the config", async () => {
+    const response = await call("?format=toml");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "application/toml; charset=utf-8",
+    );
+    const body = await response.text();
+    expect(Bun.TOML.parse(body)).toEqual(CONFIG);
+  });
+
+  test("a conditional request revalidates each format", async () => {
+    for (const format of ["yaml", "toml"]) {
+      const first = await call(`?format=${format}`);
+      const etag = first.headers.get("etag")!;
+      const second = await call(`?format=${format}`, {
+        "if-none-match": etag,
+      });
+      expect(second.status).toBe(304);
+      expect((await second.arrayBuffer()).byteLength).toBe(0);
+    }
+  });
+
+  test("an unknown format is a 400 that names the choices", async () => {
+    const response = await call("?format=xml");
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as {
+      error: string;
+      allowed: string[];
+    };
+    expect(body.error).toContain('Unsupported format "xml"');
+    expect(body.allowed).toEqual(["json", "yaml", "toml"]);
+  });
+
+  test("a non-object config cannot pretend to be TOML", async () => {
+    const scalarApi = createDashboardApi(
+      buildMockDeps({ getTiersConfig: async () => 42 }),
+    );
+    const response = await scalarApi.fetch(
+      new Request("http://dashboard.local/api/config/tiers?format=toml"),
+    );
+    expect(response.status).toBe(500);
+    expect(((await response.json()) as { error: string }).error).toContain(
+      "not an object",
+    );
+  });
+});

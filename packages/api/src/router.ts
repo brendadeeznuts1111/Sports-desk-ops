@@ -59,6 +59,18 @@ function allowedMethods(
   return ALLOW_ORDER.filter((method) => present.has(method));
 }
 
+/** Machine formats `/api/config/tiers` can emit, all native to the runtime. */
+const CONFIG_FORMATS = ["json", "yaml", "toml"] as const;
+type ConfigFormat = (typeof CONFIG_FORMATS)[number];
+
+/** `null` for anything not in the list; the route answers 400 and names the choices. */
+function resolveConfigFormat(raw: string | null): ConfigFormat | null {
+  const value = (raw ?? "json").trim().toLowerCase();
+  return (CONFIG_FORMATS as readonly string[]).includes(value)
+    ? (value as ConfigFormat)
+    : null;
+}
+
 /** RFC 9110 §15.5.6: a 405 must say what the resource does allow. */
 function methodNotAllowed(
   handlers: SimpleMethodHandlers | IdParamMethodHandlers,
@@ -244,6 +256,24 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
       contentType: "application/json; charset=utf-8",
       produce: () => bytes,
       // Assembled per request: keep the cache for the versioned artifacts instead.
+      cache: false,
+    });
+  };
+
+  /**
+   * A non-JSON body through the same encoder: content-addressed validator, negotiated
+   * compression, `Cache-Control: private, no-cache`.
+   */
+  const text = (
+    req: Request,
+    body: string,
+    contentType: string,
+  ): Response | Promise<Response> => {
+    const bytes = textEncoder.encode(body);
+    return encodeResponse(req, {
+      version: `text|${etagForBytes(bytes).slice(1, -1)}`,
+      contentType,
+      produce: () => bytes,
       cache: false,
     });
   };
@@ -544,8 +574,41 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
       GET: async (req: Request): Promise<Response> => {
         const denied = await enforceAuth(req);
         if (denied) return denied;
+        const url = new URL(req.url);
+        const rawFormat = url.searchParams.get("format");
+        const format = resolveConfigFormat(rawFormat);
+        if (format === null) {
+          return Response.json(
+            {
+              error: `Unsupported format "${rawFormat ?? ""}". Use ${CONFIG_FORMATS.join(", ")}.`,
+              allowed: CONFIG_FORMATS,
+            },
+            { status: 400 },
+          );
+        }
         try {
-          return Response.json(await deps.getTiersConfig());
+          const config = await deps.getTiersConfig();
+          if (format === "json") return await json(req, config);
+          if (typeof config !== "object" || config === null) {
+            return Response.json(
+              {
+                error:
+                  "Tiers config is not an object; it cannot be emitted as TOML/YAML.",
+              },
+              { status: 500 },
+            );
+          }
+          const body =
+            format === "yaml"
+              ? Bun.YAML.stringify(config)
+              : Bun.TOML.stringify(config);
+          return await text(
+            req,
+            `${body}\n`,
+            format === "yaml"
+              ? "application/yaml; charset=utf-8"
+              : "application/toml; charset=utf-8",
+          );
         } catch (err) {
           return Response.json(
             { error: err instanceof Error ? err.message : String(err) },
