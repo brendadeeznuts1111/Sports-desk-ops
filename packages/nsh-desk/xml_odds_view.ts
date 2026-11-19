@@ -290,6 +290,13 @@ export interface XmlOddsSoaProvenance {
   readonly generatedAt: string;
   readonly watermarkCursor: string;
   readonly rowCount: number;
+  /** The daemon reused a read inside its TTL window (or a manifest 304). */
+  readonly cached: boolean;
+  /**
+   * The daemon's refresh failed and these rows are the last good snapshot. The rows are real;
+   * the panel says so rather than presenting them as current.
+   */
+  readonly stale: boolean;
 }
 
 export type XmlOddsSoaLoadResult =
@@ -392,6 +399,8 @@ export async function loadXmlOddsSoaFeed(
       generatedAt: parsed.generatedAt,
       watermarkCursor: parsed.watermarkCursor,
       rowCount: parsed.rowCount,
+      cached: parsed.cached ?? false,
+      stale: parsed.stale ?? false,
     },
   };
 }

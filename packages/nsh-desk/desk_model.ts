@@ -3577,6 +3577,16 @@ export interface ParsedXmlOddsSoaPayload {
   readonly watermarkCursor: string;
   readonly generatedAt: string;
   readonly basis: string;
+  /**
+   * True when the daemon answered from its TTL window (or a manifest 304) instead of reading
+   * R2. Optional on the wire: an older daemon sends no flag, which reads as a fresh read.
+   */
+  readonly cached?: boolean;
+  /**
+   * True when a refresh failed and the daemon served the last good snapshot. Optional for the
+   * same reason; the rows are real, they are just older than the poll that asked for them.
+   */
+  readonly stale?: boolean;
 }
 
 /** The route's parallel arrays, checked against `rowCount` before any column is built. */
@@ -3743,6 +3753,22 @@ export function parseXmlOddsSoaPayload(raw: unknown): ParsedXmlOddsSoaPayload {
     );
   }
 
+  // Cache flags are optional and additive: `cached` says this answer reused a recent read,
+  // `stale` says the refresh failed and the rows are the last good ones. A body without them
+  // (a daemon before the cache) reads as a fresh read, which is what it was.
+  const cacheFlag = (key: "cached" | "stale"): boolean => {
+    const value = raw[key];
+    if (value === undefined) return false;
+    if (typeof value !== "boolean") {
+      throw new TypeError(
+        `[nsh-desk] /api/xml-odds/soa ${key} is not a boolean`,
+      );
+    }
+    return value;
+  };
+  const cached = cacheFlag("cached");
+  const stale = cacheFlag("stale");
+
   return {
     rowCount,
     eventId32Col,
@@ -3753,6 +3779,8 @@ export function parseXmlOddsSoaPayload(raw: unknown): ParsedXmlOddsSoaPayload {
     watermarkCursor,
     generatedAt,
     basis,
+    cached,
+    stale,
   };
 }
 

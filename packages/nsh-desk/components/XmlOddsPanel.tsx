@@ -55,8 +55,8 @@ export function XmlOddsPanel(props: { store?: DeskStore } = {}): JSX.Element {
   const provenanceLine = (): string => {
     const snap = store.xmlOddsSnap();
     if (snap.status !== "ready") return "";
-    const { basis, generatedAt, watermarkCursor, rowCount } = snap.data;
-    const base = `${basis} · ${generatedAt} · watermark ${watermarkCursor} · ${rowCount} ${rowCount === 1 ? "row" : "rows"}`;
+    const { basis, generatedAt, watermarkCursor, rowCount, stale } = snap.data;
+    const base = `${basis} · ${generatedAt} · watermark ${watermarkCursor} · ${rowCount} ${rowCount === 1 ? "row" : "rows"}${stale ? " · stale (last good snapshot; refresh failed)" : ""}`;
     const unknown = xmlOddsUnknownLineCount(store.xmlOddsFeed());
     if (unknown === 0) return base;
     // The row-level phrase: an unknown line is not rendered as a number anywhere.

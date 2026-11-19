@@ -3875,8 +3875,18 @@ export interface XmlOddsSoaPayload {
 }
 
 export type XmlOddsSoaOutcome =
-  | { readonly available: true; readonly payload: XmlOddsSoaPayload }
-  | { readonly available: false; readonly reason: string };
+  | {
+      readonly available: true;
+      readonly payload: XmlOddsSoaPayload;
+      /** Manifest ETag, for a later `If-None-Match` revalidation. */
+      readonly etag?: string | null;
+    }
+  | {
+      readonly available: false;
+      readonly reason: string;
+      /** The manifest answered 304: the caller's cached snapshot is still current. */
+      readonly notModified?: boolean;
+    };
 
 export interface XmlOddsSoaHttpResult {
   readonly status: 200 | 502;
@@ -3886,7 +3896,11 @@ export interface XmlOddsSoaHttpResult {
 /** Injectable for tests (a mocked R2 read); the default is Bun's `fetch`. */
 export type XmlOddsSoaFetcher = (
   url: string,
-  init: { readonly method: "GET"; readonly signal: AbortSignal },
+  init: {
+    readonly method: "GET";
+    readonly signal: AbortSignal;
+    readonly headers?: Readonly<Record<string, string>>;
+  },
 ) => Promise<Response>;
 
 type XmlOddsComboKeyPacker = (
@@ -3941,19 +3955,29 @@ async function fetchXmlOddsSoaText(
   label: string,
   timeoutMs: number,
   maxBytes: number,
+  headers: Readonly<Record<string, string>> = {},
 ): Promise<
-  | { readonly ok: true; readonly text: string }
-  | { readonly ok: false; readonly reason: string }
+  | { readonly ok: true; readonly text: string; readonly etag: string | null }
+  | {
+      readonly ok: false;
+      readonly reason: string;
+      readonly notModified?: boolean;
+    }
 > {
   let response: Response;
   try {
     response = await fetchImpl(url, {
       method: "GET",
       signal: AbortSignal.timeout(timeoutMs),
+      ...(Object.keys(headers).length === 0 ? {} : { headers }),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, reason: `R2 ${label} fetch failed: ${message}` };
+  }
+  // Bun's fetch does not cache; a conditional GET is the caller's decision. A 304 has no body.
+  if (response.status === 304) {
+    return { ok: false, reason: `R2 ${label} not modified`, notModified: true };
   }
   if (!response.ok) {
     return {
@@ -3985,7 +4009,11 @@ async function fetchXmlOddsSoaText(
     };
   }
   try {
-    return { ok: true, text: new TextDecoder().decode(bytes) };
+    return {
+      ok: true,
+      text: new TextDecoder().decode(bytes),
+      etag: response.headers.get("etag"),
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, reason: `R2 ${label} body decode failed: ${message}` };
@@ -4194,6 +4222,8 @@ export async function readXmlOddsSoaFromR2(
     readonly fetchImpl?: XmlOddsSoaFetcher;
     readonly publicBase?: string;
     readonly timeoutMs?: number;
+    /** Conditional read: a 304 answers `notModified` instead of parsing the chunk. */
+    readonly ifNoneMatch?: string | null;
   } = {},
 ): Promise<XmlOddsSoaOutcome> {
   const [
@@ -4217,8 +4247,19 @@ export async function readXmlOddsSoaFromR2(
     `manifest ${manifestKey}`,
     timeoutMs,
     MAX_XML_ODDS_MANIFEST_BYTES,
+    options.ifNoneMatch ? { "If-None-Match": options.ifNoneMatch } : {},
   );
-  if (!manifestText.ok) return xmlOddsSoaUnavailable(manifestText.reason);
+  if (!manifestText.ok) {
+    if (manifestText.notModified === true) {
+      return {
+        available: false,
+        reason: manifestText.reason,
+        notModified: true,
+      };
+    }
+    return xmlOddsSoaUnavailable(manifestText.reason);
+  }
+  const manifestEtag = manifestText.etag;
 
   let manifest: unknown;
   try {
@@ -4314,8 +4355,122 @@ export async function readXmlOddsSoaFromR2(
       generatedAt: new Date(generatedAtMs).toISOString(),
       basis: XML_ODDS_SOA_BASIS,
     },
+    etag: manifestEtag,
   };
 }
+
+/* -------------------------------------------------------------------------- */
+/* XML odds SoA snapshot cache                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One read of the snapshot plus whether it came from the cache.
+ *
+ * `cached` means the TTL window was still open (or the manifest answered 304); `stale` means the
+ * refresh failed and the previous snapshot is being served for the stale-if-error window.
+ */
+export interface XmlOddsSoaSnapshot {
+  readonly outcome: XmlOddsSoaOutcome;
+  readonly cached: boolean;
+  readonly stale: boolean;
+}
+
+export interface XmlOddsSoaSourceOptions {
+  readonly fetchImpl?: XmlOddsSoaFetcher | undefined;
+  readonly publicBase?: string | undefined;
+  readonly timeoutMs?: number | undefined;
+  /** Reuse window for one successful read; `0` disables the cache. Default 30 s. */
+  readonly ttlMs?: number | undefined;
+  /** Serve the last good snapshot this long after a failed refresh. Default 5 min. */
+  readonly staleIfErrorMs?: number | undefined;
+  /** Injectable clock, for tests. */
+  readonly now?: (() => number) | undefined;
+}
+
+/** Default reuse window: well under the panel's 60 s poll, long enough to dedupe clients. */
+export const XML_ODDS_SOA_TTL_MS = 30_000;
+/** Default stale-if-error window: an R2 blip should not empty a populated panel. */
+export const XML_ODDS_SOA_STALE_IF_ERROR_MS = 5 * 60_000;
+
+/**
+ * TTL-cached, single-flight reader for the published snapshot.
+ *
+ * Bun's `fetch` implements no HTTP cache, so the pieces are composed here: a conditional
+ * `If-None-Match` on the manifest (a 304 skips the chunk entirely), one shared promise while a
+ * refresh is in flight, and the previous snapshot served for a bounded window when a refresh
+ * fails. The pattern matches `lib/bun_image_asset_snapshot.ts`; the difference is the validator
+ * comes from R2 rather than a body hash.
+ */
+export class XmlOddsSoaSource {
+  readonly #options: XmlOddsSoaSourceOptions;
+  #cached: {
+    readonly outcome: XmlOddsSoaOutcome;
+    readonly etag: string | null;
+    readonly atMs: number;
+  } | null = null;
+  #inFlight: Promise<XmlOddsSoaSnapshot> | null = null;
+
+  constructor(options: XmlOddsSoaSourceOptions = {}) {
+    this.#options = options;
+  }
+
+  read(): Promise<XmlOddsSoaSnapshot> {
+    const now = (this.#options.now ?? Date.now)();
+    const ttl = this.#options.ttlMs ?? XML_ODDS_SOA_TTL_MS;
+    if (this.#cached !== null && ttl > 0 && now - this.#cached.atMs < ttl) {
+      return Promise.resolve({
+        outcome: this.#cached.outcome,
+        cached: true,
+        stale: false,
+      });
+    }
+    // Single-flight: concurrent polls share one upstream read.
+    if (this.#inFlight !== null) return this.#inFlight;
+    const refresh = this.#refresh(now).finally(() => {
+      this.#inFlight = null;
+    });
+    this.#inFlight = refresh;
+    return refresh;
+  }
+
+  async #refresh(now: number): Promise<XmlOddsSoaSnapshot> {
+    const etag = this.#cached?.etag ?? null;
+    const outcome = await readXmlOddsSoaFromR2({
+      ...(this.#options.fetchImpl === undefined
+        ? {}
+        : { fetchImpl: this.#options.fetchImpl }),
+      ...(this.#options.publicBase === undefined
+        ? {}
+        : { publicBase: this.#options.publicBase }),
+      ...(this.#options.timeoutMs === undefined
+        ? {}
+        : { timeoutMs: this.#options.timeoutMs }),
+      ...(etag === null ? {} : { ifNoneMatch: etag }),
+    });
+
+    if (outcome.available) {
+      this.#cached = { outcome, etag: outcome.etag ?? null, atMs: now };
+      return { outcome, cached: false, stale: false };
+    }
+    if (outcome.notModified === true && this.#cached !== null) {
+      this.#cached = { ...this.#cached, atMs: now };
+      return { outcome: this.#cached.outcome, cached: true, stale: false };
+    }
+    const staleWindow =
+      this.#options.staleIfErrorMs ?? XML_ODDS_SOA_STALE_IF_ERROR_MS;
+    if (
+      this.#cached !== null &&
+      staleWindow > 0 &&
+      now - this.#cached.atMs <= staleWindow
+    ) {
+      return { outcome: this.#cached.outcome, cached: true, stale: true };
+    }
+    return { outcome, cached: false, stale: false };
+  }
+}
+
+/** The daemon's single source, so every request shares one cache and one in-flight read. */
+const XML_ODDS_SOA_SOURCE = new XmlOddsSoaSource();
 
 /** The HTTP mapping: an unavailable artifact is 502 with its reason, never an empty 200. */
 export function xmlOddsSoaHttpResult(
@@ -4357,6 +4512,10 @@ export async function handleXmlOddsSoaRequest(
     readonly fetchImpl?: XmlOddsSoaFetcher;
     readonly publicBase?: string;
     readonly timeoutMs?: number;
+    /** Reuse window; `0` reads upstream every time. Default 30 s. */
+    readonly cacheTtlMs?: number;
+    /** Inject a source (tests); otherwise the daemon shares one. */
+    readonly source?: XmlOddsSoaSource;
   } = {},
 ): Promise<Response> {
   const headers: Record<string, string> = { "Cache-Control": "no-store" };
@@ -4376,8 +4535,34 @@ export async function handleXmlOddsSoaRequest(
       { status: 405, headers: { ...headers, Allow: "GET, OPTIONS" } },
     );
   }
-  const result = xmlOddsSoaHttpResult(await readXmlOddsSoaFromR2(options));
-  return Response.json(result.body, {
+  // A per-call `fetchImpl`/`publicBase` means a test or a one-off probe: never share the
+  // daemon's cache across differing upstreams.
+  const source =
+    options.source ??
+    (options.fetchImpl !== undefined || options.publicBase !== undefined
+      ? new XmlOddsSoaSource({
+          ...(options.fetchImpl === undefined
+            ? {}
+            : { fetchImpl: options.fetchImpl }),
+          ...(options.publicBase === undefined
+            ? {}
+            : { publicBase: options.publicBase }),
+          ...(options.timeoutMs === undefined
+            ? {}
+            : { timeoutMs: options.timeoutMs }),
+          ttlMs: options.cacheTtlMs ?? 0,
+        })
+      : XML_ODDS_SOA_SOURCE);
+  const snapshot = await source.read();
+  const result = xmlOddsSoaHttpResult(snapshot.outcome);
+  // `cached`/`stale` describe the read, not the artifact; a client can tell a fresh
+  // upstream answer from a reused or stale-if-error one without changing the status code.
+  const body = {
+    ...result.body,
+    cached: snapshot.cached,
+    stale: snapshot.stale,
+  };
+  return Response.json(body, {
     status: result.status,
     headers,
   });

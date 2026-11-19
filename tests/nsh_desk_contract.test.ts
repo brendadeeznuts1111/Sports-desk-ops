@@ -921,11 +921,14 @@ describe("packages/nsh-desk model and capability contracts", () => {
       expect(loaded.feed.lineHundredthsI32Col).toBeInstanceOf(Int32Array);
       expect(Array.from(loaded.feed.eventId32Col)).toEqual([11, 12]);
       expect(loaded.feed.count).toBe(2);
+      // A body without cache flags (a daemon before the cache) reads as a fresh read.
       expect(loaded.provenance).toEqual({
         basis: "r2-xml-ingest",
         generatedAt: "2023-11-14T22:13:20.123Z",
         watermarkCursor: "wm-9",
         rowCount: 2,
+        cached: false,
+        stale: false,
       });
       // A route body without lineUnknown (pre-tri-state producer) is an all-known snapshot.
       expect(loaded.feed.lineUnknownCount).toBe(0);

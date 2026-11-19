@@ -11,6 +11,7 @@ import {
   formatLineHundredths,
   hydrateCompactXmlDocIntoArena,
   isXmlOddsLineUnknown,
+  loadXmlOddsSoaFeed,
   readXmlOddsRow,
   xmlOddsFeedCount,
   xmlOddsFeedSummary,
@@ -257,5 +258,63 @@ describe("xml odds SoA read model", () => {
       line: "3.50",
     });
     expect(xmlOddsRowsHeader(knownOnly)).toBe("2 rows");
+  });
+});
+
+describe("xml odds SoA provenance cache flags", () => {
+  const body = (flags: Record<string, unknown> = {}) => ({
+    success: true,
+    rowCount: 2,
+    eventId32: [11, 12],
+    comboKey15: [1101, 2050],
+    lineHundredths: [350, -110],
+    watermarkCursor: "wm-9",
+    generatedAt: "2023-11-14T22:13:20.123Z",
+    basis: "r2-xml-ingest",
+    ...flags,
+  });
+
+  const load = async (flags: Record<string, unknown> = {}) =>
+    loadXmlOddsSoaFeed("http://127.0.0.1:4020", async () =>
+      Response.json(body(flags)),
+    );
+
+  test("a cached read is stated, and does not change the rows", async () => {
+    const loaded = await load({ cached: true, stale: false });
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.provenance.cached).toBe(true);
+    expect(loaded.provenance.stale).toBe(false);
+    expect(Array.from(loaded.feed.eventId32Col)).toEqual([11, 12]);
+  });
+
+  test("a stale read is stated, and the rows are the last good ones", async () => {
+    const loaded = await load({ cached: true, stale: true });
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.provenance.stale).toBe(true);
+    expect(loaded.feed.count).toBe(2);
+  });
+
+  test("an absent flag reads as a fresh, non-stale read", async () => {
+    const loaded = await load();
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.provenance).toEqual({
+      basis: "r2-xml-ingest",
+      generatedAt: "2023-11-14T22:13:20.123Z",
+      watermarkCursor: "wm-9",
+      rowCount: 2,
+      cached: false,
+      stale: false,
+    });
+  });
+
+  test("a non-boolean flag is a rejected payload, not a silent coercion", async () => {
+    const loaded = await load({ stale: "yes" });
+    expect(loaded.ok).toBe(false);
+    if (loaded.ok) return;
+    expect(loaded.code).toBe("invalid_payload");
+    expect(loaded.reason).toContain("stale is not a boolean");
   });
 });
