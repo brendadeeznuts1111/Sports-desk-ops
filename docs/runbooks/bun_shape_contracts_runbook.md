@@ -34,7 +34,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/argv)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Here:** `scripts/audit_bun_surface.ts`, `scripts/generate_customer_decision_rankings.ts`
-- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_eval_patterns.test.ts`, `test:tests/fetch_proxy_isolation.test.ts`, `test:tests/worker_options_contract.test.ts`
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_eval_patterns.test.ts`, `test:tests/bun_lint_cli_contract.test.ts`, `test:tests/fetch_proxy_isolation.test.ts`
 
 #### Bun.build
 

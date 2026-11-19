@@ -26,8 +26,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "test:tests/bun_capabilities.test.ts",
       "test:tests/bun_eval_patterns.test.ts",
+      "test:tests/bun_lint_cli_contract.test.ts",
       "test:tests/fetch_proxy_isolation.test.ts",
-      "test:tests/worker_options_contract.test.ts",
     ],
   },
   {

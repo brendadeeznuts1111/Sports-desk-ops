@@ -346,10 +346,14 @@ export function CustomersTabPanel({
               isInteractive &&
               card.filterTier !== "ALL" &&
               filterTier === card.filterTier;
+            const { border: _ignoredBorder, ...kpiCardBase } = styles.kpiCard;
+            const sideBorder = `1px solid ${isActiveFilter ? accent : "#1e293b"}`;
             const cardStyle: React.CSSProperties = {
-              ...styles.kpiCard,
+              ...kpiCardBase,
+              borderTop: sideBorder,
+              borderRight: sideBorder,
+              borderBottom: sideBorder,
               borderLeft: `3px solid ${accent}`,
-              borderColor: isActiveFilter ? accent : "#1e293b",
               textAlign: "left",
               width: "100%",
               cursor: isInteractive ? "pointer" : "default",
@@ -505,7 +509,7 @@ export function CustomersTabPanel({
                         : avgClv < 0
                           ? "#f87171"
                           : "#e2e8f0",
-                  borderColor: "rgba(56, 189, 248, 0.25)",
+                  border: "1px solid rgba(56, 189, 248, 0.25)",
                 }}
                 title="Mean measured book/backtest CLV (bps) across visible cohort rows"
               >
@@ -1415,7 +1419,7 @@ export function CustomersTabPanel({
                       style={{
                         ...styles.detailCard,
                         marginBottom: "12px",
-                        borderColor: "rgba(56, 189, 248, 0.28)",
+                        border: "1px solid rgba(56, 189, 248, 0.28)",
                       }}
                     >
                       <h4 style={styles.cardHeader}>
@@ -1428,7 +1432,14 @@ export function CustomersTabPanel({
                           Evaluating CLV &amp; Bayesian skill rating…
                         </div>
                       ) : selectedCustomerRating ? (
-                        <div style={styles.detailGrid}>
+                        <div
+                          style={{
+                            ...styles.detailGrid,
+                            gridTemplateColumns:
+                              "repeat(auto-fit, minmax(220px, 1fr))",
+                            overflowWrap: "anywhere",
+                          }}
+                        >
                           <div>
                             <div>
                               Rating Score:{" "}

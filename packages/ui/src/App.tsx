@@ -401,7 +401,9 @@ export function App(): React.ReactElement {
   const [rankingsError, setRankingsError] = useState<string | null>(null);
 
   const cohortProfileRows = useMemo<readonly ShowcaseCustomer[]>(() => {
-    if (cohortsReport === null) return [];
+    if (cohortsReport === null) {
+      return onDemandCustomer ? [onDemandCustomer] : [];
+    }
     const base = mergeProfileRows(
       selectProfileRows(cohortsReport),
       backtestRowsToProfiles(cohortsReport.backtestAll),
@@ -731,6 +733,15 @@ export function App(): React.ReactElement {
   };
 
   useEffect(() => {
+    const deepLinkCustomer = resolveInitialUrlParam("customer");
+    if (deepLinkCustomer) {
+      const upper = deepLinkCustomer.toUpperCase();
+      if (!attemptedOnDemandRef.current.has(upper)) {
+        setSearchQuery(deepLinkCustomer);
+        setCustomerLookupNotice(upper);
+        fetchCustomerOnDemand(upper);
+      }
+    }
     void fetchTiersConfig();
     void fetchLiveWagers();
     void fetchCustomersCohorts();
@@ -1459,6 +1470,15 @@ export function App(): React.ReactElement {
       setSelectedCustomerRatingLoading(false);
       return;
     }
+    const normRatingKey = (s: string) =>
+      s.trim().toUpperCase().replace(/_\d+$/, "");
+    if (
+      selectedCustomerRating &&
+      normRatingKey(selectedCustomerRating.customerId) === normRatingKey(cid)
+    ) {
+      setSelectedCustomerRatingLoading(false);
+      return;
+    }
     let cancelled = false;
     setSelectedCustomerRatingLoading(true);
     void trackedFetch(
@@ -1482,6 +1502,41 @@ export function App(): React.ReactElement {
     };
   }, [selectedCustomer?.id]);
 
+  const attemptedOnDemandRef = useRef<Set<string>>(new Set());
+
+  const fetchCustomerOnDemand = (upper: string) => {
+    attemptedOnDemandRef.current.add(upper);
+    const q = encodeURIComponent(upper);
+    setSelectedCustomerRatingLoading(true);
+    void Promise.all([
+      trackedFetch(dashboardApiUrl(`/api/customer/profile?id=${q}`))
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      trackedFetch(dashboardApiUrl(`/api/customer/rating?id=${q}`))
+        .then(async (r) =>
+          r.ok ? normalizeCustomerRatingResponse(await r.json()) : null,
+        )
+        .catch(() => null),
+    ])
+      .then(([profRaw, ratingParsed]) => {
+        if (!profRaw && !ratingParsed) return;
+        const hydrated = profileApiPayloadToShowcase(
+          profRaw ?? { profile: { customerId: upper } },
+          ratingParsed,
+        );
+        if (hydrated) {
+          setOnDemandCustomer(hydrated);
+          setSelectedCustomer(hydrated);
+          setSelectedCustomerRating(ratingParsed);
+          setCustomerLookupNotice(null);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        setSelectedCustomerRatingLoading(false);
+      });
+  };
+
   const handleSelectCustomerById = (customerId: string) => {
     const raw = customerId.trim();
     if (raw === "") return;
@@ -1494,34 +1549,7 @@ export function App(): React.ReactElement {
     setActiveTab("customers");
 
     if (!found) {
-      const q = encodeURIComponent(upper);
-      setSelectedCustomerRatingLoading(true);
-      void Promise.all([
-        trackedFetch(dashboardApiUrl(`/api/customer/profile?id=${q}`))
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
-        trackedFetch(dashboardApiUrl(`/api/customer/rating?id=${q}`))
-          .then(async (r) =>
-            r.ok ? normalizeCustomerRatingResponse(await r.json()) : null,
-          )
-          .catch(() => null),
-      ])
-        .then(([profRaw, ratingParsed]) => {
-          if (!profRaw && !ratingParsed) return;
-          const hydrated = profileApiPayloadToShowcase(
-            profRaw ?? { profile: { customerId: upper } },
-            ratingParsed,
-          );
-          if (hydrated) {
-            setOnDemandCustomer(hydrated);
-            setSelectedCustomer(hydrated);
-            setSelectedCustomerRating(ratingParsed);
-            setCustomerLookupNotice(null);
-          }
-        })
-        .finally(() => {
-          setSelectedCustomerRatingLoading(false);
-        });
+      fetchCustomerOnDemand(upper);
     }
   };
 
@@ -1530,9 +1558,19 @@ export function App(): React.ReactElement {
     if (!fromUrl) return;
     const upper = fromUrl.toUpperCase();
     const found = profileCustomers.find((c) => c.id.toUpperCase() === upper);
-    setSelectedCustomer(found ?? null);
+    if (found) {
+      setSelectedCustomer(found);
+      setCustomerLookupNotice(null);
+    } else if (
+      selectedCustomer?.id.toUpperCase() !== upper &&
+      onDemandCustomer?.id.toUpperCase() !== upper
+    ) {
+      setCustomerLookupNotice(upper);
+      if (!attemptedOnDemandRef.current.has(upper)) {
+        fetchCustomerOnDemand(upper);
+      }
+    }
     setSearchQuery(fromUrl);
-    setCustomerLookupNotice(found ? null : upper);
   }, [profileCustomers]);
 
   const previousTabRef = useRef(activeTab);
