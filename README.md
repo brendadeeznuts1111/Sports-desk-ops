@@ -6,6 +6,29 @@ Repository: [bw496915-cmyk/Sports-desk-ops](https://github.com/bw496915-cmyk/Spo
 
 **Engineering:** [Signal honesty ADR](docs/architecture/signal-honesty.md) — errors must name cause, missing ≠ zero, cron/CLI surfaces must match reality (see also [AGENTS.md](AGENTS.md)).
 
+## Contents
+
+- [Day-1 Operator Onboarding & 60-Second Triage Guide](#-day-1-operator-onboarding--60-second-triage-guide)
+- [Schema registry & prod dump parity](#schema-registry--prod-dump-parity)
+- [Quick Start](#quick-start)
+- [Pinned Bun compatibility tests](#pinned-bun-compatibility-tests)
+- [Runtime Architecture & Server Policies](#runtime-architecture--server-policies)
+  - [Server Port & Hostname Binding Policy](#server-port--hostname-binding-policy)
+  - [Static File Serving & Zero-Copy Policy](#static-file-serving--zero-copy-policy)
+  - [Outbound Fetch Hardening & Network Isolation](#outbound-fetch-hardening--network-isolation)
+  - [Environment Variable Precedence & Type Merging](#environment-variable-precedence--type-merging)
+  - [Security Headers & Telegram Mini App Embedding](#security-headers--telegram-mini-app-embedding)
+  - [Telegram Bot Seeding](#telegram-bot-seeding)
+- [Performance Telemetry & Micro-Benchmarks](#performance-telemetry--micro-benchmarks)
+- [Plane 3 — append-only ingestion JSONL replay](#plane-3--append-only-ingestion-jsonl-replay)
+- [Qwen3.5-4B (Layers 18–28) Token Architecture & Single Source of Truth](#qwen35-4b-layers-1828-token-architecture--single-source-of-truth)
+  - [Decoupled Discriminated Union Typing](#decoupled-discriminated-union-typing)
+- [Verification & CI Quality Gates](#verification--ci-quality-gates)
+  - [Test Suite Classification](#test-suite-classification)
+- [Project Structure](#project-structure)
+- [Documentation Runbooks](#documentation-runbooks)
+  - [Incidents](#incidents)
+
 ## 🚀 Day-1 Operator Onboarding & 60-Second Triage Guide
 
 If you are opening this repository for the first time or starting a desk shift, read the **[Operator Quickstart, Data Cleaning Pipeline & 10-Mode Action Runbook](docs/OPERATOR_QUICKSTART_AND_10_MODE_RUNBOOK.md)** and open the **[Live 6-Tab Surveillance, ROT Bet-Ticker & 10-Mode Forensic Portal (`graph.html`)](https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/graph.html)**.
