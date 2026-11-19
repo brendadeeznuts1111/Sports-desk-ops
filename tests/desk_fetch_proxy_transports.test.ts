@@ -6,6 +6,7 @@ import {
   DeskNetworkError,
   DeskTimeoutError,
   resolveDeskTimeoutMs,
+  R2ProxyConfigError,
   R2ProxyUrlError,
 } from "../lib/desk_fetch_proxy.ts";
 import { fetchPortalArtifactBytes } from "../lib/f402_portal_bundle_fetch.ts";
@@ -231,6 +232,82 @@ describe("explicit proxy is validated", () => {
         headers: { "X-Proxy-Region": "desk" },
       });
     }
+  });
+});
+
+
+describe("proxy configuration failures preserve their error identity", () => {
+  test("manager, portal, and both replay transports reject before network I/O", async () => {
+    const invalidProxy = {
+      url: proxy.url,
+      headers: { "X-Desk-Region": "do-not-echo\r\nX-Injected: 1" },
+    };
+    let calls = 0;
+    const fetchImpl = async (): Promise<Response> => {
+      calls += 1;
+      return Response.json({ unexpected: true });
+    };
+    const assertConfigError = async (
+      op: () => Promise<unknown>,
+    ): Promise<void> => {
+      let error: unknown;
+      try {
+        await op();
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(R2ProxyConfigError);
+      const config = error as R2ProxyConfigError;
+      expect(config).toMatchObject({
+        name: "R2ProxyConfigError",
+        code: "ERR_R2_PROXY_CONFIG",
+        reason: "header-value-crlf",
+      });
+      expect(config.message).not.toContain("do-not-echo");
+      expect(config.cause).toBeUndefined();
+    };
+
+    await assertConfigError(() =>
+      fetchManagerJson(`${originBase}/json`, "GSID=x", {
+        proxy: invalidProxy,
+        fetchImpl,
+      }),
+    );
+    await assertConfigError(() =>
+      postManagerJson(`${originBase}/json`, "GSID=x", {}, {
+        proxy: invalidProxy,
+        fetchImpl,
+      }),
+    );
+    await assertConfigError(() =>
+      fetchLiveVersionJs(originBase, "1.0.280", {
+        proxy: invalidProxy,
+        fetchImpl,
+      }),
+    );
+    await assertConfigError(() =>
+      fetchPortalArtifactBytes(
+        `${originBase}/app/setting/version.js`,
+        { proxy: invalidProxy, fetchImpl },
+      ),
+    );
+
+    const session = await replay({ proxy: invalidProxy, fetchImpl });
+    try {
+      await assertConfigError(() => session.fetch(`${originBase}/x`, {}));
+    } finally {
+      await session.close();
+    }
+    const local = await replay({
+      proxy: invalidProxy,
+      proxyUrl: originBase,
+    });
+    try {
+      await assertConfigError(() => local.fetch(`${originBase}/x`, {}));
+    } finally {
+      await local.close();
+    }
+    expect(calls).toBe(0);
   });
 });
 
