@@ -72,3 +72,29 @@ Official references:
 - [`bun:jsc.heapStats` semantics](https://bun.sh/reference/bun/jsc/heapStats)
 - [Bun subprocess and signal lifecycle](https://bun.com/docs/runtime/child-process)
 - [`BunFetchRequestInit.timeout` milliseconds](https://bun.com/reference/globals/BunFetchRequestInit/timeout)
+
+## Bun fetch protocol contracts
+
+Run the focused client and routing checks together on the pinned runtime. The HTTPS test uses OpenSSL to generate a temporary, one-day certificate. S3 tests supply fixture credentials and an explicit IPv4 loopback endpoint.
+
+```sh
+bun --revision
+bun --no-env-file test tests/bun_fetch_protocols.test.ts tests/routes_vs_fetch_2proc_bench.test.ts
+```
+
+| Protocol | Operation | Assertion on Bun 1.4.4 (Linux x64) |
+| --- | --- | --- |
+| HTTP/1.1 · TCP/IPv4 | Route GET | The routing suite verifies request traces and all 16 parameter/error cases for both handlers. |
+| HTTP | GET/HEAD with a body, proxy plus Unix socket | TypeError with ERR_INVALID_ARG_VALUE. |
+| HTTP · TCP/IPv4 | Refused loopback connection | TypeError with ECONNREFUSED and a matching message prefix. |
+| HTTP | POST Blob or FormData | Receiver sees the Blob media type, honors an explicit override and parses the multipart field using the generated boundary. |
+| HTTPS · TLS | Self-signed loopback server | Default and explicit verification reject the untrusted certificate. Supplying its certificate as a trust anchor succeeds with verification enabled. |
+| S3 · HTTP loopback endpoint | GET, PUT, POST, DELETE | Receiver observes path-style bucket/key requests, POST translated to PUT, and a DELETE body forwarded. A service-supplied 403 XML error resolves as a Response. |
+| S3 · HTTP loopback endpoint | 12 MiB streamed PUT | Multipart initiation, numbered 5/5/2 MiB parts and completion. |
+| file | Empty authority, localhost, foreign host | Local bytes match. A foreign authority rejects with ERR_INVALID_FILE_URL_HOST on Linux. |
+| data | Base64 text payload | Decoded bytes and text/plain media type. |
+| blob | Object URL | Original payload and text/plain media type. Test revokes the URL after use. |
+
+The route timer covers only the first row. The other rows exercise Bun's client. Live AWS/R2 authorization, Windows path normalization and the ECONNRESET, ETIMEDOUT and ENOTFOUND branches have no coverage in this suite. The locally observed DELETE behavior describes what Bun sends; provider acceptance requires its own evidence.
+
+[Bun fetch reference](https://bun.com/docs/runtime/networking/fetch)
