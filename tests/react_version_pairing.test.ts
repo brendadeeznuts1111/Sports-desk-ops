@@ -147,12 +147,14 @@ describe("React version pairing", () => {
     ).toBe(catalogReact);
     // A root pin and a catalog pin that disagree install two React copies, and the workspace
     // renders with a dispatcher the root's renderer cannot see.
-    expect(root.dependencies?.react).toBe(catalogReact);
+    expect(declaredVersion("react", root.dependencies?.react, root)).toBe(
+      catalogReact,
+    );
   });
 
   test("workspaces declare react and react-dom together, on the root's range", async () => {
     const root = await readManifest(join(ROOT, "package.json"));
-    const rootReact = root.dependencies?.react;
+    const rootReact = declaredVersion("react", root.dependencies?.react, root);
     for (const { path, manifest } of await workspaceManifests()) {
       const react =
         manifest.dependencies?.react ?? manifest.devDependencies?.react;
@@ -219,11 +221,23 @@ describe("React version pairing", () => {
     const reactVersion = await installedVersion("react");
     const reactDomVersion = await installedVersion("react-dom");
     expect(
-      majorOf(root.devDependencies?.["@types/react"]),
+      majorOf(
+        declaredVersion(
+          "@types/react",
+          root.devDependencies?.["@types/react"],
+          root,
+        ),
+      ),
       "@types/react must describe the React the code runs",
     ).toBe(majorOf(reactVersion));
     expect(
-      majorOf(root.devDependencies?.["@types/react-dom"]),
+      majorOf(
+        declaredVersion(
+          "@types/react-dom",
+          root.devDependencies?.["@types/react-dom"],
+          root,
+        ),
+      ),
       "@types/react-dom must describe the renderer the code runs",
     ).toBe(majorOf(reactDomVersion));
   });
