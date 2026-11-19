@@ -1,4 +1,6 @@
 import { $ } from "bun";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 const usage =
@@ -12,6 +14,33 @@ function safeUrl(value: string): URL {
   url.search = "";
   url.hash = "";
   return url;
+}
+
+async function configPaths() {
+  const env = process.env;
+  const home = homedir();
+  let source = "HOME";
+  let path = resolve(home, ".npmrc");
+  const explicit = env.NPM_CONFIG_USERCONFIG || env.npm_config_userconfig;
+  if (explicit) {
+    source = env.NPM_CONFIG_USERCONFIG
+      ? "NPM_CONFIG_USERCONFIG"
+      : "npm_config_userconfig";
+    path = explicit.startsWith("~/")
+      ? resolve(home, explicit.slice(2))
+      : resolve(explicit);
+  } else if (env.XDG_CONFIG_HOME) {
+    const candidate = resolve(env.XDG_CONFIG_HOME, ".npmrc");
+    if (await Bun.file(candidate).exists()) {
+      source = "XDG_CONFIG_HOME";
+      path = candidate;
+    }
+  }
+  const cwdPath = resolve(".npmrc");
+  return {
+    userConfig: { source, path, exists: await Bun.file(path).exists() },
+    cwdConfig: { path: cwdPath, exists: await Bun.file(cwdPath).exists() },
+  };
 }
 
 async function main(): Promise<number> {
@@ -54,7 +83,8 @@ async function main(): Promise<number> {
       env.ITERM_PROFILE ??
       env.WT_PROFILE_NAME ??
       "default",
-    configPath: env.NPM_CONFIG_USERCONFIG ?? null,
+    configPath: env.NPM_CONFIG_USERCONFIG ?? env.npm_config_userconfig ?? null,
+    ...(await configPaths()),
     registryOverride: override ? safeUrl(override).origin : null,
     expectedHost,
   };
@@ -129,7 +159,7 @@ async function main(): Promise<number> {
         ? Bun.color(ok ? "#22c55e" : "#ef4444", "ansi") + badge + "\x1b[0m"
         : badge;
     console.log(
-      `${label} [${context.profile}] ${pkg}\n  Tarball hosts: ${hosts.join(", ")}${expectedHost ? " (expected " + expectedHost + ")" : ""}\n  User config: ${context.configPath ?? "(default)"}\n  bun info elapsed (ms): min ${sorted[0]!.toFixed(2)}, median ${medianMs.toFixed(2)}, max ${sorted.at(-1)!.toFixed(2)} (${runs} runs)`,
+      `${label} [${context.profile}] ${pkg}\n  Tarball hosts: ${hosts.join(", ")}${expectedHost ? " (expected " + expectedHost + ")" : ""}\n  User config: ${context.userConfig.path} (${context.userConfig.source}, exists=${context.userConfig.exists})\n  CWD config: ${context.cwdConfig.path} (exists=${context.cwdConfig.exists})\n  bun info elapsed (ms): min ${sorted[0]!.toFixed(2)}, median ${medianMs.toFixed(2)}, max ${sorted.at(-1)!.toFixed(2)} (${runs} runs)`,
     );
   }
   return ok ? 0 : 2;

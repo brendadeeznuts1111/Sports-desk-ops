@@ -73,3 +73,129 @@ test("probe honors userconfig, checks every advertised host and measures info ca
     await rm(dir, { force: true, recursive: true });
   }
 });
+
+test("user config diagnostics match local registry requests and project precedence", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "bun-userconfig-"));
+  const home = join(dir, "home"),
+    cwd = join(dir, "project"),
+    xdg = join(dir, "xdg");
+  const paths: string[] = [];
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch(req) {
+      paths.push(new URL(req.url).pathname.split("/")[1]!);
+      const version = {
+        name: "@local/probe",
+        version: "1.0.0",
+        dist: { tarball: "https://cdn.example/p.tgz" },
+      };
+      return Response.json({
+        name: version.name,
+        "dist-tags": { latest: version.version },
+        versions: { [version.version]: version },
+      });
+    },
+  });
+  try {
+    const config = (label: string) =>
+      "@local:registry=" + server.url.origin + "/" + label + "/\n";
+    await Bun.write(join(home, ".npmrc"), config("home"));
+    await Bun.write(join(home, "explicit"), config("explicit"));
+    await Bun.write(join(xdg, ".npmrc"), config("xdg"));
+    await Bun.write(join(cwd, "relative"), config("relative"));
+    await Bun.write(join(cwd, "package.json"), "{}");
+    await Bun.write(
+      join(cwd, "bunfig.toml"),
+      '[install]\nregistry="' + server.url.origin + '/fallback/"',
+    );
+    async function check(
+      env: Record<string, string>,
+      source: string,
+      path: string,
+      exists: boolean,
+      target: string,
+      project = false,
+    ) {
+      paths.length = 0;
+      const proc = Bun.spawn(
+        [
+          process.execPath,
+          join(import.meta.dir, "../scripts/probe-registry.ts"),
+          "@local/probe",
+          "-n",
+          "1",
+          "--json",
+        ],
+        {
+          cwd,
+          env: { PATH: process.env.PATH, HOME: home, ...env },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [exit, out, err] = await Promise.all([
+        proc.exited,
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+      expect(exit, err).toBe(0);
+      expect(JSON.parse(out)).toMatchObject({
+        userConfig: { source, path, exists },
+        cwdConfig: { path: join(cwd, ".npmrc"), exists: project },
+      });
+      expect(paths).toEqual([target]);
+    }
+    await check({}, "HOME", join(home, ".npmrc"), true, "home");
+    await check(
+      { XDG_CONFIG_HOME: xdg },
+      "XDG_CONFIG_HOME",
+      join(xdg, ".npmrc"),
+      true,
+      "xdg",
+    );
+    await check(
+      { XDG_CONFIG_HOME: dir },
+      "HOME",
+      join(home, ".npmrc"),
+      true,
+      "home",
+    );
+    await check(
+      { npm_config_userconfig: "relative" },
+      "npm_config_userconfig",
+      join(cwd, "relative"),
+      true,
+      "relative",
+    );
+    await check(
+      {
+        NPM_CONFIG_USERCONFIG: "~/explicit",
+        npm_config_userconfig: "relative",
+      },
+      "NPM_CONFIG_USERCONFIG",
+      join(home, "explicit"),
+      true,
+      "explicit",
+    );
+    await check(
+      { NPM_CONFIG_USERCONFIG: "missing" },
+      "NPM_CONFIG_USERCONFIG",
+      join(cwd, "missing"),
+      false,
+      "fallback",
+    );
+    await Bun.write(join(cwd, ".npmrc"), config("project"));
+    await check(
+      { NPM_CONFIG_USERCONFIG: "relative" },
+      "NPM_CONFIG_USERCONFIG",
+      join(cwd, "relative"),
+      true,
+      "project",
+      true,
+    );
+  } finally {
+    server.stop(true);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
