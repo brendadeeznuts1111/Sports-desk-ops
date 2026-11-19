@@ -47,11 +47,11 @@ test("v1 sample includes void risk and preserves channel case", () => {
     holdPct: null,
   });
   expect(summary).toMatchObject({
-    customers: 4,
-    tickets: 5,
-    lifetimeNetUsd: 370,
-    sampleRiskUsd: 450,
-    sampleNetUsd: -65,
+    customers: 6,
+    tickets: 7,
+    lifetimeNetUsd: 360,
+    sampleRiskUsd: 500,
+    sampleNetUsd: -40,
   });
   expect(summary.byLeague.UNKNOWN).toEqual({
     n: 1,
@@ -62,7 +62,7 @@ test("v1 sample includes void risk and preserves channel case", () => {
     GSLIVE: { n: 2, riskUsd: 200, netUsd: 135 },
     gslive: { n: 1, riskUsd: 50, netUsd: 0 },
     unknown: { n: 1, riskUsd: 200, netUsd: -200 },
-    WEB: { n: 1, riskUsd: 0, netUsd: 0 },
+    WEB: { n: 3, riskUsd: 50, netUsd: 25 },
   });
 });
 
@@ -76,6 +76,8 @@ test("v1 rankings preserve input order on ties and include positive nonzero nets
     "C002",
     "C001",
     "C004",
+    "C004",
+    "C005",
     "C003",
   ]);
   expect(summary.sharpest[0]).toEqual({
@@ -85,7 +87,43 @@ test("v1 rankings preserve input order on ties and include positive nonzero nets
   });
   expect(summary.worstRecent).toEqual([
     { customerId: "C002", netUsd: -200 },
+    { customerId: "C005", netUsd: 25 },
     { customerId: "C004", netUsd: 45 },
     { customerId: "C001", netUsd: 90 },
   ]);
+});
+
+test("found child keeps its ancestry without a level and counts a PUSH in win rate", () => {
+  const { profiles, summary } = buildCustomerProfiles(
+    fixtureBookRows,
+    fixtureTree,
+  );
+  const child = profiles.find((row) => row.customerId === "C005");
+  expect(child?.placement).toMatchObject({
+    inTree: true,
+    level: null,
+    depth: 2,
+    chain: ["CHILD_OK", "ROOT_AGENT"],
+  });
+  expect(child?.tickets).toMatchObject({
+    n: 2,
+    voids: 0,
+    riskUsd: 50,
+    netUsd: 25,
+    winRate: 0.5,
+    holdPct: 50,
+  });
+  expect(summary.sharpest.slice(-2).map((row) => row.sharpScore)).toEqual([
+    0, -10,
+  ]);
+  expect(
+    summary.sharpest
+      .filter((row) => row.customerId === "C004")
+      .map((row) => row.sharpScore),
+  ).toEqual([40, 15]);
+  expect(
+    profiles
+      .filter((row) => row.customerId === "C004")
+      .map((row) => row.tickets.n),
+  ).toEqual([1, 0]);
 });
