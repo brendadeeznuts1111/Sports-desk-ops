@@ -29,15 +29,20 @@ test("file URLs accept empty and localhost authorities", async () => {
   }
 });
 
-test("data and blob URLs preserve payload and media type", async () => {
+test("data: decodes a base64 payload and preserves its media type", async () => {
+  const response = await fetch("data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==");
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")?.split(";")[0]).toBe("text/plain");
+  expect(await response.text()).toBe("Hello, World!");
+});
+
+test("blob: reads the registered object and preserves its media type", async () => {
   const blob = URL.createObjectURL(new Blob(["Hello, World!"], { type: "text/plain" }));
   try {
-    for (const url of ["data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==", blob]) {
-      const response = await fetch(url);
-      expect(response.status).toBe(200);
-      expect(response.headers.get("content-type")?.split(";")[0]).toBe("text/plain");
-      expect(await response.text()).toBe("Hello, World!");
-    }
+    const response = await fetch(blob);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")?.split(";")[0]).toBe("text/plain");
+    expect(await response.text()).toBe("Hello, World!");
   } finally {
     URL.revokeObjectURL(blob);
   }
