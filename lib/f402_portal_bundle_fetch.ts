@@ -2,6 +2,21 @@
  * Fetch pinned portal artifacts under Bun; classify TLS-trust vs bundle-byte drift.
  */
 
+import {
+  DeskNetworkError,
+  DeskTimeoutError,
+  fetchWithDeskPolicy,
+  type DeskFetchPolicyOptions,
+  type ProxyAwareFetch,
+  R2ProxyConfigError,
+  R2ProxyTunnelError,
+  R2ProxyUrlError,
+} from "./desk_fetch_proxy.ts";
+
+export type PortalBundleFetchOptions = DeskFetchPolicyOptions & {
+  readonly fetchImpl?: ProxyAwareFetch;
+};
+
 export type PortalFetchOutcome =
   | {
       readonly kind: "ok";
@@ -15,9 +30,15 @@ export type PortalFetchOutcome =
 
 export async function fetchPortalArtifactBytes(
   url: string,
+  options?: PortalBundleFetchOptions,
 ): Promise<PortalFetchOutcome> {
   try {
-    const res = await fetch(url, { redirect: "follow" });
+    const res = await fetchWithDeskPolicy(
+      options?.fetchImpl ?? (fetch as ProxyAwareFetch),
+      url,
+      { redirect: "follow" },
+      options,
+    );
     if (!res.ok) {
       return { kind: "http_error", status: res.status };
     }
@@ -26,10 +47,24 @@ export async function fetchPortalArtifactBytes(
     const sha256 = Buffer.from(digest).toString("hex");
     return { kind: "ok", sha256, bytes: bytes.length, body: bytes };
   } catch (e) {
-    const msg = String(e);
+    if (e instanceof R2ProxyConfigError || e instanceof R2ProxyUrlError)
+      throw e;
+    if (options?.signal?.aborted && Object.is(e, options.signal.reason))
+      throw e;
+    const named =
+      e instanceof DeskTimeoutError ||
+      e instanceof DeskNetworkError ||
+      e instanceof R2ProxyTunnelError;
+    const msg = named ? `${e.name}: ${e.message}` : String(e);
+    const diagnostic =
+      e instanceof DeskNetworkError
+        ? [e.code, e.cause instanceof Error ? e.cause.message : ""].join(" ")
+        : named
+          ? ""
+          : msg;
     const tlsLike =
       /certificate|cert|TLS|SSL|UNABLE_TO_VERIFY|unknown ca|self signed/i.test(
-        msg,
+        diagnostic,
       );
     if (tlsLike) {
       return { kind: "tls_trust", error: msg };

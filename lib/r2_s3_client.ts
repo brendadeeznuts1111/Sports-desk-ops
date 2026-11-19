@@ -15,6 +15,7 @@ import type {
 } from "bun";
 import type { BunSecretSetOptions } from "../types/bun-api.ts";
 import {
+  DESK_TRANSIENT_NETWORK_CODES,
   fetchWithProxyPolicy,
   type R2Proxy,
   R2ProxyTunnelError,
@@ -335,13 +336,7 @@ export const DEFAULT_METADATA_PUT_RETRY_DELAY_MS = 150;
 export const DEFAULT_R2_FETCH_TIMEOUT_MS = 30_000;
 
 /** Connect-failure `.code`s on Bun's fetch `TypeError` that a PUT may retry. */
-export const R2_TRANSIENT_NETWORK_CODES = [
-  "ECONNRESET",
-  "ETIMEDOUT",
-  "EPIPE",
-  "ECONNABORTED",
-  "EAI_AGAIN",
-] as const;
+export const R2_TRANSIENT_NETWORK_CODES = DESK_TRANSIENT_NETWORK_CODES;
 
 export type R2SignedMethod = "PUT" | "HEAD" | "GET";
 

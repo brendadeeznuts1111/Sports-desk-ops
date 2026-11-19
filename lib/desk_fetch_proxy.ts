@@ -1,12 +1,13 @@
 /**
  * @file lib/desk_fetch_proxy.ts
- * @description Explicit proxy policy for desk fetches (R2 and desk APIs, issue #393).
+ * @description Explicit proxy and timeout policy for desk fetches (issues #393, #399, #400).
  * Every call passes `proxy` so env proxy vars never decide routing: Bun re-reads
  * `HTTPS_PROXY` per request, so routing would follow whatever the process env says now.
  * A proxy comes only from the caller as `{ url, headers }`; credentials belong in
  * `headers["Proxy-Authorization"]` of a plain object, never in the URL, and are never logged.
  * Headers are validated before Bun sees them: since 1.4.4 one bad entry makes fetch reject
  * with a bare TypeError (older Bun dropped every proxy header, Proxy-Authorization included).
+ * Timeouts use `AbortSignal.any([timeout, caller])` and surface as named errors.
  */
 
 export type R2Proxy =
@@ -227,5 +228,120 @@ export async function fetchWithProxyPolicy(
         resolved === false ? undefined : resolved.headers,
       ),
     );
+  }
+}
+
+/** Same 30s default as signed R2 fetches (`DEFAULT_R2_FETCH_TIMEOUT_MS`). */
+export const DEFAULT_DESK_FETCH_TIMEOUT_MS = 30_000;
+
+/** Connect-failure `.code`s on Bun's fetch `TypeError` treated as transient. */
+export const DESK_TRANSIENT_NETWORK_CODES = [
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "EPIPE",
+  "ECONNABORTED",
+  "EAI_AGAIN",
+] as const;
+
+export function resolveDeskTimeoutMs(timeoutMs: number | undefined): number {
+  if (timeoutMs === undefined) return DEFAULT_DESK_FETCH_TIMEOUT_MS;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new RangeError("timeoutMs must be a positive finite number");
+  }
+  return Math.ceil(timeoutMs);
+}
+
+export class DeskTimeoutError extends Error {
+  readonly code = "ERR_DESK_TIMEOUT" as const;
+  readonly url: string;
+  readonly ms: number;
+  constructor(url: string, ms: number, options: { readonly cause: unknown }) {
+    super(`fetch ${url} timed out after ${ms}ms`, { cause: options.cause });
+    this.name = "DeskTimeoutError";
+    this.url = url;
+    this.ms = ms;
+  }
+}
+
+export class DeskNetworkError extends Error {
+  readonly url: string;
+  /** The fetch error's `.code` (e.g. `ECONNREFUSED`), or null when it had none. */
+  readonly code: string | null;
+  readonly transient: boolean;
+  constructor(
+    url: string,
+    code: string | null,
+    options: { readonly cause: unknown },
+  ) {
+    super(`fetch ${url} network error (${code ?? "no code"})`, {
+      cause: options.cause,
+    });
+    this.name = "DeskNetworkError";
+    this.url = url;
+    this.code = code;
+    this.transient =
+      code !== null &&
+      (DESK_TRANSIENT_NETWORK_CODES as readonly string[]).includes(code);
+  }
+}
+
+export interface DeskFetchPolicyOptions {
+  readonly proxy?: R2Proxy;
+  readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
+}
+
+function errorCode(error: unknown): string | null {
+  const code =
+    typeof error === "object" && error !== null
+      ? (error as { readonly code?: unknown }).code
+      : undefined;
+  return typeof code === "string" && code !== "" ? code : null;
+}
+
+/**
+ * Fetch under the proxy policy with `AbortSignal.any([timeout, caller])`.
+ * Rejects with {@link DeskTimeoutError} on our timeout, the caller's abort
+ * reason on theirs, preserves proxy URL/configuration/tunnel errors, else
+ * {@link DeskNetworkError}.
+ */
+export async function fetchWithDeskPolicy(
+  fetchImpl: ProxyAwareFetch,
+  input: string,
+  init: BunFetchRequestInit,
+  options?: DeskFetchPolicyOptions,
+): Promise<Response> {
+  const timeoutMs = resolveDeskTimeoutMs(options?.timeoutMs);
+  const timeout = AbortSignal.timeout(timeoutMs);
+  const signals = [timeout];
+  if (options?.signal) signals.push(options.signal);
+  if (init.signal && init.signal !== options?.signal) signals.push(init.signal);
+  const signal = signals.length === 1 ? timeout : AbortSignal.any(signals);
+  try {
+    return await fetchWithProxyPolicy(
+      fetchImpl,
+      input,
+      { ...init, signal },
+      options?.proxy,
+    );
+  } catch (error) {
+    if (
+      error instanceof R2ProxyConfigError ||
+      error instanceof R2ProxyUrlError ||
+      error instanceof R2ProxyTunnelError
+    ) {
+      throw error;
+    }
+    if (
+      signal.aborted &&
+      (Object.is(error, signal.reason) ||
+        (error instanceof Error && error.name === "AbortError"))
+    ) {
+      if (timeout.aborted && Object.is(signal.reason, timeout.reason)) {
+        throw new DeskTimeoutError(input, timeoutMs, { cause: error });
+      }
+      throw signal.reason;
+    }
+    throw new DeskNetworkError(input, errorCode(error), { cause: error });
   }
 }
