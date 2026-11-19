@@ -61,22 +61,11 @@ export async function createF402ReplayTransport(
 ): Promise<F402ReplayTransport> {
   const env = options?.env ?? Bun.env;
   warnIfDeprecatedCookieEnv(env);
-  const policy: DeskFetchPolicyOptions = {
-    ...(options?.proxy === undefined ? {} : { proxy: options.proxy }),
-    ...(options?.timeoutMs === undefined
-      ? {}
-      : { timeoutMs: options.timeoutMs }),
-  };
-
   const policyFetch = (
     fetchImpl: ProxyAwareFetch,
     url: string,
     init: RequestInit,
-  ): Promise<Response> =>
-    fetchWithDeskPolicy(fetchImpl, url, init, {
-      ...policy,
-      ...(init.signal == null ? {} : { signal: init.signal }),
-    });
+  ): Promise<Response> => fetchWithDeskPolicy(fetchImpl, url, init, options);
 
   const proxy = (
     options?.proxyUrl ??
