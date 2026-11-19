@@ -22,7 +22,7 @@ Reference: [pm/cli/install](https://bun.com/docs/pm/cli/install).
 
 | Topic                 | Upstream                                                                                                                                                                                                        | This repo                                                                                                                   |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Reproducible install  | `--frozen-lockfile`, `bun ci`, or pnpm `--immutable`; **not** enabled automatically in CI                                                                                                                       | `.github/workflows/ci.yml`, README: `bun install --frozen-lockfile`; `ci:local --install`                                   |
+| Reproducible install  | `--frozen-lockfile`, `bun ci`, or pnpm `--immutable`; **not** enabled automatically in CI                                                                                                                       | `.github/workflows/ci.yml`: `bun ci --no-env-file`; README: `bun install --frozen-lockfile`; `ci:local --install`           |
 | Lock vs manifest      | Adds/removes/version bumps fail frozen and name the first drift; range-only edits, dependency group moves, workspace `version`/`bin`/`scripts`, `trustedDependencies`, and `patchedDependencies` can still pass | `pm:doctor` still flags workspace **version** and **patch** drift in `bun.lock`; run `bun-deps install` and commit the lock |
 | Validate lock only    | `bun install --frozen-lockfile --dry-run` (no `node_modules`, no root lifecycle)                                                                                                                                | Same flags when debugging CI install failures                                                                               |
 | Changing deps         | `bun add` / `remove` / `update`                                                                                                                                                                                 | Global `install.frozenLockfile = true` → `bun-deps` / `bun run deps` (`AGENTS.md`)                                          |
@@ -48,7 +48,7 @@ flowchart LR
     DEPS[bun-deps → bun --config unfrozen]
   end
   subgraph paths [Install paths]
-    CI["bun install --frozen-lockfile"]
+    CI["bun ci --no-env-file"]
     CHG[bun-deps add / install / patch]
   end
   GLOBAL --> CI
@@ -171,7 +171,7 @@ Implementation: `scripts/pm_doctor.ts`. Exit **1** if any selected check has sta
 
 | Layer                                         | Runs when                     | Proves                                                                                                                                                |
 | --------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **CI** `bun install --frozen-lockfile`        | GitHub / `ci:local --install` | Manifest dependency graph matches committed lock for **registry** adds/removes/versions; no machine bunfig assumed                                    |
+| **CI** `bun ci --no-env-file`                 | GitHub / `ci:local --install` | Manifest dependency graph matches committed lock for **registry** adds/removes/versions; no machine bunfig assumed                                    |
 | **`bun install --frozen-lockfile --dry-run`** | Manual                        | Same class of errors as CI without touching `node_modules`                                                                                            |
 | **`tests/bun_config_policy.test.ts`**         | `bun test`                    | No foreign lockfiles; no machine keys in project bunfig; `trustedDependencies: []`; lock workspace **names/versions** and **patches** match manifests |
 | **`tests/pm_policy_workspaces.test.ts`**      | `bun test`                    | `resolveWorkspaces()` matches the lock Bun writes for synthetic fixtures (glob / `!` / literal-path edge cases)                                       |
@@ -206,7 +206,7 @@ Catalog and workspace-scoped adds: run **`bun-deps`** (or `bun run deps` / `./bi
 
 | Goal                          | Command                                                                                                                                                |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Clone / CI parity             | `bun install --frozen-lockfile` (README, `.github/workflows/ci.yml`; local full chain: `bun run ci:local --install`)                                   |
+| Clone / CI parity             | `bun install --frozen-lockfile` (README) / `bun ci --no-env-file` (`.github/workflows/ci.yml`; local full chain: `bun run ci:local --install`)         |
 | Machine policy audit          | `bun run pm:doctor` or `./bin/dx deps check`                                                                                                           |
 | Lock drift only (offline)     | `bun run pm:doctor --only lock` (matches workspaces, versions, patches)                                                                                |
 | Manifest vs lock (no install) | `bun install --frozen-lockfile --dry-run`                                                                                                              |
@@ -424,9 +424,9 @@ Other workspace packages are not publishable yet: `api`, `backend` and `ui` depe
 | Step                    | Where                                                      | Notes                                                                                                                                                                                           |
 | ----------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Bun version             | `.bun-version` + `oven-sh/setup-bun@v2` `bun-version-file` | Same pin as `engines.bun`                                                                                                                                                                       |
-| Repo install            | `bun install --frozen-lockfile`                            | Does **not** run `pm:doctor`                                                                                                                                                                    |
+| Repo install            | `bun ci --no-env-file`                                     | Does **not** run `pm:doctor`                                                                                                                                                                    |
 | Platform policy tree    | Second frozen install under `$RUNNER_TEMP/platform`        | Checked out under `platform/` then **`mv` to `$RUNNER_TEMP/platform`** so Bun does not treat `brendadeeznuts1111/platform` as another member of `packages/*` and merge its graph into this lock |
-| Local CI replay         | `bun run ci:local`                                         | Omits `bun install` unless `--install`                                                                                                                                                          |
+| Local CI replay         | `bun run ci:local`                                         | Omits the install step (`bun ci`) unless `--install`                                                                                                                                            |
 | Policy gate before push | Maintainer                                                 | `bun run pm:doctor` (or `./bin/dx deps check`)                                                                                                                                                  |
 
 GitHub Actions cannot start on this private repo; the local chain in `AGENTS.md` plus `ci:local` is the proof surface.
@@ -541,7 +541,7 @@ Each case builds a temp monorepo, runs **`bun install`** with empty global confi
 | Gate                         | Install-related?                                                     |
 | ---------------------------- | -------------------------------------------------------------------- |
 | Git prepush (`prepush-gate`) | **No** frozen install; runs catalog contract + typecheck (fast mode) |
-| `.github/workflows/ci.yml`   | **`bun install --frozen-lockfile`** at job start                     |
+| `.github/workflows/ci.yml`   | **`bun ci --no-env-file`** at job start                              |
 | Local full chain             | `AGENTS.md` fragments + `bun run ci:local --install`                 |
 
 Run **`bun run pm:doctor`** before push on maintainer machines; it is not wired into prepush.
@@ -615,10 +615,10 @@ When moving off **1.4.4** ( deliberate repo event):
 
 ## Known 1.4.4 behavior vs upstream docs (install)
 
-| Topic                         | Docs often say         | Measured here                                                        |
-| ----------------------------- | ---------------------- | -------------------------------------------------------------------- |
-| Unfreeze for one command      | `--no-frozen-lockfile` | **Ignored** when global bunfig sets frozen; use **`bun --config=…`** |
-| Frozen without lockfile       | May imply failure      | Can **exit 0** without writing lock — repo always commits `bun.lock` |
-| `trustedDependencies` omitted | Default allow list     | Repo uses **`[]`** — no default list                                 |
-| Project + global bunfig       | Project overrides      | Repo **forbids** project `[install]` overrides for machine keys      |
-| CI frozen                     | Sometimes `bun ci`     | This repo uses explicit **`bun install --frozen-lockfile`**          |
+| Topic                         | Docs often say         | Measured here                                                                                                  |
+| ----------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Unfreeze for one command      | `--no-frozen-lockfile` | **Ignored** when global bunfig sets frozen; use **`bun --config=…`**                                           |
+| Frozen without lockfile       | May imply failure      | Can **exit 0** without writing lock — repo always commits `bun.lock`                                           |
+| `trustedDependencies` omitted | Default allow list     | Repo uses **`[]`** — no default list                                                                           |
+| Project + global bunfig       | Project overrides      | Repo **forbids** project `[install]` overrides for machine keys                                                |
+| CI frozen                     | Sometimes `bun ci`     | Workflows run explicit **`bun ci --no-env-file`**; README keeps the `bun install --frozen-lockfile` equivalent |

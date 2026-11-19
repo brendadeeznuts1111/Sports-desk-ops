@@ -6,7 +6,7 @@
  *   bun run ci:local                 every step, stop at the first failure
  *   bun run ci:local --keep-going    run every step, report all failures
  *   bun run ci:local --list          print the steps without running them
- *   bun run ci:local --install       include the `bun install --frozen-lockfile` step
+ *   bun run ci:local --install       include the dependency-install steps (`bun ci`)
  *   bun run ci:local --event schedule replay the scheduled workflow (live CDN pin included)
  */
 import path from "node:path";
@@ -14,6 +14,7 @@ import { parseArgs } from "node:util";
 
 import workflowYaml from "../.github/workflows/ci.yml" with { type: "yaml" };
 import { stepMatchesEvent } from "../lib/ci_event_filter.ts";
+import { isInstallStep } from "../lib/ci_install_step.ts";
 
 type Step = {
   job: string;
@@ -75,7 +76,7 @@ function loadSteps(): Step[] {
 const values = parseCli();
 const event = values.event ?? (values.scheduled ? "schedule" : "push");
 const steps = loadSteps().filter(
-  (step) => values.install || !step.run.startsWith("bun install"),
+  (step) => values.install || !isInstallStep(step.run),
 );
 const runsForEvent = (step: Step): boolean =>
   stepMatchesEvent(step.condition, event);
