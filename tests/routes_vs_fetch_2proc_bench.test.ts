@@ -53,12 +53,22 @@ describe("two-process benchmark contract (pure math)", () => {
   });
 
   test("heap deltas are signed live survivors, not allocations", () => {
-    expect(retainedHeapDelta({ objectCount: 150, heapSize: 8000 }, { objectCount: 140, heapSize: 7000 }, 10)).toEqual({
+    expect(
+      retainedHeapDelta(
+        { objectCount: 150, heapSize: 8000 },
+        { objectCount: 140, heapSize: 7000 },
+        10,
+      ),
+    ).toEqual({
       retained_cells_per_request: -1,
       retained_bytes_per_request: -100,
     });
-    expect(() => retainedHeapDelta({ objectCount: 0, heapSize: 0 }, { objectCount: 1, heapSize: 1 }, 0)).toThrow();
-    expect(() => retainedHeapDelta({ objectCount: -1, heapSize: 1 }, { objectCount: 1, heapSize: 1 }, 1)).toThrow();
+    expect(() =>
+      retainedHeapDelta({ objectCount: 0, heapSize: 0 }, { objectCount: 1, heapSize: 1 }, 0),
+    ).toThrow();
+    expect(() =>
+      retainedHeapDelta({ objectCount: -1, heapSize: 1 }, { objectCount: 1, heapSize: 1 }, 1),
+    ).toThrow();
   });
 
   test("median handles odd/even counts and invalid values", () => {
