@@ -393,7 +393,11 @@ async function main(): Promise<void> {
       "retained_cells_per_request",
       "retained_bytes_per_request",
     ];
-    console.log(Bun.inspect.table([routes, manual, delta], columns, { colors: Boolean(process.stdout.isTTY) }));
+    console.log(
+      Bun.inspect.table([routes, manual, delta], columns, {
+        colors: Boolean(process.stdout.isTTY),
+      }),
+    );
     console.log("Native routes p50 improvement (%): " + report.summary.route_p50_improvement_pct);
     console.log("Heap columns measure post-GC survivors, NOT per-request allocations.");
   }
