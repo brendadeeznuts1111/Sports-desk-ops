@@ -625,3 +625,32 @@ When moving off **1.4.4** ( deliberate repo event):
 | `trustedDependencies` omitted | Default allow list     | Repo uses **`[]`** — no default list                                                                           |
 | Project + global bunfig       | Project overrides      | Repo **forbids** project `[install]` overrides for machine keys                                                |
 | CI frozen                     | Sometimes `bun ci`     | Workflows run explicit **`bun ci --no-env-file`**; README keeps the `bun install --frozen-lockfile` equivalent |
+
+## Workspace Publishing (`bun publish --filter` vs `bun --filter ... publish`)
+
+Root `package.json` stays `"private": true`; `@sportsdesk-ops/contracts` is the sole publishable (`"private": false`) workspace under `@sportsdesk-ops/*`.
+
+| Command                                    | Behavior                                                                                                                                                                | Policy                                                                     |
+| :----------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------- |
+| `bun publish --filter "@sportsdesk-ops/*"` | Invokes Bun's native topological publisher (flags **after** `publish`). Automatically skips `"private": true` packages (including root) and already-published versions. | **Canonical.** Always use for CI dry-runs and releases.                    |
+| `bun --filter "@sportsdesk-ops/*" publish` | Runs each workspace's `"publish"` lifecycle script (flags **before** `publish`).                                                                                        | **Forbidden in release CI.** Bypasses native topological publish ordering. |
+
+### Prerelease Tagging & Dry-Run Gate
+
+Bun enforces npm 11 parity and rejects prerelease versions (e.g., `*-next`) unless `--tag` or `publishConfig.tag` is set:
+
+```sh
+# Read-only CI probe (safe on Bun >= 1.4.4)
+bun publish --filter "@sportsdesk-ops/contracts" --tag next --dry-run
+
+# Release invocation (stops on first failure; re-run resumes cleanly)
+bun publish --filter "@sportsdesk-ops/contracts" --tag next
+```
+
+Never add `publishConfig.tag` to root `package.json`; declare it only on publishable workspace packages.
+
+## `packageExtensions` Governance
+
+- **Location:** Root `package.json` only (never in `bunfig.toml`, which remains restricted to `exact = true` and `ignoreScripts = true` under `[install]`).
+- **Scope:** Use `packageExtensions` to patch missing transitive `dependencies`, `optionalDependencies`, `peerDependencies`, or `peerDependenciesMeta` on third-party packages (range keys such as `pkg@1` are supported).
+- **Lockfile Parity:** Any `packageExtensions` edit changes resolution. Regenerate `bun.lock` on the pinned `.bun-version` so CI's `bun install --frozen-lockfile && git diff --exit-code bun.lock` gate stays green.
