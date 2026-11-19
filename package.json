@@ -175,6 +175,7 @@
     "audit:tool-calls": "bun run scripts/audit_tool_calls.ts",
     "pm:doctor": "bun scripts/pm_doctor.ts",
     "deps": "bun-deps",
+    "check:staged": "bun run scripts/check_staged.ts",
     "check:secrets": "bun run bin/check-secrets.ts",
     "audit:secrets": "bun run scripts/audit_secrets.ts",
     "audit:data-handling": "bun run scripts/audit_data_handling.ts",

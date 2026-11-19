@@ -1,5 +1,7 @@
 #!/bin/sh
-# Format the files in the index and re-stage them (Bun 1.4.4 --staged).
+# Format the files in the index and re-stage them (Bun 1.4.4 --staged), then type-check them.
+# `bun check` has no --staged flag, so scripts/check_staged.ts supplies the file set from git.
 # Install with: sh scripts/install-git-hooks.sh
 set -e
-exec bun fmt --staged
+bun fmt --staged
+exec bun run scripts/check_staged.ts
