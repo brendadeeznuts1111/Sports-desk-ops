@@ -4,8 +4,11 @@ import {
   CliInspectCard,
   type CliInspectContext,
   cliInspectOptions,
+  cliInspectOptionsFor,
   inspectReport,
+  inspectTableRows,
   isCliInspectable,
+  parseInspectFlags,
 } from "../lib/cli_inspect.ts";
 
 const ANSI = "\x1b[";
@@ -124,5 +127,124 @@ describe("isCliInspectable", () => {
       [Bun.inspect.custom]: () => "hand-rolled",
     };
     expect(isCliInspectable(handRolled)).toBe(true);
+  });
+});
+
+describe("parseInspectFlags", () => {
+  test("collects every flag and leaves the command's own args", () => {
+    const { flags, rest } = parseInspectFlags([
+      "winners",
+      "--limit",
+      "5",
+      "--inspect-depth=2",
+      "--inspect-sorted",
+      "--inspect-compact",
+      "--inspect-color=always",
+    ]);
+    expect(flags).toEqual({
+      depth: 2,
+      sorted: true,
+      compact: true,
+      color: "always",
+    });
+    expect(rest).toEqual(["winners", "--limit", "5"]);
+  });
+
+  test("--inspect-no-compact turns compaction off explicitly", () => {
+    expect(parseInspectFlags(["--inspect-no-compact"]).flags).toEqual({
+      compact: false,
+    });
+  });
+
+  test("a malformed value throws instead of falling back", () => {
+    for (const bad of [
+      "--inspect-depth=9",
+      "--inspect-depth=-1",
+      "--inspect-depth=1.5",
+      "--inspect-depth=",
+      "--inspect-color=sometimes",
+      "--inspect-unknown",
+    ]) {
+      expect(() => parseInspectFlags([bad])).toThrow(/--inspect/);
+    }
+  });
+});
+
+describe("cliInspectOptionsFor", () => {
+  test("auto follows the terminal and NO_COLOR", () => {
+    expect(cliInspectOptionsFor({}, { isTTY: true }, {}).colors).toBe(true);
+    expect(cliInspectOptionsFor({}, { isTTY: false }, {}).colors).toBe(false);
+    expect(
+      cliInspectOptionsFor({}, { isTTY: true }, { NO_COLOR: "1" }).colors,
+    ).toBe(false);
+  });
+
+  test("explicit modes win over the terminal, and always is the NO_COLOR escape hatch", () => {
+    expect(
+      cliInspectOptionsFor({ color: "never" }, { isTTY: true }, {}).colors,
+    ).toBe(false);
+    expect(
+      cliInspectOptionsFor({ color: "always" }, { isTTY: false }, {}).colors,
+    ).toBe(true);
+    expect(
+      cliInspectOptionsFor({ color: "auto" }, { isTTY: true }, {}).colors,
+    ).toBe(true);
+  });
+
+  test("depth, sorted and compact come from the flags with stable defaults", () => {
+    expect(cliInspectOptionsFor({}, { isTTY: false }, {})).toEqual({
+      colors: false,
+      depth: 4,
+      sorted: false,
+      compact: false,
+    });
+    expect(
+      cliInspectOptionsFor(
+        { depth: 1, sorted: true, compact: true },
+        { isTTY: false },
+        {},
+      ),
+    ).toEqual({ colors: false, depth: 1, sorted: true, compact: true });
+  });
+});
+
+describe("inspectTableRows", () => {
+  const rows = [
+    { id: 1, name: "alpha", note: "first" },
+    { id: 2, name: "wider-name", note: "second" },
+  ];
+
+  test("renders the requested columns in order", () => {
+    const text = inspectTableRows(rows, ["id", "name"], {
+      colors: false,
+      depth: 4,
+      sorted: false,
+      compact: false,
+    });
+    expect(text).toContain("id");
+    expect(text).toContain("name");
+    expect(text).not.toContain("note");
+    expect(text.indexOf("id")).toBeLessThan(text.indexOf("name"));
+  });
+
+  test("an empty report states that instead of drawing a header", () => {
+    expect(inspectTableRows([], ["id"])).toBe("(no rows)");
+  });
+
+  test("colour follows the options", () => {
+    const plain = inspectTableRows(rows, ["id"], {
+      colors: false,
+      depth: 4,
+      sorted: false,
+      compact: false,
+    });
+    const colored = inspectTableRows(rows, ["id"], {
+      colors: true,
+      depth: 4,
+      sorted: false,
+      compact: false,
+    });
+    expect(plain).not.toContain("\x1b[");
+    expect(colored).toContain("\x1b[");
   });
 });

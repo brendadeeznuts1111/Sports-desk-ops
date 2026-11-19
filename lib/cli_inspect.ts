@@ -79,24 +79,142 @@ export interface InspectTarget {
   readonly isTTY?: boolean | undefined;
 }
 
+/** `auto` resolves against the terminal and `NO_COLOR`; the explicit modes force a decision. */
+export type CliInspectColorMode = "auto" | "always" | "never";
+
+/** Flags every inspect-capable command accepts, parsed from its own argv slice. */
+export interface CliInspectFlags {
+  /** `Bun.inspect` depth, 0..8. */
+  readonly depth?: number | undefined;
+  readonly sorted?: boolean | undefined;
+  readonly compact?: boolean | undefined;
+  readonly color?: CliInspectColorMode | undefined;
+}
+
+/** The highest depth `Bun.inspect` documents; a larger value is clamped by Bun, not by us. */
+export const CLI_INSPECT_MAX_DEPTH = 8;
+
+/**
+ * Pull the shared inspect flags out of an argv slice.
+ *
+ * Recognised: `--inspect-depth=<0..8>`, `--inspect-sorted`, `--inspect-compact`,
+ * `--inspect-no-compact`, `--inspect-color=auto|always|never`. The returned `rest` keeps every
+ * argument the command still needs, so a handler can pass its whole `args` here and continue.
+ *
+ * @throws when a flag is malformed, so a typo never silently falls back to defaults.
+ */
+export function parseInspectFlags(args: readonly string[]): {
+  readonly flags: CliInspectFlags;
+  readonly rest: readonly string[];
+} {
+  let depth: number | undefined;
+  let sorted: boolean | undefined;
+  let compact: boolean | undefined;
+  let color: CliInspectColorMode | undefined;
+  const rest: string[] = [];
+
+  for (const arg of args) {
+    if (arg.startsWith("--inspect-depth=")) {
+      const raw = arg.slice("--inspect-depth=".length);
+      const value = Number(raw);
+      if (
+        raw.trim() === "" ||
+        !Number.isInteger(value) ||
+        value < 0 ||
+        value > CLI_INSPECT_MAX_DEPTH
+      ) {
+        throw new Error(
+          `--inspect-depth must be an integer 0..${CLI_INSPECT_MAX_DEPTH}, got ${JSON.stringify(raw)}`,
+        );
+      }
+      depth = value;
+    } else if (arg === "--inspect-sorted") {
+      sorted = true;
+    } else if (arg === "--inspect-compact") {
+      compact = true;
+    } else if (arg === "--inspect-no-compact") {
+      compact = false;
+    } else if (arg.startsWith("--inspect-color=")) {
+      const raw = arg.slice("--inspect-color=".length);
+      if (raw !== "auto" && raw !== "always" && raw !== "never") {
+        throw new Error(
+          `--inspect-color must be auto, always or never, got ${JSON.stringify(raw)}`,
+        );
+      }
+      color = raw;
+    } else if (arg.startsWith("--inspect-")) {
+      throw new Error(`unknown inspect flag ${arg}`);
+    } else {
+      rest.push(arg);
+    }
+  }
+
+  return {
+    flags: {
+      ...(depth === undefined ? {} : { depth }),
+      ...(sorted === undefined ? {} : { sorted }),
+      ...(compact === undefined ? {} : { compact }),
+      ...(color === undefined ? {} : { color }),
+    },
+    rest,
+  };
+}
+
+/**
+ * Resolve the full option set: explicit flags first, then the terminal/`NO_COLOR` default.
+ *
+ * `--inspect-color=always` is the only way to colour under `NO_COLOR`; `never` always wins.
+ */
+export function cliInspectOptionsFor(
+  flags: CliInspectFlags = {},
+  target: InspectTarget = process.stdout,
+  env: NodeJS.ProcessEnv = Bun.env,
+): CliInspectOptions {
+  const noColor = (env.NO_COLOR ?? "") !== "";
+  const colors =
+    flags.color === "never"
+      ? false
+      : flags.color === "always"
+        ? true
+        : target.isTTY === true && !noColor;
+  return {
+    colors,
+    depth: flags.depth ?? 4,
+    sorted: flags.sorted ?? false,
+    compact: flags.compact ?? false,
+  };
+}
+
 /** Colour only on a terminal, and never under `NO_COLOR` (https://no-color.org). */
 export function cliInspectOptions(
   target: InspectTarget = process.stdout,
   env: NodeJS.ProcessEnv = Bun.env,
 ): CliInspectOptions {
-  return {
-    colors: target.isTTY === true && (env.NO_COLOR ?? "") === "",
-    depth: 4,
-    sorted: false,
-    compact: false,
-  };
+  return cliInspectOptionsFor({}, target, env);
 }
 
 export function inspectReport(
-  report: object,
+  report: unknown,
   options: CliInspectOptions = cliInspectOptions(),
 ): string {
   return Bun.inspect(report, options);
+}
+
+/**
+ * `Bun.inspect.table` with the same option source as `inspectReport`.
+ *
+ * `columns` narrows and orders the columns; an empty row set renders a single stated line rather
+ * than a header-only grid, so a report never looks like it has data.
+ */
+export function inspectTableRows<const R extends Record<string, unknown>>(
+  rows: readonly R[],
+  columns?: readonly (keyof R & string)[],
+  options: CliInspectOptions = cliInspectOptions(),
+): string {
+  if (rows.length === 0) return "(no rows)";
+  return Bun.inspect.table(rows as R[], columns as string[] | undefined, {
+    colors: options.colors,
+  });
 }
 
 /**

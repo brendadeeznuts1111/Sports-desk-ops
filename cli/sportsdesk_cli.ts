@@ -67,7 +67,15 @@ import {
 } from "../design/domain-branded-types.ts";
 import { assertUniqueTokenColors } from "../lib/validation/token_validator.ts";
 import { printAnsiMarkdown } from "../lib/canonical_osc8_links.ts";
-import { padDisplay } from "../lib/cli_inspect.ts";
+import {
+  cliInspectOptions,
+  cliInspectOptionsFor,
+  inspectReport,
+  inspectTableRows,
+  padDisplay,
+  parseInspectFlags,
+  type CliInspectOptions,
+} from "../lib/cli_inspect.ts";
 import {
   executePlayerColumnMutation,
   executeVigSetupInsert,
@@ -273,7 +281,9 @@ export function printHelpOld(): void {
 `);
 }
 
-export function printDomainBrandedTypes(): void {
+export function printDomainBrandedTypes(
+  options: CliInspectOptions = cliInspectOptions(),
+): void {
   console.log(
     "================================================================================",
   );
@@ -417,22 +427,14 @@ export function printDomainBrandedTypes(): void {
     },
   ];
 
+  // One table renderer for every report: Bun measures ANSI, emoji and wide glyphs itself.
   console.log(
-    " # | Branded Type         | Primitive | Sample Constructor Output      | Domain Invariant Guarantee",
+    inspectTableRows(
+      tableRows,
+      ["Type", "Primitive", "Constructor", "Value", "Invariant"],
+      options,
+    ),
   );
-  console.log(
-    "---+----------------------+-----------+--------------------------------+-------------------------------------------------------",
-  );
-  tableRows.forEach((r, idx) => {
-    const num = String(idx + 1).padStart(2);
-    console.log(
-      `${num} | ` +
-        `${r.Type.padEnd(20)} | ` +
-        `${r.Primitive.padEnd(9)} | ` +
-        `${r.Value.padEnd(30)} | ` +
-        `${r.Invariant}`,
-    );
-  });
   console.log(
     "================================================================================\n",
   );
@@ -911,9 +913,8 @@ export async function printCustomerProfile(
   customerId: string,
   args: string[],
 ): Promise<void> {
-  const asJson =
-    args.includes("--json") ||
-    getArgValue(args, ["--format"], "table") === "json";
+  const format = getArgValue(args, ["--format"], "table");
+  const asJson = args.includes("--json") || format === "json";
   let result;
   try {
     result = await lookupCustomer(customerId);
@@ -931,6 +932,12 @@ export async function printCustomerProfile(
   }
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  if (format === "inspect") {
+    const options = inspectOptionsOrUsageError(args);
+    if (options === null) return;
+    console.log(inspectReport(result, options));
     return;
   }
   const record = result.record;
@@ -1170,9 +1177,8 @@ export function printDownlineTree(agentId: string): void {
 }
 
 export async function printSharpAudit(args: string[]): Promise<void> {
-  const asJson =
-    args.includes("--json") ||
-    getArgValue(args, ["--format"], "table") === "json";
+  const format = getArgValue(args, ["--format"], "table");
+  const asJson = args.includes("--json") || format === "json";
   const parsedThreshold = Number.parseInt(
     getArgValue(args, ["--min-sharp", "--min-sharp-score"], "70"),
     10,
@@ -1189,6 +1195,12 @@ export async function printSharpAudit(args: string[]): Promise<void> {
   }
   if (asJson) {
     console.log(JSON.stringify(audit, null, 2));
+    return;
+  }
+  if (format === "inspect") {
+    const options = inspectOptionsOrUsageError(args);
+    if (options === null) return;
+    console.log(inspectReport(audit, options));
     return;
   }
   const divider = "=".repeat(112);
@@ -1447,6 +1459,24 @@ export async function printLeaderboard(args: string[]): Promise<void> {
   await printWinners(["-p", period, "--limit", "5", "--format", format]);
   console.log("TOP 5 LOSERS (HOUSE HOLD):");
   await printLosers(["-p", period, "--limit", "5", "--format", format]);
+}
+
+/**
+ * Parse the shared inspect flags for a command, reporting a malformed one as a usage error.
+ *
+ * The top-level catch prints a stack and exits 1; a typo in a flag is an operator mistake, so it
+ * exits 2 with one line and leaves the command's own output untouched.
+ */
+function inspectOptionsOrUsageError(args: string[]): CliInspectOptions | null {
+  try {
+    return cliInspectOptionsFor(parseInspectFlags(args).flags);
+  } catch (error) {
+    console.error(
+      `[USAGE] ${error instanceof Error ? error.message : String(error)}`,
+    );
+    process.exitCode = 2;
+    return null;
+  }
 }
 
 function getArgValue(
@@ -2731,7 +2761,11 @@ export async function main(): Promise<void> {
     cmd === "brands" ||
     cmd === "types"
   ) {
-    printDomainBrandedTypes();
+    {
+      const options = inspectOptionsOrUsageError(rawArgs);
+      if (options === null) return;
+      printDomainBrandedTypes(options);
+    }
     return;
   }
 
@@ -2925,7 +2959,7 @@ export async function main(): Promise<void> {
     const customerId = getArgValue(rawArgs, ["-C", "--customer"], "");
     if (customerId === "") {
       console.error(
-        "usage: bun cli/sportsdesk_cli.ts -C <CUSTOMER_ID> [--json]",
+        "usage: bun cli/sportsdesk_cli.ts -C <CUSTOMER_ID> [--json] [--format table|json|inspect]",
       );
       process.exitCode = 2;
       return;
