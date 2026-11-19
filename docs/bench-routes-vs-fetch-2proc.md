@@ -101,4 +101,15 @@ The scheme is the identifier before the first colon. A JavaScript `URL` object e
 
 The route timer covers only the first row. The other rows exercise Bun's client. Live AWS/R2 authorization, Windows path normalization and the ECONNRESET, ETIMEDOUT and ENOTFOUND branches have no coverage in this suite. The locally observed DELETE behavior describes what Bun sends; provider acceptance requires its own evidence.
 
+### Fetch call arguments
+
+The tests call `fetch(input)` for each URL representation below. The first argument comes from the indicated loop value. An omitted second argument uses the fetch defaults.
+
+| Scheme | Function | First argument (`input`) | Second argument (`init`) |
+| --- | --- | --- | --- |
+| `data` | `fetch` | `url` | Omitted |
+| `data` | `fetch` | `url.href` | Omitted |
+| `blob` | `fetch` | `url` | Omitted |
+| `blob` | `fetch` | `href` from `URL.createObjectURL(blob)` | Omitted |
+
 [Bun fetch reference](https://bun.com/docs/runtime/networking/fetch)
