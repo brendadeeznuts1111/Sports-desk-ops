@@ -327,3 +327,61 @@ describe("xml taxonomy", () => {
     expect(await taxonomyCommand(path, { dryRun: true })).toBe(2);
   });
 });
+
+/**
+ * The probe is the object an operator holds after a failed `dx xml status`. `Bun.inspect` must
+ * print the same one line the command prints, at any depth, and the `--json` form must keep the
+ * fields the class carries.
+ */
+describe("EndpointProbe custom inspect", () => {
+  test("Bun.inspect renders the status line, not a field dump", async () => {
+    const probe = await probeDaemonEndpoint("http://127.0.0.1:4020", async () =>
+      Response.json({ success: true, rowCount: 7, cached: true, stale: true }),
+    );
+    const line = describeProbe(probe);
+    expect(Bun.inspect(probe)).toBe(line);
+    // Already one line: the shallow branch agrees with the full one.
+    expect(Bun.inspect(probe, { depth: 0 })).toBe(line);
+    expect(Bun.inspect(probe)).toContain("stale — last good snapshot");
+    expect(Bun.inspect(probe)).not.toContain("origin:");
+  });
+
+  test("--json still serialises the probe's fields", async () => {
+    const chunks: string[] = [];
+    const write = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string) => {
+      chunks.push(chunk);
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      await statusCommand({
+        json: true,
+        readArtifact: async () => ({ available: false, reason: "none" }),
+        daemonFetch: async () =>
+          Response.json({ rowCount: 2, cached: true, stale: false }),
+      });
+    } finally {
+      process.stdout.write = write;
+    }
+    const body = JSON.parse(chunks.join("")) as {
+      daemon: Record<string, unknown>;
+    };
+    expect(body.daemon).toMatchObject({
+      reachable: true,
+      status: 200,
+      kind: "serving",
+      cached: true,
+      stale: false,
+    });
+    // The label is a getter, so it is not part of the serialised shape.
+    expect(Object.keys(body.daemon).sort()).toEqual([
+      "cached",
+      "detail",
+      "kind",
+      "origin",
+      "reachable",
+      "stale",
+      "status",
+    ]);
+  });
+});

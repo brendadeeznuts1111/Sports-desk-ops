@@ -344,7 +344,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/inspect)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (2):** `custom`, `table`
-- **Here:** `lib/bitwise_pattern_inspect.ts`, `scripts/nsh_desk_cli.ts`
+- **Here:** `lib/bitwise_pattern_inspect.ts`, `lib/cli_inspect.ts`
 - **Evidence:** `test:lib/f402_credentials_policy.test.ts`, `test:lib/wager_soa.test.ts`, `test:tests/bitwise_pattern_inspect.test.ts`, `test:tests/bun_capabilities.test.ts`
 
 #### Bun.markdown

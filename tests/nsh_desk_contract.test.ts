@@ -1325,6 +1325,15 @@ describe("packages/nsh-desk model and capability contracts", () => {
       });
       expect(rendered).toContain("bundle.nshc");
       expect(rendered).toContain("capabilities.json");
+      // A card nested in another inspected object is a label, not the whole table.
+      expect(
+        inspectReport(new InspectableNshArtifactsReport(inv), {
+          colors: false,
+          depth: 0,
+          sorted: false,
+          compact: false,
+        }),
+      ).toBe("NSH build artifacts");
     } finally {
       await rm(scratchOut, { recursive: true, force: true });
     }

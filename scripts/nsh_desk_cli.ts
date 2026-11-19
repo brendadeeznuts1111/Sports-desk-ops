@@ -17,7 +17,8 @@ import { Transpiler, YAML, type Import, type ImportKind } from "bun";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  type BunInspectOptions,
+  CliInspectCard,
+  type CliInspectContext,
   cliInspectOptions,
   inspectReport,
   padDisplay,
@@ -562,15 +563,17 @@ export async function collectNshBuildArtifacts(
   };
 }
 
-export class InspectableNshDoctorReport {
+export class InspectableNshDoctorReport extends CliInspectCard {
+  readonly inspectLabel = "NSH desk doctor";
   readonly data: NshDoctorReportData;
 
   constructor(data: NshDoctorReportData) {
+    super();
     this.data = data;
   }
 
-  [Bun.inspect.custom](_depth?: number, options?: BunInspectOptions): string {
-    const colors = options?.colors === true;
+  inspectBody(options: CliInspectContext): string {
+    const colors = options.colors;
     const verdict = this.data.ok ? "READY" : "FAILED";
     const binSummary = this.data.binary
       ? `${this.data.binary.bin} (${this.data.binary.source})`
@@ -606,15 +609,17 @@ export class InspectableNshDoctorReport {
   }
 }
 
-export class InspectableNshArtifactsReport {
+export class InspectableNshArtifactsReport extends CliInspectCard {
+  readonly inspectLabel = "NSH build artifacts";
   readonly data: NshArtifactsInventory;
 
   constructor(data: NshArtifactsInventory) {
+    super();
     this.data = data;
   }
 
-  [Bun.inspect.custom](_depth?: number, options?: BunInspectOptions): string {
-    const colors = options?.colors === true;
+  inspectBody(options: CliInspectContext): string {
+    const colors = options.colors;
     const header = [
       `${padDisplay("NSH Output Dir", 18)}: ${this.data.outDir}`,
       `${padDisplay("Artifact Count", 18)}: ${this.data.totalFiles} file(s) (${this.data.totalBytes.toLocaleString("en-US")} B)`,
@@ -638,15 +643,17 @@ export class InspectableNshArtifactsReport {
   }
 }
 
-export class InspectableNshSignVerifyReport {
+export class InspectableNshSignVerifyReport extends CliInspectCard {
+  readonly inspectLabel = "NSH sign & verify";
   readonly data: NshSignVerifyReportData;
 
   constructor(data: NshSignVerifyReportData) {
+    super();
     this.data = data;
   }
 
-  [Bun.inspect.custom](_depth?: number, options?: BunInspectOptions): string {
-    const colors = options?.colors === true;
+  inspectBody(options: CliInspectContext): string {
+    const colors = options.colors;
     const verdict = this.data.ok ? "PASS" : "FAIL";
     const header = [
       `${padDisplay("NSH Sign & Verify", 20)}: ${verdict} (${this.data.durationMs.toFixed(1)} ms)`,
@@ -672,15 +679,17 @@ export class InspectableNshSignVerifyReport {
   }
 }
 
-export class InspectableNshVerifyReport {
+export class InspectableNshVerifyReport extends CliInspectCard {
+  readonly inspectLabel = "NSH verify loop";
   readonly data: NshVerifyLoopReportData;
 
   constructor(data: NshVerifyLoopReportData) {
+    super();
     this.data = data;
   }
 
-  [Bun.inspect.custom](_depth?: number, options?: BunInspectOptions): string {
-    const colors = options?.colors === true;
+  inspectBody(options: CliInspectContext): string {
+    const colors = options.colors;
     const statusLabel = this.data.ok ? "PASS" : "FAIL";
     const header = `${padDisplay("NSH Verify Loop", 18)}: ${statusLabel} (${this.data.totalDurationMs.toFixed(1)} ms)`;
     const table = Bun.inspect.table(

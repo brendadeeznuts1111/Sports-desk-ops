@@ -26,6 +26,7 @@ import {
 } from "../src/lib/portal_taxonomy_r2_publish.ts";
 import type { PortalTaxonomyEntry } from "../src/lib/portal_taxonomy_normalizer.ts";
 import { XML_INGEST_SINK } from "../src/lib/xml_ingest_r2_publish.ts";
+import { CliInspectCard, type CliInspectContext } from "../lib/cli_inspect.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const PUBLISHER = "packages/sportsdesk-ops/src/bin/xml-parse.ts";
@@ -66,8 +67,14 @@ export interface StatusLine {
   readonly summary: string;
 }
 
-/** What the local daemon answers on `/api/xml-odds/soa`, independent of the R2 artifact. */
-export interface EndpointProbe {
+/**
+ * What the local daemon answers on `/api/xml-odds/soa`, independent of the R2 artifact.
+ *
+ * A class rather than a bare object so `Bun.inspect(probe)` renders the same one line
+ * `dx xml status` prints — the probe is what an operator holds after a failed status call, and
+ * a field dump would bury the verdict under `origin`/`reachable`/`status`.
+ */
+export class EndpointProbe extends CliInspectCard {
   readonly origin: string;
   readonly reachable: boolean;
   readonly status: number | null;
@@ -75,15 +82,43 @@ export interface EndpointProbe {
     "serving" | "artifact-missing" | "route-absent" | "unreachable" | "error";
   readonly detail: string;
   /**
-   * The daemon reused a read inside its TTL window (or a manifest 304). Optional because a
-   * build predating the route cache sends no flag, and `false` is the honest reading then.
+   * The daemon reused a read inside its TTL window (or a manifest 304). A build predating the
+   * route cache sends no flag, and `false` is the honest reading then.
    */
-  readonly cached?: boolean;
+  readonly cached: boolean;
   /**
    * The daemon's refresh failed and it answered with the last good snapshot. An operator must
    * see this: the row count is real, but it is older than the poll that asked for it.
    */
-  readonly stale?: boolean;
+  readonly stale: boolean;
+
+  constructor(fields: {
+    readonly origin: string;
+    readonly reachable: boolean;
+    readonly status: number | null;
+    readonly kind: EndpointProbe["kind"];
+    readonly detail: string;
+    readonly cached?: boolean;
+    readonly stale?: boolean;
+  }) {
+    super();
+    this.origin = fields.origin;
+    this.reachable = fields.reachable;
+    this.status = fields.status;
+    this.kind = fields.kind;
+    this.detail = fields.detail;
+    this.cached = fields.cached === true;
+    this.stale = fields.stale === true;
+  }
+
+  /** The probe is already one line, so the shallow and full renders agree. */
+  get inspectLabel(): string {
+    return describeProbe(this);
+  }
+
+  inspectBody(_options: CliInspectContext): string {
+    return describeProbe(this);
+  }
 }
 
 export const XML_ODDS_SOA_PATH = "/api/xml-odds/soa";
@@ -135,23 +170,23 @@ export async function probeDaemonEndpoint(
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
-    return {
+    return new EndpointProbe({
       origin,
       reachable: false,
       status: null,
       kind: "unreachable",
       detail: error instanceof Error ? error.message : String(error),
-    };
+    });
   }
   const text = await response.text().catch(() => "");
   if (response.status === 404) {
-    return {
+    return new EndpointProbe({
       origin,
       reachable: true,
       status: 404,
       kind: "route-absent",
       detail: "this daemon build predates the route — restart it",
-    };
+    });
   }
   if (response.status === 200) {
     let body: Record<string, unknown> | null = null;
@@ -175,7 +210,7 @@ export async function probeDaemonEndpoint(
       ...(cached ? ["cached"] : []),
       ...(stale ? ["stale — last good snapshot"] : []),
     ];
-    return {
+    return new EndpointProbe({
       origin,
       reachable: true,
       status: 200,
@@ -183,7 +218,7 @@ export async function probeDaemonEndpoint(
       detail: state.length === 0 ? rows : `${rows}, ${state.join(", ")}`,
       cached,
       stale,
-    };
+    });
   }
   let reason = `HTTP ${response.status}`;
   try {
@@ -192,13 +227,13 @@ export async function probeDaemonEndpoint(
   } catch {
     // Non-JSON body: the status alone is the reason.
   }
-  return {
+  return new EndpointProbe({
     origin,
     reachable: true,
     status: response.status,
     kind: response.status === 502 ? "artifact-missing" : "error",
     detail: reason,
-  };
+  });
 }
 
 /** One line for a daemon probe, with the origin so a non-default port is obvious. */
