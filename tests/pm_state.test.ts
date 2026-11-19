@@ -1,3 +1,4 @@
+import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -42,5 +43,71 @@ describe("PM state invariants", () => {
 
   test("the lockfile is present", () => {
     expect(existsSync(join(root, "bun.lock"))).toBe(true);
+  });
+});
+
+interface PackageManifest {
+  readonly name?: string;
+  readonly version?: string;
+  readonly private?: boolean;
+  readonly publishConfig?: {
+    readonly tag?: string;
+    readonly access?: string;
+  };
+  readonly scripts?: Record<string, string>;
+}
+
+const SEMVER_PRERELEASE_RE = /-[0-9A-Za-z.-]+$/;
+const FORBIDDEN_FILTER_BEFORE_PUBLISH_RE =
+  /\bbun\s+--filter\b[^\n]*\bpublish\b/;
+
+describe("Contract #36: workspace publish policy & flag-order guard", () => {
+  test("root package.json stays private: true with no publishConfig.tag", async () => {
+    const rootPkg = (await Bun.file(
+      join(root, "package.json"),
+    ).json()) as PackageManifest;
+    expect(rootPkg.private).toBe(true);
+    expect(rootPkg.publishConfig?.tag).toBeUndefined();
+  });
+
+  test("publishable workspaces declare publishConfig.tag on prerelease versions", async () => {
+    const glob = new Glob("packages/*/package.json");
+    for await (const relPath of glob.scan({ cwd: root })) {
+      const manifest = (await Bun.file(
+        join(root, relPath),
+      ).json()) as PackageManifest;
+      if (manifest.private !== false) continue;
+
+      const isPrerelease =
+        typeof manifest.version === "string" &&
+        SEMVER_PRERELEASE_RE.test(manifest.version);
+      if (isPrerelease) {
+        expect(
+          typeof manifest.publishConfig?.tag === "string" &&
+            manifest.publishConfig.tag.length > 0,
+        ).toBe(true);
+      }
+    }
+  });
+
+  test("CI workflows and package scripts use 'bun publish --filter', never 'bun --filter ... publish'", async () => {
+    const rootPkg = (await Bun.file(
+      join(root, "package.json"),
+    ).json()) as PackageManifest;
+    for (const [scriptName, cmd] of Object.entries(rootPkg.scripts ?? {})) {
+      expect(
+        FORBIDDEN_FILTER_BEFORE_PUBLISH_RE.test(cmd),
+        `scripts.${scriptName} uses forbidden flag order: ${cmd}`,
+      ).toBe(false);
+    }
+
+    const wfGlob = new Glob(".github/workflows/*.{yml,yaml}");
+    for await (const relPath of wfGlob.scan({ cwd: root })) {
+      const text = await Bun.file(join(root, relPath)).text();
+      expect(
+        FORBIDDEN_FILTER_BEFORE_PUBLISH_RE.test(text),
+        `${relPath} uses forbidden 'bun --filter ... publish' flag order`,
+      ).toBe(false);
+    }
   });
 });
