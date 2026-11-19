@@ -1000,7 +1000,7 @@ export function CustomersTabPanel({
         };
 
         return (
-          <div style={styles.showcaseGrid}>
+          <div className="sd-showcase-grid" style={styles.showcaseGrid}>
             {/* Left Column: Customers Table */}
             <div style={styles.tablePanel}>
               <div
@@ -1137,6 +1137,7 @@ export function CustomersTabPanel({
                     </label>
                     <button
                       type="button"
+                      className="sd-page-btn"
                       disabled={safePage === 0}
                       onClick={() => setPage((p) => Math.max(0, p - 1))}
                       style={{
@@ -1155,6 +1156,7 @@ export function CustomersTabPanel({
                     </span>
                     <button
                       type="button"
+                      className="sd-page-btn"
                       disabled={safePage >= totalPages - 1}
                       onClick={() =>
                         setPage((p) => Math.min(totalPages - 1, p + 1))
@@ -1805,7 +1807,7 @@ export function CustomersTabPanel({
                   </div>
 
                   {/* Sizing & Portfolio Risk */}
-                  <div style={styles.detailGrid}>
+                  <div className="sd-detail-grid" style={styles.detailGrid}>
                     <div style={styles.detailCard}>
                       <h4 style={styles.cardHeader}>
                         💰 Stake Sizing & Variance
@@ -2057,7 +2059,7 @@ export function CustomersTabPanel({
                   ) : null}
 
                   {/* Correlated Parlay & Timing */}
-                  <div style={styles.detailGrid}>
+                  <div className="sd-detail-grid" style={styles.detailGrid}>
                     <div style={styles.detailCard}>
                       <h4 style={styles.cardHeader}>🔗 Correlated Parlays</h4>
                       <div>

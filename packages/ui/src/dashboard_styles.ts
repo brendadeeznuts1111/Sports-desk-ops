@@ -97,18 +97,21 @@ export const styles = {
   }),
   tabNav: {
     display: "flex",
-    flexWrap: "wrap" as const,
+    flexWrap: "nowrap" as const,
+    overflowX: "auto" as const,
     gap: "6px",
+    paddingBottom: "2px",
   },
   tabBtn: (active: boolean) => ({
     display: "inline-flex",
     alignItems: "center",
     gap: "6px",
-    padding: "7px 12px",
+    padding: "5px 10px",
     borderRadius: "6px",
     fontSize: "12px",
     fontWeight: 600,
     whiteSpace: "nowrap" as const,
+    flexShrink: 0,
     cursor: "pointer",
     backgroundColor: active
       ? "rgba(56, 189, 248, 0.16)"
@@ -208,7 +211,7 @@ export const styles = {
   },
   main: {
     flex: 1,
-    padding: "24px",
+    padding: "16px 24px 24px",
     maxWidth: "1600px",
     margin: "0 auto",
     width: "100%",

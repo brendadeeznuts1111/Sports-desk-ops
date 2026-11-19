@@ -2436,7 +2436,7 @@ export function App(): React.ReactElement {
             </button>
           </div>
         </div>
-        <div style={styles.tabNav}>
+        <div className="sd-tab-nav" style={styles.tabNav}>
           <button
             type="button"
             className="sd-tab-btn"
@@ -2630,13 +2630,14 @@ export function App(): React.ReactElement {
       {/* Cross-Desk Operations Command Ribbon */}
       <section
         aria-label="Operations Command Ribbon"
+        className="sd-quick-jump-ribbon"
         style={{
           display: "flex",
           flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: "8px 14px",
-          padding: "8px 20px",
+          gap: "6px 10px",
+          padding: "6px 24px",
           backgroundColor: "#0b1120",
           borderBottom: "1px solid #1e293b",
           fontSize: "11px",

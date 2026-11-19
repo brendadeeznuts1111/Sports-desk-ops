@@ -8,12 +8,33 @@
 }
 
 .sd-ops-toolbar {
-  padding: 10px 24px;
+  padding: 8px 24px;
   background-color: #0b1120;
   border-bottom: 1px solid #1e293b;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+}
+
+.sd-tab-nav {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sd-tab-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.sd-page-btn:not(:disabled):hover {
+  border-color: rgba(56, 189, 248, 0.5) !important;
+  color: #38bdf8 !important;
+}
+
+.sd-page-btn:focus-visible,
+.sd-quick-jump-ribbon button:focus-visible,
+.sd-quick-jump-ribbon a:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
 }
 
 .sd-ops-telemetry-row {
@@ -94,13 +115,20 @@ button.sd-kpi-card:hover {
   td.directive,
   th.directive {
     position: sticky;
-    right: 0;
+    right: -1px;
     z-index: var(--z-frozen-col);
     background: var(--surface-overlay);
-    box-shadow: -2px 0 0 var(--border-default);
+    background-clip: padding-box;
+    box-shadow:
+      -6px 0 14px rgba(2, 6, 23, 0.55),
+      -1px 0 0 var(--border-default);
   }
   thead th.directive {
     z-index: calc(var(--z-frozen-col) + 1);
+    background: #0f172a;
+  }
+  tbody tr:hover td.directive {
+    background: var(--surface-elevated);
   }
 }
 
@@ -137,9 +165,24 @@ button.sd-kpi-card:hover {
   background: #475569;
 }
 
+@media (max-width: 1080px) {
+  .sd-showcase-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .detail-panel {
+    position: static;
+    max-height: none;
+  }
+}
+
 @media (max-width: 960px) {
   .sd-ops-toolbar {
-    padding: 10px 16px;
+    padding: 8px 16px;
+  }
+
+  .sd-quick-jump-ribbon {
+    padding: 6px 16px !important;
   }
 
   .sd-primary-nav {
@@ -147,6 +190,12 @@ button.sd-kpi-card:hover {
     flex-basis: 100%;
     width: 100%;
     padding-bottom: 2px;
+  }
+}
+
+@media (max-width: 560px) {
+  .sd-detail-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 
