@@ -30,21 +30,30 @@ test("file URLs accept empty and localhost authorities", async () => {
 });
 
 test("data: decodes a base64 payload and preserves its media type", async () => {
-  const response = await fetch("data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==");
-  expect(response.status).toBe(200);
-  expect(response.headers.get("content-type")?.split(";")[0]).toBe("text/plain");
-  expect(await response.text()).toBe("Hello, World!");
-});
-
-test("blob: reads the registered object and preserves its media type", async () => {
-  const blob = URL.createObjectURL(new Blob(["Hello, World!"], { type: "text/plain" }));
-  try {
-    const response = await fetch(blob);
+  const url = new URL("data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==");
+  expect(url.protocol).toBe("data:");
+  for (const input of [url, url.href]) {
+    const response = await fetch(input);
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")?.split(";")[0]).toBe("text/plain");
     expect(await response.text()).toBe("Hello, World!");
+  }
+});
+
+test("blob: reads the registered object and preserves its media type", async () => {
+  const href = URL.createObjectURL(new Blob(["Hello, World!"], { type: "text/plain" }));
+  try {
+    expect(typeof href).toBe("string");
+    const url = new URL(href);
+    expect(url.protocol).toBe("blob:");
+    for (const input of [url, href]) {
+      const response = await fetch(input);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")?.split(";")[0]).toBe("text/plain");
+      expect(await response.text()).toBe("Hello, World!");
+    }
   } finally {
-    URL.revokeObjectURL(blob);
+    URL.revokeObjectURL(href);
   }
 });
 

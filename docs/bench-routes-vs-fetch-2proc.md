@@ -82,20 +82,20 @@ bun --revision
 bun --no-env-file test tests/bun_fetch_protocols.test.ts tests/routes_vs_fetch_2proc_bench.test.ts
 ```
 
-The scheme is the identifier before the first colon. The URL column shows the complete fetch input or its template. Braces mark values generated at runtime. The route row shows the timed URL.
+The scheme is the identifier before the first colon. A JavaScript `URL` object exposes the scheme with a trailing colon through `.protocol` and the serialized string through `.href`. The input type column records the first argument passed to `fetch()`. Braces mark values generated at runtime. The route row shows the timed URL.
 
-| Scheme | URL | Protocol / transport | Operation | Assertion on Bun 1.4.4 (Linux x64) |
-| --- | --- | --- | --- | --- |
-| `http` | `http://127.0.0.1:{port}/api/customers/AGT%20402/wagers/G99120488` | HTTP/1.1 · TCP/IPv4 | Route GET | The routing suite verifies request traces and all 16 parameter/error cases for both handlers. |
-| `http` | `http://127.0.0.1:{port}/` | HTTP | GET/HEAD with a body, proxy plus Unix socket | TypeError with ERR_INVALID_ARG_VALUE. |
-| `http` | `http://127.0.0.1:{port}/` | HTTP · TCP/IPv4 | Refused loopback connection | TypeError with ECONNREFUSED and a matching message prefix. |
-| `http` | `http://127.0.0.1:{port}/` | HTTP | POST Blob or FormData | Receiver sees the Blob media type, honors an explicit override and parses the multipart field using the generated boundary. |
-| `https` | `https://127.0.0.1:{port}/` | HTTPS · TLS | Self-signed loopback server | Default and explicit verification reject the untrusted certificate. Supplying its certificate as a trust anchor succeeds with verification enabled. |
-| `s3` | `s3://bucket/key`, `s3://bucket/denied` | S3 · HTTP loopback endpoint | GET, PUT, POST, DELETE | Receiver observes path-style bucket/key requests, POST translated to PUT, and a DELETE body forwarded. A service-supplied 403 XML error resolves as a Response. |
-| `s3` | `s3://bucket/key` | S3 · HTTP loopback endpoint | 12 MiB streamed PUT | Multipart initiation, numbered 5/5/2 MiB parts and completion. |
-| `file` | `file:///{temp-path}/a%20b.txt`, `file://localhost/{temp-path}/a%20b.txt`, `file://other.host/{temp-path}/a%20b.txt` | Local filesystem | Empty authority, localhost, foreign host | Local bytes match. A foreign authority rejects with ERR_INVALID_FILE_URL_HOST on Linux. |
-| `data` | `data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==` | In-process | Base64 text payload | Decoded bytes and text/plain media type. |
-| `blob` | `blob:{uuid}` | In-process | Object URL | Original payload and text/plain media type. Test revokes the URL after use. |
+| Scheme | Fetch input type | Serialized URL | Protocol / transport | Operation | Assertion on Bun 1.4.4 (Linux x64) |
+| --- | --- | --- | --- | --- | --- |
+| `http` | `string` | `http://127.0.0.1:{port}/api/customers/AGT%20402/wagers/G99120488` | HTTP/1.1 · TCP/IPv4 | Route GET | The routing suite verifies request traces and all 16 parameter/error cases for both handlers. |
+| `http` | `URL` object | `http://127.0.0.1:{port}/` | HTTP | GET/HEAD with a body, proxy plus Unix socket | TypeError with ERR_INVALID_ARG_VALUE. |
+| `http` | `URL` object | `http://127.0.0.1:{port}/` | HTTP · TCP/IPv4 | Refused loopback connection | TypeError with ECONNREFUSED and a matching message prefix. |
+| `http` | `URL` object | `http://127.0.0.1:{port}/` | HTTP | POST Blob or FormData | Receiver sees the Blob media type, honors an explicit override and parses the multipart field using the generated boundary. |
+| `https` | `URL` object | `https://127.0.0.1:{port}/` | HTTPS · TLS | Self-signed loopback server | Default and explicit verification reject the untrusted certificate. Supplying its certificate as a trust anchor succeeds with verification enabled. |
+| `s3` | `string` | `s3://bucket/key`, `s3://bucket/denied` | S3 · HTTP loopback endpoint | GET, PUT, POST, DELETE | Receiver observes path-style bucket/key requests, POST translated to PUT, and a DELETE body forwarded. A service-supplied 403 XML error resolves as a Response. |
+| `s3` | `string` | `s3://bucket/key` | S3 · HTTP loopback endpoint | 12 MiB streamed PUT | Multipart initiation, numbered 5/5/2 MiB parts and completion. |
+| `file` | `string` | `file:///{temp-path}/a%20b.txt`, `file://localhost/{temp-path}/a%20b.txt`, `file://other.host/{temp-path}/a%20b.txt` | Local filesystem | Empty authority, localhost, foreign host | Local bytes match. A foreign authority rejects with ERR_INVALID_FILE_URL_HOST on Linux. |
+| `data` | `URL` object and `string` | `data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==` | In-process | Base64 text payload | Decoded bytes and text/plain media type. |
+| `blob` | `URL` object and `string` | `blob:{uuid}` | In-process | Object URL | Original payload and text/plain media type. Test revokes the URL after use. |
 
 The route timer covers only the first row. The other rows exercise Bun's client. Live AWS/R2 authorization, Windows path normalization and the ECONNRESET, ETIMEDOUT and ENOTFOUND branches have no coverage in this suite. The locally observed DELETE behavior describes what Bun sends; provider acceptance requires its own evidence.
 
