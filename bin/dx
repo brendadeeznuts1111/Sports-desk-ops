@@ -346,8 +346,10 @@ Usage: ./bin/dx <command> [args...]
                                     bun-deps (frozen-safe); version = pm version + lock refresh
     ./bin/dx nsh [doctor|artifacts|verify-loop|check|build|test|run|...]
                                     Native Shell (packages/nsh-desk) CLI & verification loop
-    ./bin/dx worktrees [--apply] [--remote] [--ensure-auto-delete] [--offline] [--json|--yaml]
-                                    Audit & clean stale Git worktrees and merged local/remote branches
+    ./bin/dx worktrees [--apply] [--remote] [--ensure-auto-delete] [--offline] [--pr-limit N] [--json|--yaml]
+                                    Audit & clean stale Git worktrees and merged local/remote branches;
+                                    splits dirty trees into real work vs chmod/symlink artifacts and
+                                    reports a shallow clone instead of guessing ancestry
 
   Manager Tools / partner config (GSID cookie auth — set GSLIVE_SESSION_ID in .env)
     ./bin/dx fetch-config           Fetch partnerConfig JSON → partnerConfig.json
