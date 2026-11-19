@@ -32,14 +32,18 @@ import { rmSync } from "node:fs";
 import { declarationDrift } from "../bin/bun_types.ts";
 import {
   SHAPE_SUBSYSTEMS,
+  WEB_GLOBAL_CATEGORIES,
   collectBunShapeUsage,
   listBunShapeScannedFiles,
   type BunShape,
+  type BunWebGlobalShape,
   type ShapeSubsystem,
+  type WebGlobalCategory,
 } from "../lib/bun_shapes.ts";
 import {
   SHAPE_EVIDENCE_FALLBACK,
   SHAPE_SUBSYSTEMS_BY_NAME,
+  WEB_GLOBAL_SPECS_BY_NAME,
 } from "../lib/bun_shapes_overlay.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -59,6 +63,14 @@ function subsystemRank(subsystem: ShapeSubsystem): number {
   const index = SHAPE_SUBSYSTEMS.indexOf(subsystem);
   if (index < 0) {
     throw new Error(`ERR_SHAPE_SUBSYSTEM_UNKNOWN: ${subsystem}`);
+  }
+  return index;
+}
+
+function webGlobalCategoryRank(category: WebGlobalCategory): number {
+  const index = WEB_GLOBAL_CATEGORIES.indexOf(category);
+  if (index < 0) {
+    throw new Error(`ERR_WEB_GLOBAL_CATEGORY_UNKNOWN: ${category}`);
   }
   return index;
 }
@@ -86,7 +98,15 @@ export async function renderBunShapeCatalog(
   // resolve in CI, and a ref to one would be a broken citation.
   const tracked = Bun.spawnSync(
     ["git", "-C", root, "ls-files", "-z", "*.test.ts", "*.test-d.ts"],
-    { stdout: "pipe", stderr: "ignore" },
+    {
+      stdout: "pipe",
+      stderr: "ignore",
+      env: {
+        ...Bun.env,
+        GIT_CONFIG_GLOBAL: Bun.env.GIT_CONFIG_GLOBAL ?? "/dev/null",
+        GIT_CONFIG_NOSYSTEM: "1",
+      },
+    },
   );
   const testFiles = tracked.stdout
     .toString()
@@ -217,6 +237,34 @@ export async function renderBunShapeCatalog(
       };
     });
 
+  const globalRecord = globalThis as Record<string, unknown>;
+  const webGlobalUsage = usage.webGlobals ?? new Map<string, Set<string>>();
+  const webGlobalShapes: BunWebGlobalShape[] = Object.entries(
+    WEB_GLOBAL_SPECS_BY_NAME,
+  )
+    .map(([name, spec]): BunWebGlobalShape => {
+      const actualType = typeof globalRecord[name];
+      if (actualType !== "function" && actualType !== "object") {
+        throw new Error(
+          `ERR_WEB_GLOBAL_RUNTIME_UNEXPECTED: ${name} has typeof ${actualType}`,
+        );
+      }
+      const used = webGlobalUsage.has(name);
+      return {
+        name,
+        category: spec.category,
+        topic: spec.topic,
+        expectedTypeof: actualType,
+        ...(used ? {} : { status: "declared-only" as const }),
+        ...(spec.note !== undefined ? { note: spec.note } : {}),
+      };
+    })
+    .sort(
+      (a, b) =>
+        webGlobalCategoryRank(a.category) - webGlobalCategoryRank(b.category) ||
+        a.name.localeCompare(b.name),
+    );
+
   const lines: string[] = [
     "/**",
     " * @file bun_shapes.generated.ts",
@@ -228,7 +276,7 @@ export async function renderBunShapeCatalog(
     " * `lib/bun_shapes_overlay.ts`.",
     " */",
     "",
-    'import type { BunShape, BunSubmoduleSymbol } from "./bun_shapes.ts";',
+    'import type { BunShape, BunSubmoduleSymbol, BunWebGlobalShape } from "./bun_shapes.ts";',
     "",
     "export const BUN_SHAPES: readonly BunShape[] = [",
   ];
@@ -260,6 +308,26 @@ export async function renderBunShapeCatalog(
     lines.push(
       `    evidence: [${submodule.evidence.map((e) => JSON.stringify(e)).join(", ")}],`,
     );
+    lines.push("  },");
+  }
+  lines.push("];", "");
+
+  lines.push(
+    "/** Window-adjacent Web API globals Bun exposes on `globalThis` (no DOM / no `window`). */",
+    "export const BUN_WEB_GLOBAL_SHAPES: readonly BunWebGlobalShape[] = [",
+  );
+  for (const web of webGlobalShapes) {
+    lines.push("  {");
+    lines.push(`    name: ${JSON.stringify(web.name)},`);
+    lines.push(`    category: ${JSON.stringify(web.category)},`);
+    lines.push(`    topic: ${JSON.stringify(web.topic)},`);
+    lines.push(`    expectedTypeof: ${JSON.stringify(web.expectedTypeof)},`);
+    if (web.status !== undefined) {
+      lines.push(`    status: ${JSON.stringify(web.status)},`);
+    }
+    if (web.note !== undefined) {
+      lines.push(`    note: ${JSON.stringify(web.note)},`);
+    }
     lines.push("  },");
   }
   lines.push("];", "");

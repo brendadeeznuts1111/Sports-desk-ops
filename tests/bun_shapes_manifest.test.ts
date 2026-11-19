@@ -2,12 +2,15 @@ import { describe, expect, test } from "bun:test";
 import {
   BUN_SHAPES,
   BUN_SUBMODULE_SHAPES,
+  BUN_WEB_GLOBAL_SHAPES,
   RUNTIME_ONLY_SHAPES,
   SHAPE_SECTIONS,
   SHAPE_SUBSYSTEMS,
+  WEB_GLOBAL_CATEGORIES,
   analyzeBunShapes,
   catalogHeadings,
   collectBunShapeUsage,
+  scanBunShapeSource,
   type BunShape,
   type ShapeWorld,
 } from "../lib/bun_shapes.ts";
@@ -537,6 +540,92 @@ describe("analyzeBunShapes", () => {
     );
     expect(problems).toEqual([
       { rule: "element-access", detail: 'a.ts: Bun["file"]' },
+    ]);
+  });
+});
+
+describe("Window-adjacent Web global shapes", () => {
+  test("every Web global shape sits in a known category and carries a topic", () => {
+    expect(BUN_WEB_GLOBAL_SHAPES.length).toBeGreaterThan(0);
+    for (const entry of BUN_WEB_GLOBAL_SHAPES) {
+      expect(WEB_GLOBAL_CATEGORIES).toContain(entry.category);
+      expect(entry.topic.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  test("scanBunShapeSource tracks bare and globalThis Web globals while ignoring properties and shadows", () => {
+    const src = `
+      import { URL } from "node:url";
+      function fetch() { return 1; }
+      const obj = { Headers: 1, abort: () => {} };
+      const x = obj.Headers;
+      const u = new URL("file:///tmp/a");
+      const r = fetch();
+      const s = AbortSignal.timeout(100);
+      const t = new globalThis.TextEncoder();
+      const c = structuredClone({ ok: true });
+      // Comment mentioning ShadowRealm and prompt
+      const str = "BroadcastChannel";
+    `;
+    const scanned = scanBunShapeSource("sample.ts", src);
+    expect([...scanned.webGlobals.keys()].sort()).toEqual([
+      "AbortSignal",
+      "TextEncoder",
+      "structuredClone",
+    ]);
+    expect(scanned.webGlobals.has("URL")).toBe(false);
+    expect(scanned.webGlobals.has("fetch")).toBe(false);
+    expect(scanned.webGlobals.has("Headers")).toBe(false);
+    expect(scanned.webGlobals.has("ShadowRealm")).toBe(false);
+    expect(scanned.webGlobals.has("BroadcastChannel")).toBe(false);
+  });
+
+  test("analyzeBunShapes reports missing, typeof-mismatch, member-drift, unbaselined, and dom-global-present", () => {
+    const webGlobalShapes = [
+      {
+        name: "URL",
+        category: "url" as const,
+        topic: "WHATWG URL",
+        expectedTypeof: "function" as const,
+      },
+      {
+        name: "crypto",
+        category: "crypto" as const,
+        topic: "WebCrypto",
+        expectedTypeof: "object" as const,
+      },
+      {
+        name: "ShadowRealm",
+        category: "realms" as const,
+        topic: "Isolated realms",
+        expectedTypeof: "function" as const,
+      },
+    ];
+    const problems = analyzeBunShapes(
+      world({
+        webGlobalShapes,
+        webGlobalRuntimeTypeof: new Map([
+          ["URL", "function"],
+          ["crypto", "function"],
+          ["ShadowRealm", "undefined"],
+        ]),
+        webGlobalMembers: new Map([
+          ["URL", ["canParse", "parse", "extra"]],
+          ["crypto", ["randomUUID"]],
+        ]),
+        webGlobalMemberBaseline: new Map([["URL", ["canParse", "parse"]]]),
+        absentDomRuntimeTypeof: new Map([
+          ["window", "object"],
+          ["document", "undefined"],
+        ]),
+      }),
+    );
+    expect(rules(problems).sort()).toEqual([
+      "dom-global-present",
+      "web-global-member-drift",
+      "web-global-member-unbaselined",
+      "web-global-missing",
+      "web-global-typeof-mismatch",
     ]);
   });
 });

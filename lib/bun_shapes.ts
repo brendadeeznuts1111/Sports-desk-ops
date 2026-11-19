@@ -107,7 +107,110 @@ export interface BunSubmoduleSymbol {
  * bundler macros rather than runtime values (`MACRO_SUBMODULE_SYMBOLS` in the
  * generator).
  */
-export { BUN_SUBMODULE_SHAPES } from "./bun_shapes.generated.ts";
+export {
+  BUN_SUBMODULE_SHAPES,
+  BUN_WEB_GLOBAL_SHAPES,
+} from "./bun_shapes.generated.ts";
+
+export const WEB_GLOBAL_CATEGORIES = [
+  "url",
+  "binary",
+  "streams",
+  "encoding",
+  "http",
+  "workers",
+  "crypto",
+  "timing",
+  "cli",
+  "events",
+  "realms",
+] as const;
+
+export type WebGlobalCategory = (typeof WEB_GLOBAL_CATEGORIES)[number];
+
+/** Display label per unmixed Window-adjacent Web global category. */
+export const WEB_GLOBAL_SECTIONS: Readonly<Record<WebGlobalCategory, string>> =
+  {
+    url: "URL",
+    binary: "Binary & Files",
+    streams: "Web Streams",
+    encoding: "Encoding",
+    http: "HTTP & Fetch",
+    workers: "Workers & IPC",
+    crypto: "WebCrypto",
+    timing: "Timers & Performance",
+    cli: "Console & CLI",
+    events: "Events",
+    realms: "Realms & Errors",
+  };
+
+/** Browser DOM globals that must stay absent (`undefined`) in Bun server/CLI runtimes. */
+export const ABSENT_DOM_GLOBALS = ["window", "document"] as const;
+
+/**
+ * Window-adjacent Web API globals Bun exposes directly on `globalThis` (no DOM,
+ * no `window` object required). Tracked alongside `BUN_SHAPES` and `BUN_SUBMODULE_SHAPES`
+ * so static helper methods and runtime availability cannot drift silently across upgrades.
+ */
+export interface BunWebGlobalShape {
+  readonly name: string;
+  readonly category: WebGlobalCategory;
+  /** Concise operational topic label (e.g. `"WHATWG URL"`, `"Cancellation"`, `"WebCrypto"`). */
+  readonly topic: string;
+  /** Runtime `typeof globalThis[name]` measured on the pinned Bun binary. */
+  readonly expectedTypeof: "function" | "object";
+  /** `declared-only` when no tracked production source currently references this global. */
+  readonly status?: "declared-only";
+  /** Desk-relevant invariant or 1.4.4 caveat. */
+  readonly note?: string;
+}
+
+/** Exact set of Window-adjacent Web globals tracked by the AST scanner. */
+export const TRACKED_WEB_GLOBAL_NAMES: ReadonlySet<string> = new Set([
+  "URL",
+  "URLSearchParams",
+  "Blob",
+  "File",
+  "ReadableStream",
+  "WritableStream",
+  "TransformStream",
+  "TextEncoder",
+  "TextDecoder",
+  "atob",
+  "btoa",
+  "fetch",
+  "Request",
+  "Response",
+  "Headers",
+  "AbortController",
+  "AbortSignal",
+  "FormData",
+  "WebSocket",
+  "Worker",
+  "MessagePort",
+  "MessageChannel",
+  "BroadcastChannel",
+  "structuredClone",
+  "crypto",
+  "SubtleCrypto",
+  "CryptoKey",
+  "performance",
+  "console",
+  "setTimeout",
+  "setInterval",
+  "queueMicrotask",
+  "alert",
+  "confirm",
+  "prompt",
+  "Event",
+  "EventTarget",
+  "CustomEvent",
+  "MessageEvent",
+  "ErrorEvent",
+  "CloseEvent",
+  "ShadowRealm",
+  "reportError",
+]);
 
 /**
  * Shapes whose members depend on the caller, so they are not snapshotted: the
@@ -170,6 +273,34 @@ export function surfaceMembers(value: unknown): string[] {
 }
 
 /**
+ * Instance/prototype member surface for constructors (`value.prototype`), minus
+ * object/function internals. Returns `[]` for plain callables or objects.
+ */
+export function surfacePrototypeMembers(value: unknown): string[] {
+  if (typeof value !== "function") return [];
+  const proto = (value as { prototype?: unknown }).prototype;
+  if (typeof proto !== "object" || proto === null) return [];
+  return surfaceMembers(proto);
+}
+
+/**
+ * Combined static + `prototype.*` member surface for a Window-adjacent Web global,
+ * so constructors like `URLSearchParams`, `Headers`, and `Blob` are drift-checked
+ * on both static helpers and instance methods.
+ */
+export function webGlobalSurfaceMembers(value: unknown): string[] {
+  if (
+    (typeof value !== "object" && typeof value !== "function") ||
+    value === null
+  ) {
+    return [];
+  }
+  const statics = surfaceMembers(value);
+  const protos = surfacePrototypeMembers(value).map((m) => `prototype.${m}`);
+  return [...statics, ...protos];
+}
+
+/**
  * Derived, not hand-written: membership from the tracked-source usage scan,
  * `kind`/`heading` from bun-types declarations, subsystem and evidence from
  * `lib/bun_shapes_overlay.ts`. Regenerate with
@@ -192,6 +323,8 @@ export interface ShapeUsage {
   readonly elementAccess: string[];
   /** Built-in `bun:*` submodule symbol (`"bun:sqlite/Database"`) → files that import it. */
   readonly submodules?: ReadonlyMap<string, Set<string>>;
+  /** Tracked Window-adjacent Web global (`"URL"`, `"AbortSignal"`, …) → files that reference it. */
+  readonly webGlobals?: ReadonlyMap<string, Set<string>>;
 }
 
 const SCANNED_EXTENSIONS = ["ts", "tsx", "mts", "mjs", "js"] as const;
@@ -291,15 +424,75 @@ function leftmostIdentifier(entity: ts.EntityName): string {
   return cur.text;
 }
 
+function isBareWebGlobalReference(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  if (parent === undefined) return false;
+  if (ts.isPropertyAccessExpression(parent) && parent.name === node) {
+    return false;
+  }
+  if (ts.isQualifiedName(parent) && parent.right === node) {
+    return false;
+  }
+  if (
+    (ts.isPropertyAssignment(parent) ||
+      ts.isShorthandPropertyAssignment(parent) ||
+      ts.isMethodDeclaration(parent) ||
+      ts.isPropertyDeclaration(parent) ||
+      ts.isPropertySignature(parent) ||
+      ts.isMethodSignature(parent) ||
+      ts.isGetAccessorDeclaration(parent) ||
+      ts.isSetAccessorDeclaration(parent) ||
+      ts.isParameter(parent) ||
+      ts.isVariableDeclaration(parent) ||
+      ts.isFunctionDeclaration(parent) ||
+      ts.isFunctionExpression(parent) ||
+      ts.isClassDeclaration(parent) ||
+      ts.isClassExpression(parent) ||
+      ts.isInterfaceDeclaration(parent) ||
+      ts.isTypeAliasDeclaration(parent) ||
+      ts.isEnumDeclaration(parent) ||
+      ts.isEnumMember(parent) ||
+      ts.isBindingElement(parent) ||
+      ts.isImportClause(parent) ||
+      ts.isNamespaceImport(parent) ||
+      ts.isImportSpecifier(parent) ||
+      ts.isExportSpecifier(parent) ||
+      ts.isJsxAttribute(parent) ||
+      ts.isTypeParameterDeclaration(parent)) &&
+    parent.name === node
+  ) {
+    return false;
+  }
+  if (
+    (ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent)) &&
+    parent.propertyName === node
+  ) {
+    return false;
+  }
+  if (
+    (ts.isLabeledStatement(parent) ||
+      ts.isBreakStatement(parent) ||
+      ts.isContinueStatement(parent)) &&
+    parent.label === node
+  ) {
+    return false;
+  }
+  if (ts.isShorthandPropertyAssignment(parent)) {
+    return true;
+  }
+  return true;
+}
+
 /**
  * Parse a single TypeScript/JavaScript source file and return per-shape hit counts,
- * `bun:*` built-in submodule symbol hits, and any dynamic element accesses (`Bun[...]`
- * or `bunNs[...]`).
+ * `bun:*` built-in submodule symbol hits, tracked Window-adjacent Web global hits,
+ * and any dynamic element accesses (`Bun[...]` or `bunNs[...]`).
  *
  * Tracks both `globalThis.Bun` (`Bun.<name>`, `globalThis.Bun.<name>`, `const { x } = Bun`)
  * and the `"bun"` module surface (`import { x, type T } from "bun"`, `import * as bunNs from "bun"`,
  * `export { x } from "bun"`, `import("bun").<Member>`), plus built-in `bun:*` submodules
- * (`bun:sqlite`, `bun:jsc`, `bun:bundle`, `bun:ffi`, excluding `bun:test`).
+ * (`bun:sqlite`, `bun:jsc`, `bun:bundle`, `bun:ffi`, excluding `bun:test`) and
+ * `TRACKED_WEB_GLOBAL_NAMES` (`globalThis.<Name>` or unshadowed bare identifiers).
  * Comments and string literals are ignored by construction.
  */
 export function scanBunShapeSource(
@@ -308,10 +501,12 @@ export function scanBunShapeSource(
 ): {
   readonly hits: Map<string, number>;
   readonly submodules: Map<string, number>;
+  readonly webGlobals: Map<string, number>;
   readonly elementAccess: string[];
 } {
   const hits = new Map<string, number>();
   const submodules = new Map<string, number>();
+  const webGlobals = new Map<string, number>();
   const elementAccess: string[] = [];
   const bump = (name: string): void => {
     if (name === "default" || name === "__esModule") return;
@@ -324,17 +519,21 @@ export function scanBunShapeSource(
     const key = `${mod}/${name}`;
     submodules.set(key, (submodules.get(key) ?? 0) + 1);
   };
+  const bumpWebGlobal = (name: string): void => {
+    webGlobals.set(name, (webGlobals.get(name) ?? 0) + 1);
+  };
 
   const sf = ts.createSourceFile(
     file,
     text,
     ts.ScriptTarget.Latest,
-    false,
+    true,
     scriptKindForFile(file),
   );
 
   const bunNamespaces = new Set<string>(["Bun"]);
   const submoduleNamespaces = new Map<string, string>();
+  const shadowedWebGlobals = new Set<string>();
 
   for (const stmt of sf.statements) {
     if (
@@ -343,6 +542,25 @@ export function scanBunShapeSource(
     ) {
       const spec = stmt.moduleSpecifier.text;
       const clause = stmt.importClause;
+      if (clause) {
+        if (clause.name && TRACKED_WEB_GLOBAL_NAMES.has(clause.name.text)) {
+          shadowedWebGlobals.add(clause.name.text);
+        }
+        if (clause.namedBindings) {
+          if (
+            ts.isNamespaceImport(clause.namedBindings) &&
+            TRACKED_WEB_GLOBAL_NAMES.has(clause.namedBindings.name.text)
+          ) {
+            shadowedWebGlobals.add(clause.namedBindings.name.text);
+          } else if (ts.isNamedImports(clause.namedBindings)) {
+            for (const el of clause.namedBindings.elements) {
+              if (TRACKED_WEB_GLOBAL_NAMES.has(el.name.text)) {
+                shadowedWebGlobals.add(el.name.text);
+              }
+            }
+          }
+        }
+      }
       if (spec === "bun" && clause) {
         if (clause.name) bunNamespaces.add(clause.name.text);
         const bindings = clause.namedBindings;
@@ -366,6 +584,27 @@ export function scanBunShapeSource(
               bumpSubmodule(spec, (el.propertyName ?? el.name).text);
             }
           }
+        }
+      }
+    } else if (
+      ts.isFunctionDeclaration(stmt) &&
+      stmt.name &&
+      TRACKED_WEB_GLOBAL_NAMES.has(stmt.name.text)
+    ) {
+      shadowedWebGlobals.add(stmt.name.text);
+    } else if (
+      ts.isClassDeclaration(stmt) &&
+      stmt.name &&
+      TRACKED_WEB_GLOBAL_NAMES.has(stmt.name.text)
+    ) {
+      shadowedWebGlobals.add(stmt.name.text);
+    } else if (ts.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        if (
+          ts.isIdentifier(decl.name) &&
+          TRACKED_WEB_GLOBAL_NAMES.has(decl.name.text)
+        ) {
+          shadowedWebGlobals.add(decl.name.text);
         }
       }
     } else if (
@@ -398,6 +637,12 @@ export function scanBunShapeSource(
     if (ts.isPropertyAccessExpression(node)) {
       if (isBunNamespaceExpression(node.expression, bunNamespaces)) {
         bump(node.name.text);
+      } else if (
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "globalThis" &&
+        TRACKED_WEB_GLOBAL_NAMES.has(node.name.text)
+      ) {
+        bumpWebGlobal(node.name.text);
       } else if (ts.isIdentifier(node.expression)) {
         const submod = submoduleNamespaces.get(node.expression.text);
         if (submod !== undefined) bumpSubmodule(submod, node.name.text);
@@ -463,23 +708,31 @@ export function scanBunShapeSource(
       } else if (spec.startsWith("bun:") && spec !== "bun:test") {
         bumpSubmodule(spec, member);
       }
+    } else if (
+      ts.isIdentifier(node) &&
+      TRACKED_WEB_GLOBAL_NAMES.has(node.text) &&
+      !shadowedWebGlobals.has(node.text) &&
+      isBareWebGlobalReference(node)
+    ) {
+      bumpWebGlobal(node.text);
     }
     ts.forEachChild(node, visit);
   };
   visit(sf);
-  return { hits, submodules, elementAccess };
+  return { hits, submodules, webGlobals, elementAccess };
 }
 
 /**
  * Parse each source and collect `Bun.<name>` / `import { <name> } from "bun"` value and
- * type positions plus `bun:*` built-in submodule imports. Comments and string literals
- * are ignored by construction.
+ * type positions, `bun:*` built-in submodule imports, and tracked Window-adjacent Web
+ * global references. Comments and string literals are ignored by construction.
  */
 export function collectBunShapeUsage(
   sources: ReadonlyMap<string, string>,
 ): ShapeUsage {
   const used = new Map<string, Set<string>>();
   const submodules = new Map<string, Set<string>>();
+  const webGlobals = new Map<string, Set<string>>();
   const elementAccess: string[] = [];
   for (const [file, text] of sources) {
     const scanned = scanBunShapeSource(file, text);
@@ -493,9 +746,14 @@ export function collectBunShapeUsage(
       set.add(file);
       submodules.set(subKey, set);
     }
+    for (const globalName of scanned.webGlobals.keys()) {
+      const set = webGlobals.get(globalName) ?? new Set<string>();
+      set.add(file);
+      webGlobals.set(globalName, set);
+    }
     elementAccess.push(...scanned.elementAccess);
   }
-  return { used, submodules, elementAccess };
+  return { used, submodules, webGlobals, elementAccess };
 }
 
 export type ShapeRule =
@@ -517,7 +775,12 @@ export type ShapeRule =
   | "element-access"
   | "unknown-submodule-symbol"
   | "unused-submodule-symbol"
-  | "submodule-evidence-unresolved";
+  | "submodule-evidence-unresolved"
+  | "web-global-missing"
+  | "web-global-typeof-mismatch"
+  | "web-global-member-drift"
+  | "web-global-member-unbaselined"
+  | "dom-global-present";
 
 export interface ShapeProblem {
   readonly rule: ShapeRule;
@@ -552,6 +815,16 @@ export interface ShapeWorld {
   readonly runtimeOnly?: ReadonlyMap<string, string>;
   /** Optional `BUN_SUBMODULE_SHAPES` check when `usage.submodules` is populated. */
   readonly submoduleShapes?: readonly BunSubmoduleSymbol[];
+  /** Optional Window-adjacent Web global catalogue check. */
+  readonly webGlobalShapes?: readonly BunWebGlobalShape[];
+  /** Measured `typeof globalThis[name]` per tracked Web global. */
+  readonly webGlobalRuntimeTypeof?: ReadonlyMap<string, string>;
+  /** Measured static/own member surface per tracked Web global. */
+  readonly webGlobalMembers?: ReadonlyMap<string, readonly string[]>;
+  /** Baselined member surface per Web global from tests/bun_shape_members.json. */
+  readonly webGlobalMemberBaseline?: ReadonlyMap<string, readonly string[]>;
+  /** Measured `typeof globalThis[name]` for `ABSENT_DOM_GLOBALS` (`window`, `document`). */
+  readonly absentDomRuntimeTypeof?: ReadonlyMap<string, string>;
 }
 
 const TYPE_DECLARATION =
@@ -772,6 +1045,65 @@ export function analyzeBunShapes(world: ShapeWorld): ShapeProblem[] {
             detail: `${key} -> ${ref}`,
           });
         }
+      }
+    }
+  }
+
+  if (world.webGlobalShapes !== undefined) {
+    for (const web of world.webGlobalShapes) {
+      const actualTypeof = world.webGlobalRuntimeTypeof?.get(web.name);
+      if (actualTypeof === "undefined" || actualTypeof === undefined) {
+        problems.push({
+          rule: "web-global-missing",
+          detail: web.name,
+        });
+      } else if (actualTypeof !== web.expectedTypeof) {
+        problems.push({
+          rule: "web-global-typeof-mismatch",
+          detail: `${web.name}: expected ${web.expectedTypeof}, got ${actualTypeof}`,
+        });
+      }
+
+      if (
+        world.webGlobalMembers !== undefined &&
+        world.webGlobalMemberBaseline !== undefined
+      ) {
+        const baselineMembers = world.webGlobalMemberBaseline.get(web.name);
+        const now = world.webGlobalMembers.get(web.name);
+        if (baselineMembers !== undefined) {
+          if (now === undefined) {
+            problems.push({
+              rule: "web-global-member-drift",
+              detail: `${web.name}: no member surface in the binary now`,
+            });
+          } else {
+            const added = now.filter((m) => !baselineMembers.includes(m));
+            const removed = baselineMembers.filter((m) => !now.includes(m));
+            if (added.length > 0 || removed.length > 0) {
+              problems.push({
+                rule: "web-global-member-drift",
+                detail: `${web.name}: added [${added.join(", ")}] removed [${removed.join(", ")}]`,
+              });
+            }
+          }
+        } else if (now !== undefined && now.length > 0) {
+          problems.push({
+            rule: "web-global-member-unbaselined",
+            detail: web.name,
+          });
+        }
+      }
+    }
+  }
+
+  if (world.absentDomRuntimeTypeof !== undefined) {
+    for (const domName of ABSENT_DOM_GLOBALS) {
+      const actual = world.absentDomRuntimeTypeof.get(domName) ?? "undefined";
+      if (actual !== "undefined") {
+        problems.push({
+          rule: "dom-global-present",
+          detail: `${domName}: expected undefined, got ${actual}`,
+        });
       }
     }
   }

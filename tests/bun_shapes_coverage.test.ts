@@ -1,14 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { dirname, join, resolve } from "node:path";
 import {
+  ABSENT_DOM_GLOBALS,
   BUN_SHAPES,
   BUN_SUBMODULE_SHAPES,
+  BUN_WEB_GLOBAL_SHAPES,
   VOLATILE_SHAPES,
   analyzeBunShapes,
   catalogHeadings,
   collectBunShapeUsage,
   listBunShapeScannedFiles,
   surfaceMembers,
+  webGlobalSurfaceMembers,
 } from "../lib/bun_shapes.ts";
 import { declarationDrift } from "../bin/bun_types.ts";
 import {
@@ -126,13 +129,37 @@ describe("Bun shape coverage", () => {
     }
     const memberFile = (await Bun.file(
       join(root, "tests/bun_shape_members.json"),
-    ).json()) as { shapes: Record<string, string[]> };
+    ).json()) as {
+      shapes: Record<string, string[]>;
+      webGlobals?: Record<string, string[]>;
+    };
     const memberBaseline = new Map(Object.entries(memberFile.shapes));
+
+    const g = globalThis as Record<string, unknown>;
+    const webGlobalRuntimeTypeof = new Map<string, string>();
+    const webGlobalMembers = new Map<string, readonly string[]>();
+    for (const web of BUN_WEB_GLOBAL_SHAPES) {
+      const value = g[web.name];
+      webGlobalRuntimeTypeof.set(web.name, typeof value);
+      const list = webGlobalSurfaceMembers(value);
+      if (list.length > 0) webGlobalMembers.set(web.name, list);
+    }
+    const webGlobalMemberBaseline = new Map(
+      Object.entries(memberFile.webGlobals ?? {}),
+    );
+    const absentDomRuntimeTypeof = new Map<string, string>(
+      ABSENT_DOM_GLOBALS.map((dom) => [dom, typeof g[dom]]),
+    );
 
     const problems = analyzeBunShapes({
       usage,
       shapes: BUN_SHAPES,
       submoduleShapes: BUN_SUBMODULE_SHAPES,
+      webGlobalShapes: BUN_WEB_GLOBAL_SHAPES,
+      webGlobalRuntimeTypeof,
+      webGlobalMembers,
+      webGlobalMemberBaseline,
+      absentDomRuntimeTypeof,
       members,
       memberBaseline,
       headings,
@@ -168,5 +195,40 @@ describe("Bun shape coverage", () => {
       join(await bunTypesDir(), "package.json"),
     ).json();
     expect(String(typesPkg.version)).toBe(String(BUN_SHAPE_PINS.typesVersion));
+  });
+
+  test("Window-adjacent Web globals satisfy desk runtime contracts on this binary", () => {
+    const g = globalThis as Record<string, unknown>;
+    for (const dom of ABSENT_DOM_GLOBALS) {
+      expect(typeof g[dom]).toBe("undefined");
+    }
+
+    expect(URL.canParse("file:///tmp/desk.sqlite")).toBe(true);
+    const parsed = URL.parse("file:///tmp/desk.sqlite");
+    expect(parsed?.protocol).toBe("file:");
+    expect(parsed?.pathname).toBe("/tmp/desk.sqlite");
+    parsed?.searchParams.set("mode", "ro");
+    expect(Bun.file(parsed!).name).toBe("/tmp/desk.sqlite");
+    expect(Bun.file("s3://bucket/key").name).toBe("bucket/key");
+    expect(() => Bun.file(new URL("s3://bucket/key"))).toThrow(
+      /ERR_INVALID_URL_SCHEME|file:/,
+    );
+
+    const encoded = new TextEncoder().encode("desk");
+    expect(new TextDecoder().decode(encoded)).toBe("desk");
+    expect(atob(btoa("f402"))).toBe("f402");
+    expect(structuredClone({ a: [1, 2] })).toEqual({ a: [1, 2] });
+    expect(AbortSignal.timeout(50)).toBeInstanceOf(AbortSignal);
+
+    const target = new EventTarget();
+    let seen = "";
+    target.addEventListener("ping", (ev) => {
+      seen = (ev as CustomEvent<string>).detail;
+    });
+    target.dispatchEvent(new CustomEvent("ping", { detail: "ok" }));
+    expect(seen).toBe("ok");
+
+    const realm = new ShadowRealm();
+    expect(realm.evaluate("2 + 2")).toBe(4);
   });
 });

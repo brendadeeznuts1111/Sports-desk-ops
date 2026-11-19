@@ -15,15 +15,19 @@
  */
 import path from "node:path";
 import {
+  ABSENT_DOM_GLOBALS,
   BUN_SHAPES,
   BUN_SHAPE_PINS,
   BUN_SUBMODULE_SHAPES,
+  BUN_WEB_GLOBAL_SHAPES,
   RUNTIME_ONLY_SHAPES,
   SHAPE_SECTIONS,
   VOLATILE_SHAPES,
+  WEB_GLOBAL_SECTIONS,
   listBunShapeScannedFiles,
   scanBunShapeSource,
   surfaceMembers,
+  surfacePrototypeMembers,
 } from "../lib/bun_shapes.ts";
 
 export const SHAPE_CATALOG_PATH =
@@ -174,9 +178,10 @@ export async function renderBunShapeContractsCatalog(
   const files = await listBunShapeScannedFiles(root);
   const perShape = new Map<string, Map<string, number>>();
   const perSubmodule = new Map<string, Map<string, number>>();
+  const perWebGlobal = new Map<string, Map<string, number>>();
   for (const file of files) {
     const text = await Bun.file(path.join(root, file)).text();
-    const { hits, submodules } = scanBunShapeSource(file, text);
+    const { hits, submodules, webGlobals } = scanBunShapeSource(file, text);
     for (const [hit, count] of hits) {
       const m = perShape.get(hit) ?? new Map<string, number>();
       m.set(file, (m.get(file) ?? 0) + count);
@@ -186,6 +191,11 @@ export async function renderBunShapeContractsCatalog(
       const m = perSubmodule.get(subKey) ?? new Map<string, number>();
       m.set(file, (m.get(file) ?? 0) + count);
       perSubmodule.set(subKey, m);
+    }
+    for (const [globalName, count] of webGlobals) {
+      const m = perWebGlobal.get(globalName) ?? new Map<string, number>();
+      m.set(file, (m.get(file) ?? 0) + count);
+      perWebGlobal.set(globalName, m);
     }
   }
 
@@ -296,6 +306,87 @@ export async function renderBunShapeContractsCatalog(
     out.push(
       `- **\`${sub.module}\` → \`${sub.name}\`** (${kindLabel}) — here: ${top.length === 0 ? "no call site" : top.join(", ")} · evidence: ${sub.evidence.map((e) => `\`${e}\``).join(", ")}`,
     );
+  }
+
+  out.push("");
+  out.push(`## Window-adjacent Web globals (\`globalThis\`)`);
+  out.push("");
+  out.push(
+    `Bun implements a broad subset of the browser \`Window\` surface as true globals on \`globalThis\` — no import required, and no DOM (\`${ABSENT_DOM_GLOBALS.join("`, `")}\` are strictly \`undefined\` in server/CLI runtimes). Each entry below is checked at runtime against \`Bun ${BUN_SHAPE_PINS.bunVersion}\`, and non-empty static member sets are snapshotted under \`webGlobals\` in \`tests/bun_shape_members.json\`.`,
+  );
+  out.push("");
+  out.push(
+    `- **No DOM:** \`window\` and \`document\` are absent; use \`globalThis\` or bare constructors.`,
+  );
+  out.push(
+    `- **\`Bun.file(url)\` scheme boundary (measured on \`${BUN_SHAPE_PINS.bunVersion}\`):** string \`Bun.file("s3://bucket/key")\` and \`Bun.s3.file(...)\` return an \`S3File\`, whereas passing a \`URL\` instance accepts \`file:\` only (\`new URL("s3://...")\` throws \`ERR_INVALID_URL_SCHEME\`) and ignores query strings such as \`?mode=ro\`.`,
+  );
+  out.push(
+    `- **Path ↔ URL conversion:** use \`Bun.pathToFileURL\` / \`Bun.fileURLToPath\` (or \`node:url\`).`,
+  );
+  out.push("");
+
+  const g = globalThis as Record<string, unknown>;
+  const headers = [
+    "Global",
+    "Category",
+    "Topic",
+    "`typeof`",
+    "Static members",
+    "Prototype members",
+    "Here",
+    "Notes",
+  ];
+  const rows: string[][] = [];
+  for (const entry of BUN_WEB_GLOBAL_SHAPES) {
+    const title = WEB_GLOBAL_SECTIONS[entry.category];
+    const val = g[entry.name];
+    const statics =
+      (typeof val === "object" || typeof val === "function") && val !== null
+        ? surfaceMembers(val)
+        : [];
+    const protos = surfacePrototypeMembers(val);
+    const staticCell =
+      statics.length === 0
+        ? "—"
+        : statics.length <= 5
+          ? statics.map((m) => `\`${m}\``).join(", ")
+          : `${statics.length} (snapshot)`;
+    const protoCell =
+      protos.length === 0
+        ? "—"
+        : protos.length <= 5
+          ? protos.map((m) => `\`${m}\``).join(", ")
+          : `${protos.length} (snapshot)`;
+    const filesForGlobal = [
+      ...(perWebGlobal.get(entry.name) ?? new Map()),
+    ].sort((a, c) => c[1] - a[1] || a[0].localeCompare(c[0]));
+    const top = filesForGlobal.slice(0, 2).map(([f]) => `\`${f}\``);
+    const hereCell =
+      top.length === 0
+        ? "declared-only"
+        : `${top.join(", ")}${filesForGlobal.length > 2 ? ` (+${filesForGlobal.length - 2})` : ""}`;
+    const noteCell = (entry.note ?? "—").replaceAll("|", "\\|");
+    rows.push([
+      `\`${entry.name}\``,
+      title,
+      entry.topic,
+      `\`${entry.expectedTypeof}\``,
+      staticCell,
+      protoCell,
+      hereCell,
+      noteCell,
+    ]);
+  }
+  const widths = headers.map((header, idx) =>
+    Math.max(header.length, 3, ...rows.map((r) => (r[idx] ?? "").length)),
+  );
+  const padRow = (cells: readonly string[]): string =>
+    `| ${cells.map((c, idx) => c.padEnd(widths[idx] ?? 3)).join(" | ")} |`;
+  out.push(padRow(headers));
+  out.push(`| ${widths.map((w) => "-".repeat(w)).join(" | ")} |`);
+  for (const row of rows) {
+    out.push(padRow(row));
   }
 
   const okLinks = [...permalinks.values()].filter((s) => s === 200).length;
