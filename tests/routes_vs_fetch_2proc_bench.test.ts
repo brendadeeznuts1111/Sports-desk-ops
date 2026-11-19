@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   benchmarkOrder,
   median,
+  pairedLatency,
   retainedHeapDelta,
   routeImprovementPct,
   summarizeLatencies,
@@ -88,6 +89,8 @@ describe("two-process benchmark contract (pure math)", () => {
       max_us: latency + 30,
       retained_cells_per_request: 0.25,
       retained_bytes_per_request: -3.5,
+      retained_cells_batch: 10,
+      retained_bytes_batch: -50,
       heap_before: { objectCount: 100, heapSize: 1000 },
       heap_after: { objectCount: 110, heapSize: 950 },
     });
@@ -99,6 +102,13 @@ describe("two-process benchmark contract (pure math)", () => {
       make(3, "routes", 30),
       make(3, "fetch", 80),
     ];
+    const alternating = [make(1, "routes", 40), make(1, "fetch", 30), make(2, "fetch", 80), make(2, "routes", 60)];
+    expect(pairedLatency(alternating)[0]).toEqual({
+      metric: "p50_us", deltas_us: [{ round: 1, delta: -10 }, { round: 2, delta: 20 }],
+      pairs: 2, native_wins: 1, median_us: 5, min_us: -10, max_us: 20,
+    });
+    expect(() => pairedLatency(alternating.slice(1))).toThrow();
+    expect(() => pairedLatency([...alternating, alternating[0]!])).toThrow();
     const routes = summarizeRuns(runs, "routes");
     const manual = summarizeRuns(runs, "fetch");
     expect(routes.p50_us).toBe(20);

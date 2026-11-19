@@ -19,6 +19,8 @@ export interface RunResult extends LatencyStats {
   mode: BenchMode;
   retained_cells_per_request: number;
   retained_bytes_per_request: number;
+  retained_cells_batch: number;
+  retained_bytes_batch: number;
   heap_before: HeapSnap;
   heap_after: HeapSnap;
 }
@@ -110,4 +112,28 @@ export function routeImprovementPct(routes: ModeSummary, manual: ModeSummary): n
   return manual.p50_us > 0
     ? rounded(((manual.p50_us - routes.p50_us) / manual.p50_us) * 100)
     : null;
+}
+
+/** One signed difference per paired round. Positive values favor native. */
+export function pairedLatency(runs: RunResult[]) {
+  const rounds = [...new Set(runs.map((run) => run.round))];
+  const pairs = rounds.map((round) => {
+    const rows = runs.filter((row) => row.round === round);
+    const routes = rows.find((row) => row.mode === "routes");
+    const manual = rows.find((row) => row.mode === "fetch");
+    if (rows.length !== 2 || !routes || !manual) throw new Error("Incomplete or duplicate pair in round " + round);
+    return { round, routes, manual };
+  });
+  return (["p50_us", "p95_us", "p99_us"] as const).map((metric) => {
+    const deltas_us = pairs.map(({ round, routes, manual }) => ({
+      round,
+      delta: rounded(manual[metric] - routes[metric]),
+    }));
+    const values = deltas_us.map(({ delta }) => delta);
+    return {
+      metric, deltas_us, pairs: pairs.length,
+      native_wins: values.filter((value) => value > 0).length,
+      median_us: rounded(median(values)), min_us: Math.min(...values), max_us: Math.max(...values),
+    };
+  });
 }

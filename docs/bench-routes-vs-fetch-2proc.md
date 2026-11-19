@@ -7,7 +7,7 @@ This is an **isolated local microbenchmark**, not an application benchmark or a 
 ## Run and save a real measurement snapshot
 
 ```sh
-bun --version     # should be 1.4.4 (repository pin)
+bun --revision     # should be 1.4.4 (repository pin)
 mkdir -p scratch/bench
 bun test tests/routes_vs_fetch_2proc_bench.test.ts
 bun run bench/routes-vs-fetch-2proc.bench.ts \
@@ -23,7 +23,7 @@ bun run bench/routes-vs-fetch-2proc.bench.ts \
   --rounds=1 --warmup=100 --latency=200 --heap=100
 ```
 
-The output file is **written only when `--output` is requested**. `scratch/` is gitignored. A snapshot is *real measured data* and includes timestamp, **git commit and dirty-worktree flag**, Bun version, OS/architecture, CPU model and logical CPU count, settings, each run and median summary. No fabricated latency numbers are committed.
+The output file is **written only when `--output` is requested**. `scratch/` is gitignored. A snapshot is *real measured data* and includes timestamp, **git commit and dirty-worktree flag**, Bun version and revision, OS/architecture, CPU model and logical CPU count, settings, each run and median summary. No fabricated latency numbers are committed.
 
 ## What is actually measured
 
@@ -51,7 +51,9 @@ The server control endpoint invokes `fullGC()` **before both snapshots** and the
 
 This benchmark can establish a **repeatable directional difference** in this narrow handler workload. It does **not** establish a server-only allocation rate, end-to-end SportsDesk production speedup, memory safety, concurrency scaling, or the latency of the actual customer/wager backend.
 
-A real benchmark has **not been executed in this environment** because Bun is not installed here. The deterministic summary helpers are covered by `tests/routes_vs_fetch_2proc_bench.test.ts`. Attach a snapshot from the pinned Bun runtime before making any performance claims.
+Each child checks the expected status and body for seven GET cases before warmup. The synthetic identifier policy rejects encoded slashes and malformed escapes with HTTP 400. Confirm the application contract separately before proposing a routing change.
+
+Use an even number of rounds for balanced ordering. The JSON `paired` rows report manual minus native latency by round, the median and range of those differences, and native wins. Treat the pair as the repeat unit. The `runs` rows include signed whole-batch retained cells and bytes alongside the underlying snapshots. Repeat under representative application and network conditions before drawing a SportsDesk performance conclusion.
 
 Official references:
 - [Bun router and percent-decoded params](https://bun.com/docs/runtime/http/routing)

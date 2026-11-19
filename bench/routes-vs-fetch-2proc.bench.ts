@@ -7,6 +7,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import {
   benchmarkOrder,
+  pairedLatency,
   retainedHeapDelta,
   routeImprovementPct,
   summarizeLatencies,
@@ -16,8 +17,16 @@ import {
   type RunResult,
 } from "./routes-vs-fetch-2proc.core";
 
-const WAGER_PATH = "/api/customers/AGT%20402/wagers/G99120488";
-const EXPECTED_BODY = "AGT 402:G99120488";
+const CASES = [
+  ["/api/customers/AGT%20402/wagers/G99120488", 200, "AGT 402:G99120488"],
+  ["/api/customers/AGT-42/wagers/G8?limit=1", 200, "AGT-42:G8"],
+  ["/api/customers/AGT%2F42/wagers/G8", 400, "Invalid identifier"],
+  ["/api/customers/AGT%FF/wagers/G8", 400, "Invalid identifier"],
+  ["/api/customers/AGT%ZZ/wagers/G8", 400, "Invalid identifier"],
+  ["/api/accounts/AGT-42/wagers/G8", 404, "Not found"],
+  ["/api/customers/AGT-42/wagers/G8/extra", 404, "Not found"],
+] as const;
+const [WAGER_PATH, , EXPECTED_BODY] = CASES[0];
 const STARTUP_TIMEOUT_MS = 8_000;
 const SHUTDOWN_TIMEOUT_MS = 2_000;
 
@@ -77,6 +86,17 @@ function parseSettings(argv: string[]): Settings {
   return settings;
 }
 
+const notFound = () => new Response("Not found", { status: 404 });
+const badIdentifier = () => new Response("Invalid identifier", { status: 400 });
+
+// Shared synthetic endpoint policy: a decoded slash, replacement character, or
+// literal percent isn't a valid ID. This is not a change to SportsDesk's ID rules.
+function respond(agentId: string, wagerId: string): Response {
+  return /^[A-Za-z0-9_ -]+$/.test(agentId) && /^[A-Za-z0-9_-]+$/.test(wagerId)
+    ? new Response(`${agentId}:${wagerId}`)
+    : badIdentifier();
+}
+
 /** Both server modes bind loopback only; memory control calls cannot be remote. */
 function startChildServer(mode: BenchMode): void {
   const snapshot = (): Response => {
@@ -88,25 +108,23 @@ function startChildServer(mode: BenchMode): void {
       headers: { "Cache-Control": "no-store" },
     });
   };
-  const notFound = (): Response => new Response("Not Found", { status: 404 });
+  const listen = { hostname: "127.0.0.1", port: 0, development: false } as const;
 
   const server =
     mode === "routes"
       ? Bun.serve({
-          hostname: "127.0.0.1",
-          port: 0,
+          ...listen,
           routes: {
             "/__gc": snapshot,
             "/api/customers/:agentId/wagers/:wagerId": (req) => {
               const { agentId, wagerId } = req.params;
-              return new Response(agentId + ":" + wagerId);
+              return respond(agentId, wagerId);
             },
           },
           fetch: notFound,
         })
       : Bun.serve({
-          hostname: "127.0.0.1",
-          port: 0,
+          ...listen,
           fetch(req) {
             const pathname = new URL(req.url).pathname;
             if (pathname === "/__gc") return snapshot();
@@ -121,9 +139,12 @@ function startChildServer(mode: BenchMode): void {
             ) {
               return notFound();
             }
-            const agentId = decodeURIComponent(parts[3]);
-            const wagerId = decodeURIComponent(parts[5]);
-            return new Response(agentId + ":" + wagerId);
+            try {
+              return respond(decodeURIComponent(parts[3]), decodeURIComponent(parts[5]));
+            } catch (error) {
+              if (error instanceof URIError) return badIdentifier();
+              throw error;
+            }
           },
         });
 
@@ -261,14 +282,13 @@ async function runOnce(
       }
     };
 
-    await verify();
-    // Semantic parity also requires a 404 on unmatched paths, not just a
-    // correct positive response. Keep this out of the timed phase.
-    const miss = await fetch(target + "/extra", init);
-    if (miss.status !== 404) {
-      throw new Error(mode + " incorrectly routed unmatched path (HTTP " + miss.status + ")");
+    for (const [path, status, expected] of CASES) {
+      const response = await fetch(origin + path, init);
+      const body = await response.text();
+      if (response.status !== status || body !== expected) {
+        throw new Error(`${mode} ${path}: expected ${status} ${JSON.stringify(expected)}, got ${response.status} ${JSON.stringify(body)}`);
+      }
     }
-    await miss.text();
     for (let i = 0; i < settings.warmup; i++) await get(target);
     await verify();
 
@@ -306,6 +326,8 @@ async function runOnce(
       mode,
       ...latency,
       ...retainedHeapDelta(before, after, settings.heap),
+      retained_cells_batch: after.objectCount - before.objectCount,
+      retained_bytes_batch: after.heapSize - before.heapSize,
       heap_before: before,
       heap_after: after,
     };
@@ -366,11 +388,12 @@ async function main(): Promise<void> {
   };
   const cpu = cpus();
   const report = {
-    schema_version: 1,
+    schema_version: 2,
     generated_at: new Date().toISOString(),
     git: gitProvenance(),
     runtime: {
       bun: Bun.version,
+      revision: Bun.revision,
       platform: process.platform,
       arch: process.arch,
       cpu_model: cpu[0]?.model ?? "unknown",
@@ -393,6 +416,7 @@ async function main(): Promise<void> {
       exclusions: "JSC heap excludes native allocations; OS/cache/GC timing can still affect results",
     },
     runs,
+    paired: pairedLatency(runs),
     summary: { routes, fetch: manual, delta, route_p50_improvement_pct: routeImprovementPct(routes, manual) },
   };
 
@@ -418,8 +442,10 @@ async function main(): Promise<void> {
         colors: Boolean(process.stdout.isTTY),
       }),
     );
-    console.log("Native routes p50 improvement (%): " + report.summary.route_p50_improvement_pct);
-    console.log("Heap columns measure post-GC survivors, NOT per-request allocations.");
+    console.log("Paired latency differences (manual minus native, microseconds)");
+    console.table(report.paired.map(({ deltas_us, ...row }) => row));
+    console.log("Signed post-GC server heap change per batch");
+    console.table(runs.map(({ round, mode, retained_cells_batch, retained_bytes_batch }) => ({ round, mode, retained_cells_batch, retained_bytes_batch })));
   }
 }
 
