@@ -20,6 +20,8 @@ interface Scenario {
   readonly dns?: DnsCacheStatsSnapshot;
   readonly lockForeignS3?: boolean;
   readonly openS3?: boolean;
+  readonly tlsCiphers?: string;
+  readonly pinTlsCiphers?: boolean;
 }
 
 const raw = Bun.argv[2];
@@ -45,6 +47,10 @@ const hiddenInspect = {
 } as unknown as NonNullable<Parameters<typeof Bun.inspect>[1]>;
 
 try {
+  const tlsSurface =
+    scenario.tlsCiphers === undefined
+      ? undefined
+      : { DEFAULT_CIPHERS: scenario.tlsCiphers };
   const { report, client } = bootstrapSealedR2Client({
     env: scenario.env,
     ...(scenario.bucket === undefined ? {} : { bucket: scenario.bucket }),
@@ -54,6 +60,10 @@ try {
     ...(scenario.dns === undefined
       ? {}
       : { getDnsCacheStats: () => scenario.dns as DnsCacheStatsSnapshot }),
+    ...(tlsSurface === undefined ? {} : { tlsSurface }),
+    ...(scenario.pinTlsCiphers === undefined
+      ? {}
+      : { pinTlsCiphers: scenario.pinTlsCiphers }),
   });
   const opened = scenario.openS3 === true ? client.s3Client() : null;
   console.log(
@@ -72,6 +82,12 @@ try {
       openedInspect:
         opened === null ? null : Bun.inspect(opened, hiddenInspect),
       openedJson: opened === null ? null : JSON.stringify(opened),
+      activeCiphers:
+        tlsSurface === undefined ? null : tlsSurface.DEFAULT_CIPHERS,
+      tlsPinned: report.tlsCiphers.pinned,
+      tls13Count: report.tlsCiphers.tls13Suites.length,
+      aeadCount: report.tlsCiphers.aeadSuites.length,
+      totalAllowedSuites: report.tlsCiphers.totalAllowedSuites,
     }),
   );
 } catch (error) {

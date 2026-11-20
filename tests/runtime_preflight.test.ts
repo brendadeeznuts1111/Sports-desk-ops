@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import type {
-  DnsCacheStatsSnapshot,
-  PreflightErrorCode,
+import {
+  PINNED_TLS_CIPHERS,
+  PreflightError,
+  verifyAndPinTlsCiphers,
+  type DnsCacheStatsSnapshot,
+  type PreflightErrorCode,
 } from "../lib/runtime_preflight.ts";
 
 const VALID_R2_ENV: Record<string, string> = {
@@ -28,6 +31,8 @@ interface Scenario {
   readonly dns?: DnsCacheStatsSnapshot;
   readonly lockForeignS3?: boolean;
   readonly openS3?: boolean;
+  readonly tlsCiphers?: string;
+  readonly pinTlsCiphers?: boolean;
 }
 
 interface IsolatedOk {
@@ -44,6 +49,11 @@ interface IsolatedOk {
   readonly reportJson: string;
   readonly openedInspect: string | null;
   readonly openedJson: string | null;
+  readonly activeCiphers: string | null;
+  readonly tlsPinned: boolean;
+  readonly tls13Count: number;
+  readonly aeadCount: number;
+  readonly totalAllowedSuites: number;
 }
 
 interface IsolatedErr {
@@ -85,6 +95,21 @@ function expectIsolatedError(
   if (result.status !== "error") return;
   expect(result.code).toBe(code);
   expect(result.exitCode).toBe(exitCode);
+}
+
+function expectPreflightError(
+  fn: () => unknown,
+  code: PreflightErrorCode,
+  exitCode: number,
+): void {
+  try {
+    fn();
+    expect.unreachable(`Expected ${code}`);
+  } catch (err) {
+    expect(err).toBeInstanceOf(PreflightError);
+    expect((err as PreflightError).code).toBe(code);
+    expect((err as PreflightError).exitCode).toBe(exitCode);
+  }
 }
 
 describe("bootstrapSealedR2Client preflight gates", () => {
@@ -268,6 +293,59 @@ describe("bootstrapSealedR2Client preflight gates", () => {
     expect(result.status).toBe("ok");
     if (result.status !== "ok") return;
     expect(result.bucket).toBe("desk-archive");
+  });
+
+  test("pins tls.DEFAULT_CIPHERS to TLS 1.3 and forward-secret AEAD suites", () => {
+    const result = runIsolated({
+      env: VALID_R2_ENV,
+      dns: HEALTHY_DNS,
+      tlsCiphers: "DEFAULT",
+    });
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.activeCiphers).toBe(PINNED_TLS_CIPHERS);
+    expect(result.tlsPinned).toBe(true);
+    expect(result.tls13Count).toBe(3);
+    expect(result.aeadCount).toBe(6);
+    expect(result.totalAllowedSuites).toBe(9);
+  });
+
+  test("fails closed with ERR_TLS_WEAK_CIPHER_SUITE on CBC, RC4, or @SECLEVEL=0 when pinTlsCiphers is false", () => {
+    expectIsolatedError(
+      {
+        env: VALID_R2_ENV,
+        dns: HEALTHY_DNS,
+        tlsCiphers: `${PINNED_TLS_CIPHERS}:ECDHE-RSA-AES256-SHA384`,
+        pinTlsCiphers: false,
+      },
+      "ERR_TLS_WEAK_CIPHER_SUITE",
+      77,
+    );
+
+    expectPreflightError(
+      () =>
+        verifyAndPinTlsCiphers(
+          { DEFAULT_CIPHERS: `${PINNED_TLS_CIPHERS}:@SECLEVEL=0` },
+          false,
+        ),
+      "ERR_TLS_WEAK_CIPHER_SUITE",
+      77,
+    );
+  });
+
+  test("fails closed when a required TLS 1.3 suite is missing", () => {
+    expectPreflightError(
+      () =>
+        verifyAndPinTlsCiphers(
+          {
+            DEFAULT_CIPHERS:
+              "TLS_AES_256_GCM_SHA384:ECDHE-ECDSA-AES256-GCM-SHA384",
+          },
+          false,
+        ),
+      "ERR_TLS_WEAK_CIPHER_SUITE",
+      77,
+    );
   });
 
   test("does not replace Bun.s3 in the suite process", () => {

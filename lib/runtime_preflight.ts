@@ -8,10 +8,12 @@
  *  3. Implicit `AWS_*` / `S3_*` env blocked unless opted in — exit 77
  *  4. `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — exit 78
  *  5. Seal ambient `Bun.s3` before any client is constructed — exit 77 if it cannot
+ *  5b. Pin `tls.DEFAULT_CIPHERS` to TLS 1.3 and TLS 1.2 AEAD suites — exit 77
  *  6. DNS cache error ratio at most 500 bps (5%) — exit 75
  *  7. Inspect and JSON surfaces must not contain active secrets — exit 77
  */
 
+import tls from "node:tls";
 import {
   SealedR2ManifestClient,
   sealGlobalBunS3,
@@ -24,6 +26,7 @@ export type PreflightErrorCode =
   | "ERR_CF_R2_ENV_MISSING"
   | "ERR_BUN_S3_SEAL_FAILED"
   | "ERR_DNS_CACHE_THRASH_OR_ERR_SPIKE"
+  | "ERR_TLS_WEAK_CIPHER_SUITE"
   | "ERR_INSP_SECRET_REDACTION_LEAK";
 
 export class PreflightError extends Error {
@@ -47,6 +50,18 @@ export interface DnsCacheStatsSnapshot {
   readonly totalCount: number;
 }
 
+export interface TlsCipherPolicySnapshot {
+  readonly pinned: boolean;
+  readonly tls13Suites: readonly string[];
+  readonly aeadSuites: readonly string[];
+  readonly totalAllowedSuites: number;
+}
+
+/** Default-import surface. `import * as tls` is read-only and throws on assignment. */
+export interface MutableTlsSurface {
+  DEFAULT_CIPHERS: string;
+}
+
 export interface RuntimePreflightReport {
   readonly bunVersion: string;
   readonly bindings: {
@@ -65,6 +80,7 @@ export interface RuntimePreflightReport {
     readonly errors: number;
     readonly errorRatioBps: number;
   };
+  readonly tlsCiphers: TlsCipherPolicySnapshot;
   readonly sealedGlobalS3: boolean;
 }
 
@@ -77,6 +93,10 @@ export interface PreflightOptions {
   readonly allowAwsFallbackEnv?: boolean | undefined;
   /** Maximum permitted DNS cache error ratio in basis points. Default: 500 (5%). */
   readonly maxDnsErrorRatioBps?: number | undefined;
+  /** Pin tls.DEFAULT_CIPHERS to PINNED_TLS_CIPHERS before verification. Default: true. */
+  readonly pinTlsCiphers?: boolean | undefined;
+  /** Injectable node:tls surface for deterministic unit tests. */
+  readonly tlsSurface?: MutableTlsSurface | undefined;
   /** Injectable DNS stats reader for deterministic unit tests. */
   readonly getDnsCacheStats?: (() => DnsCacheStatsSnapshot) | undefined;
   /** Injectable R2 transport for zero-network unit tests. */
@@ -100,6 +120,116 @@ function inspectLeakSurface(value: unknown): string {
     showHidden: true,
     depth: null,
   } as unknown as NonNullable<Parameters<typeof Bun.inspect>[1]>);
+}
+
+const REQUIRED_TLS13_SUITES = [
+  "TLS_AES_256_GCM_SHA384",
+  "TLS_CHACHA20_POLY1305_SHA256",
+  "TLS_AES_128_GCM_SHA256",
+] as const;
+
+const APPROVED_TLS12_AEAD_SUITES = [
+  "ECDHE-ECDSA-AES256-GCM-SHA384",
+  "ECDHE-RSA-AES256-GCM-SHA384",
+  "ECDHE-ECDSA-CHACHA20-POLY1305",
+  "ECDHE-RSA-CHACHA20-POLY1305",
+  "ECDHE-ECDSA-AES128-GCM-SHA256",
+  "ECDHE-RSA-AES128-GCM-SHA256",
+] as const;
+
+const EXPLICIT_TLS_EXCLUSIONS = [
+  "!aNULL",
+  "!eNULL",
+  "!EXPORT",
+  "!DES",
+  "!3DES",
+  "!RC4",
+  "!MD5",
+  "!PSK",
+  "!SRP",
+  "!CAMELLIA",
+  "!CBC",
+] as const;
+
+export const PINNED_TLS_CIPHERS: string = [
+  ...REQUIRED_TLS13_SUITES,
+  ...APPROVED_TLS12_AEAD_SUITES,
+  ...EXPLICIT_TLS_EXCLUSIONS,
+].join(":");
+
+const TLS13_ALLOWLIST = new Set<string>(REQUIRED_TLS13_SUITES);
+const TLS12_AEAD_ALLOWLIST = new Set<string>(APPROVED_TLS12_AEAD_SUITES);
+const WEAK_SECLEVEL_RE = /^@SECLEVEL=[01]$/i;
+
+export function verifyAndPinTlsCiphers(
+  tlsTarget: MutableTlsSurface = tls,
+  pin = true,
+): TlsCipherPolicySnapshot {
+  if (pin) {
+    tlsTarget.DEFAULT_CIPHERS = PINNED_TLS_CIPHERS;
+  }
+
+  const active = tlsTarget.DEFAULT_CIPHERS;
+  if (typeof active !== "string" || active.trim().length === 0) {
+    throw new PreflightError(
+      "ERR_TLS_WEAK_CIPHER_SUITE",
+      77,
+      "tls.DEFAULT_CIPHERS is empty or non-string",
+    );
+  }
+
+  const tokens = active
+    .split(":")
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+
+  const tls13Suites: string[] = [];
+  const aeadSuites: string[] = [];
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]!;
+    if (token.startsWith("!") || token.startsWith("-")) {
+      continue;
+    }
+    if (WEAK_SECLEVEL_RE.test(token)) {
+      throw new PreflightError(
+        "ERR_TLS_WEAK_CIPHER_SUITE",
+        77,
+        `Forbidden OpenSSL security level directive "${token}" in tls.DEFAULT_CIPHERS`,
+      );
+    }
+    if (TLS13_ALLOWLIST.has(token)) {
+      tls13Suites.push(token);
+      continue;
+    }
+    if (TLS12_AEAD_ALLOWLIST.has(token)) {
+      aeadSuites.push(token);
+      continue;
+    }
+    throw new PreflightError(
+      "ERR_TLS_WEAK_CIPHER_SUITE",
+      77,
+      `Unapproved or non-AEAD cipher suite "${token}" in tls.DEFAULT_CIPHERS`,
+    );
+  }
+
+  for (let i = 0; i < REQUIRED_TLS13_SUITES.length; i++) {
+    const required = REQUIRED_TLS13_SUITES[i]!;
+    if (!tls13Suites.includes(required)) {
+      throw new PreflightError(
+        "ERR_TLS_WEAK_CIPHER_SUITE",
+        77,
+        `Missing required TLS 1.3 suite "${required}" in tls.DEFAULT_CIPHERS`,
+      );
+    }
+  }
+
+  return Object.freeze({
+    pinned: pin && active === PINNED_TLS_CIPHERS,
+    tls13Suites: Object.freeze(tls13Suites),
+    aeadSuites: Object.freeze(aeadSuites),
+    totalAllowedSuites: tls13Suites.length + aeadSuites.length,
+  });
 }
 
 const DEFAULT_BUCKET = "sportsdesk-ops-reports";
@@ -240,6 +370,13 @@ export function bootstrapSealedR2Client(
     );
   }
 
+  // Gate 5b: Pin and verify TLS 1.3 + AEAD-only cipher suites.
+  // Re-reads DEFAULT_CIPHERS after the write so a dropped assignment fails closed.
+  const tlsCiphers = verifyAndPinTlsCiphers(
+    options.tlsSurface ?? tls,
+    options.pinTlsCiphers ?? true,
+  );
+
   // Gate 6: Live DNS cache health check
   const stats = (options.getDnsCacheStats ?? readLiveDnsCacheStats)();
   const errorRatioBps =
@@ -267,6 +404,7 @@ export function bootstrapSealedR2Client(
       errors: stats.errors,
       errorRatioBps,
     }),
+    tlsCiphers,
     sealedGlobalS3,
   });
 
