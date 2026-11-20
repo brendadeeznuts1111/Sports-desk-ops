@@ -8,7 +8,11 @@
     "typescript/no-explicit-any": "error",
     "typescript/no-require-imports": "error",
     "preserve-caught-error": "warn",
-    "unicorn/prefer-array-flat-map": "error"
+    "unicorn/require-module-attributes": "error",
+    "unicorn/prefer-array-flat-map": "error",
+    "bun:test/prefer-snapshot-hint": "error",
+    "bun:test/no-large-snapshots": "error",
+    "bun:test/no-interpolation-in-snapshots": "error"
   },
   "ignorePatterns": [
     "**/node_modules/**",

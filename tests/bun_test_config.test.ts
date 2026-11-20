@@ -19,6 +19,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { resolveNativeBunLintBin } from "../scripts/lint_native.ts";
 
 // @bun-behavior: bun-test-config
 
@@ -229,5 +230,107 @@ describe("reporting and environment files", () => {
     });
     const result = run(dir);
     expect(result.exitCode).toBe(0);
+  });
+});
+
+describe("runtime, env, and newer [test] bunfig options", () => {
+  test("[console].depth in bunfig.toml wins over --console-depth", () => {
+    const dir = project(
+      {
+        "show.ts": "console.log({ a: { b: { c: { d: 1 } } } });\n",
+      },
+      "[console]\ndepth = 4\n",
+    );
+    const res = Bun.spawnSync(
+      [process.execPath, "--console-depth=1", "run", "show.ts"],
+      {
+        cwd: dir,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, NO_COLOR: "1" },
+      },
+    );
+    expect(res.exitCode, res.stderr.toString()).toBe(0);
+    expect(res.stdout.toString()).toContain("d: 1");
+  });
+
+  test("env = false and [env] file = false suppress automatic .env loading", () => {
+    for (const bunfig of ["env = false\n", "[env]\nfile = false\n"]) {
+      const dir = project(
+        {
+          ".env": "BUNFIG_ENV_PROBE=from-dotenv\n",
+        },
+        bunfig,
+      );
+      const env: Record<string, string | undefined> = {
+        ...process.env,
+        NO_COLOR: "1",
+      };
+      delete env.BUNFIG_ENV_PROBE;
+      const res = Bun.spawnSync(
+        [
+          process.execPath,
+          "-e",
+          'console.log(process.env.BUNFIG_ENV_PROBE ?? "unset")',
+        ],
+        {
+          cwd: dir,
+          stdout: "pipe",
+          stderr: "pipe",
+          env,
+        },
+      );
+      expect(res.exitCode, res.stderr.toString()).toBe(0);
+      expect(res.stdout.toString().trim()).toBe("unset");
+    }
+  });
+
+  test("[test] onlyFailures = true suppresses passing test lines", () => {
+    const dir = project(
+      {
+        "only.test.ts": [
+          'import { expect, test } from "bun:test";',
+          'test("alpha", () => { expect(1).toBe(1); });',
+          'test("beta", () => { expect(2).toBe(2); });',
+        ].join("\n"),
+      },
+      "[test]\nonlyFailures = true\n",
+    );
+    const res = run(dir, ["./only.test.ts"]);
+    expect(res.exitCode, res.output).toBe(0);
+    expect(res.output).toContain("2 pass");
+    expect(res.output).not.toContain("(pass) alpha");
+    expect(res.output).not.toContain("(pass) beta");
+  });
+
+  test("[test] clearMocks = true is ignored on stable 1.4.4/1.4.5 and clears mock calls on canary", () => {
+    const dir = project(
+      {
+        "clear.test.ts": [
+          'import { expect, mock, test } from "bun:test";',
+          "const fn = mock(() => 1);",
+          'test("first", () => { fn(); expect(fn).toHaveBeenCalledTimes(1); });',
+          'test("second", () => { expect(fn).toHaveBeenCalledTimes(0); });',
+        ].join("\n"),
+      },
+      "[test]\nclearMocks = true\n",
+    );
+    const stableRes = run(dir, ["./clear.test.ts"]);
+    expect(stableRes.exitCode).not.toBe(0);
+    expect(stableRes.output).toContain("Received number of calls: 1");
+
+    const canaryBin = resolveNativeBunLintBin();
+    if (canaryBin !== null) {
+      const canaryProc = Bun.spawnSync([canaryBin, "test", "./clear.test.ts"], {
+        cwd: dir,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, NO_COLOR: "1" },
+      });
+      const canaryOut =
+        canaryProc.stdout.toString() + canaryProc.stderr.toString();
+      expect(canaryProc.exitCode, canaryOut).toBe(0);
+      expect(canaryOut).toContain("2 pass");
+    }
   });
 });

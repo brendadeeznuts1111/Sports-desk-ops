@@ -74,6 +74,29 @@ function hasDataExtension(file: string): boolean {
   return DATA_EXTENSIONS.some((ext) => file.endsWith(ext));
 }
 
+const SNAPSHOT_FILE_RE = /^(?:(.+)\/)?__snapshots__\/([^/]+)\.snap$/;
+const SNAPSHOT_OWNER_TEST_RE =
+  /(?:\.|_)(?:test|spec)\.(ts|tsx|js|jsx|mts|cts|mjs|cjs)$/;
+
+/** True for any Bun/Jest snapshot file (`__snapshots__/*.snap`). */
+export function isSnapshotFile(file: string): boolean {
+  return SNAPSHOT_FILE_RE.test(file);
+}
+
+/**
+ * Map a snapshot file (`<dir>/__snapshots__/<test>.snap` or `__snapshots__/<test>.snap`)
+ * back to its owning test file (`<dir>/<test>` or `<test>`).
+ * Returns null when the path is not a snapshot of a test file.
+ */
+export function snapshotOwnerTestFile(file: string): string | null {
+  const match = SNAPSHOT_FILE_RE.exec(file);
+  if (match === null) return null;
+  const dir = match[1];
+  const testFile = match[2] as string;
+  if (!SNAPSHOT_OWNER_TEST_RE.test(testFile)) return null;
+  return dir === undefined ? testFile : `${dir}/${testFile}`;
+}
+
 /**
  * Drop paths a module imports, because `--changed` follows those and the warning would be wrong.
  *
@@ -88,7 +111,10 @@ export function filterImported(
   files: readonly string[],
   imported: ReadonlySet<string>,
 ): string[] {
-  return files.filter((file) => hasDataExtension(file) && !imported.has(file));
+  return files.filter(
+    (file) =>
+      (hasDataExtension(file) || isSnapshotFile(file)) && !imported.has(file),
+  );
 }
 
 /**
@@ -142,6 +168,8 @@ export function ownerHint(file: string): string | null {
   if (file === ".bun-version") return "bun test tests/bun_runtime_pin.test.ts";
   if (file === "bunfig.toml") return "bun test tests/bun_config_policy.test.ts";
   if (file.startsWith("schema/")) return "bun run schema:gate";
+  const snapOwner = snapshotOwnerTestFile(file);
+  if (snapOwner !== null) return `bun test ${snapOwner}`;
   if (file.startsWith("tests/fixtures/")) {
     const base = file.slice("tests/fixtures/".length);
     return `the suite that reads tests/fixtures/${base} (name it explicitly)`;
@@ -169,7 +197,8 @@ export function nonModuleChangedFiles(changed: readonly string[]): string[] {
   return changed.filter(
     (file) =>
       NON_MODULE_FILES.has(file) ||
-      NON_MODULE_PATHS.some((prefix) => file.startsWith(prefix)),
+      NON_MODULE_PATHS.some((prefix) => file.startsWith(prefix)) ||
+      isSnapshotFile(file),
   );
 }
 
@@ -244,14 +273,24 @@ function gitGrepReaders(file: string, root: string): string[] {
  * @param files - changed paths no module imports.
  * @param root - repository root for `git grep`.
  * @param grep - seam for tests; defaults to the literal `git grep` above.
+ * @param exists - seam for snapshot-owner existence checks in tests.
  */
 export function dataReaderTestFiles(
   files: readonly string[],
   root: string,
   grep: (file: string) => string[] = (file) => gitGrepReaders(file, root),
+  exists: (relPath: string) => boolean = (relPath) =>
+    existsSync(path.join(root, relPath)),
 ): string[] {
   const readers = new Set<string>();
   for (const file of files) {
+    if (isSnapshotFile(file)) {
+      const snapOwner = snapshotOwnerTestFile(file);
+      if (snapOwner !== null && exists(snapOwner)) {
+        readers.add(snapOwner);
+      }
+      continue;
+    }
     for (const hit of grep(file)) {
       if (hit.endsWith(".test.ts") || hit.endsWith(".test.tsx"))
         readers.add(hit);
@@ -515,6 +554,18 @@ export function inferTestsForFiles(
       !f.includes("market_index")
     ) {
       tests.add(f);
+      continue;
+    }
+
+    const snapOwner = snapshotOwnerTestFile(f);
+    if (snapOwner !== null) {
+      if (
+        existsSync(path.join(root, snapOwner)) &&
+        !snapOwner.includes("language_coverage") &&
+        !snapOwner.includes("market_index")
+      ) {
+        tests.add(snapOwner);
+      }
       continue;
     }
 

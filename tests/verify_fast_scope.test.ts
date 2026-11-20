@@ -10,12 +10,14 @@ import {
   filterImported,
   importedSpecifierPaths,
   inferTestsForFiles,
+  isSnapshotFile,
   nonModuleChangedFiles,
   ownerHint,
   parseSelectedFileCount,
   planReaderRecovery,
   planSelectionRecovery,
   planTypecheckTasks,
+  snapshotOwnerTestFile,
   type WorkspaceEdgeRef,
 } from "../scripts/verify_fast.ts";
 
@@ -421,5 +423,137 @@ describe("shape-source gate", () => {
     expect(addedShapeSources(["tests/fixtures/fraud/live-bets.json"])).toBe(
       false,
     );
+  });
+});
+
+describe("snapshot file recovery (__snapshots__/*.snap)", () => {
+  test("recognizes __snapshots__/*.snap files and maps test snapshots to their owning suite", () => {
+    expect(isSnapshotFile("tests/__snapshots__/foo.test.ts.snap")).toBe(true);
+    expect(snapshotOwnerTestFile("tests/__snapshots__/foo.test.ts.snap")).toBe(
+      "tests/foo.test.ts",
+    );
+
+    expect(
+      isSnapshotFile("packages/ui/src/__snapshots__/Button.test.tsx.snap"),
+    ).toBe(true);
+    expect(
+      snapshotOwnerTestFile(
+        "packages/ui/src/__snapshots__/Button.test.tsx.snap",
+      ),
+    ).toBe("packages/ui/src/Button.test.tsx");
+
+    expect(isSnapshotFile("__snapshots__/root.spec.ts.snap")).toBe(true);
+    expect(snapshotOwnerTestFile("__snapshots__/root.spec.ts.snap")).toBe(
+      "root.spec.ts",
+    );
+
+    expect(isSnapshotFile("tests/__snapshots__/notes.txt.snap")).toBe(true);
+    expect(
+      snapshotOwnerTestFile("tests/__snapshots__/notes.txt.snap"),
+    ).toBeNull();
+
+    expect(isSnapshotFile("tests/foo.test.ts")).toBe(false);
+    expect(snapshotOwnerTestFile("tests/foo.test.ts")).toBeNull();
+    expect(isSnapshotFile("data/profile-snapshot.json")).toBe(false);
+    expect(snapshotOwnerTestFile("data/profile-snapshot.json")).toBeNull();
+  });
+
+  test("treats __snapshots__/*.snap as non-module and provides the owning bun test hint", () => {
+    const snap = "tests/__snapshots__/foo.test.ts.snap";
+    expect(nonModuleChangedFiles([snap])).toEqual([snap]);
+    expect(filterImported([snap], new Set())).toEqual([snap]);
+    expect(ownerHint(snap)).toBe("bun test tests/foo.test.ts");
+  });
+
+  test("recovers existing owning test files without invoking git grep", () => {
+    let grepCalled = false;
+    const grep = () => {
+      grepCalled = true;
+      return [];
+    };
+    const recovered = dataReaderTestFiles(
+      [
+        "tests/__snapshots__/snap.test.ts.snap",
+        "tests/__snapshots__/deleted.test.ts.snap",
+      ],
+      "/root",
+      grep,
+      (relPath) => relPath === "tests/snap.test.ts",
+    );
+    expect(grepCalled).toBe(false);
+    expect(recovered).toEqual(["tests/snap.test.ts"]);
+
+    const dir = mkdtempSync(join(tmpdir(), "verify-snap-recovery-"));
+    try {
+      mkdirSync(join(dir, "tests", "__snapshots__"), { recursive: true });
+      writeFileSync(join(dir, "tests", "snap.test.ts"), "// test owner\n");
+      writeFileSync(
+        join(dir, "tests", "__snapshots__", "snap.test.ts.snap"),
+        "// Bun Snapshot v1\n",
+      );
+      writeFileSync(
+        join(dir, "tests", "__snapshots__", "deleted.test.ts.snap"),
+        "// Bun Snapshot v1\n",
+      );
+
+      expect(
+        dataReaderTestFiles(
+          [
+            "tests/__snapshots__/snap.test.ts.snap",
+            "tests/__snapshots__/deleted.test.ts.snap",
+          ],
+          dir,
+        ),
+      ).toEqual(["tests/snap.test.ts"]);
+
+      const snapOnly = planSelectionRecovery(
+        ["tests/__snapshots__/snap.test.ts.snap"],
+        dir,
+        { imported: () => new Set() },
+      );
+      expect(snapOnly.unreachable).toEqual([
+        "tests/__snapshots__/snap.test.ts.snap",
+      ]);
+      expect(snapOnly.recovery).toEqual({
+        kind: "run",
+        files: ["tests/snap.test.ts"],
+      });
+
+      const mixed = planSelectionRecovery(
+        ["lib/foo.ts", "tests/__snapshots__/snap.test.ts.snap"],
+        dir,
+        { imported: () => new Set() },
+      );
+      expect(mixed.unreachable).toEqual([
+        "tests/__snapshots__/snap.test.ts.snap",
+      ]);
+      expect(mixed.recovery).toEqual({
+        kind: "run",
+        files: ["tests/snap.test.ts"],
+      });
+
+      const orphan = planSelectionRecovery(
+        ["tests/__snapshots__/deleted.test.ts.snap"],
+        dir,
+        { imported: () => new Set() },
+      );
+      expect(orphan.unreachable).toEqual([
+        "tests/__snapshots__/deleted.test.ts.snap",
+      ]);
+      expect(orphan.recovery).toEqual({
+        kind: "warn",
+        reason: "no-references",
+        count: 0,
+      });
+
+      expect(
+        inferTestsForFiles(["tests/__snapshots__/snap.test.ts.snap"], dir),
+      ).toEqual(["tests/snap.test.ts"]);
+      expect(
+        inferTestsForFiles(["tests/__snapshots__/deleted.test.ts.snap"], dir),
+      ).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

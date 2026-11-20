@@ -102,6 +102,7 @@ function workspace(
     readonly name: string;
     readonly private?: boolean;
     readonly marker?: string;
+    readonly dependencies?: Readonly<Record<string, string>>;
   }[],
 ): { dir: string; npmrc: string } {
   const dir = mkdtempSync(join(tmpdir(), "bun-publish-"));
@@ -128,6 +129,9 @@ function workspace(
         name: pkg.name,
         version: "1.0.0",
         ...(pkg.private === true ? { private: true } : {}),
+        ...(pkg.dependencies === undefined
+          ? {}
+          : { dependencies: pkg.dependencies }),
         ...(pkg.marker === undefined
           ? {}
           : { scripts: { prepack: `bun ../../marker.ts ${pkg.marker}` } }),
@@ -238,5 +242,25 @@ describe("bun publish --recursive on a mock registry", () => {
     ]);
     expect(second.exitCode).toBe(0);
     expect(state.uploads.length).toBe(afterFirst);
+  }, 60_000);
+
+  test("publishes workspaces in dependency-first topological order", async () => {
+    const fixture = workspace([
+      {
+        name: "@probe/aaa-app",
+        dependencies: { "@probe/zzz-core": "workspace:*" },
+      },
+      { name: "@probe/zzz-core" },
+    ]);
+    const before = state.uploads.length;
+    const result = await publish(fixture.dir, fixture.npmrc, [
+      "--recursive",
+      "--quiet",
+    ]);
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(state.uploads.slice(before).map((u) => u.name)).toEqual([
+      "@probe/zzz-core",
+      "@probe/aaa-app",
+    ]);
   }, 60_000);
 });

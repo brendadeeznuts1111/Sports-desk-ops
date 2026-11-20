@@ -141,6 +141,18 @@ describe("repo lint wiring", () => {
     expect(bunfig).toContain("ignorePatterns");
     expect(existsSync(join(ROOT, ".oxlintrc.json"))).toBe(true);
     expect(existsSync(join(ROOT, ".oxlintrc.type-aware.json"))).toBe(true);
+    const oxlint = JSON.parse(
+      readFileSync(join(ROOT, ".oxlintrc.json"), "utf8"),
+    ) as { rules?: Record<string, unknown> };
+    for (const rule of [
+      "unicorn/require-module-attributes",
+      "bun:test/prefer-snapshot-hint",
+      "bun:test/no-large-snapshots",
+      "bun:test/no-interpolation-in-snapshots",
+    ]) {
+      expect(bunfig).toContain(`"${rule}" = "error"`);
+      expect(oxlint.rules?.[rule]).toBe("error");
+    }
   });
 
   test("CI isolates native lint in a canary job", () => {
@@ -505,6 +517,117 @@ describe("native lint (canary only)", () => {
         dir,
       );
       expect(output(cfg)).not.toMatch(/unknown|unrecognized/i);
+    },
+  );
+
+  nativeTest(
+    "enforces bun:test snapshot rules (prefer-snapshot-hint, no-large-snapshots, no-interpolation-in-snapshots)",
+    () => {
+      const dir = makeTemp("bun-lint-snapshots-");
+      const longLines = Array.from(
+        { length: 55 },
+        (_, i) => `    line ${i}`,
+      ).join("\n");
+      writeFileSync(
+        join(dir, "bad.test.ts"),
+        [
+          'import { expect, test } from "bun:test";',
+          'test("snaps", () => {',
+          "  expect(1).toMatchSnapshot();",
+          "  expect(2).toMatchSnapshot();",
+          "  const x = 1;",
+          '  expect("a").toMatchInlineSnapshot(`a ${x}`);',
+          '  expect("big").toMatchInlineSnapshot(`',
+          longLines,
+          "  `);",
+          "});",
+        ].join("\n"),
+      );
+      writeFileSync(
+        join(dir, "good.test.ts"),
+        [
+          'import { expect, test } from "bun:test";',
+          'test("snaps", () => {',
+          '  expect(1).toMatchSnapshot("first");',
+          '  expect(2).toMatchSnapshot("second");',
+          '  expect("ok").toMatchInlineSnapshot(`"ok"`);',
+          "});",
+        ].join("\n"),
+      );
+
+      const bad = run(
+        nativeBin!,
+        [
+          "lint",
+          "--no-script",
+          "-c",
+          join(ROOT, ".oxlintrc.json"),
+          "bad.test.ts",
+        ],
+        dir,
+      );
+      expect(bad.exitCode).toBe(1);
+      const badOut = output(bad);
+      expect(badOut).toContain("bun:test/prefer-snapshot-hint");
+      expect(badOut).toContain("bun:test/no-interpolation-in-snapshots");
+      expect(badOut).toContain("bun:test/no-large-snapshots");
+
+      const good = run(
+        nativeBin!,
+        [
+          "lint",
+          "--no-script",
+          "-c",
+          join(ROOT, ".oxlintrc.json"),
+          "good.test.ts",
+        ],
+        dir,
+      );
+      expect(good.exitCode, output(good)).toBe(0);
+    },
+  );
+
+  nativeTest(
+    "merges bunfig.toml [lint.rules] on top of .oxlintrc.json during linting while --print-config omits bunfig-only rules",
+    () => {
+      const dir = makeTemp("bun-lint-merge-");
+      writeFileSync(
+        join(dir, ".oxlintrc.json"),
+        JSON.stringify({ rules: { eqeqeq: "error" } }),
+      );
+      writeFileSync(
+        join(dir, "bunfig.toml"),
+        '[lint.rules]\n"unicorn/require-module-attributes" = "error"\n',
+      );
+      // Assemble empty attribute syntax at runtime so tests/module_attributes.test.ts does not flag this file.
+      writeFileSync(
+        join(dir, "sample.ts"),
+        `import x from "./data.json" ${"with"} ${"{}"};\nexport const y = x == 1;\n`,
+      );
+
+      const lintRes = run(
+        nativeBin!,
+        ["lint", "--no-script", "sample.ts"],
+        dir,
+      );
+      expect(lintRes.exitCode).toBe(1);
+      const lintOut = output(lintRes);
+      expect(lintOut).toContain("eqeqeq");
+      expect(lintOut).toContain("unicorn/require-module-attributes");
+
+      const printRes = run(
+        nativeBin!,
+        ["lint", "--no-script", "--print-config", "sample.ts"],
+        dir,
+      );
+      expect(printRes.exitCode, output(printRes)).toBe(0);
+      const printed = JSON.parse(printRes.stdout.toString()) as {
+        rules?: Record<string, unknown>;
+      };
+      expect(printed.rules?.["eqeqeq"]).toBe("deny");
+      expect(
+        printed.rules?.["unicorn/require-module-attributes"],
+      ).toBeUndefined();
     },
   );
 });

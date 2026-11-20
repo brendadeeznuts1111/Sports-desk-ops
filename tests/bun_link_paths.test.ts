@@ -9,6 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -59,6 +60,80 @@ describe("bun link: paths", () => {
       const linked = join(dir, "node_modules", "linked");
       expect(lstatSync(linked).isSymbolicLink()).toBe(true);
       expect(realpathSync(linked)).toBe(realpathSync(linkedDir));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  test("resolves link: relative to a workspace package.json, not the repo root", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bun-link-ws-"));
+    try {
+      const sharedDir = join(dir, "shared");
+      const appDir = join(dir, "packages", "app");
+      mkdirSync(sharedDir, { recursive: true });
+      mkdirSync(appDir, { recursive: true });
+
+      writeFileSync(
+        join(sharedDir, "package.json"),
+        JSON.stringify({
+          name: "ws-shared",
+          version: "1.0.0",
+          main: "index.js",
+        }),
+      );
+      writeFileSync(
+        join(sharedDir, "index.js"),
+        'module.exports = "WS_SHARED_OK";\n',
+      );
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({
+          name: "link-ws-root",
+          version: "0.0.0",
+          private: true,
+          workspaces: ["packages/*"],
+        }),
+      );
+      writeFileSync(
+        join(appDir, "package.json"),
+        JSON.stringify({
+          name: "@link-probe/app",
+          version: "1.0.0",
+          dependencies: { "ws-shared": "link:../../shared" },
+        }),
+      );
+
+      const env = {
+        ...process.env,
+        HOME: join(dir, ".home"),
+        NO_COLOR: "1",
+      };
+      const install = Bun.spawnSync(
+        [
+          process.execPath,
+          "install",
+          "--no-env-file",
+          "--ignore-scripts",
+          "--no-summary",
+          "--cache-dir",
+          join(dir, ".cache"),
+        ],
+        { cwd: dir, env, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(install.exitCode, install.stderr.toString()).toBe(0);
+
+      const linked = existsSync(join(appDir, "node_modules", "ws-shared"))
+        ? join(appDir, "node_modules", "ws-shared")
+        : join(dir, "node_modules", "ws-shared");
+      expect(lstatSync(linked).isSymbolicLink()).toBe(true);
+      expect(realpathSync(linked)).toBe(realpathSync(sharedDir));
+
+      const evaluated = Bun.spawnSync(
+        [process.execPath, "-e", "console.log(require('ws-shared'))"],
+        { cwd: appDir, env, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(evaluated.exitCode, evaluated.stderr.toString()).toBe(0);
+      expect(evaluated.stdout.toString().trim()).toBe("WS_SHARED_OK");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

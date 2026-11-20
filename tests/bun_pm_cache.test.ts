@@ -115,4 +115,133 @@ describe("Bun 1.4.4 cache pack/unpack/prune", () => {
     expect(run(["pm", "cache", "prune", "--max-age", "0"]).exitCode).toBe(0);
     expect(cacheEntryCount(cacheDir)).toBeLessThan(before);
   });
+
+  test("unpack is additive and preserves existing cache entries", () => {
+    const root = mkdtempSync(join(tmpdir(), "bun-pm-cache-additive-"));
+    roots.push(root);
+    const cacheA = join(root, "cache-a");
+    const cacheB = join(root, "cache-b");
+    const baseEnv = {
+      ...process.env,
+      XDG_CACHE_HOME: join(root, "xdg"),
+      HOME: join(root, "home"),
+      BUN_INSTALL: join(root, "bun"),
+      NO_COLOR: "1",
+    };
+
+    const makePacked = (pkgName: string): string => {
+      const pkgDir = join(root, "pkgs", pkgName);
+      mkdirSync(pkgDir, { recursive: true });
+      writeFileSync(
+        join(pkgDir, "package.json"),
+        JSON.stringify(
+          { name: pkgName, version: "1.0.0", main: "index.js" },
+          null,
+          2,
+        ),
+      );
+      writeFileSync(
+        join(pkgDir, "index.js"),
+        `module.exports = ${JSON.stringify(pkgName)};\n`,
+      );
+      const packRes = Bun.spawnSync(
+        [process.execPath, "pm", "pack", "--quiet"],
+        { cwd: pkgDir, env: baseEnv, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(packRes.exitCode, packRes.stderr.toString()).toBe(0);
+      return `file:../../pkgs/${pkgName}/${packRes.stdout.toString().trim()}`;
+    };
+
+    const specA = makePacked("pkg-a-fixture");
+    const specB = makePacked("pkg-b-fixture");
+
+    const appA = join(root, "apps", "app-a");
+    const appB = join(root, "apps", "app-b");
+    mkdirSync(appA, { recursive: true });
+    mkdirSync(appB, { recursive: true });
+    writeFileSync(
+      join(appA, "package.json"),
+      JSON.stringify(
+        {
+          name: "app-a",
+          private: true,
+          dependencies: { "pkg-a-fixture": specA },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      join(appB, "package.json"),
+      JSON.stringify(
+        {
+          name: "app-b",
+          private: true,
+          dependencies: { "pkg-b-fixture": specB },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const runWithCache = (cwd: string, args: string[], cacheDir: string) =>
+      Bun.spawnSync([process.execPath, ...args], {
+        cwd,
+        env: { ...baseEnv, BUN_INSTALL_CACHE_DIR: cacheDir },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+    const installA = runWithCache(
+      appA,
+      ["install", "--no-env-file", "--no-summary"],
+      cacheA,
+    );
+    expect(installA.exitCode, installA.stderr.toString()).toBe(0);
+    const installB = runWithCache(
+      appB,
+      ["install", "--no-env-file", "--no-summary"],
+      cacheB,
+    );
+    expect(installB.exitCode, installB.stderr.toString()).toBe(0);
+
+    const packB = join(root, "b.pack");
+    const packed = runWithCache(appB, ["pm", "cache", "pack", packB], cacheB);
+    expect(packed.exitCode, packed.stderr.toString()).toBe(0);
+
+    const entriesBefore = readdirSync(cacheA);
+    expect(entriesBefore.length).toBeGreaterThan(0);
+
+    const unpacked = runWithCache(
+      appA,
+      ["pm", "cache", "unpack", packB],
+      cacheA,
+    );
+    expect(unpacked.exitCode, unpacked.stderr.toString()).toBe(0);
+
+    const entriesAfter = readdirSync(cacheA);
+    for (const entry of entriesBefore) {
+      expect(entriesAfter).toContain(entry);
+    }
+    expect(entriesAfter.length).toBeGreaterThan(entriesBefore.length);
+
+    rmSync(join(appA, "node_modules"), { recursive: true, force: true });
+    rmSync(join(appB, "node_modules"), { recursive: true, force: true });
+
+    const offlineA = runWithCache(
+      appA,
+      ["install", "--offline", "--frozen-lockfile", "--no-env-file"],
+      cacheA,
+    );
+    expect(offlineA.exitCode, offlineA.stderr.toString()).toBe(0);
+    expect(existsSync(join(appA, "node_modules", "pkg-a-fixture"))).toBe(true);
+
+    const offlineB = runWithCache(
+      appB,
+      ["install", "--offline", "--frozen-lockfile", "--no-env-file"],
+      cacheA,
+    );
+    expect(offlineB.exitCode, offlineB.stderr.toString()).toBe(0);
+    expect(existsSync(join(appB, "node_modules", "pkg-b-fixture"))).toBe(true);
+  });
 });
