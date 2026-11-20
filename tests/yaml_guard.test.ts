@@ -82,6 +82,68 @@ describe("parseGuardedYaml", () => {
     );
   });
 
+  test("parses a compact sequence mapping and a shared anchor", () => {
+    expect(
+      parseGuardedYaml(
+        "items:\n  - key: a\n    value: &a 1\n  - key: b\n    value: *a\n",
+      ),
+    ).toEqual({
+      items: [
+        { key: "a", value: 1 },
+        { key: "b", value: 1 },
+      ],
+    });
+  });
+
+  test("parses a plain scalar that contains an apostrophe", () => {
+    expect(parseGuardedYaml("name: O'Reilly\nkind: manifest\n")).toEqual({
+      name: "O'Reilly",
+      kind: "manifest",
+    });
+  });
+
+  test("parses one inline document after the start marker", () => {
+    expect(parseGuardedYaml("--- {kind: manifest}\n")).toEqual({
+      kind: "manifest",
+    });
+  });
+
+  test("rejects inline multi-document markers", () => {
+    expect(() => parseGuardedYaml("--- {a: 1}\n--- {b: 2}\n")).toThrow(
+      expect.objectContaining({ code: "ERR_YAML_MULTI_DOC" }),
+    );
+  });
+
+  test("rejects a cyclic anchor nested in a compact sequence mapping", () => {
+    expect(() =>
+      parseGuardedYaml("items:\n  - key: a\n    value: &a [*a]\n"),
+    ).toThrow(expect.objectContaining({ code: "ERR_YAML_CYCLIC_GRAPH" }));
+  });
+
+  test("rejects an alias bomb nested in compact sequence mappings", () => {
+    const scalars = Array.from({ length: fanout }, () => '"x"').join(", ");
+    const lines = ["items:", `  - key: a`, `    value: &a [${scalars}]`];
+    let prev = "a";
+    for (const name of "bcdef") {
+      const refs = Array.from({ length: fanout }, () => `*${prev}`).join(", ");
+      lines.push(`  - key: ${name}`, `    value: &${name} [${refs}]`);
+      prev = name;
+    }
+    const started = performance.now();
+    expect(() => parseGuardedYaml(`${lines.join("\n")}\n`)).toThrow(
+      expect.objectContaining({ code: "ERR_YAML_ALIAS_BOMB" }),
+    );
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  test("an apostrophe in a plain scalar does not hide a later alias bomb", () => {
+    const started = performance.now();
+    expect(() => parseGuardedYaml(`name: O'Reilly\n${aliasBomb()}`)).toThrow(
+      expect.objectContaining({ code: "ERR_YAML_ALIAS_BOMB" }),
+    );
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
   test("rejects an alias bomb before expansion", () => {
     const started = performance.now();
     expect(() => parseGuardedYaml(aliasBomb())).toThrow(

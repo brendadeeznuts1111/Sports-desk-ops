@@ -102,6 +102,7 @@ function assertSingleDocument(text: string): void {
   let blockIndent = -1;
   let docOpen = false;
   let closed = false;
+  let inPlain = false;
 
   const throwMulti = (): never => {
     throw new YamlGuardError(
@@ -160,13 +161,20 @@ function assertSingleDocument(text: string): void {
           closed = true;
           docOpen = false;
         }
-        i = nextLine(s, i);
+        i += 3;
+        while (s.charCodeAt(i) === 32 || s.charCodeAt(i) === 9) i += 1;
+        inPlain = false;
         continue;
       }
     }
 
     const c = s[i] ?? "";
-    if (c === '"' || c === "'") {
+    if (endsPlainScalar(s, i)) {
+      inPlain = false;
+      i += 1;
+      continue;
+    }
+    if ((c === '"' || c === "'") && !inPlain) {
       quote = c;
       i += 1;
       continue;
@@ -177,24 +185,29 @@ function assertSingleDocument(text: string): void {
     }
     if (c === "[" || c === "{") {
       flow += 1;
+      inPlain = false;
       i += 1;
       continue;
     }
     if ((c === "]" || c === "}") && flow > 0) {
       flow -= 1;
+      inPlain = false;
+      i += 1;
+      continue;
+    }
+    if (c === "," && flow > 0) {
+      inPlain = false;
       i += 1;
       continue;
     }
     if (flow === 0 && (c === "|" || c === ">") && isBlockIndicator(s, i)) {
       blockIndent = indentAt(s, lineStart(s, i));
+      inPlain = false;
       i = nextLine(s, i);
       continue;
     }
-    if (c === "\n") {
-      i += 1;
-      continue;
-    }
-    if (c === "\r") {
+    if (c === "\n" || c === "\r") {
+      if (flow === 0) inPlain = false;
       i += 1;
       continue;
     }
@@ -204,6 +217,7 @@ function assertSingleDocument(text: string): void {
     }
     if (closed) throwMulti();
     docOpen = true;
+    inPlain = true;
     i += 1;
   }
 }
@@ -215,6 +229,7 @@ function hasAnchorOrAlias(text: string): boolean {
   let quote: "'" | '"' | null = null;
   let escape = false;
   let blockIndent = -1;
+  let inPlain = false;
   while (i < s.length) {
     if (quote !== null) {
       const c = s[i] ?? "";
@@ -245,7 +260,12 @@ function hasAnchorOrAlias(text: string): boolean {
       blockIndent = -1;
     }
     const c = s[i] ?? "";
-    if (c === '"' || c === "'") {
+    if (endsPlainScalar(s, i)) {
+      inPlain = false;
+      i += 1;
+      continue;
+    }
+    if ((c === '"' || c === "'") && !inPlain) {
       quote = c;
       i += 1;
       continue;
@@ -256,20 +276,38 @@ function hasAnchorOrAlias(text: string): boolean {
     }
     if (c === "[" || c === "{") {
       flow += 1;
+      inPlain = false;
       i += 1;
       continue;
     }
     if ((c === "]" || c === "}") && flow > 0) {
       flow -= 1;
+      inPlain = false;
+      i += 1;
+      continue;
+    }
+    if (c === "," && flow > 0) {
+      inPlain = false;
       i += 1;
       continue;
     }
     if (flow === 0 && (c === "|" || c === ">") && isBlockIndicator(s, i)) {
       blockIndent = indentAt(s, lineStart(s, i));
+      inPlain = false;
       i = nextLine(s, i);
       continue;
     }
-    if (c === "&" || c === "*") return true;
+    if (c === "\n" || c === "\r") {
+      if (flow === 0) inPlain = false;
+      i += 1;
+      continue;
+    }
+    if (c === " " || c === "\t") {
+      i += 1;
+      continue;
+    }
+    if ((c === "&" || c === "*") && !inPlain) return true;
+    inPlain = true;
     i += 1;
   }
   return false;
@@ -322,14 +360,51 @@ function isDocMarker(s: string, i: number): boolean {
   if (!dashes && !dots) return false;
   const fourth = s.charCodeAt(i + 3);
   if (fourth === 45 || fourth === 46) return false;
-  let j = i + 3;
-  while (j < s.length) {
-    const c = s.charCodeAt(j);
-    if (c === 10 || c === 13 || c === 35) return true;
-    if (c !== 32 && c !== 9) return false;
-    j += 1;
+  return (
+    Number.isNaN(fourth) ||
+    fourth === 10 ||
+    fourth === 13 ||
+    fourth === 35 ||
+    fourth === 32 ||
+    fourth === 9
+  );
+}
+
+/** `:` or a block `-` indicator ends the current plain scalar so the next value can be quoted. */
+function endsPlainScalar(s: string, i: number): boolean {
+  const c = s.charCodeAt(i);
+  if (c === 58) {
+    const next = s.charCodeAt(i + 1);
+    return (
+      next === 32 ||
+      next === 9 ||
+      next === 10 ||
+      next === 13 ||
+      next === 35 ||
+      next === 44 ||
+      next === 93 ||
+      next === 125 ||
+      Number.isNaN(next)
+    );
   }
-  return true;
+  return isSeqDashAt(s, i);
+}
+
+function isSeqDashAt(s: string, i: number): boolean {
+  if (s.charCodeAt(i) !== 45) return false;
+  const next = s.charCodeAt(i + 1);
+  if (
+    next !== 32 &&
+    next !== 9 &&
+    next !== 10 &&
+    next !== 13 &&
+    !Number.isNaN(next)
+  ) {
+    return false;
+  }
+  let j = i - 1;
+  while (j >= 0 && s.charCodeAt(j) === 32) j -= 1;
+  return j < 0 || s.charCodeAt(j) === 10 || s.charCodeAt(j) === 13;
 }
 
 function isBlockIndicator(s: string, i: number): boolean {
@@ -369,7 +444,10 @@ class AnchorParser {
       this.consumeLine();
       this.skipSpace();
     }
-    if (this.isDocStart()) this.consumeLine();
+    if (this.isDocStart()) {
+      this.i += 3;
+      this.skipInline();
+    }
     this.skipSpace();
     if (this.eof()) return leaf();
     const root = this.parseNode(-1);
@@ -420,8 +498,9 @@ class AnchorParser {
     if (this.atLineStart() && this.isSeqEntry()) {
       return withAnchors(anchors, this.parseBlockSeq(this.lineIndent()));
     }
-    if (this.atLineStart() && this.looksLikeKey()) {
-      return withAnchors(anchors, this.parseBlockMap(this.lineIndent()));
+    if (this.looksLikeKey()) {
+      const indent = this.atLineStart() ? this.lineIndent() : this.column();
+      return withAnchors(anchors, this.parseBlockMap(indent));
     }
     const plainStart = this.i;
     const plain = this.parsePlain(minIndent);
@@ -435,8 +514,7 @@ class AnchorParser {
       const before = this.i;
       this.skipSpace();
       if (this.eof() || this.isDocMarker()) break;
-      if (!this.atLineStart() || this.lineIndent() !== indent) break;
-      if (!this.looksLikeKey()) break;
+      if (!this.atMapKey(indent)) break;
       this.consumeKey();
       this.skipInline();
       children.push(this.parseValue(indent));
@@ -891,6 +969,17 @@ class AnchorParser {
 
   private lineIndent(): number {
     return indentAt(this.s, lineStart(this.s, this.i));
+  }
+
+  private column(): number {
+    return this.i - lineStart(this.s, this.i);
+  }
+
+  /** A mapping key at `indent`, including ` - key:` where the key is not at the line start. */
+  private atMapKey(indent: number): boolean {
+    if (!this.looksLikeKey()) return false;
+    if (this.atLineStart()) return this.lineIndent() === indent;
+    return this.column() === indent;
   }
 
   private atLineStart(): boolean {
