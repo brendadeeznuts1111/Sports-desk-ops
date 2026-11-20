@@ -3,4 +3,5 @@ import { installRedactingSnapshotSerializers } from "./serializers/redacting_sna
 process.env.TZ = "UTC";
 process.env.NO_COLOR = "1";
 
+// Preload serializers apply to every test file after this one.
 installRedactingSnapshotSerializers();

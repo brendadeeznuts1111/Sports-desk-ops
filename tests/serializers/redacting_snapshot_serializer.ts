@@ -3,9 +3,14 @@
  * @description Snapshot serializers that redact secrets and normalize versions,
  * timestamps, and Date values before a snapshot is stored.
  *
+ * Snapshots exist only in `bun test`. There is no `bun.snapshot` API.
  * Bun 1.4.4 exposes `expect.addSnapshotSerializer` and throws "Not implemented".
  * `installRedactingSnapshotSerializers` still calls it. When that throws, callers
  * snapshot `prepareSnapshot(value)` instead, which runs the same plugins.
+ *
+ * Registration follows Bun's rule that the last serializer added runs first.
+ * A preload install applies to every later file. A serializer added from a
+ * test file applies until that file ends, so extra secrets stay in that call.
  */
 
 import { expect } from "bun:test";
@@ -108,7 +113,6 @@ function collectActiveSecrets(extra?: readonly string[]): readonly string[] {
   return [...found];
 }
 
-const runtimeExtraSecrets: string[] = [];
 let installed = false;
 let hooked = false;
 let activeSerializers: readonly SnapshotSerializer[] = [];
@@ -282,56 +286,55 @@ function materializeChildren(
   return out;
 }
 
-/** Plain value with the installed serializers applied. Bun prints this form. */
-export function prepareSnapshot(value: unknown): unknown {
-  if (activeSerializers.length === 0) return value;
-  return materialize(value, activeSerializers, new WeakSet());
+/**
+ * Plain value with serializers applied. The array is priority order: index 0
+ * runs first, matching Bun after the reversed `addSnapshotSerializer` calls.
+ */
+export function prepareSnapshot(
+  value: unknown,
+  serializers: readonly SnapshotSerializer[] = activeSerializers,
+): unknown {
+  if (serializers.length === 0) return value;
+  return materialize(value, serializers, new WeakSet());
 }
 
 function notImplemented(err: unknown): boolean {
   return err instanceof Error && err.message === "Not implemented";
 }
 
-export function installRedactingSnapshotSerializers(
-  options: SnapshotRedactionOptions = {},
-): void {
-  if (options.extraSecrets) {
-    for (let i = 0; i < options.extraSecrets.length; i++) {
-      const val = options.extraSecrets[i];
-      if (
-        val !== undefined &&
-        val.length >= 8 &&
-        !runtimeExtraSecrets.includes(val)
-      ) {
-        runtimeExtraSecrets.push(val);
-      }
-    }
-  }
-  if (installed) return;
-  installed = true;
-
-  activeSerializers = createRedactingSnapshotSerializers({
-    extraSecrets: runtimeExtraSecrets,
-    normalizeBunVersion: options.normalizeBunVersion,
-    normalizeIsoTimestamps: options.normalizeIsoTimestamps,
-    normalizeDates: options.normalizeDates,
-  });
-
+/**
+ * Register serializers with `bun test`. Adds them last-to-first so the first
+ * entry in `serializers` runs first. Returns false when Bun 1.4.4 throws
+ * "Not implemented".
+ */
+export function tryAddSnapshotSerializers(
+  serializers: readonly SnapshotSerializer[],
+): boolean {
   const add = (
     expect as unknown as {
       addSnapshotSerializer?: (serializer: SnapshotSerializer) => void;
     }
   ).addSnapshotSerializer;
-  if (typeof add !== "function") return;
+  if (typeof add !== "function") return false;
 
   try {
-    for (let i = 0; i < activeSerializers.length; i++) {
-      const serializer = activeSerializers[i];
+    for (let i = serializers.length - 1; i >= 0; i--) {
+      const serializer = serializers[i];
       if (serializer !== undefined) add(serializer);
     }
-    hooked = true;
+    return true;
   } catch (err) {
     if (!notImplemented(err)) throw err;
-    hooked = false;
+    return false;
   }
+}
+
+export function installRedactingSnapshotSerializers(
+  options: SnapshotRedactionOptions = {},
+): void {
+  if (installed) return;
+  installed = true;
+
+  activeSerializers = createRedactingSnapshotSerializers(options);
+  hooked = tryAddSnapshotSerializers(activeSerializers);
 }

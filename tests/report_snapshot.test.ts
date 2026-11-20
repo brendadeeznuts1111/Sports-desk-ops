@@ -191,4 +191,19 @@ describe("deterministic report snapshots", () => {
     expect(JSON.stringify(redacted)).not.toContain(token);
     expect(redacted).toMatchSnapshot("redacted surface");
   });
+
+  test("writes a Bun-format snapshot file", () => {
+    const header = readFileSync(
+      fileURLToPath(
+        new URL(
+          "./__snapshots__/report_snapshot.test.ts.snap",
+          import.meta.url,
+        ),
+      ),
+      "utf8",
+    ).split("\n")[0];
+    expect(header).toBe(
+      "// Bun Snapshot v1, https://bun.sh/docs/test/snapshots",
+    );
+  });
 });

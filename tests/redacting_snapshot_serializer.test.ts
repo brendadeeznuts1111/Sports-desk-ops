@@ -1,14 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
   createRedactingSnapshotSerializers,
-  installRedactingSnapshotSerializers,
   prepareSnapshot,
-  snapshotSerializersHooked,
+  tryAddSnapshotSerializers,
 } from "./serializers/redacting_snapshot_serializer.ts";
 
-installRedactingSnapshotSerializers({
+// File-local serializers apply until this file ends. The canary is not added
+// to the preload set, which covers every later file.
+const fileSerializers = createRedactingSnapshotSerializers({
   extraSecrets: ["AKIA_CUSTOM_CANARY_9988"],
 });
+const fileHooked = tryAddSnapshotSerializers(fileSerializers);
 
 describe("redacting & normalizing snapshot serializer", () => {
   test("redacts secret keys, Bearer tokens, URL userinfo, and normalizes Bun.version and timestamps", () => {
@@ -26,9 +28,9 @@ describe("redacting & normalizing snapshot serializer", () => {
       ok: true,
     };
 
-    const viewed = snapshotSerializersHooked()
+    const viewed = fileHooked
       ? payload
-      : prepareSnapshot(payload);
+      : prepareSnapshot(payload, fileSerializers);
 
     expect(viewed).toMatchInlineSnapshot(`
       {
