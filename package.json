@@ -425,7 +425,7 @@
   "author": "bw496915-cmyk",
   "license": "MIT",
   "devDependencies": {
-    "@deepseek-ai/dsh-plugin-market-index": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-plugin-market-index": "0.2.2-rc.3",
     "@hughescr/stryker-bun-runner": "1.6.0",
     "@sportsdesk-ops/api": "workspace:*",
     "@sportsdesk-ops/backend": "workspace:*",

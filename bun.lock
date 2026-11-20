@@ -16,7 +16,7 @@
         "zod": "4.6.7",
       },
       "devDependencies": {
-        "@deepseek-ai/dsh-plugin-market-index": "0.2.2-rc.1",
+        "@deepseek-ai/dsh-plugin-market-index": "0.2.2-rc.3",
         "@hughescr/stryker-bun-runner": "1.6.0",
         "@sportsdesk-ops/api": "workspace:*",
         "@sportsdesk-ops/backend": "workspace:*",
@@ -212,9 +212,9 @@
 
     "@deepseek-ai/cosmokit": ["@deepseek-ai/cosmokit@1.9.0", "", {}, "sha512-5O1S53mZiJyZYcvxxD0Qv1EY7qFPSxbGyD8CbVK6gw7W9FvcXZj2YIX1ZkOqyQQ3Xt2rFkZDHJv0+V3Zmmp8CA=="],
 
-    "@deepseek-ai/dsh-package-manifest": ["@deepseek-ai/dsh-package-manifest@0.2.2-rc.1", "", { "peerDependencies": { "@deepseek-ai/cordis": "~4.1.0" } }, "sha512-/Dz9+N+iMLu4QaXC28Miy1ClgZpHcWEq+B7+BQVwekdWwEPyFrPPjcl6slTXtq2ZlhOh/lNhXousZzyg7TsyKA=="],
+    "@deepseek-ai/dsh-package-manifest": ["@deepseek-ai/dsh-package-manifest@0.2.2-rc.3", "", { "peerDependencies": { "@deepseek-ai/cordis": "~4.1.0" } }, "sha512-5HhXGTnI0CDmFfJ08OYte3iIp+dr406qjKZGhfaxqdCtgZoHUFBrE+KerEZ3TK/fZbzVQ+qouTS5jIax+UcL3w=="],
 
-    "@deepseek-ai/dsh-plugin-market-index": ["@deepseek-ai/dsh-plugin-market-index@0.2.2-rc.1", "", { "dependencies": { "@deepseek-ai/dsh-package-manifest": "0.2.2-rc.1", "semver": "^7.8.5" }, "peerDependencies": { "@deepseek-ai/cordis": "~4.1.0" } }, "sha512-wvt0zmNtg5kOx2WDRKiesFTlRS8Ev2WDVTIqoE2Up1VdIk2NMNyKbRocC/PMc8nTGiXzhHb4EUTqI8Y3FlXNSQ=="],
+    "@deepseek-ai/dsh-plugin-market-index": ["@deepseek-ai/dsh-plugin-market-index@0.2.2-rc.3", "", { "dependencies": { "@deepseek-ai/dsh-package-manifest": "0.2.2-rc.3", "semver": "^7.8.5" }, "peerDependencies": { "@deepseek-ai/cordis": "~4.1.0" } }, "sha512-VMf34fPzlHJnuYd/PYzjoUMMnx6CYJMTw3SsR7KCDFAEDhm1cJUP3Lnk72nZhiZhVWqGWSn1fKMMo6oxi0BmVQ=="],
 
     "@ganchrowsci/gs-sdk": ["@ganchrowsci/gs-sdk@1.0.27", "", { "dependencies": { "diffusion": "6.4.4", "got": "11.8.0" } }, "sha512-uKos2LeXv2WGe1SkHPe3tJv1c9JQZWeFQhWKMfBSJPoNqpVkH1Cg0l5mS0g/URg4wz2VT7ILi2XSDWiD9E3MZA=="],
 

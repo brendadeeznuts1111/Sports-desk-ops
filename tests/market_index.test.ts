@@ -157,10 +157,15 @@ async function publishedValidatorReady(): Promise<boolean> {
   ) {
     return false;
   }
+  const rootPkg = (await Bun.file(join(ROOT, "package.json")).json()) as {
+    devDependencies?: Record<string, string>;
+  };
+  const expected =
+    rootPkg.devDependencies?.["@deepseek-ai/dsh-plugin-market-index"];
   const pkg = (await Bun.file(PUBLISHED_PARSER_PKG).json()) as {
     version?: string;
   };
-  return pkg.version === HARNESS_RUNTIME;
+  return typeof expected === "string" && pkg.version === expected;
 }
 
 function marketIndexTestsReady(): boolean {
