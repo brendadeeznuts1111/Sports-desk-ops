@@ -31,6 +31,13 @@ export interface AgentTreeFile {
   readonly source: string;
   /** Set only by `build:agent-tree --live`. A scratch reduction has no observation time. */
   readonly capturedAt?: string;
+  /**
+   * True when the portal parser dropped level 13+ rows. The node count is then a subset
+   * of GENERAL, not the whole downline.
+   */
+  readonly partial?: boolean;
+  /** How many GENERAL rows were above the portal parser's level 12 ceiling. */
+  readonly omittedCount?: number;
   readonly agentCount: number;
   readonly roots: readonly string[];
   /** Canonical keys owned by more than one `AgentID`; those nodes are flagged, never levelled. */
@@ -94,6 +101,10 @@ export function readAgentTreeFile(payload: unknown): AgentTreeFile | null {
     source: typeof record.source === "string" ? record.source : "",
     ...(typeof record.capturedAt === "string"
       ? { capturedAt: record.capturedAt }
+      : {}),
+    ...(record.partial === true ? { partial: true as const } : {}),
+    ...(typeof record.omittedCount === "number"
+      ? { omittedCount: record.omittedCount }
       : {}),
     agentCount:
       typeof record.agentCount === "number"

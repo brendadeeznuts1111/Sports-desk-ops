@@ -63,6 +63,8 @@ export interface AgentTreeNodes {
   readonly source?: string;
   /** Observation time stamped by a live refresh. Absent on the committed scratch tree. */
   readonly capturedAt?: string | null;
+  /** True when the live refresh omitted level 13+ rows the portal parser cannot place. */
+  readonly partial?: boolean;
   readonly nodes?: Record<string, { readonly t?: string | null }>;
 }
 
@@ -211,7 +213,7 @@ export function deriveDeskKpis(inputs: DeskKpiInputs, now: Date): DeskKpis {
       basis === "fixture" ? null : capturedAt,
       agentTree.mtime,
       STALE_AFTER_SECONDS.agentTree,
-      false,
+      agentTree.value.partial === true,
       now,
     );
     return {

@@ -8,7 +8,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { buildAgentTreeFileFromGraph } from "../lib/agent_tree_build.ts";
-import { LIVE_AGENT_TREE_SOURCE } from "../lib/agent_tree_live.ts";
+import {
+  LIVE_AGENT_TREE_SOURCE,
+  liveTreeOverflow,
+} from "../lib/agent_tree_live.ts";
 import { isFixtureAgentTreeGraphSource } from "../lib/agent_tree.ts";
 
 const REPO = join(import.meta.dir, "..");
@@ -28,6 +31,26 @@ describe("buildAgentTreeFileFromGraph", () => {
     expect(file.capturedAt).toBe(capturedAt);
     expect(file.agentCount).toBe(1);
     expect(isFixtureAgentTreeGraphSource(file.source)).toBe(false);
+  });
+
+  test("level 13+ rows the portal parser drops are stamped partial, not a complete capture", () => {
+    expect(liveTreeOverflow([])).toEqual({ partial: false, omittedCount: 0 });
+    expect(liveTreeOverflow([{ level: 13 }, { level: 14 }])).toEqual({
+      partial: true,
+      omittedCount: 2,
+    });
+    const file = buildAgentTreeFileFromGraph({
+      graph: {
+        nodes: [{ data: { id: "A1", level: 12 } }],
+        edges: [],
+      },
+      source: LIVE_AGENT_TREE_SOURCE,
+      capturedAt: "2026-11-20T16:00:00.000Z",
+      ...liveTreeOverflow([{ level: 13 }]),
+    });
+    expect(file.partial).toBe(true);
+    expect(file.omittedCount).toBe(1);
+    expect(file.agentCount).toBe(1);
   });
 });
 

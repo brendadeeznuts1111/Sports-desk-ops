@@ -22,6 +22,17 @@ import { buildAgentTreeFileFromGraph } from "./agent_tree_build.ts";
 
 export const LIVE_AGENT_TREE_SOURCE = "live:f402-list-agents-by-agent";
 
+/**
+ * Levels above 12 never enter the portal agent map. A live tree built from that
+ * map is a partial capture when any such row was in the envelope.
+ */
+export function liveTreeOverflow(
+  skippedOverflow: readonly { readonly level: number }[],
+): { partial: boolean; omittedCount: number } {
+  const omittedCount = skippedOverflow.length;
+  return { partial: omittedCount > 0, omittedCount };
+}
+
 export function resolveLiveAccountPath(
   argvAccount: string | null,
   env: NodeJS.ProcessEnv = Bun.env,
@@ -86,14 +97,16 @@ export async function fetchLiveAgentTree(
       envelope: { GENERAL: envelope.GENERAL },
     });
     const capturedAt = new Date().toISOString();
+    const overflow = liveTreeOverflow(result.ingest.skippedOverflow);
     const file = buildAgentTreeFileFromGraph({
       graph: result.graph,
       hierarchy: envelope,
       source: LIVE_AGENT_TREE_SOURCE,
       capturedAt,
+      ...overflow,
     });
     console.error(
-      `[build:agent-tree] live capturedAt=${capturedAt} agents=${file.agentCount} generalRows=${envelope.GENERAL.length}`,
+      `[build:agent-tree] live capturedAt=${capturedAt} agents=${file.agentCount} generalRows=${envelope.GENERAL.length} omittedLevel13Plus=${overflow.omittedCount}`,
     );
     return { file, hierarchy: envelope };
   } finally {

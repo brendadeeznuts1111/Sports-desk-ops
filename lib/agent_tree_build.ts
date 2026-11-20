@@ -23,6 +23,9 @@ export interface AgentTreeBuildInput {
   readonly hierarchy?: unknown;
   readonly source: string;
   readonly capturedAt?: string;
+  /** Level 13+ rows the portal parser did not place. */
+  readonly partial?: boolean;
+  readonly omittedCount?: number;
 }
 
 export function buildAgentTreeFileFromGraph(
@@ -100,6 +103,10 @@ export function buildAgentTreeFileFromGraph(
     schemaVersion: 1,
     source: input.source,
     ...(input.capturedAt !== undefined ? { capturedAt: input.capturedAt } : {}),
+    ...(input.partial === true ? { partial: true as const } : {}),
+    ...(input.omittedCount !== undefined
+      ? { omittedCount: input.omittedCount }
+      : {}),
     agentCount: keys.length,
     roots,
     collisions,

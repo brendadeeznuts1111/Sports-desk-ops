@@ -65,6 +65,30 @@ describe("deriveDeskKpis", () => {
     });
   });
 
+  test("a live tree that omitted level 13+ rows is a partial capture", () => {
+    const kpis = deriveDeskKpis(
+      {
+        ...none,
+        agentTree: {
+          value: {
+            source: "live:f402-list-agents-by-agent",
+            capturedAt: NOW.toISOString(),
+            partial: true,
+            nodes: { A1: { t: "A" } },
+          },
+          mtime: NOW,
+        },
+      },
+      NOW,
+    );
+    expect(kpis.agents?.total).toBe(1);
+    expect(kpis.agents?.provenance).toMatchObject({
+      basis: "capture",
+      partial: true,
+      stale: false,
+    });
+  });
+
   test("a live tree with no capturedAt ages from the file mtime", () => {
     const kpis = deriveDeskKpis(
       {
