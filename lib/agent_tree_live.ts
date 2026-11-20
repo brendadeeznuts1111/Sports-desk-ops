@@ -50,6 +50,16 @@ export function missingLiveSessionMessage(): string {
   return "live agent tree needs a manager session. Set F402_SESSION_FILE (bun run session:login) or F402_REPLAY_PROXY_URL. Refusing to rewrite data/agent-tree.json from scratch/agent-graph.json.";
 }
 
+/** Local-graph source stamped by `--allow-fixture`. The `fixture:` prefix keeps KPI basis fixture. */
+export function fixtureEscapeSource(graphPath: string): string {
+  return `fixture:${graphPath}`;
+}
+
+/** Refusal text plus the operator escape hatch. The hourly job does not pass that flag. */
+export function liveRefusalWithEscapeHatch(reason: string): string {
+  return `${reason} Escape hatch: re-run with --allow-fixture to write the local graph as a fixture.`;
+}
+
 /** Named reason to stop, or null when a session, proxy, or deprecated cookie is configured. */
 export function liveAgentTreeRefusal(
   env: NodeJS.ProcessEnv = Bun.env,

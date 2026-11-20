@@ -9,7 +9,8 @@
  * Live (`--live`) fetches the portal downline through the replay transport and stamps
  * `source: live:f402-list-agents-by-agent` plus `capturedAt`. It does not read
  * `scratch/agent-graph.json`, and it does not write the tree when the account fixture
- * or the manager session is missing.
+ * or the manager session is missing. `--allow-fixture` is the escape hatch: it writes
+ * the local graph and stamps `source` as `fixture:<path>` so the card stays a fixture.
  *
  * Usage:
  *   bun run build:agent-tree -- --live
@@ -27,12 +28,17 @@ import {
 import type { AgentTreeFile } from "../lib/agent_tree.ts";
 import {
   fetchLiveAgentTree,
+  fixtureEscapeSource,
+  liveAgentTreeRefusal,
+  liveRefusalWithEscapeHatch,
   missingLiveAccountMessage,
   resolveLiveAccountPath,
 } from "../lib/agent_tree_live.ts";
 
 interface Args {
   live: boolean;
+  /** Explicit escape hatch. Never set by the hourly job. */
+  allowFixture: boolean;
   account: string | null;
   graph: string;
   graphExplicit: boolean;
@@ -45,6 +51,7 @@ interface Args {
 function parseArgs(argv: readonly string[]): Args {
   const args: Args = {
     live: false,
+    allowFixture: false,
     account: null,
     graph: "scratch/agent-graph.json",
     graphExplicit: false,
@@ -59,6 +66,9 @@ function parseArgs(argv: readonly string[]): Args {
     switch (flag) {
       case "--live":
         args.live = true;
+        break;
+      case "--allow-fixture":
+        args.allowFixture = true;
         break;
       case "--account":
         if (value === undefined) throw new Error("--account needs a path");
@@ -97,6 +107,8 @@ function parseArgs(argv: readonly string[]): Args {
             "",
             "  --live              fetch the portal downline (needs --account or F402_GRAPH_ACCOUNT,",
             "                      and a manager session). Does not read scratch/agent-graph.json",
+            "  --allow-fixture     escape hatch when --live cannot run: write the local graph and",
+            "                      stamp source fixture:<path>. The hourly job does not pass this",
             "  --account <path>    getAccountInfoOwner JSON (or set F402_GRAPH_ACCOUNT)",
             "  --graph <path>      cytoscape agent graph (default scratch/agent-graph.json)",
             "  --hierarchy <path>  list-agents envelope, adds AgentType",
@@ -149,16 +161,29 @@ async function main(): Promise<void> {
   const args = parseArgs(Bun.argv.slice(2));
 
   if (args.live) {
-    if (args.graphExplicit) {
-      throw new Error(
-        "--live does not read --graph. Refusing to mix a local graph with a portal fetch.",
-      );
-    }
     const accountPath = resolveLiveAccountPath(args.account);
-    if (accountPath === "") throw new Error(missingLiveAccountMessage());
-    const { file, hierarchy } = await fetchLiveAgentTree(accountPath);
-    await writeOutputs(args, file, hierarchy, file.source);
-    return;
+    const reason =
+      accountPath === "" ? missingLiveAccountMessage() : liveAgentTreeRefusal();
+    if (reason !== null) {
+      if (!args.allowFixture)
+        throw new Error(liveRefusalWithEscapeHatch(reason));
+      console.error(
+        `[build:agent-tree] escape hatch --allow-fixture: ${reason}`,
+      );
+    } else {
+      if (args.graphExplicit) {
+        throw new Error(
+          "--live does not read --graph. Refusing to mix a local graph with a portal fetch. --allow-fixture applies only when the live fetch is refused.",
+        );
+      }
+      const { file, hierarchy } = await fetchLiveAgentTree(accountPath);
+      await writeOutputs(args, file, hierarchy, file.source);
+      return;
+    }
+  } else if (args.allowFixture) {
+    console.error(
+      `[build:agent-tree] escape hatch --allow-fixture: writing fixture from ${args.graph}`,
+    );
   }
 
   const graphFile = Bun.file(resolve(process.cwd(), args.graph));
@@ -177,7 +202,7 @@ async function main(): Promise<void> {
   const file = buildAgentTreeFileFromGraph({
     graph: await graphFile.json(),
     hierarchy,
-    source: args.graph,
+    source: args.allowFixture ? fixtureEscapeSource(args.graph) : args.graph,
   });
   const collisions = file.collisions ?? [];
   if (collisions.length > 0) {

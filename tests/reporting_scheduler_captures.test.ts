@@ -115,6 +115,7 @@ describe("SHELL_CAPTURE schedule definitions", () => {
       "--live",
     ]);
     expect(def?.shellJob?.requires).toEqual(["F402_GRAPH_ACCOUNT"]);
+    expect(def?.shellJob?.args).not.toContain("--allow-fixture");
     expect(def?.enabled).toBe(true);
   });
 

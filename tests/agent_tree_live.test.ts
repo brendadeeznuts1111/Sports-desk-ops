@@ -9,6 +9,7 @@ import { join } from "node:path";
 
 import { buildAgentTreeFileFromGraph } from "../lib/agent_tree_build.ts";
 import {
+  fixtureEscapeSource,
   LIVE_AGENT_TREE_SOURCE,
   liveTreeOverflow,
 } from "../lib/agent_tree_live.ts";
@@ -77,6 +78,7 @@ describe("build:agent-tree --live", () => {
     expect(result.exitCode).not.toBe(0);
     expect(stderr).toContain("F402_GRAPH_ACCOUNT");
     expect(stderr).toContain("scratch/agent-graph.json");
+    expect(stderr).toContain("--allow-fixture");
     expect(Bun.file(out).size).toBe(0);
   });
 
@@ -114,7 +116,55 @@ describe("build:agent-tree --live", () => {
     expect(result.exitCode).not.toBe(0);
     expect(stderr).toContain("manager session");
     expect(stderr).toContain("scratch/agent-graph.json");
+    expect(stderr).toContain("--allow-fixture");
     expect(stderr).not.toContain("FIXTURE_LOGIN");
     expect(Bun.file(out).size).toBe(0);
+  });
+
+  test("--allow-fixture writes the local graph as a fixture when live cannot run", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-tree-live-"));
+    const out = join(dir, "agent-tree.json");
+    const graph = join(dir, "graph.json");
+    await Bun.write(
+      graph,
+      JSON.stringify({
+        nodes: [{ data: { id: "A1", level: 1 } }],
+        edges: [],
+      }),
+    );
+    const result = Bun.spawnSync(
+      [
+        "bun",
+        "scripts/build_agent_tree.ts",
+        "--live",
+        "--allow-fixture",
+        "--graph",
+        graph,
+        "--out",
+        out,
+        "--no-index",
+      ],
+      {
+        cwd: REPO,
+        env: {
+          ...Bun.env,
+          F402_GRAPH_ACCOUNT: "",
+          F402_SESSION_FILE: join(dir, "no-session.json"),
+          F402_REPLAY_PROXY_URL: "",
+          F402_COOKIE: "",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const stderr = result.stderr.toString();
+    expect(result.exitCode).toBe(0);
+    expect(stderr).toContain("escape hatch");
+    expect(stderr).toContain("--allow-fixture");
+    const written = await Bun.file(out).json();
+    expect(written.source).toBe(fixtureEscapeSource(graph));
+    expect(written.capturedAt).toBeUndefined();
+    expect(written.agentCount).toBe(1);
+    expect(isFixtureAgentTreeGraphSource(written.source)).toBe(true);
   });
 });

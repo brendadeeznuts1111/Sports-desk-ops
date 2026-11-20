@@ -150,6 +150,7 @@ Each capture is credential-gated at two layers (defense in depth):
 the requirement is satisfied`. No cron timer is ever registered for it; the scheduler must be
    restarted after the requirement is satisfied. The child also exits before writing when the
    manager session is missing, and it does not rebuild from `scratch/agent-graph.json`.
+   `--allow-fixture` is the operator escape hatch for that refusal; the schedule does not pass it.
 2. **Fire-time skip** (`runShellCaptureDefault`): if an env var changes mid-run after a schedule
    was armed, the fire-time check logs
    `[Shell Capture] bun run build:agent-tree -- --live: skipped (missing F402_GRAPH_ACCOUNT)` and returns
