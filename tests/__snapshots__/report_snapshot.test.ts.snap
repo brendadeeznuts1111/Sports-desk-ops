@@ -1,0 +1,28 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`deterministic report snapshots snapshots nested report with property matchers and explicit hint: two-user report 1`] = `
+{
+  "generatedAt": StringMatching /^\\d{4}-\\d{2}-\\d{2}T/,
+  "requestId": Any<String>,
+  "summary": [
+    {
+      "id": 1,
+      "name": "Alice",
+    },
+    {
+      "id": 2,
+      "name": "Bob",
+    },
+  ],
+  "total": 2,
+}
+`;
+
+exports[`deterministic report snapshots snapshots a typed error message without the stack: rejected sample 1`] = `"ERR_REPORT_SNAPSHOT: sample rejected"`;
+
+exports[`deterministic report snapshots snapshots the redacted toJSON surface: redacted surface 1`] = `
+{
+  "bucket": "sportsdesk-ops-reports",
+  "token": "[REDACTED_SECRET]",
+}
+`;
