@@ -98,6 +98,8 @@ noOrphans = true
 depth = 8
 
 [test]
+preload = ["./tests/preload.ts"]
+
 # Ignore scratch experiments, heavy fixtures, and generated gate artifacts from default test scans.
 # Keeps colocated tests in lib/ and scripts/ active without traversing scratch/.
 pathIgnorePatterns = [
