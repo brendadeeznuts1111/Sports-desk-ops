@@ -3,31 +3,39 @@
  * @file build_agent_tree.ts
  * @description Builds `data/agent-tree.json` (parent pointers + level) from the agent graph.
  *
- * The portal's "Agent Tree" sidebar renders `baseHeriarchy`; this repository already has the
- * same forest in `scratch/agent-graph.json` (nodes + `parent->child` edges). This script reduces
- * it to the minimum the scoreboard needs, keyed by the canonical `agentLoginKey` so lookups
- * against wagers can never miss by case.
+ * Offline (`--graph`) reduces a cytoscape graph already on disk. That path stamps `source`
+ * with the graph path, and a `scratch/` path stays a fixture.
  *
- * Output shape (compact on purpose — 2.2k agents):
- *   { schemaVersion: 1, roots: [key...], nodes: { key: { l: level, p: parent, t: agentType } } }
- *
- * PII: agent ids only. No logins-with-passwords, no rates, no customers.
+ * Live (`--live`) fetches the portal downline through the replay transport and stamps
+ * `source: live:f402-list-agents-by-agent` plus `capturedAt`. It does not read
+ * `scratch/agent-graph.json`, and it does not write the tree when the account fixture
+ * or the manager session is missing.
  *
  * Usage:
- *   bun run build:agent-tree --graph scratch/agent-graph.json
- *   bun run build:agent-tree --graph scratch/agent-graph.json --hierarchy scratch/raw-f402-list-agents.json
+ *   bun run build:agent-tree -- --live
+ *   bun run build:agent-tree -- --graph scratch/agent-graph.json
+ *   bun run build:agent-tree -- --graph scratch/agent-graph.json --hierarchy scratch/raw-f402-list-agents.json
  */
 
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { agentKeyOf, readHierarchyRows } from "../lib/live_bets.ts";
+import { readHierarchyRows } from "../lib/live_bets.ts";
 import {
-  type AgentTreeFile,
-  type AgentTreeWireNode,
-} from "../lib/agent_tree.ts";
+  agentIndexDocument,
+  buildAgentTreeFileFromGraph,
+} from "../lib/agent_tree_build.ts";
+import type { AgentTreeFile } from "../lib/agent_tree.ts";
+import {
+  fetchLiveAgentTree,
+  missingLiveAccountMessage,
+  resolveLiveAccountPath,
+} from "../lib/agent_tree_live.ts";
 
 interface Args {
+  live: boolean;
+  account: string | null;
   graph: string;
+  graphExplicit: boolean;
   hierarchy: string | null;
   out: string;
   /** Identity + level index derived from the same hierarchy rows; empty string disables. */
@@ -36,7 +44,10 @@ interface Args {
 
 function parseArgs(argv: readonly string[]): Args {
   const args: Args = {
+    live: false,
+    account: null,
     graph: "scratch/agent-graph.json",
+    graphExplicit: false,
     hierarchy: null,
     out: "data/agent-tree.json",
     indexOut: "data/agent-index.json",
@@ -46,9 +57,18 @@ function parseArgs(argv: readonly string[]): Args {
     const flag = argv[i];
     const value = argv[i + 1];
     switch (flag) {
+      case "--live":
+        args.live = true;
+        break;
+      case "--account":
+        if (value === undefined) throw new Error("--account needs a path");
+        args.account = value;
+        i++;
+        break;
       case "--graph":
         if (value === undefined) throw new Error("--graph needs a path");
         args.graph = value;
+        args.graphExplicit = true;
         i++;
         break;
       case "--hierarchy":
@@ -75,6 +95,9 @@ function parseArgs(argv: readonly string[]): Args {
           [
             "Usage: bun run build:agent-tree [flags]",
             "",
+            "  --live              fetch the portal downline (needs --account or F402_GRAPH_ACCOUNT,",
+            "                      and a manager session). Does not read scratch/agent-graph.json",
+            "  --account <path>    getAccountInfoOwner JSON (or set F402_GRAPH_ACCOUNT)",
             "  --graph <path>      cytoscape agent graph (default scratch/agent-graph.json)",
             "  --hierarchy <path>  list-agents envelope, adds AgentType",
             "  --out <path>        output (default data/agent-tree.json)",
@@ -91,195 +114,78 @@ function parseArgs(argv: readonly string[]): Args {
   return args;
 }
 
-interface CytoscapeGraph {
-  readonly nodes?: ReadonlyArray<{ data?: { id?: unknown; level?: unknown } }>;
-  readonly edges?: ReadonlyArray<{
-    data?: { source?: unknown; target?: unknown };
-  }>;
-}
-
-async function main(): Promise<void> {
-  const args = parseArgs(Bun.argv.slice(2));
-
-  const graphFile = Bun.file(resolve(process.cwd(), args.graph));
-  if (!(await graphFile.exists())) {
-    throw new Error(`agent graph not found: ${args.graph}`);
-  }
-  const graph = (await graphFile.json()) as CytoscapeGraph;
-
-  const nodes = graph.nodes ?? [];
-  const edges = graph.edges ?? [];
-  if (nodes.length === 0) throw new Error("agent graph has no nodes");
-
-  // The graph keys nodes by AgentID; the scoreboard keys agents by agentLoginKey (Login first).
-  // Both must agree or a wager resolves to a key the tree does not contain.
-  const rows =
-    args.hierarchy === null
-      ? []
-      : readHierarchyRows(
-          await Bun.file(resolve(process.cwd(), args.hierarchy)).json(),
-        );
-
-  const keyByAgentId = new Map<string, string>();
-  const types = new Map<string, string | null>();
-  const idsByKey = new Map<string, Set<string>>();
-  for (const row of rows) {
-    const agentId = String(row.AgentID ?? "").trim();
-    const key = agentKeyOf(row);
-    if (agentId === "" || key === "") continue;
-    keyByAgentId.set(agentId, key);
-    types.set(key, (row.AgentType as string | undefined) ?? null);
-    const ids = idsByKey.get(key) ?? new Set<string>();
-    ids.add(agentId);
-    idsByKey.set(key, ids);
-  }
-  if (args.hierarchy !== null) {
-    console.log(`[build:agent-tree] hierarchy: ${rows.length} row(s)`);
-  }
-
-  // A canonical key owned by two AgentIDs cannot be levelled truthfully: omit it and report.
-  const collisions = [...idsByKey]
-    .filter(([, ids]) => ids.size > 1)
-    .map(([key, ids]) => ({ key, agentIds: [...ids].sort() }));
-  const ambiguous = new Set(collisions.map((c) => c.key));
-
-  // Ambiguous keys stay in the tree so their children keep a parent; they are flagged and
-  // never given a level, because two agents own the key and picking one would be a guess.
-  const canonical = (agentId: string): string | null => {
-    const key = keyByAgentId.get(agentId) ?? agentKeyOf({ AgentID: agentId });
-    return key === "" ? null : key;
-  };
-
-  const levels = new Map<string, number | null>();
-  for (const node of nodes) {
-    const id = String(node.data?.id ?? "").trim();
-    if (id === "") continue;
-    const key = canonical(id);
-    if (key === null) continue;
-    const level = Number(node.data?.level);
-    levels.set(key, Number.isFinite(level) ? level : null);
-  }
-
-  const parentOf = new Map<string, string>();
-  let orphans = 0;
-  let selfLoops = 0;
-  for (const edge of edges) {
-    const source = String(edge.data?.source ?? "").trim();
-    const target = String(edge.data?.target ?? "").trim();
-    if (source === "" || target === "") continue;
-
-    const parent = canonical(source);
-    const child = canonical(target);
-    if (parent === null || child === null) {
-      orphans += 1;
-      continue;
-    }
-    if (parent === child) {
-      // Canonicalising AgentID -> Login can collapse a parent/child pair into one agent.
-      selfLoops += 1;
-      continue;
-    }
-    // The portal tree is single-parent; a second parent would be a data surprise, not a rule.
-    if (parentOf.has(child)) {
-      orphans += 1;
-      continue;
-    }
-    parentOf.set(child, parent);
-    if (!levels.has(parent)) levels.set(parent, null);
-    if (!levels.has(child)) levels.set(child, null);
-  }
-
-  const keys = [...levels.keys()].sort();
-  const outNodes: Record<string, AgentTreeWireNode> = {};
-  const roots: string[] = [];
-  for (const key of keys) {
-    const parent = parentOf.get(key) ?? null;
-    if (parent === null) roots.push(key);
-    const isAmbiguous = ambiguous.has(key);
-    outNodes[key] = {
-      l: isAmbiguous ? null : (levels.get(key) ?? null),
-      p: parent,
-      t: isAmbiguous ? null : (types.get(key) ?? null),
-      ...(isAmbiguous ? { a: true as const } : {}),
-    };
-  }
-
-  const file: AgentTreeFile = {
-    schemaVersion: 1,
-    source: args.graph,
-    agentCount: keys.length,
-    roots,
-    collisions,
-    nodes: outNodes,
-  };
-
+async function writeOutputs(
+  args: Args,
+  file: AgentTreeFile,
+  hierarchy: unknown,
+  indexSource: string | null,
+): Promise<void> {
   const outPath = resolve(process.cwd(), args.out);
   mkdirSync(dirname(outPath), { recursive: true });
   await Bun.write(outPath, `${JSON.stringify(file)}\n`);
-
   console.log(
-    `[build:agent-tree] wrote ${args.out}: ${keys.length} agents, ${roots.length} root(s)` +
-      (orphans > 0 ? `, ${orphans} edge(s) dropped` : "") +
-      (selfLoops > 0 ? `, ${selfLoops} self-loop(s)` : "") +
-      (collisions.length > 0
-        ? `, ${collisions.length} ambiguous key(s): ${collisions.map((c) => c.key).join(", ")}`
-        : ""),
+    `[build:agent-tree] wrote ${args.out}: ${file.agentCount} agents, ${file.roots.length} root(s)` +
+      (file.capturedAt !== undefined ? `, capturedAt ${file.capturedAt}` : "") +
+      `, source ${file.source}`,
   );
-  console.log(`[build:agent-tree] roots: ${roots.join(", ")}`);
+  console.log(`[build:agent-tree] roots: ${file.roots.join(", ")}`);
   const { summarizeTree } = await import("../lib/agent_tree.ts");
   const summary = summarizeTree(file);
   console.log(
     `[build:agent-tree] depth ${summary.depth}, ${summary.leaves} leaf agent(s)`,
   );
 
-  if (args.indexOut !== "") {
-    const agents: Record<
-      string,
-      {
-        i: string | string[];
-        l: number | null;
-        t: string | null;
-        s: number | null;
-      }
-    > = {};
-    for (const row of rows) {
-      const key = agentKeyOf(row);
-      if (key === "") continue;
-      const id = String(row.AgentID ?? "").trim();
-      const s = Number(row.SeqNumber);
-      agents[key] = {
-        i: id,
-        l: Number.isFinite(Number(row.Level)) ? Number(row.Level) : null,
-        t: (row.AgentType as string | undefined) ?? null,
-        s: Number.isFinite(s) ? s : null,
-      };
-    }
-    // Ambiguous keys keep every id and lose the level: two agents cannot share one tier.
-    for (const collision of collisions) {
-      const entry = agents[collision.key];
-      agents[collision.key] = {
-        i: collision.agentIds,
-        l: null,
-        t: null,
-        s: entry?.s ?? null,
-      };
-    }
+  if (args.indexOut === "") return;
+  const index = agentIndexDocument(hierarchy, file.collisions, indexSource);
+  const indexPath = resolve(process.cwd(), args.indexOut);
+  mkdirSync(dirname(indexPath), { recursive: true });
+  await Bun.write(indexPath, `${JSON.stringify(index)}\n`);
+  console.log(
+    `[build:agent-tree] index -> ${args.indexOut}: ${index.agentCount} agent(s)`,
+  );
+}
 
-    const indexPath = resolve(process.cwd(), args.indexOut);
-    mkdirSync(dirname(indexPath), { recursive: true });
-    await Bun.write(
-      indexPath,
-      `${JSON.stringify({
-        schemaVersion: 1,
-        source: args.hierarchy,
-        agentCount: Object.keys(agents).length,
-        agents,
-      })}\n`,
-    );
+async function main(): Promise<void> {
+  const args = parseArgs(Bun.argv.slice(2));
+
+  if (args.live) {
+    if (args.graphExplicit) {
+      throw new Error(
+        "--live does not read --graph. Refusing to mix a local graph with a portal fetch.",
+      );
+    }
+    const accountPath = resolveLiveAccountPath(args.account);
+    if (accountPath === "") throw new Error(missingLiveAccountMessage());
+    const { file, hierarchy } = await fetchLiveAgentTree(accountPath);
+    await writeOutputs(args, file, hierarchy, file.source);
+    return;
+  }
+
+  const graphFile = Bun.file(resolve(process.cwd(), args.graph));
+  if (!(await graphFile.exists())) {
+    throw new Error(`agent graph not found: ${args.graph}`);
+  }
+  const hierarchy =
+    args.hierarchy === null
+      ? []
+      : await Bun.file(resolve(process.cwd(), args.hierarchy)).json();
+  if (args.hierarchy !== null) {
     console.log(
-      `[build:agent-tree] index -> ${args.indexOut}: ${Object.keys(agents).length} agent(s)`,
+      `[build:agent-tree] hierarchy: ${readHierarchyRows(hierarchy).length} row(s)`,
     );
   }
+  const file = buildAgentTreeFileFromGraph({
+    graph: await graphFile.json(),
+    hierarchy,
+    source: args.graph,
+  });
+  const collisions = file.collisions ?? [];
+  if (collisions.length > 0) {
+    console.log(
+      `[build:agent-tree] ${collisions.length} ambiguous key(s): ${collisions.map((c) => c.key).join(", ")}`,
+    );
+  }
+  await writeOutputs(args, file, hierarchy, args.hierarchy);
 }
 
 try {

@@ -130,7 +130,7 @@ credentials so the in-process bridge cron can rewrite the four source artifacts:
 
 | Card          | Artifact                      | Rebuilder                                                                                                         |
 | :------------ | :---------------------------- | :---------------------------------------------------------------------------------------------------------------- |
-| agents        | `data/agent-tree.json`        | `sched_agent_tree_hourly` (`bun run build:agent-tree` at `:11`; gated on `F402_BEARER_TOKEN`)                     |
+| agents        | `data/agent-tree.json`        | `sched_agent_tree_hourly` (`bun run build:agent-tree -- --live` at `:11`; gated on `F402_GRAPH_ACCOUNT` plus a manager session) |
 | pending       | `data/live-bets.json`         | `sched_bridge_rollup_15m` (`bridge3b`, needs F402 token)                                                          |
 | ticker        | `data/bet-ticker.json`        | `sched_bridge_rollup_15m` (`bridge3a`, needs `F402_AGENT_ID`)                                                     |
 | customer book | `data/customer-profiles.json` | `sched_customer_profiles_6h` (`bun run customers:profiles` at `:27 */6`; gated on `enriched_customers_full.json`) |
@@ -146,12 +146,13 @@ Each capture is credential-gated at two layers (defense in depth):
 1. **Registration-time filter** ([PR #45](https://github.com/bw496915-cmyk/Sports-desk-ops/pull/45),
    `ReportingSchedulerService.start()`): a SHELL_CAPTURE whose `requires` are unmet is dropped
    before being armed, with a single startup log line like
-   `[Scheduler] sched_agent_tree_hourly: not armed (missing F402_BEARER_TOKEN); restart after
+   `[Scheduler] sched_agent_tree_hourly: not armed (missing F402_GRAPH_ACCOUNT); restart after
 the requirement is satisfied`. No cron timer is ever registered for it; the scheduler must be
-   restarted after the requirement is satisfied.
+restarted after the requirement is satisfied. The child also exits before writing when the
+manager session is missing, and it does not rebuild from `scratch/agent-graph.json`.
 2. **Fire-time skip** (`runShellCaptureDefault`): if an env var changes mid-run after a schedule
    was armed, the fire-time check logs
-   `[Shell Capture] bun run build:agent-tree: skipped (missing F402_BEARER_TOKEN)` and returns
+   `[Shell Capture] bun run build:agent-tree -- --live: skipped (missing F402_GRAPH_ACCOUNT)` and returns
    without spawning the CLI. Values are never printed.
 
 Together these guarantee cron cannot hammer a tool that would exit 2 either at startup or

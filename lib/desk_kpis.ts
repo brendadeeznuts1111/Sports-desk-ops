@@ -34,9 +34,16 @@ export interface KpiProvenance {
   readonly basis: KpiBasis;
   /** When the data was observed: the artifact's own timestamp, else the file's mtime. */
   readonly asOf: string;
-  readonly asOfFrom: "artifact" | "file-mtime";
+  /**
+   * `unrecorded` means there is no observation time. A fixture agent tree uses it so a checkout
+   * mtime cannot read as "file written just now".
+   */
+  readonly asOfFrom: "artifact" | "file-mtime" | "unrecorded";
   readonly ageSeconds: number;
-  /** Older than `STALE_AFTER_SECONDS` for its kind. Fixtures are never stale, only fixtures. */
+  /**
+   * Older than `STALE_AFTER_SECONDS` for its kind. A fixture agent tree is always stale.
+   * Other fixture blocks stay unstale: they are labelled fixtures, not failed captures.
+   */
   readonly stale: boolean;
   /** The artifact says it is a subset of what the portal showed. */
   readonly partial: boolean;
@@ -49,8 +56,13 @@ export interface KpiInput<T> {
 }
 
 export interface AgentTreeNodes {
-  /** Input graph path stamped by `build:agent-tree` (`source` on `AgentTreeFile`). */
+  /**
+   * Input graph path, or `live:f402-list-agents-by-agent` after `build:agent-tree --live`.
+   * A `scratch/` path is a fixture.
+   */
   readonly source?: string;
+  /** Observation time stamped by a live refresh. Absent on the committed scratch tree. */
+  readonly capturedAt?: string | null;
   readonly nodes?: Record<string, { readonly t?: string | null }>;
 }
 
@@ -189,21 +201,35 @@ export function deriveDeskKpis(inputs: DeskKpiInputs, now: Date): DeskKpis {
       : "capture";
     const provenanceSource =
       graphSource !== "" ? graphSource : "data/agent-tree.json";
+    const capturedAt =
+      typeof agentTree.value.capturedAt === "string"
+        ? agentTree.value.capturedAt
+        : null;
+    const observed = provenance(
+      provenanceSource,
+      basis,
+      basis === "fixture" ? null : capturedAt,
+      agentTree.mtime,
+      STALE_AFTER_SECONDS.agentTree,
+      false,
+      now,
+    );
     return {
       total: nodes.length,
       agents: nodes.filter((node) => node.t === "A").length,
       masters: nodes.filter((node) => node.t === "M").length,
       unclassified: nodes.filter((node) => node.t !== "A" && node.t !== "M")
         .length,
-      provenance: provenance(
-        provenanceSource,
-        basis,
-        null,
-        agentTree.mtime,
-        STALE_AFTER_SECONDS.agentTree,
-        false,
-        now,
-      ),
+      provenance:
+        basis === "fixture"
+          ? {
+              ...observed,
+              asOf: "",
+              asOfFrom: "unrecorded" as const,
+              ageSeconds: 0,
+              stale: true,
+            }
+          : observed,
     };
   })();
 

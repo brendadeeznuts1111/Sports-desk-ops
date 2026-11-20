@@ -51,6 +51,8 @@ describe("data/agent-tree.json contract", () => {
 
     expect(kpis.agents?.provenance.basis).toBe("fixture");
     expect(kpis.agents?.provenance.source).toBe(tree.source);
-    expect(kpis.agents?.provenance.stale).toBe(false);
+    expect(kpis.agents?.provenance.stale).toBe(true);
+    expect(kpis.agents?.provenance.asOfFrom).toBe("unrecorded");
+    expect(kpis.agents?.provenance.asOf).toBe("");
   });
 });

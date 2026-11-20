@@ -29,6 +29,8 @@ export interface AgentTreeWireNode {
 export interface AgentTreeFile {
   readonly schemaVersion: 1;
   readonly source: string;
+  /** Set only by `build:agent-tree --live`. A scratch reduction has no observation time. */
+  readonly capturedAt?: string;
   readonly agentCount: number;
   readonly roots: readonly string[];
   /** Canonical keys owned by more than one `AgentID`; those nodes are flagged, never levelled. */
@@ -90,6 +92,9 @@ export function readAgentTreeFile(payload: unknown): AgentTreeFile | null {
   return {
     schemaVersion: 1,
     source: typeof record.source === "string" ? record.source : "",
+    ...(typeof record.capturedAt === "string"
+      ? { capturedAt: record.capturedAt }
+      : {}),
     agentCount:
       typeof record.agentCount === "number"
         ? record.agentCount

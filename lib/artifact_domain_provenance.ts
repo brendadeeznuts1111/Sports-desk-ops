@@ -98,7 +98,7 @@ export const SOURCES_ARTIFACT_CONTRACTS: readonly ArtifactDomainContract[] = [
     timestampKeys: ["capturedAt", "generatedAt", "observedAt"],
     basisKeys: ["source", "provenance"],
     defaultBasisWhenPresent: "capture",
-    refreshCommand: "build:agent-tree",
+    refreshCommand: "build:agent-tree --live",
   },
   {
     artifactPath: "data/customer-profiles.json",
