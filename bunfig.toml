@@ -32,8 +32,12 @@ ignorePatterns = [
   "verification/gen-tokens-zero-drift-gate/out/**",
 ]
 
-# Install keys (linker, globalStore, cache.dir, frozenLockfile, minimumReleaseAge) are owned by the
-# machine config at ~/.bunfig.toml. Setting them here would override that SSOT, so they stay out.
+# exact and ignoreScripts are repo policy: a local bunfig.toml wins over ~/.bunfig.toml for keys
+# it sets. Linker, global store, cache dir, frozen lockfile, minimum release age, install.scopes,
+# and any registry token stay in ~/.bunfig.toml and must not be committed.
+[install]
+exact = true
+ignoreScripts = true
 
 # Native Bun lint (Bun 1.5+). Bun 1.4.4 accepts but ignores this section; the enforced
 # gate is `bun run lint:check` (oxlint 1.90 + oxlint-tsgolint). Keep this block aligned
