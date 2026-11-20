@@ -7,7 +7,7 @@
  *  2. Pages token must not coexist with R2 credentials — exit 77
  *  3. Implicit `AWS_*` / `S3_*` env blocked unless opted in — exit 77
  *  4. `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — exit 78
- *  5. Seal ambient `Bun.s3` before any client is constructed
+ *  5. Seal ambient `Bun.s3` before any client is constructed — exit 77 if it cannot
  *  6. DNS cache error ratio at most 500 bps (5%) — exit 75
  *  7. Inspect and JSON surfaces must not contain active secrets — exit 77
  */
@@ -22,6 +22,7 @@ export type PreflightErrorCode =
   | "ERR_SPAWN_BINARY_NOT_FOUND"
   | "ERR_CF_TOKEN_BLEED_10000"
   | "ERR_CF_R2_ENV_MISSING"
+  | "ERR_BUN_S3_SEAL_FAILED"
   | "ERR_DNS_CACHE_THRASH_OR_ERR_SPIKE"
   | "ERR_INSP_SECRET_REDACTION_LEAK";
 
@@ -107,6 +108,7 @@ function collectActiveSecrets(
   env: Record<string, string | undefined>,
 ): readonly string[] {
   return [
+    env.F402_BEARER_TOKEN,
     env.F402_AUTH_JWT,
     env.GSLIVE_SESSION_ID,
     env.R2_ACCESS_KEY_ID,
@@ -227,8 +229,16 @@ export function bootstrapSealedR2Client(
     );
   }
 
-  // Gate 5: Seal ambient Bun.s3 singleton before client construction
+  // Gate 5: Seal ambient Bun.s3 singleton before client construction.
+  // A false result means the singleton stayed credential-capable. Do not continue.
   const sealedGlobalS3 = sealGlobalBunS3();
+  if (!sealedGlobalS3) {
+    throw new PreflightError(
+      "ERR_BUN_S3_SEAL_FAILED",
+      77,
+      "Bun.s3 could not be sealed; refusing to construct a client",
+    );
+  }
 
   // Gate 6: Live DNS cache health check
   const stats = (options.getDnsCacheStats ?? readLiveDnsCacheStats)();

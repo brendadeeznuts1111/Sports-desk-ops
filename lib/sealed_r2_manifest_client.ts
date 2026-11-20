@@ -83,7 +83,11 @@ export class SealedR2ManifestClient {
   readonly #transport: R2ManifestClient | null;
 
   constructor(options: SealedR2ClientOptions) {
-    if (options.sealGlobalS3 !== false) sealGlobalBunS3();
+    if (options.sealGlobalS3 !== false && !sealGlobalBunS3()) {
+      throw new Error(
+        "Bun.s3 could not be sealed; refusing to construct a client",
+      );
+    }
     this.bucket = options.bucket;
     this.endpointHost = configuredEndpointHost(options.endpoint);
     this.#endpoint = options.endpoint;
