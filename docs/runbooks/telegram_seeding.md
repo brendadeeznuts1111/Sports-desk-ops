@@ -128,12 +128,12 @@ no I/O, performs no logging, and never echoes the token or the raw payload.
 Seeding Telegram alone will not move the KPI cards at `/`; the daemon needs F402 and GSLive
 credentials so the in-process bridge cron can rewrite the four source artifacts:
 
-| Card          | Artifact                      | Rebuilder                                                                                                         |
-| :------------ | :---------------------------- | :---------------------------------------------------------------------------------------------------------------- |
+| Card          | Artifact                      | Rebuilder                                                                                                                       |
+| :------------ | :---------------------------- | :------------------------------------------------------------------------------------------------------------------------------ |
 | agents        | `data/agent-tree.json`        | `sched_agent_tree_hourly` (`bun run build:agent-tree -- --live` at `:11`; gated on `F402_GRAPH_ACCOUNT` plus a manager session) |
-| pending       | `data/live-bets.json`         | `sched_bridge_rollup_15m` (`bridge3b`, needs F402 token)                                                          |
-| ticker        | `data/bet-ticker.json`        | `sched_bridge_rollup_15m` (`bridge3a`, needs `F402_AGENT_ID`)                                                     |
-| customer book | `data/customer-profiles.json` | `sched_customer_profiles_6h` (`bun run customers:profiles` at `:27 */6`; gated on `enriched_customers_full.json`) |
+| pending       | `data/live-bets.json`         | `sched_bridge_rollup_15m` (`bridge3b`, needs F402 token)                                                                        |
+| ticker        | `data/bet-ticker.json`        | `sched_bridge_rollup_15m` (`bridge3a`, needs `F402_AGENT_ID`)                                                                   |
+| customer book | `data/customer-profiles.json` | `sched_customer_profiles_6h` (`bun run customers:profiles` at `:27 */6`; gated on `enriched_customers_full.json`)               |
 
 Watch the mtimes to confirm:
 
@@ -148,8 +148,8 @@ Each capture is credential-gated at two layers (defense in depth):
    before being armed, with a single startup log line like
    `[Scheduler] sched_agent_tree_hourly: not armed (missing F402_GRAPH_ACCOUNT); restart after
 the requirement is satisfied`. No cron timer is ever registered for it; the scheduler must be
-restarted after the requirement is satisfied. The child also exits before writing when the
-manager session is missing, and it does not rebuild from `scratch/agent-graph.json`.
+   restarted after the requirement is satisfied. The child also exits before writing when the
+   manager session is missing, and it does not rebuild from `scratch/agent-graph.json`.
 2. **Fire-time skip** (`runShellCaptureDefault`): if an env var changes mid-run after a schedule
    was armed, the fire-time check logs
    `[Shell Capture] bun run build:agent-tree -- --live: skipped (missing F402_GRAPH_ACCOUNT)` and returns
