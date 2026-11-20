@@ -3532,6 +3532,14 @@
           node.title = provenance.source;
           valEl.textContent = value;
           subEl.textContent = sub;
+          if (provenance.asOfFrom === "unrecorded") {
+            ageEl.textContent =
+              provenance.basis === "fixture"
+                ? "demo fixture · not a live hierarchy"
+                : "observation time unrecorded";
+            ageEl.dataset.tone = "stale";
+            return;
+          }
           const verb =
             provenance.asOfFrom === "file-mtime" ? "file written" : "as of";
           const parts = [
@@ -3561,7 +3569,7 @@
                   }`
                 : "",
               agents?.provenance ?? null,
-              "No data/agent-tree.json. Run bun run build:agent-tree.",
+              "No live hierarchy. Run bun run build:agent-tree -- --live.",
             );
             fill(
               "pending",

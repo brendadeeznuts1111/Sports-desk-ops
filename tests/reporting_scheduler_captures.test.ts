@@ -25,7 +25,7 @@ function fakeTelegram(): SportsDeskTelegramService {
 
 const env = Bun.env as unknown as Record<string, string | undefined>;
 const SAVED: Record<string, string | undefined> = {};
-const TOUCHED = ["F402_BEARER_TOKEN"] as const;
+const TOUCHED = ["F402_BEARER_TOKEN", "F402_GRAPH_ACCOUNT"] as const;
 
 function setEnv(name: string, value: string | undefined): void {
   if (value === undefined) Reflect.deleteProperty(env, name);
@@ -99,7 +99,7 @@ describe("SHELL_CAPTURE schedule definitions", () => {
     expect(sentinel?.shellJob?.requires).toEqual(["TELEGRAM_BOT_TOKEN"]);
   });
 
-  test("agent-tree runs on the desk clock at :11 and gates on F402_BEARER_TOKEN", () => {
+  test("agent-tree runs on the desk clock at :11 and gates on F402_GRAPH_ACCOUNT", () => {
     const scheduler = new ReportingSchedulerService(fakeTelegram());
     const def = scheduler
       .getSchedules()
@@ -108,8 +108,14 @@ describe("SHELL_CAPTURE schedule definitions", () => {
     expect(def?.scheduleTime).toBe("11 * * * *");
     expect(def?.tz).toBe("America/Chicago");
     expect(def?.shellJob?.bin).toBe("bun");
-    expect(def?.shellJob?.args).toEqual(["run", "build:agent-tree"]);
-    expect(def?.shellJob?.requires).toEqual(["F402_BEARER_TOKEN"]);
+    expect(def?.shellJob?.args).toEqual([
+      "run",
+      "build:agent-tree",
+      "--",
+      "--live",
+    ]);
+    expect(def?.shellJob?.requires).toEqual(["F402_GRAPH_ACCOUNT"]);
+    expect(def?.shellJob?.args).not.toContain("--allow-fixture");
     expect(def?.enabled).toBe(true);
   });
 
@@ -159,24 +165,22 @@ describe("shell capture dispatch", () => {
     await fireSchedule(scheduler, "sched_agent_tree_hourly", injected);
     await fireSchedule(scheduler, "sched_customer_profiles_6h", injected);
     expect(calls.map((c) => c.args)).toEqual([
-      ["run", "build:agent-tree"],
+      ["run", "build:agent-tree", "--", "--live"],
       ["run", "customers:profiles"],
     ]);
   });
 
-  test("agent-tree is skipped when F402_BEARER_TOKEN is unset (no spawn)", async () => {
-    setEnv("F402_BEARER_TOKEN", undefined);
-    const outcome = await runShellCaptureDefault(
-      {
-        bin: "bun",
-        args: ["run", "build:agent-tree"],
-        requires: ["F402_BEARER_TOKEN"],
-      },
-      quietLogger(),
-    );
+  test("agent-tree is skipped when F402_GRAPH_ACCOUNT is unset (no spawn)", async () => {
+    setEnv("F402_GRAPH_ACCOUNT", undefined);
+    const scheduler = new ReportingSchedulerService(fakeTelegram());
+    const spec = scheduler
+      .getSchedules()
+      .find((s) => s.id === "sched_agent_tree_hourly")?.shellJob;
+    expect(spec).toBeDefined();
+    const outcome = await runShellCaptureDefault(spec!, quietLogger());
     expect(outcome).toEqual({
       status: "skipped",
-      missing: ["F402_BEARER_TOKEN"],
+      missing: ["F402_GRAPH_ACCOUNT"],
     });
   });
 

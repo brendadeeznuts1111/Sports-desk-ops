@@ -34,15 +34,18 @@ describe("deriveDeskKpis", () => {
     });
   });
 
-  test("agent counts come from the tree's node types, aged by file mtime", () => {
+  test("agent counts come from the tree's node types, aged by capturedAt", () => {
+    const capturedAt = hoursBefore(2).toISOString();
     const kpis = deriveDeskKpis(
       {
         ...none,
         agentTree: {
           value: {
+            source: "live:f402-list-agents-by-agent",
+            capturedAt,
             nodes: { A1: { t: "A" }, A2: { t: "A" }, M1: { t: "M" }, X: {} },
           },
-          mtime: hoursBefore(2),
+          mtime: NOW,
         },
       },
       NOW,
@@ -54,13 +57,61 @@ describe("deriveDeskKpis", () => {
       unclassified: 1,
     });
     expect(kpis.agents?.provenance).toMatchObject({
+      basis: "capture",
+      asOf: capturedAt,
+      asOfFrom: "artifact",
+      ageSeconds: 7200,
+      stale: false,
+    });
+  });
+
+  test("a live tree that omitted level 13+ rows is a partial capture", () => {
+    const kpis = deriveDeskKpis(
+      {
+        ...none,
+        agentTree: {
+          value: {
+            source: "live:f402-list-agents-by-agent",
+            capturedAt: NOW.toISOString(),
+            partial: true,
+            nodes: { A1: { t: "A" } },
+          },
+          mtime: NOW,
+        },
+      },
+      NOW,
+    );
+    expect(kpis.agents?.total).toBe(1);
+    expect(kpis.agents?.provenance).toMatchObject({
+      basis: "capture",
+      partial: true,
+      stale: false,
+    });
+  });
+
+  test("a live tree with no capturedAt ages from the file mtime", () => {
+    const kpis = deriveDeskKpis(
+      {
+        ...none,
+        agentTree: {
+          value: {
+            source: "live:f402-list-agents-by-agent",
+            nodes: { A1: { t: "A" } },
+          },
+          mtime: hoursBefore(2),
+        },
+      },
+      NOW,
+    );
+    expect(kpis.agents?.provenance).toMatchObject({
+      basis: "capture",
       asOfFrom: "file-mtime",
       ageSeconds: 7200,
       stale: false,
     });
   });
 
-  test("scratch graph source is fixture basis even when the file is old", () => {
+  test("scratch graph source is a stale fixture and does not age from checkout mtime", () => {
     const kpis = deriveDeskKpis(
       {
         ...none,
@@ -69,15 +120,19 @@ describe("deriveDeskKpis", () => {
             source: "scratch/agent-graph.json",
             nodes: { A1: { t: "A" } },
           },
-          mtime: hoursBefore(200),
+          mtime: NOW,
         },
       },
       NOW,
     );
+    expect(kpis.agents?.total).toBe(1);
     expect(kpis.agents?.provenance).toMatchObject({
       source: "scratch/agent-graph.json",
       basis: "fixture",
-      stale: false,
+      asOf: "",
+      asOfFrom: "unrecorded",
+      ageSeconds: 0,
+      stale: true,
     });
   });
 

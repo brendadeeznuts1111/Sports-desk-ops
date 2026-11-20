@@ -335,12 +335,12 @@ export class ReportingSchedulerService {
         scheduleTime: "11 * * * *",
         reportType: "SHELL_CAPTURE",
         description:
-          "Runs `bun run build:agent-tree` once per hour so data/agent-tree.json tracks the F402 downline. Skipped when F402_BEARER_TOKEN is unset (cron cannot re-authenticate).",
+          "Runs `bun run build:agent-tree -- --live` once per hour so data/agent-tree.json is the portal downline. Skipped when F402_GRAPH_ACCOUNT is unset. The child also refuses to write when the manager session is missing, and it never rebuilds from scratch/agent-graph.json.",
         tz: "America/Chicago",
         shellJob: {
           bin: "bun",
-          args: ["run", "build:agent-tree"],
-          requires: ["F402_BEARER_TOKEN"],
+          args: ["run", "build:agent-tree", "--", "--live"],
+          requires: ["F402_GRAPH_ACCOUNT"],
         },
         enabled: true,
       },

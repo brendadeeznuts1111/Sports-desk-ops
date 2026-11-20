@@ -87,6 +87,9 @@ describe("isFixtureAgentTreeGraphSource", () => {
     expect(
       isFixtureAgentTreeGraphSource("out/capture/f402-hierarchy.json"),
     ).toBe(false);
+    expect(
+      isFixtureAgentTreeGraphSource("live:f402-list-agents-by-agent"),
+    ).toBe(false);
   });
 });
 
