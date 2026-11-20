@@ -72,10 +72,11 @@ export function ansi256ToCss(index: number): string | undefined {
 
 /* eslint-disable no-control-regex */
 export function parseAnsiTokens(raw: string): AnsiSegment[] {
+  const normalized = raw.replace(/\r\n/g, "\n").replace(/\r/g, "");
   const segments: AnsiSegment[] = [];
   // eslint-disable-next-line no-control-regex -- ANSI and OSC 8 sequences require control characters
   const tokenRegex =
-    /\x1b]8;[a-zA-Z0-9;=]*;([^\x1b\x07]*)(?:\x1b\\|\x07)|\x1b\[([0-9;]*)m/g;
+    /\x1b]8;[^\x1b\x07;]*;([^\x1b\x07]*)(?:\x1b\\|\x07)|\x1b\[([0-9;]*)m|\x1b\[[0-9;?]*[A-Za-ln-z]|\x1b\][^\x1b\x07]*(?:\x1b\\|\x07)/g;
 
   let lastIndex = 0;
   let currentColor: string | undefined;
@@ -103,9 +104,9 @@ export function parseAnsiTokens(raw: string): AnsiSegment[] {
   };
 
   let match: RegExpExecArray | null;
-  while ((match = tokenRegex.exec(raw)) !== null) {
+  while ((match = tokenRegex.exec(normalized)) !== null) {
     if (match.index > lastIndex) {
-      pushText(raw.slice(lastIndex, match.index));
+      pushText(normalized.slice(lastIndex, match.index));
     }
 
     if (match[1] !== undefined) {
@@ -203,8 +204,8 @@ export function parseAnsiTokens(raw: string): AnsiSegment[] {
     lastIndex = tokenRegex.lastIndex;
   }
 
-  if (lastIndex < raw.length) {
-    pushText(raw.slice(lastIndex));
+  if (lastIndex < normalized.length) {
+    pushText(normalized.slice(lastIndex));
   }
 
   return segments;
@@ -215,7 +216,10 @@ export function renderAnsiReact(raw: string): React.ReactNode[] {
   return segments.map((seg, i) => {
     const style: React.CSSProperties = {};
     if (seg.color) style.color = seg.color;
-    if (seg.bg) style.backgroundColor = seg.bg;
+    if (seg.bg) {
+      style.backgroundColor = seg.bg;
+      style.borderRadius = "2px";
+    }
     if (seg.bold) style.fontWeight = 700;
     if (seg.dim) style.opacity = 0.75;
     if (seg.italic) style.fontStyle = "italic";
@@ -228,17 +232,25 @@ export function renderAnsiReact(raw: string): React.ReactNode[] {
     }
 
     if (seg.linkUrl) {
-      return (
-        <a
-          key={i}
-          href={rewriteBrokenDeskUrl(seg.linkUrl)}
-          target="_blank"
-          rel="noreferrer"
-          style={{ ...style, cursor: "pointer" }}
-        >
-          {seg.text}
-        </a>
-      );
+      const safeHref = rewriteBrokenDeskUrl(seg.linkUrl);
+      const isAllowedHref =
+        safeHref.startsWith("https://") ||
+        safeHref.startsWith("http://") ||
+        safeHref.startsWith("/") ||
+        safeHref.startsWith("#");
+      if (isAllowedHref) {
+        return (
+          <a
+            key={i}
+            href={safeHref}
+            target="_blank"
+            rel="noreferrer"
+            style={{ ...style, cursor: "pointer" }}
+          >
+            {seg.text}
+          </a>
+        );
+      }
     }
 
     return (

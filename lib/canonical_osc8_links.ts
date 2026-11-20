@@ -216,6 +216,11 @@ export interface ParsedAnsiMarkdownCli {
 
 const VALID_THEME_PRESET_NAMES = Object.keys(ANSI_THEME_PRESETS).join(", ");
 
+export interface ParseAnsiMarkdownCliDefaults {
+  readonly defaultColors?: boolean;
+  readonly defaultLight?: boolean;
+}
+
 /**
  * Parse CLI arguments (`--theme`, `--colors` / `--no-color`, `--hyperlinks` / `--no-hyperlinks`,
  * `--light` / `--dark`, `--columns`, `--kitty-graphics`, `--linkify-symbols`, `--ansi`, `--wager`, `--help`)
@@ -223,6 +228,7 @@ const VALID_THEME_PRESET_NAMES = Object.keys(ANSI_THEME_PRESETS).join(", ");
  */
 export function parseAnsiMarkdownCliArgs(
   args: readonly string[] = [],
+  defaults?: ParseAnsiMarkdownCliDefaults,
 ): ParsedAnsiMarkdownCli {
   let preset: AnsiTheme | undefined;
   let colors: boolean | undefined;
@@ -353,9 +359,15 @@ export function parseAnsiMarkdownCliArgs(
   }
 
   const resolvedColors =
-    colors ?? preset?.colors ?? (!Bun.env.NO_COLOR && Bun.env.TERM !== "dumb");
+    colors ??
+    preset?.colors ??
+    defaults?.defaultColors ??
+    (!Bun.env.NO_COLOR && Bun.env.TERM !== "dumb");
   const resolvedHyperlinks = hyperlinks ?? preset?.hyperlinks ?? resolvedColors;
-  const resolvedLight = light ?? preset?.light;
+  const resolvedLight =
+    light ??
+    preset?.light ??
+    (resolvedColors ? defaults?.defaultLight : undefined);
   const resolvedColumns = columns ?? preset?.columns;
   const resolvedKitty = kittyGraphics ?? preset?.kittyGraphics;
 

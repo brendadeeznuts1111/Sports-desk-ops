@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-11-20",
+  "source": "operator paste of live POST /cloud/api/Manager/getWebLog Mode C form request; operator/account identifiers replaced with placeholders while preserving distinct case-sensitive agentOwner and lowercase Mode C ip echo.",
+  "agentPlaceholder": "<agent>",
+  "agentOwnerPlaceholder": "<agentOwner>",
+  "customerPlaceholder": "<customer>",
+  "ipPlaceholder": "<customer-lower>",
+  "responsesObserved": false,
+  "wireOrder": [
+    "agentID",
+    "customerID",
+    "start",
+    "end",
+    "type",
+    "actions",
+    "ip",
+    "operation",
+    "RRO",
+    "agentOwner"
+  ],
+  "fields": {
+    "agentID": "<agent>",
+    "customerID": "<customer>",
+    "start": "2026-11-06",
+    "end": "2026-11-20",
+    "type": "C",
+    "actions": "ALL",
+    "ip": "<customer-lower>",
+    "operation": "getWebLog",
+    "RRO": "1",
+    "agentOwner": "<agentOwner>"
+  }
+}

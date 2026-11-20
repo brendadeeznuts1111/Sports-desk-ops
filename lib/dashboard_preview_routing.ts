@@ -8,20 +8,32 @@
  * talks to the preview origin.
  */
 const FEED_PATHS: ReadonlySet<string> = new Set([
-  "/api/config/tiers",
-  "/api/customers",
-  "/api/wagers",
-  "/api/dashboard",
+  "/api/agency/conduits",
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/auth/me",
+  "/api/automations",
   "/api/bet-ticker",
   "/api/build-matrix",
+  "/api/config/tiers",
+  "/api/customers",
+  "/api/daemon/status",
+  "/api/dashboard",
   "/api/dns",
+  "/api/gslive/verify-tickets",
+  "/api/r2/image-provenance",
   "/api/r2/pipeline",
   "/api/r2/pipeline/history",
-  "/api/r2/image-provenance",
   "/api/shadow-pricing",
   "/api/shift/summary",
+  "/api/taxonomy-catalog",
   "/api/terminal/exec",
+  "/api/wagers",
+  "/api/ws/status",
 ]);
+
+/** Routes owned strictly by the daemon even when sharing a prefix with `FEED_PREFIXES`. */
+const DAEMON_ONLY_PATHS: ReadonlySet<string> = new Set(["/api/agents/search"]);
 
 /** Path families the React app calls under a parameter (`/api/alerts/:id/ack`). */
 const FEED_PREFIXES: readonly string[] = [
@@ -46,6 +58,9 @@ export function pickApiTarget(
   pathname: string,
   targets: PreviewProxyTargets,
 ): string {
+  if (DAEMON_ONLY_PATHS.has(pathname)) {
+    return targets.api;
+  }
   if (targets.feedsApi) {
     if (FEED_PATHS.has(pathname)) return targets.feedsApi;
     if (FEED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {

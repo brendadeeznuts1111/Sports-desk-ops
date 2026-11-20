@@ -4,7 +4,7 @@
  *
  * Every dashboard request goes through `trackedFetch`, which records the endpoint
  * (method + path, dynamic ids collapsed), outcome, latency and last status. The
- * Telemetry tab renders the snapshot; nothing leaves the page and no request body
+ * Risk Overview tab renders the snapshot; nothing leaves the page and no request body
  * or customer id is stored — only the normalized route.
  */
 

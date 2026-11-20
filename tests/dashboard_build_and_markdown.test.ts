@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { resolve } from "node:path";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { handleDashboardCli } from "../cli/sportsdesk_cli.ts";
 import { renderAnsiMarkdown } from "../lib/canonical_osc8_links.ts";
 import { dashboardAnsiTheme } from "../lib/dashboard_render.ts";
@@ -15,7 +17,7 @@ import {
   renderWagerMarkdownTerminal,
   TIER_KEYWORD_RE,
 } from "../lib/terminal_emulator.ts";
-import { parseAnsiTokens } from "../src/dashboard/ansi.tsx";
+import { parseAnsiTokens, renderAnsiReact } from "../src/dashboard/ansi.tsx";
 
 describe("Dashboard Build and Markdown Pipeline", () => {
   describe("Wager Tier Tokens & TrueColor ANSI Bridge", () => {
@@ -379,6 +381,28 @@ describe("Dashboard Build and Markdown Pipeline", () => {
       );
       expect(lightCodeSeg?.color).toBe("rgb(175, 0, 0)");
       expect(lightCodeSeg?.bg).toBe("rgb(228, 228, 228)");
+    });
+
+    it("handles extended OSC 8 params, strips non-SGR CSI & CR sequences, and blocks non-http(s) link schemes", () => {
+      const sample =
+        "\x1b]0;SportsDesk\x07\x1b[2K\r\n" +
+        "\x1b]8;id=link-1:role=nav;https://bun.sh\x1b\\Docs\x1b]8;;\x1b\\\x1b[K " +
+        "\x1b]8;;javascript:alert(1)\x1b\\Unsafe\x1b]8;;\x1b\\";
+      const tokens = parseAnsiTokens(sample);
+      const joined = tokens.map((t) => t.text).join("");
+      expect(joined).toBe("\nDocs Unsafe");
+      expect(joined).not.toContain("\r");
+      expect(joined).not.toContain("\x1b");
+
+      const docsSeg = tokens.find((t) => t.text === "Docs");
+      expect(docsSeg?.linkUrl).toBe("https://bun.sh");
+
+      const html = renderToStaticMarkup(
+        React.createElement(React.Fragment, null, renderAnsiReact(sample)),
+      );
+      expect(html).toContain('href="https://bun.sh"');
+      expect(html).not.toContain("javascript:");
+      expect(html).toContain(">Unsafe</span>");
     });
 
     it("renders dashboard.md to ANSI terminal presentation in single-digit milliseconds", async () => {

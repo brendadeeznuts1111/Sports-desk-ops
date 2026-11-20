@@ -298,3 +298,16 @@ When an account or sub-agent triggers risk thresholds:
    └── Step 6: Dispatch Telegram Risk Alert
          bun sportsdesk_cli.ts -A [CUSTOMER_ID]
 ```
+
+---
+
+## 9. Mode C (`getWebLog`) Wire Observation Addendum (2026-11-20)
+
+An operator paste of a live Mode `C` (`Acct IP Match`) form request to `POST /cloud/api/Manager/getWebLog` (no response body captured — Tier B request observation only) confirmed four details alongside the 2026-10-28 Mode `B` HAR (Section 5.1.1):
+
+1. **10-field wire order**: `agentID`, `customerID`, `start`, `end`, `type`, `actions`, `ip`, `operation`, `RRO`, `agentOwner`.
+2. **Multi-day `YYYY-MM-DD` date window**: Mode `C` accepts an inclusive multi-day ISO range (`start=2026-11-06` .. `end=2026-11-20`) rather than only single-day snapshots.
+3. **Mode `C` `ip` field mirrors lowercase customer login**: `ip` carries `<customer-lower>` alongside `customerID=<customer>` (matching the Desk note in Section 5.1.1).
+4. **Distinct case-sensitive `agentOwner`**: `agentOwner` can differ from `agentID` (e.g., suffixed operator sub-identity with lowercase characters) and must not be forced equal to `agentID` or uppercased by request builders.
+
+Sanitized request fixture: `tests/fixtures/f402-weblog-mode-c-observed-2026-11-20.json`.

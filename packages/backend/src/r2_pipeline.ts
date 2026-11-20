@@ -1074,6 +1074,35 @@ export function createR2PipelineService(
     probeAll,
     getHistory,
     getLatestBetTickerBridge3a,
+    /** Zero-I/O summary of the most recent cached R2 pipeline probe, if any. */
+    getCachedSummary: () => {
+      if (cachedResponse === null) return null;
+      let minAgeSec: number | null = null;
+      let hasErrorOrMissing = false;
+      for (const sink of cachedResponse.sinks) {
+        if (sink.state === "error" || sink.state === "missing") {
+          hasErrorOrMissing = true;
+        }
+        if (
+          typeof sink.ageSeconds === "number" &&
+          Number.isFinite(sink.ageSeconds)
+        ) {
+          minAgeSec =
+            minAgeSec === null
+              ? sink.ageSeconds
+              : Math.min(minAgeSec, sink.ageSeconds);
+        }
+      }
+      return {
+        observedAt: cachedResponse.observedAt,
+        overallStatus: cachedResponse.overallStatus,
+        freshCount: cachedResponse.freshCount,
+        totalCount: cachedResponse.totalCount,
+        hasErrorOrMissing,
+        lastSnapshotAgeMs:
+          minAgeSec === null ? null : Math.round(minAgeSec * 1000),
+      };
+    },
     probeDaemon: () =>
       probeDaemon4020Status({
         origin: options.daemon4020Origin,

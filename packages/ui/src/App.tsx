@@ -10,6 +10,7 @@ import "./desk.css";
 // Bun's file loader: absolute path under `bun run`, copied-relative path under `bun build`.
 import logo from "./assets/logo.svg";
 import { ShadowPricingPanel } from "./ShadowPricingPanel.tsx";
+import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import { styles } from "./dashboard_styles.ts";
 import { newTicketIds as diffNewTicketIds } from "./live_stream.ts";
 import {
@@ -107,6 +108,8 @@ import {
   type CustomersApiResponse,
   type CustomerScopeCounts,
   type CustomerSortKey,
+  type Daemon4020Status,
+  DASHBOARD_TAB_SPECS,
   type DashboardAlertRecord,
   type DashboardData,
   type DashboardSourceProvenance,
@@ -131,6 +134,7 @@ import {
 } from "./types.ts";
 
 export * from "./types.ts";
+export { ErrorBoundary } from "./ErrorBoundary.tsx";
 
 /**
  * Why the profile cards are empty: no endpoint serves the per-customer card list, and two of the
@@ -173,9 +177,9 @@ interface PrimaryNavItem {
 const PRIMARY_NAV_ITEMS: readonly PrimaryNavItem[] = [
   {
     hash: "risk-overview",
-    label: "Risk Overview",
+    label: DASHBOARD_TAB_SPECS.surveillance.label,
     tab: "surveillance",
-    title: "Telemetry, Bun.dns cache health and the risk brief",
+    title: DASHBOARD_TAB_SPECS.surveillance.description,
   },
   {
     hash: "bettor-churn-simulation",
@@ -207,6 +211,61 @@ function initialDashboardUrlState(): DashboardUrlState {
 function resolveInitialUrlParam(name: string): string {
   if (typeof window === "undefined") return "";
   return new URLSearchParams(window.location.search).get(name)?.trim() ?? "";
+}
+
+export function resolveLocalSpaPort(): string {
+  if (typeof window === "undefined") return "4022";
+  const port = window.location.port?.trim();
+  return port && port.length > 0 ? port : "4022";
+}
+
+export function summarizeDaemonDegradedCause(
+  daemon: Daemon4020Status | null | undefined,
+): string | null {
+  if (!daemon) return null;
+  const state = resolveDaemon4020State(daemon);
+  if (state === "online") return null;
+  const authParts: string[] = [];
+  if (daemon.auth?.f402 && daemon.auth.f402.status !== "ok") {
+    authParts.push(`F402 ${daemon.auth.f402.status}`);
+  }
+  if (daemon.auth?.gslive && daemon.auth.gslive.status !== "ok") {
+    authParts.push(`GSLive ${daemon.auth.gslive.status}`);
+  }
+  if (authParts.length > 0) {
+    return authParts.join(" · ");
+  }
+  const rawReason = daemon.reason?.trim() ?? "";
+  if (!rawReason) return null;
+  const firstClause = (rawReason.split(";")[0] ?? rawReason).trim();
+  return firstClause.length > 42
+    ? `${firstClause.slice(0, 39).trimEnd()}...`
+    : firstClause;
+}
+
+export function formatFooterTimestamp(iso: string | undefined): {
+  readonly display: string;
+  readonly title: string;
+} {
+  const trimmed = iso?.trim() ?? "";
+  if (!trimmed) {
+    return {
+      display: "—",
+      title: "No snapshot timestamp yet",
+    };
+  }
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return {
+      display: trimmed,
+      title: trimmed,
+    };
+  }
+  const display = `${parsed.toISOString().slice(0, 19).replace("T", " ")} UTC`;
+  return {
+    display,
+    title: trimmed,
+  };
 }
 
 export function App(): React.ReactElement {
@@ -1324,10 +1383,17 @@ export function App(): React.ReactElement {
     setTerminalLoading(true);
 
     try {
+      const cols =
+        typeof window !== "undefined"
+          ? Math.max(
+              96,
+              Math.min(130, Math.floor((window.innerWidth - 110) / 7.5)),
+            )
+          : 120;
       const res = await trackedFetch("/api/terminal/exec", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: trimmed, cols: 100, rows: 30 }),
+        body: JSON.stringify({ command: trimmed, cols, rows: 30 }),
       });
 
       if (res.ok) {
@@ -2082,33 +2148,69 @@ export function App(): React.ReactElement {
     return () => window.removeEventListener("popstate", apply);
   }, [profileCustomers, liveWagers]);
 
+  const localPort = resolveLocalSpaPort();
   const daemon4020 = r2PipelineData?.daemon4020;
   const daemonState = resolveDaemon4020State(daemon4020);
   const daemonLatency = daemon4020?.latencyMs ?? 1;
+  const daemonCause = summarizeDaemonDegradedCause(daemon4020);
   const daemonPill =
     daemonState === "online"
       ? {
           color: "#4ade80",
+          border: "rgba(74, 222, 128, 0.35)",
+          bg: "rgba(34, 197, 94, 0.1)",
           label: `● API :4020 (${daemonLatency}ms)`,
-          title: `SportsDesk Daemon :4020 online (${daemonLatency}ms)`,
+          title: `SportsDesk Daemon :4020 online (${daemonLatency}ms) · Click to inspect Daemon & R2 diagnostics`,
         }
       : daemonState === "degraded"
         ? {
             color: "#fbbf24",
-            label: `◐ API :4020 ${daemon4020?.operationalStatus === "down" ? "Auth Down" : "Degraded"} (${daemonLatency}ms)`,
-            title: `SportsDesk Daemon :4020 reachable (HTTP ${daemon4020?.status ?? 503}, ${daemonLatency}ms)${daemon4020?.reason ? ` — ${daemon4020.reason}` : ""}`,
+            border: "rgba(245, 158, 11, 0.45)",
+            bg: "rgba(245, 158, 11, 0.12)",
+            label: `◐ API :4020 ${daemon4020?.operationalStatus === "down" ? "Auth Down" : "Degraded"}${daemonCause ? ` · ${daemonCause}` : ""} (${daemonLatency}ms)`,
+            title: `SportsDesk Daemon :4020 reachable (HTTP ${daemon4020?.status ?? 503}, ${daemonLatency}ms)${daemon4020?.reason ? ` — ${daemon4020.reason}` : ""} · Click to inspect Daemon & R2 diagnostics`,
           }
         : daemonState === "offline"
           ? {
               color: "#fbbf24",
-              label: "○ API :4020 Offline",
-              title: `SportsDesk Daemon :4020 offline (${daemon4020?.reason ?? "unreachable"})`,
+              border: "rgba(245, 158, 11, 0.35)",
+              bg: "rgba(245, 158, 11, 0.08)",
+              label: `○ API :4020 Offline${daemonCause ? ` · ${daemonCause}` : ""}`,
+              title: `SportsDesk Daemon :4020 offline (${daemon4020?.reason ?? "unreachable"}) · Click to inspect Daemon & R2 diagnostics`,
             }
           : {
               color: "#94a3b8",
+              border: "rgba(148, 163, 184, 0.3)",
+              bg: "rgba(15, 23, 42, 0.85)",
               label: "◌ API :4020 Probing...",
-              title: "SportsDesk Daemon :4020 probing...",
+              title:
+                "SportsDesk Daemon :4020 probing... · Click to inspect Daemon & R2 diagnostics",
             };
+  const r2StatusUi =
+    r2PipelineData?.overallStatus === "fresh"
+      ? {
+          color: "#4ade80",
+          border: "rgba(74, 222, 128, 0.35)",
+          bg: "rgba(34, 197, 94, 0.1)",
+        }
+      : r2PipelineData?.overallStatus === "stale"
+        ? {
+            color: "#fbbf24",
+            border: "rgba(245, 158, 11, 0.4)",
+            bg: "rgba(245, 158, 11, 0.1)",
+          }
+        : r2PipelineData
+          ? {
+              color: "#f87171",
+              border: "rgba(248, 113, 113, 0.4)",
+              bg: "rgba(239, 68, 68, 0.1)",
+            }
+          : {
+              color: "#94a3b8",
+              border: "rgba(148, 163, 184, 0.3)",
+              bg: "rgba(15, 23, 42, 0.85)",
+            };
+  const footerTs = formatFooterTimestamp(data?.updatedAt);
 
   const alertsStatus = healthData?.alerts?.status;
   const opStatus = healthData?.operationalStatus;
@@ -2218,43 +2320,49 @@ export function App(): React.ReactElement {
               display: "flex",
               flexWrap: "wrap",
               alignItems: "center",
-              gap: "10px",
+              gap: "8px",
               fontSize: "11px",
               color: "#94a3b8",
             }}
           >
-            <span style={{ color: "#38bdf8", fontWeight: 600 }}>
-              ● Local :4022 SPA
-            </span>
-            <span>·</span>
             <span
+              data-local-spa-pill="true"
+              style={styles.telemetryPill(
+                "#38bdf8",
+                "rgba(56, 189, 248, 0.35)",
+                "rgba(56, 189, 248, 0.1)",
+              )}
+            >
+              ● Local :{localPort} SPA
+            </span>
+            <button
+              type="button"
+              data-daemon-status-btn="true"
+              className="sd-telemetry-btn"
+              onClick={() => setActiveTab("r2")}
               style={{
-                color: daemonPill.color,
-                fontWeight: 600,
+                ...styles.telemetryPill(
+                  daemonPill.color,
+                  daemonPill.border,
+                  daemonPill.bg,
+                ),
+                cursor: "pointer",
               }}
               title={daemonPill.title}
             >
               {daemonPill.label}
-            </span>
-            <span>·</span>
+            </button>
             <button
               type="button"
+              className="sd-telemetry-btn"
               onClick={() => setActiveTab("r2")}
               style={{
-                background: "none",
-                border: "none",
-                padding: 0,
+                ...styles.telemetryPill(
+                  r2StatusUi.color,
+                  r2StatusUi.border,
+                  r2StatusUi.bg,
+                ),
                 cursor: "pointer",
-                fontSize: "11px",
-                fontWeight: 600,
-                color:
-                  r2PipelineData?.overallStatus === "fresh"
-                    ? "#4ade80"
-                    : r2PipelineData?.overallStatus === "stale"
-                      ? "#fbbf24"
-                      : r2PipelineData
-                        ? "#f87171"
-                        : "#94a3b8",
               }}
               title="Open R2 Pipeline Monitor"
             >
@@ -2262,60 +2370,84 @@ export function App(): React.ReactElement {
                 ? `☁️ R2 ${r2PipelineData.freshCount}/${r2PipelineData.totalCount} Fresh`
                 : "☁️ R2 Probing..."}
             </button>
-            <span>·</span>
-            <a
-              href="/live-bets"
-              target="_blank"
-              rel="noreferrer"
+            <div
               style={{
-                color: "#38bdf8",
-                textDecoration: "none",
-                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                flexWrap: "wrap",
               }}
             >
-              📈 Live Bets ↗
-            </a>
-            <a
-              href="/graph"
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                color: "#38bdf8",
-                textDecoration: "none",
-                fontWeight: 600,
-              }}
+              <a
+                href="/live-bets"
+                target="_blank"
+                rel="noreferrer"
+                className="sd-telemetry-link"
+                style={styles.telemetryLink}
+              >
+                📈 Live Bets ↗
+              </a>
+              <a
+                href="/graph"
+                target="_blank"
+                rel="noreferrer"
+                className="sd-telemetry-link"
+                style={styles.telemetryLink}
+              >
+                🕸️ Graph ↗
+              </a>
+              <a
+                href="/tracker"
+                target="_blank"
+                rel="noreferrer"
+                className="sd-telemetry-link"
+                style={styles.telemetryLink}
+              >
+                📋 Tracker ↗
+              </a>
+              <a
+                href="/governance"
+                target="_blank"
+                rel="noreferrer"
+                className="sd-telemetry-link"
+                style={styles.telemetryLink}
+              >
+                🛡️ Gov ↗
+              </a>
+              <a
+                href="/status"
+                target="_blank"
+                rel="noreferrer"
+                className="sd-telemetry-link"
+                style={styles.telemetryLink}
+              >
+                🩺 Status ↗
+              </a>
+            </div>
+            <span
+              style={styles.telemetryPill(
+                "#fbbf24",
+                "rgba(245, 158, 11, 0.35)",
+                "rgba(245, 158, 11, 0.1)",
+              )}
+              title="autoExecute: false invariant active — human operator confirmation required"
             >
-              🕸️ Graph ↗
-            </a>
-            <a
-              href="/status"
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                color: "#38bdf8",
-                textDecoration: "none",
-                fontWeight: 600,
-              }}
-            >
-              🩺 Status ↗
-            </a>
-            <span>·</span>
-            <span style={{ color: "#f59e0b", fontWeight: 600 }}>
               🛡️ autoExecute: false
             </span>
             {clockTime && (
-              <>
-                <span>·</span>
-                <span
-                  style={{
-                    fontFamily:
-                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                    color: "#f1f5f9",
-                  }}
-                >
-                  🕒 {clockTime}
-                </span>
-              </>
+              <span
+                style={{
+                  ...styles.telemetryPill(
+                    "#f1f5f9",
+                    "rgba(51, 65, 85, 0.85)",
+                    "#0f172a",
+                  ),
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                }}
+              >
+                🕒 {clockTime}
+              </span>
             )}
           </div>
           <div style={styles.headerLeft}>
@@ -2465,13 +2597,17 @@ export function App(): React.ReactElement {
           <button
             type="button"
             className="sd-tab-btn"
+            data-tab-id="surveillance"
             aria-pressed={activeTab === "surveillance"}
             style={styles.tabBtn(activeTab === "surveillance")}
             onClick={() => setActiveTab("surveillance")}
-            title="Bun.dns latency benchmarks and surveillance markdown (Ctrl+2)"
+            title={`${DASHBOARD_TAB_SPECS.surveillance.description} (${DASHBOARD_TAB_SPECS.surveillance.shortcut})`}
           >
-            📊 Telemetry
-            <span style={styles.keyShortcutBadge}>Ctrl+2</span>
+            {DASHBOARD_TAB_SPECS.surveillance.icon}{" "}
+            {DASHBOARD_TAB_SPECS.surveillance.label}
+            <span style={styles.keyShortcutBadge}>
+              {DASHBOARD_TAB_SPECS.surveillance.shortcut}
+            </span>
           </button>
           <button
             type="button"
@@ -2989,313 +3125,403 @@ export function App(): React.ReactElement {
         data-dashboard-section={activePrimaryNav?.hash ?? undefined}
         style={{ ...styles.main, scrollMarginTop: "96px" }}
       >
-        {activeTab === "customers" ? (
-          <CustomersTabPanel
-            bannerDismissed={bannerDismissed}
-            onDismissBanner={() => {
-              setBannerDismissed(true);
-              try {
-                sessionStorage.setItem("portalBannerDismissed", "1");
-              } catch {}
-            }}
-            kpisCollapsed={kpisCollapsed}
-            onToggleKpis={() => {
-              const next = !kpisCollapsed;
-              setKpisCollapsed(next);
-              try {
-                localStorage.setItem("kpisCollapsed", next ? "1" : "0");
-              } catch {}
-            }}
-            cohortsReport={cohortsReport}
-            cohortsStatus={cohortsStatus}
-            cohortsError={cohortsError}
-            searchQuery={searchQuery}
-            onSearchQueryChange={(value) => {
-              setSearchQuery(value);
-              setCustomerLookupNotice(null);
-            }}
-            customerLookupNotice={customerLookupNotice}
-            onClearCustomerLookupNotice={() => {
-              setCustomerLookupNotice(null);
-            }}
-            filterTier={filterTier}
-            onFilterTierChange={setFilterTier}
-            sortedCustomers={sortedCustomers}
-            customerSort={customerSort}
-            onCustomerSort={onCustomerSort}
-            selectedCustomer={selectedCustomer}
-            inspectedCustomer={selectedCustomerHydrated ?? selectedCustomer}
-            selectedCustomerRating={selectedCustomerRating}
-            selectedCustomerRatingLoading={selectedCustomerRatingLoading}
-            customerScope={customerScope}
-            onCustomerScopeChange={setCustomerScope}
-            scopeCounts={scopeCounts}
-            formulaKpiCards={formulaKpiCards}
-            masterBranchFilter={masterBranchFilter}
-            onMasterBranchFilterChange={setMasterBranchFilter}
-            masterBranchCounts={masterBranchCounts}
-            rankingsLoading={rankingsStatus === "pending"}
-            onSelectCustomer={(customer) => {
-              setSelectedCustomer(customer);
-              setCustomerLookupNotice(null);
-            }}
-            copiedCliId={copiedCliId}
-            onCopyCli={(customerId) => {
-              const cmd = `bun run cli -C ${customerId}`;
-              void copyText(cmd);
-              setCopiedCliId(customerId);
-              setTimeout(() => setCopiedCliId(null), 2000);
-            }}
-            customerReverseForensics={customerForensicResult}
-            onClearForensicResult={() => setCustomerReverseForensics(null)}
-            onRunReverseLookup={(ipAddress) => {
-              void runReverseLookup(ipAddress);
-            }}
-            onOpenTerminalProfile={(customerId) => {
-              setActiveTab("terminal");
-              void runTerminalCommand(`profile ${customerId}`);
-            }}
-            onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
-            profilesUnavailableReason={
-              profileCustomers.length === 0 ? PROFILES_UNAVAILABLE_REASON : null
-            }
-            profilesProvenance={profilesProvenance}
-            matrixMode={showBuildMatrix}
-            matrixProfileOverlay={matrixProfileOverlay}
-            onOpenTerminalRadar={(customerId) => {
-              setActiveTab("terminal");
-              void runTerminalCommand(`profile ${customerId} --radar`);
-            }}
-            onViewCustomerWagers={(customerId) => {
-              setWagerSportFilter("ALL");
-              setWagerAlertFilter("ALL");
-              setWagerTypeFilter("ALL");
-              setWagerSearch(customerId);
-              const match = liveWagers.find(
-                (w) => w.customerId.toUpperCase() === customerId.toUpperCase(),
-              );
-              if (match) {
-                setSelectedWager(match);
+        <ErrorBoundary
+          resetKey={activeTab}
+          panelName={activeTab}
+          onNavigateSafe={
+            activeTab !== "surveillance"
+              ? () => setActiveTab("surveillance")
+              : undefined
+          }
+        >
+          {activeTab === "customers" ? (
+            <CustomersTabPanel
+              bannerDismissed={bannerDismissed}
+              onDismissBanner={() => {
+                setBannerDismissed(true);
+                try {
+                  sessionStorage.setItem("portalBannerDismissed", "1");
+                } catch {}
+              }}
+              kpisCollapsed={kpisCollapsed}
+              onToggleKpis={() => {
+                const next = !kpisCollapsed;
+                setKpisCollapsed(next);
+                try {
+                  localStorage.setItem("kpisCollapsed", next ? "1" : "0");
+                } catch {}
+              }}
+              cohortsReport={cohortsReport}
+              cohortsStatus={cohortsStatus}
+              cohortsError={cohortsError}
+              searchQuery={searchQuery}
+              onSearchQueryChange={(value) => {
+                setSearchQuery(value);
+                setCustomerLookupNotice(null);
+              }}
+              customerLookupNotice={customerLookupNotice}
+              onClearCustomerLookupNotice={() => {
+                setCustomerLookupNotice(null);
+              }}
+              filterTier={filterTier}
+              onFilterTierChange={setFilterTier}
+              sortedCustomers={sortedCustomers}
+              customerSort={customerSort}
+              onCustomerSort={onCustomerSort}
+              selectedCustomer={selectedCustomer}
+              inspectedCustomer={selectedCustomerHydrated ?? selectedCustomer}
+              selectedCustomerRating={selectedCustomerRating}
+              selectedCustomerRatingLoading={selectedCustomerRatingLoading}
+              customerScope={customerScope}
+              onCustomerScopeChange={setCustomerScope}
+              scopeCounts={scopeCounts}
+              formulaKpiCards={formulaKpiCards}
+              masterBranchFilter={masterBranchFilter}
+              onMasterBranchFilterChange={setMasterBranchFilter}
+              masterBranchCounts={masterBranchCounts}
+              rankingsLoading={rankingsStatus === "pending"}
+              onSelectCustomer={(customer) => {
+                setSelectedCustomer(customer);
+                setCustomerLookupNotice(null);
+              }}
+              copiedCliId={copiedCliId}
+              onCopyCli={(customerId) => {
+                const cmd = `bun run cli -C ${customerId}`;
+                void copyText(cmd);
+                setCopiedCliId(customerId);
+                setTimeout(() => setCopiedCliId(null), 2000);
+              }}
+              customerReverseForensics={customerForensicResult}
+              onClearForensicResult={() => setCustomerReverseForensics(null)}
+              onRunReverseLookup={(ipAddress) => {
+                void runReverseLookup(ipAddress);
+              }}
+              onOpenTerminalProfile={(customerId) => {
+                setActiveTab("terminal");
+                void runTerminalCommand(`profile ${customerId}`);
+              }}
+              onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
+              profilesUnavailableReason={
+                profileCustomers.length === 0
+                  ? PROFILES_UNAVAILABLE_REASON
+                  : null
               }
-              setActiveTab("wagers");
-            }}
-          />
-        ) : activeTab === "surveillance" ? (
-          <SurveillanceTabPanel
-            dnsData={dnsData}
-            dnsRefreshing={dnsRefreshing}
-            dnsError={dnsError}
-            onRefreshDns={() => {
-              void fetchDnsTelemetry();
-            }}
-            benchLoading={benchLoading}
-            benchResult={benchResult}
-            onRunBenchmark={() => {
-              void runBenchmark();
-            }}
-            reverseIp={reverseIp}
-            onReverseIpChange={setReverseIp}
-            reverseForensics={reverseForensics}
-            onRunReverseLookup={() => {
-              void runReverseLookup();
-            }}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            data={data}
-            onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
-          />
-        ) : activeTab === "terminal" ? (
-          <TerminalTabPanel
-            terminalCategory={terminalCategory}
-            onTerminalCategoryChange={setTerminalCategory}
-            terminalHistory={terminalHistory}
-            onClearHistory={() => setTerminalHistory([])}
-            copiedTerminalIdx={copiedTerminalIdx}
-            onCopyOutput={(idx, stdout) => {
-              void copyText(stdout);
-              setCopiedTerminalIdx(idx);
-              setTimeout(() => setCopiedTerminalIdx(null), 1500);
-            }}
-            copiedCommandIdx={copiedCommandIdx}
-            onCopyCommand={(idx, command) => {
-              void copyText(command);
-              setCopiedCommandIdx(idx);
-              setTimeout(() => setCopiedCommandIdx(null), 1500);
-            }}
-            terminalLoading={terminalLoading}
-            terminalBottomRef={terminalBottomRef}
-            terminalCommand={terminalCommand}
-            onTerminalCommandChange={setTerminalCommand}
-            commandHistory={commandHistory}
-            historyIndex={historyIndex}
-            onHistoryIndexChange={setHistoryIndex}
-            onAutocomplete={handleAutocomplete}
-            onRunCommand={(cmd) => {
-              void runTerminalCommand(cmd);
-            }}
-          />
-        ) : activeTab === "rankings" ? (
-          <RankingsTabPanel
-            rankingsSearch={rankingsSearch}
-            onRankingsSearchChange={setRankingsSearch}
-            rankingsFilter={rankingsFilter}
-            onRankingsFilterChange={setRankingsFilter}
-            onInspectPty={(customerId) => {
-              setActiveTab("terminal");
-              void runTerminalCommand(`p ${customerId} --radar`);
-            }}
-            onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
-            onSelectCustomerById={handleSelectCustomerById}
-            rankings={rankings}
-            rankingsStatus={rankingsStatus}
-            rankingsError={rankingsError}
-          />
-        ) : activeTab === "alerts" ? (
-          <AlertsTabPanel
-            alertToast={alertToast}
-            onDismissToast={() => setAlertToast(null)}
-            onCopyDeliveryId={(deliveryId) => {
-              void copyText(deliveryId);
-              setAlertToast({
-                message: `Copied delivery UUID: ${deliveryId}`,
-                type: "info",
-              });
-            }}
-            healthData={healthData}
-            alertFilter={alertFilter}
-            onFilterChange={(filter) => {
-              setAlertFilter(filter);
-              fetchAlerts(filter);
-            }}
-            alertLoading={alertLoading}
-            onSweepAlerts={() => {
-              void handleSweepAlerts();
-            }}
-            onRefreshAlerts={() => fetchAlerts(alertFilter)}
-            onOpenShiftModal={() => {
-              void fetchShiftSummary();
-              setIsShiftModalOpen(true);
-            }}
-            alertRecords={alertRecords}
-            tiersConfig={tiersConfig}
-            onAckAlert={(deliveryId, notes) => {
-              void handleAckAlert(deliveryId, notes);
-            }}
-            onRetryAlert={(deliveryId) => {
-              void handleRetryAlert(deliveryId);
-            }}
-          />
-        ) : activeTab === "shadow" ? (
-          <ShadowPricingPanel
-            onInspectAccount={handleSelectCustomerById}
-            onRunPtyCommand={(cmd) => {
-              setActiveTab("terminal");
-              void runTerminalCommand(cmd);
-            }}
-          />
-        ) : activeTab === "bet-ticker" ? (
-          <BetTickerTabPanel
-            data={betTickerData}
-            loading={betTickerLoading}
-            error={betTickerError}
-            onRefresh={() => {
-              void fetchBetTicker();
-            }}
-            onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
-            onSelectCustomerById={handleSelectCustomerById}
-            onInspectPty={(customerId) => {
-              setActiveTab("terminal");
-              void runTerminalCommand(`profile ${customerId} --radar`);
-            }}
-          />
-        ) : activeTab === "r2" ? (
-          <R2PipelineTabPanel
-            data={r2PipelineData}
-            history={r2PipelineHistory}
-            historyError={r2PipelineHistoryError}
-            loading={r2PipelineLoading}
-            error={r2PipelineError}
-            onRefresh={(force) => {
-              void (async () => {
-                await fetchR2Pipeline(Boolean(force));
-                await fetchR2PipelineHistory(false);
-              })();
-            }}
-            onVerifyTickets={(dryRun) => {
-              void runTicketVerification(dryRun ?? true);
-            }}
-            verifyingTickets={verifyingTickets}
-            verifyTicketsError={verifyTicketsError}
-          />
-        ) : activeTab === "assets" ? (
-          <BunAssetsTabPanel />
-        ) : (
-          <LiveWagersTabPanel
-            wagers={liveWagers}
-            clvSummary={wagersClvSummary}
-            liveBetsSnapshot={liveBetsSnapshot}
-            provenance={wagersProvenance}
-            wagersError={wagersError}
-            wagersLastUpdatedAt={wagersUpdatedAt}
-            newTicketIds={newTicketIds}
-            streamingConnected={connected}
-            wireContract={wireContract}
-            slabPolicy={slabPolicy}
-            onRefreshWagers={() => {
-              void fetchLiveWagers();
-            }}
-            wagerSearch={wagerSearch}
-            onWagerSearchChange={setWagerSearch}
-            wagerSportFilter={wagerSportFilter}
-            onWagerSportFilterChange={setWagerSportFilter}
-            wagerAlertFilter={wagerAlertFilter}
-            onWagerAlertFilterChange={setWagerAlertFilter}
-            wagerChannelFilter={wagerChannelFilter}
-            onWagerChannelFilterChange={setWagerChannelFilter}
-            wagerTypeFilter={wagerTypeFilter}
-            onWagerTypeFilterChange={setWagerTypeFilter}
-            wagerSortField={wagerSortField}
-            wagerSortDir={wagerSortDir}
-            onWagerSort={handleWagerSort}
-            selectedWager={selectedWager}
-            onSelectWager={(wager) => {
-              setSelectedWager(wager);
-              syncTicketInspectorToLocation(wager.ticketId);
-            }}
-            alertRecords={alertRecords}
-            copiedTicketId={copiedTicketId}
-            onCopyText={(ticketId, text) => {
-              void copyText(text);
-              setCopiedTicketId(ticketId);
-              setTimeout(() => setCopiedTicketId(null), 1500);
-            }}
-            tiersConfig={tiersConfig}
-            onSelectCustomerById={handleSelectCustomerById}
-            onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
-            onInspectPty={(customerId) => {
-              setActiveTab("terminal");
-              void runTerminalCommand(`profile ${customerId} --radar`);
-            }}
-            onRunPtyCommand={(cmd) => {
-              setActiveTab("terminal");
-              void runTerminalCommand(cmd);
-            }}
-          />
-        )}
+              profilesProvenance={profilesProvenance}
+              matrixMode={showBuildMatrix}
+              matrixProfileOverlay={matrixProfileOverlay}
+              onOpenTerminalRadar={(customerId) => {
+                setActiveTab("terminal");
+                void runTerminalCommand(`profile ${customerId} --radar`);
+              }}
+              onViewCustomerWagers={(customerId) => {
+                setWagerSportFilter("ALL");
+                setWagerAlertFilter("ALL");
+                setWagerTypeFilter("ALL");
+                setWagerSearch(customerId);
+                const match = liveWagers.find(
+                  (w) =>
+                    w.customerId.toUpperCase() === customerId.toUpperCase(),
+                );
+                if (match) {
+                  setSelectedWager(match);
+                }
+                setActiveTab("wagers");
+              }}
+            />
+          ) : activeTab === "surveillance" ? (
+            <SurveillanceTabPanel
+              dnsData={dnsData}
+              dnsRefreshing={dnsRefreshing}
+              dnsError={dnsError}
+              onRefreshDns={() => {
+                void fetchDnsTelemetry();
+              }}
+              benchLoading={benchLoading}
+              benchResult={benchResult}
+              onRunBenchmark={() => {
+                void runBenchmark();
+              }}
+              reverseIp={reverseIp}
+              onReverseIpChange={setReverseIp}
+              reverseForensics={reverseForensics}
+              onRunReverseLookup={() => {
+                void runReverseLookup();
+              }}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              data={data}
+              onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
+            />
+          ) : activeTab === "terminal" ? (
+            <TerminalTabPanel
+              terminalCategory={terminalCategory}
+              onTerminalCategoryChange={setTerminalCategory}
+              terminalHistory={terminalHistory}
+              onClearHistory={() => setTerminalHistory([])}
+              copiedTerminalIdx={copiedTerminalIdx}
+              onCopyOutput={(idx, stdout) => {
+                void copyText(stdout);
+                setCopiedTerminalIdx(idx);
+                setTimeout(() => setCopiedTerminalIdx(null), 1500);
+              }}
+              copiedCommandIdx={copiedCommandIdx}
+              onCopyCommand={(idx, command) => {
+                void copyText(command);
+                setCopiedCommandIdx(idx);
+                setTimeout(() => setCopiedCommandIdx(null), 1500);
+              }}
+              terminalLoading={terminalLoading}
+              terminalBottomRef={terminalBottomRef}
+              terminalCommand={terminalCommand}
+              onTerminalCommandChange={setTerminalCommand}
+              commandHistory={commandHistory}
+              historyIndex={historyIndex}
+              onHistoryIndexChange={setHistoryIndex}
+              onAutocomplete={handleAutocomplete}
+              onRunCommand={(cmd) => {
+                void runTerminalCommand(cmd);
+              }}
+            />
+          ) : activeTab === "rankings" ? (
+            <RankingsTabPanel
+              rankingsSearch={rankingsSearch}
+              onRankingsSearchChange={setRankingsSearch}
+              rankingsFilter={rankingsFilter}
+              onRankingsFilterChange={setRankingsFilter}
+              onInspectPty={(customerId) => {
+                setActiveTab("terminal");
+                void runTerminalCommand(`p ${customerId} --radar`);
+              }}
+              onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
+              onSelectCustomerById={handleSelectCustomerById}
+              rankings={rankings}
+              rankingsStatus={rankingsStatus}
+              rankingsError={rankingsError}
+            />
+          ) : activeTab === "alerts" ? (
+            <AlertsTabPanel
+              alertToast={alertToast}
+              onDismissToast={() => setAlertToast(null)}
+              onCopyDeliveryId={(deliveryId) => {
+                void copyText(deliveryId);
+                setAlertToast({
+                  message: `Copied delivery UUID: ${deliveryId}`,
+                  type: "info",
+                });
+              }}
+              healthData={healthData}
+              alertFilter={alertFilter}
+              onFilterChange={(filter) => {
+                setAlertFilter(filter);
+                fetchAlerts(filter);
+              }}
+              alertLoading={alertLoading}
+              onSweepAlerts={() => {
+                void handleSweepAlerts();
+              }}
+              onRefreshAlerts={() => fetchAlerts(alertFilter)}
+              onOpenShiftModal={() => {
+                void fetchShiftSummary();
+                setIsShiftModalOpen(true);
+              }}
+              alertRecords={alertRecords}
+              tiersConfig={tiersConfig}
+              onAckAlert={(deliveryId, notes) => {
+                void handleAckAlert(deliveryId, notes);
+              }}
+              onRetryAlert={(deliveryId) => {
+                void handleRetryAlert(deliveryId);
+              }}
+            />
+          ) : activeTab === "shadow" ? (
+            <ShadowPricingPanel
+              onInspectAccount={handleSelectCustomerById}
+              onRunPtyCommand={(cmd) => {
+                setActiveTab("terminal");
+                void runTerminalCommand(cmd);
+              }}
+            />
+          ) : activeTab === "bet-ticker" ? (
+            <BetTickerTabPanel
+              data={betTickerData}
+              loading={betTickerLoading}
+              error={betTickerError}
+              onRefresh={() => {
+                void fetchBetTicker();
+              }}
+              onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
+              onSelectCustomerById={handleSelectCustomerById}
+              onInspectPty={(customerId) => {
+                setActiveTab("terminal");
+                void runTerminalCommand(`profile ${customerId} --radar`);
+              }}
+            />
+          ) : activeTab === "r2" ? (
+            <R2PipelineTabPanel
+              data={r2PipelineData}
+              history={r2PipelineHistory}
+              historyError={r2PipelineHistoryError}
+              loading={r2PipelineLoading}
+              error={r2PipelineError}
+              onRefresh={(force) => {
+                void (async () => {
+                  await fetchR2Pipeline(Boolean(force));
+                  await fetchR2PipelineHistory(false);
+                })();
+              }}
+              onVerifyTickets={(dryRun) => {
+                void runTicketVerification(dryRun ?? true);
+              }}
+              verifyingTickets={verifyingTickets}
+              verifyTicketsError={verifyTicketsError}
+            />
+          ) : activeTab === "assets" ? (
+            <BunAssetsTabPanel />
+          ) : (
+            <LiveWagersTabPanel
+              wagers={liveWagers}
+              clvSummary={wagersClvSummary}
+              liveBetsSnapshot={liveBetsSnapshot}
+              provenance={wagersProvenance}
+              wagersError={wagersError}
+              wagersLastUpdatedAt={wagersUpdatedAt}
+              newTicketIds={newTicketIds}
+              streamingConnected={connected}
+              wireContract={wireContract}
+              slabPolicy={slabPolicy}
+              onRefreshWagers={() => {
+                void fetchLiveWagers();
+              }}
+              wagerSearch={wagerSearch}
+              onWagerSearchChange={setWagerSearch}
+              wagerSportFilter={wagerSportFilter}
+              onWagerSportFilterChange={setWagerSportFilter}
+              wagerAlertFilter={wagerAlertFilter}
+              onWagerAlertFilterChange={setWagerAlertFilter}
+              wagerChannelFilter={wagerChannelFilter}
+              onWagerChannelFilterChange={setWagerChannelFilter}
+              wagerTypeFilter={wagerTypeFilter}
+              onWagerTypeFilterChange={setWagerTypeFilter}
+              wagerSortField={wagerSortField}
+              wagerSortDir={wagerSortDir}
+              onWagerSort={handleWagerSort}
+              selectedWager={selectedWager}
+              onSelectWager={(wager) => {
+                setSelectedWager(wager);
+                syncTicketInspectorToLocation(wager.ticketId);
+              }}
+              alertRecords={alertRecords}
+              copiedTicketId={copiedTicketId}
+              onCopyText={(ticketId, text) => {
+                void copyText(text);
+                setCopiedTicketId(ticketId);
+                setTimeout(() => setCopiedTicketId(null), 1500);
+              }}
+              tiersConfig={tiersConfig}
+              onSelectCustomerById={handleSelectCustomerById}
+              onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
+              onInspectPty={(customerId) => {
+                setActiveTab("terminal");
+                void runTerminalCommand(`profile ${customerId} --radar`);
+              }}
+              onRunPtyCommand={(cmd) => {
+                setActiveTab("terminal");
+                void runTerminalCommand(cmd);
+              }}
+            />
+          )}
+        </ErrorBoundary>
       </main>
 
       {/* Global Footer */}
-      <footer style={styles.footer}>
-        <span>Updated: {data?.updatedAt ?? "—"}</span>
-        <span>
-          Native Bun HTML Bundler + Bun.serve Routes + bun:bundle (
-          {runtimeFlags.target}) + tokens.toml v{TOKENS_TOML_VERSION} ·
-          dashboard.toml v{DASHBOARD_META.version}
-          {buildInfo
-            ? ` · build ${buildInfo.target}@${buildInfo.commit} · ${buildInfo.builtAt} · bun ${buildInfo.bunVersion}+${buildInfo.bunRevision.slice(0, 9)} on ${buildInfo.builtOn}`
-            : ""}{" "}
-          · autoExecute: false invariant active
-        </span>
+      <footer data-dashboard-footer="true" style={styles.footer}>
+        <div style={styles.footerGroup}>
+          <span style={styles.footerMetaPill} title={footerTs.title}>
+            Updated: {footerTs.display}
+          </span>
+          <span
+            style={styles.footerSafetyPill}
+            title="autoExecute: false invariant active — human operator confirmation required"
+          >
+            🛡️ autoExecute: false
+          </span>
+        </div>
+        <div style={styles.footerGroup}>
+          <span style={styles.footerMetaPill}>
+            bun:bundle ({runtimeFlags.target})
+          </span>
+          <span style={styles.footerMetaPill}>
+            tokens.toml v{TOKENS_TOML_VERSION}
+          </span>
+          <span style={styles.footerMetaPill}>
+            dashboard.toml v{DASHBOARD_META.version}
+          </span>
+          {buildInfo && (
+            <span
+              style={styles.footerMetaPill}
+              title={`Built ${buildInfo.builtAt} · bun ${buildInfo.bunVersion}+${buildInfo.bunRevision.slice(0, 9)} on ${buildInfo.builtOn}`}
+            >
+              build {buildInfo.target}@{buildInfo.commit} · bun{" "}
+              {buildInfo.bunVersion}
+            </span>
+          )}
+        </div>
+        <nav aria-label="Footer Quick Links" style={styles.footerGroup}>
+          <a
+            href="/health"
+            target="_blank"
+            rel="noreferrer"
+            className="sd-footer-link"
+            style={styles.footerLink}
+          >
+            Health
+          </a>
+          <a
+            href="/status"
+            target="_blank"
+            rel="noreferrer"
+            className="sd-footer-link"
+            style={styles.footerLink}
+          >
+            Status
+          </a>
+          <a
+            href="/tracker"
+            target="_blank"
+            rel="noreferrer"
+            className="sd-footer-link"
+            style={styles.footerLink}
+          >
+            Tracker
+          </a>
+          <a
+            href="/governance"
+            target="_blank"
+            rel="noreferrer"
+            className="sd-footer-link"
+            style={styles.footerLink}
+          >
+            Governance
+          </a>
+          <a
+            href="/graph"
+            target="_blank"
+            rel="noreferrer"
+            className="sd-footer-link"
+            style={styles.footerLink}
+          >
+            Graph
+          </a>
+          <a
+            href="/live-bets"
+            target="_blank"
+            rel="noreferrer"
+            className="sd-footer-link"
+            style={styles.footerLink}
+          >
+            Live Bets
+          </a>
+        </nav>
       </footer>
 
       {selectedAgentId !== null && (

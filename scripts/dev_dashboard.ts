@@ -18,6 +18,8 @@ import {
   createCustomerRowFinder,
   createDevLiveWagersLoader,
   createR2PipelineService,
+  type CompanionDaemonDegradedReason,
+  type CompanionDaemonHealthSnapshot,
   DashboardHealthTracker,
   DashboardMarkdownCache,
   DEFAULT_R2_PUBLIC_BASE,
@@ -25,6 +27,7 @@ import {
   isDashboardAuthRequired,
   profileDocumentRow,
   type Dod6CustomerLookupHit,
+  type R2DependencyStatus,
 } from "@sportsdesk-ops/backend";
 import {
   createDashboardApi,
@@ -33,7 +36,7 @@ import {
 } from "@sportsdesk-ops/api";
 import type { AgentDetailApiResponse } from "@sportsdesk-ops/contracts";
 import type { BunRequest, Server, ServerWebSocket } from "bun";
-import { existsSync, type FSWatcher, watch } from "node:fs";
+import { existsSync, type FSWatcher, readFileSync, watch } from "node:fs";
 import { resolve } from "node:path";
 import {
   acknowledgeAlert,
@@ -85,6 +88,12 @@ import {
   resolveMcpAllowedOrigins,
 } from "../lib/sportsdesk_mcp_server.ts";
 import { executeTerminalQuery } from "../lib/terminal_emulator.ts";
+import {
+  buildDashboardLaunchUrl,
+  devDashboardHelpText,
+  openUrlInBrowser,
+  parseDevDashboardCliArgs,
+} from "../lib/dev_dashboard_cli.ts";
 import indexHtml from "../src/dashboard/index.html";
 import { runBunBuild } from "./build.ts";
 import { computeDashboardDceMatrix } from "./build_dashboard.ts";
@@ -105,6 +114,8 @@ export interface DashboardServerOptions {
   readonly forceShadowFixture?: boolean | undefined;
   readonly apiOnly?: boolean | undefined;
   readonly mcpStateless?: boolean | undefined;
+  readonly companionOrigin?: string | undefined;
+  readonly cursorSecret?: string | readonly string[] | undefined;
 }
 
 export interface DashboardServerHandle {
@@ -281,10 +292,21 @@ export function startDashboardServer(
     options.port !== undefined ? options.port : Number(Bun.env.PORT) || 4022;
   const hostname = options.hostname ?? "127.0.0.1";
   const apiOnly = options.apiOnly === true;
+  const companionOrigin =
+    options.companionOrigin ??
+    Bun.env.SPORTSDESK_API_ORIGIN ??
+    DEFAULT_COMPANION_4020_ORIGIN;
 
   const dashboardMdPath = resolve(cwd, "dashboard.md");
   const dashboardEntryPath = resolve(cwd, "src/dashboard/index.tsx");
   const wagerTiersTomlPath = resolve(cwd, "config/wager_tiers.toml");
+
+  const startedAtNs = Bun.nanoseconds();
+  const bunVersionPath = resolve(cwd, ".bun-version");
+  const expectedBunVersion = existsSync(bunVersionPath)
+    ? readFileSync(bunVersionPath, "utf8").trim() || Bun.version
+    : Bun.version;
+  let lastCompanionDaemonHealth: CompanionDaemonHealthSnapshot | null = null;
 
   const clients = new Set<ServerWebSocket<undefined>>();
   const watchers: FSWatcher[] = [];
@@ -357,8 +379,7 @@ export function startDashboardServer(
   });
   const markdownCache = new DashboardMarkdownCache(dashboardMdPath);
   const r2PipelineService = createR2PipelineService({
-    daemon4020Origin:
-      Bun.env.SPORTSDESK_API_ORIGIN ?? DEFAULT_COMPANION_4020_ORIGIN,
+    daemon4020Origin: companionOrigin,
     getAutomationsSnapshot: () => buildAutomationsSnapshot(),
   });
   const { buildLiveWagersPayload, clearCache: clearWagersCache } =
@@ -555,7 +576,231 @@ export function startDashboardServer(
     },
   });
 
+  async function probeCompanionDaemonHealthOnce(): Promise<CompanionDaemonHealthSnapshot> {
+    const targetUrl = new URL("/health", companionOrigin).toString();
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort(
+        new Error(`Companion daemon /health timed out at ${targetUrl}`),
+      );
+    }, 2_500);
+    const startedAt = performance.now();
+    let httpStatus: number | null = null;
+    try {
+      const res = await fetch(targetUrl, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      });
+      httpStatus = res.status;
+      const latencyMs = Math.round(performance.now() - startedAt);
+      const rawText = await res.text();
+      let parsed: unknown = null;
+      if (rawText) {
+        try {
+          parsed = JSON.parse(rawText);
+        } catch (parseErr) {
+          // signal-honesty: intentional-companion-4020-health-probe-offline
+          return {
+            online: false,
+            origin: companionOrigin,
+            httpStatus,
+            latencyMs,
+            status: "offline",
+            operationalStatus: "down",
+            dataStatus: null,
+            checks: null,
+            degradedReasons: [],
+            error: `Invalid JSON from ${targetUrl} (HTTP ${res.status}): ${
+              parseErr instanceof Error ? parseErr.message : String(parseErr)
+            }`,
+            sampledAt: new Date().toISOString(),
+          };
+        }
+      }
+      if (typeof parsed !== "object" || parsed === null) {
+        return {
+          online: false,
+          origin: companionOrigin,
+          httpStatus,
+          latencyMs,
+          status: "offline",
+          operationalStatus: "down",
+          dataStatus: null,
+          checks: null,
+          degradedReasons: [],
+          error: `Non-object response from ${targetUrl} (HTTP ${res.status})`,
+          sampledAt: new Date().toISOString(),
+        };
+      }
+      const body = parsed as Record<string, unknown>;
+      const rawReasons = Array.isArray(body.degradedReasons)
+        ? body.degradedReasons
+        : [];
+      const degradedReasons: CompanionDaemonDegradedReason[] = [];
+      for (const item of rawReasons) {
+        if (typeof item !== "object" || item === null) continue;
+        const rec = item as Record<string, unknown>;
+        const message =
+          typeof rec.message === "string" && rec.message.trim() !== ""
+            ? rec.message
+            : null;
+        if (message === null) continue;
+        degradedReasons.push({
+          message,
+          ...(typeof rec.kind === "string" ? { kind: rec.kind } : {}),
+          ...(typeof rec.severity === "string"
+            ? { severity: rec.severity }
+            : {}),
+          ...(typeof rec.action === "string" || rec.action === null
+            ? { action: rec.action }
+            : {}),
+        });
+      }
+      const rawVersion =
+        typeof body.version === "object" && body.version !== null
+          ? (body.version as Record<string, unknown>)
+          : null;
+      const rawIngress =
+        typeof body.ingress === "object" && body.ingress !== null
+          ? (body.ingress as Record<string, unknown>)
+          : null;
+      return {
+        online: true,
+        origin: companionOrigin,
+        httpStatus,
+        latencyMs,
+        status:
+          typeof body.status === "string"
+            ? body.status
+            : res.ok
+              ? "ok"
+              : "degraded",
+        operationalStatus:
+          typeof body.operationalStatus === "string"
+            ? body.operationalStatus
+            : null,
+        dataStatus:
+          typeof body.dataStatus === "string" ? body.dataStatus : null,
+        ...(typeof body.runtime === "string" ? { runtime: body.runtime } : {}),
+        ...(typeof body.uptimeSeconds === "number"
+          ? { uptimeSeconds: body.uptimeSeconds }
+          : {}),
+        ...(typeof body.nodeEnv === "string" ? { nodeEnv: body.nodeEnv } : {}),
+        ...(rawVersion !== null
+          ? {
+              version: {
+                ...(typeof rawVersion.gitSha === "string"
+                  ? { gitSha: rawVersion.gitSha }
+                  : {}),
+                ...(typeof rawVersion.buildTime === "string"
+                  ? { buildTime: rawVersion.buildTime }
+                  : {}),
+                ...(typeof rawVersion.nodeEnv === "string"
+                  ? { nodeEnv: rawVersion.nodeEnv }
+                  : {}),
+              },
+            }
+          : {}),
+        ...(rawIngress !== null
+          ? {
+              ingress: {
+                ...(typeof rawIngress.proxied === "boolean"
+                  ? { proxied: rawIngress.proxied }
+                  : {}),
+                ...(typeof rawIngress.trustProxy === "boolean"
+                  ? { trustProxy: rawIngress.trustProxy }
+                  : {}),
+              },
+            }
+          : {}),
+        checks:
+          typeof body.checks === "object" && body.checks !== null
+            ? (body.checks as Record<string, unknown>)
+            : null,
+        degradedReasons,
+        error: null,
+        sampledAt: new Date().toISOString(),
+      };
+    } catch (err) {
+      // signal-honesty: intentional-companion-4020-health-probe-offline
+      const latencyMs = Math.round(performance.now() - startedAt);
+      return {
+        online: false,
+        origin: companionOrigin,
+        httpStatus,
+        latencyMs,
+        status: "offline",
+        operationalStatus: "down",
+        dataStatus: null,
+        checks: null,
+        degradedReasons: [],
+        error: `Companion probe failed for ${targetUrl}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        sampledAt: new Date().toISOString(),
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function probeCompanionDaemonHealth(): Promise<CompanionDaemonHealthSnapshot> {
+    const snap = await probeCompanionDaemonHealthOnce();
+    lastCompanionDaemonHealth = snap;
+    return snap;
+  }
+
+  function resolveR2HealthFromRuntime(): {
+    readonly status: R2DependencyStatus;
+    readonly lastSnapshotAgeMs: number | null;
+  } {
+    const cached = r2PipelineService.getCachedSummary();
+    if (cached !== null) {
+      const status: R2DependencyStatus = cached.hasErrorOrMissing
+        ? "error"
+        : cached.overallStatus === "fresh"
+          ? "ok"
+          : "degraded";
+      return {
+        status,
+        lastSnapshotAgeMs: cached.lastSnapshotAgeMs,
+      };
+    }
+    const pipelines =
+      lastCompanionDaemonHealth?.online &&
+      lastCompanionDaemonHealth.checks &&
+      typeof lastCompanionDaemonHealth.checks === "object" &&
+      lastCompanionDaemonHealth.checks.pipelines !== null
+        ? (lastCompanionDaemonHealth.checks.pipelines as Record<
+            string,
+            unknown
+          >)
+        : null;
+    if (pipelines !== null) {
+      const fresh = Number(pipelines.r2Fresh ?? 0);
+      const total = Number(pipelines.r2Total ?? 0);
+      const r2StaleKeys = Array.isArray(pipelines.r2StaleKeys)
+        ? pipelines.r2StaleKeys
+        : [];
+      const dataStaleKeys = Array.isArray(pipelines.dataStaleKeys)
+        ? pipelines.dataStaleKeys
+        : [];
+      const status: R2DependencyStatus =
+        total > 0 && fresh === 0
+          ? "error"
+          : fresh < total || r2StaleKeys.length > 0 || dataStaleKeys.length > 0
+            ? "degraded"
+            : "ok";
+      return { status, lastSnapshotAgeMs: null };
+    }
+    return { status: "degraded", lastSnapshotAgeMs: null };
+  }
+
   const healthTracker = new DashboardHealthTracker({
+    daemonProbeMs: 5_000,
+    expectedBunVersion,
+    startedAtNs,
     isDbConfigured: () => Boolean(Bun.env.PGUSER && Bun.env.PGPASSWORD),
     probeDb: async () => {
       const { sql } = await import("../lib/db.ts");
@@ -565,8 +810,25 @@ export function startDashboardServer(
       const { sessionCleanup } = await import("../lib/session.ts");
       return sessionCleanup();
     },
+    countActiveSessions: async () => {
+      const { sessionCountActive } = await import("../lib/session.ts");
+      return sessionCountActive();
+    },
     getAlertMetrics: () => alertDispatcher.getHealthMetrics(),
     getPort: () => serverRef?.port ?? port,
+    getServerCounters: () => {
+      let wsBackpressureBytes = 0;
+      for (const ws of clients) {
+        wsBackpressureBytes += ws.getBufferedAmount?.() ?? 0;
+      }
+      return {
+        pendingRequests: serverRef?.pendingRequests ?? 0,
+        pendingWebSockets: serverRef?.pendingWebSockets ?? 0,
+        wsBackpressureBytes,
+      };
+    },
+    getR2Health: resolveR2HealthFromRuntime,
+    probeDaemon4020: probeCompanionDaemonHealth,
   });
 
   let cachedDceMatrixProbe: {
@@ -651,6 +913,9 @@ export function startDashboardServer(
           ...(spec.cache === undefined ? {} : { cache: spec.cache }),
         }),
       getHealthPayload: () => healthTracker.sample(),
+      cursorSecret:
+        options.cursorSecret ??
+        (Bun.env.SPORTSDESK_CURSOR_SECRET?.trim() || undefined),
       getServerTelemetry: () => ({
         pendingRequests: serverRef?.pendingRequests ?? 0,
         pendingWebSockets: serverRef?.pendingWebSockets ?? 0,
@@ -818,7 +1083,35 @@ export function startDashboardServer(
           return rateCustomerBookRow(row, id);
         },
       },
-      execTerminal: (command, dims) => executeTerminalQuery(command, dims),
+      execTerminal: (command, dims) =>
+        executeTerminalQuery(command, {
+          ...dims,
+          getHealthPayload: async () =>
+            (await healthTracker.sample()) as unknown as Record<
+              string,
+              unknown
+            >,
+          getStatusPayload: async () => {
+            try {
+              const res = await fetch(`${companionOrigin}/api/status`, {
+                cache: "no-store",
+                signal: AbortSignal.timeout(2_000),
+              });
+              if (!res.ok) return null;
+              const parsed: unknown = await res.json();
+              return typeof parsed === "object" &&
+                parsed !== null &&
+                !Array.isArray(parsed)
+                ? (parsed as Record<string, unknown>)
+                : null;
+            } catch {
+              // signal-honesty: intentional-terminal-status-probe-offline
+              return null;
+            }
+          },
+          dashboardOrigin: `http://${hostname}:${serverRef?.port ?? port}`,
+          companionOrigin,
+        }),
       rankings: {
         getAll: async (limit) => {
           const { runBatchedRanking } =
@@ -926,6 +1219,17 @@ export function startDashboardServer(
   const uiRoutes = {
     "/": indexHtml,
     "/dashboard": indexHtml,
+    "/app": indexHtml,
+    "/app/*": indexHtml,
+    "/wagers": indexHtml,
+    "/bet-ticker": indexHtml,
+    "/customers": indexHtml,
+    "/surveillance": indexHtml,
+    "/shadow": indexHtml,
+    "/terminal": indexHtml,
+    "/rankings": indexHtml,
+    "/alerts": indexHtml,
+    "/r2": indexHtml,
     // `/static/*` through the range-aware handler, not Bun's native `{ dir }` mount. The mount
     // was chosen for its "symlink clamping", which it does not do: measured on 1.4.4, a symlink
     // inside `static/` pointing at a file outside it was served with that file's content
@@ -1025,9 +1329,6 @@ export function startDashboardServer(
     },
   };
 
-  const companionOrigin =
-    Bun.env.SPORTSDESK_API_ORIGIN ?? DEFAULT_COMPANION_4020_ORIGIN;
-
   async function serveStaticFileResponse(
     absPath: string,
     contentType: string,
@@ -1045,42 +1346,193 @@ export function startDashboardServer(
     });
   }
 
+  async function serveLocalAgentSearch(url: URL): Promise<Response> {
+    const query = (url.searchParams.get("q") ?? "").trim().toUpperCase();
+    const limitRaw = Number(url.searchParams.get("limit") ?? 20);
+    const limit = Math.min(
+      Math.max(Number.isFinite(limitRaw) ? Math.trunc(limitRaw) : 20, 1),
+      100,
+    );
+    if (query.length < 2) {
+      return Response.json(
+        {
+          success: false,
+          error: "q must be at least 2 characters",
+          minLength: 2,
+        },
+        { status: 400 },
+      );
+    }
+
+    const treeCached = await jsonReader.readCachedJson<{
+      nodes?: Record<string, { readonly l?: number; readonly t?: string }>;
+    }>(resolve(cwd, "data/agent-tree.json"));
+    if (treeCached === null) {
+      return Response.json(
+        { error: "no agent tree; run bun run build:agent-tree" },
+        { status: 404 },
+      );
+    }
+
+    const nodes = treeCached.value.nodes ?? {};
+    const matches = Object.entries(nodes)
+      .filter(([key]) => key.includes(query))
+      .sort((a, b) => {
+        const aPrefix = a[0].startsWith(query) ? 0 : 1;
+        const bPrefix = b[0].startsWith(query) ? 0 : 1;
+        if (aPrefix !== bPrefix) return aPrefix - bPrefix;
+        if (a[0].length !== b[0].length) return a[0].length - b[0].length;
+        return a[0].localeCompare(b[0]);
+      })
+      .slice(0, limit)
+      .map(([key, node]) => ({
+        key,
+        level: typeof node.l === "number" ? node.l : null,
+        agentType: node.t ?? null,
+      }));
+
+    return Response.json(
+      { success: true, query, count: matches.length, agents: matches },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  async function buildLiveBetsSummaryFallback(url: URL): Promise<Response> {
+    const rawSource = (url.searchParams.get("source") ?? "auto").trim();
+    if (rawSource !== "auto" && rawSource !== "live" && rawSource !== "file") {
+      return Response.json(
+        { success: false, error: "source must be auto, live or file" },
+        { status: 400 },
+      );
+    }
+    const [{ resolveLiveBets }, { summarizeGames }] = await Promise.all([
+      import("../src/live_bets/resolve.ts"),
+      import("../lib/live_bets.ts"),
+    ]);
+    const v2 = await resolveLiveBets(
+      {
+        source: rawSource === "live" ? "db" : "file",
+        fallback: "sample",
+      },
+      { repoRoot: cwd },
+    );
+    const summary = summarizeGames(
+      v2.games,
+      v2.pendingCount,
+      v2.summary.dataSource,
+      v2.provenance.capturedAt ?? null,
+    );
+    return Response.json(
+      {
+        success: true,
+        games: v2.games,
+        agents: v2.agents,
+        pendingCount: summary.totalPending,
+        summary,
+        scoreboard: v2.scoreboard,
+        sports: v2.sports,
+        provenance: v2.provenance,
+        generatedAt: v2.provenance.generatedAt,
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  const HOP_BY_HOP_REQUEST_HEADERS: readonly string[] = [
+    "host",
+    "connection",
+    "content-length",
+    "transfer-encoding",
+    "keep-alive",
+    "upgrade",
+    "proxy-connection",
+  ];
+
   async function proxy4020OrFallback(
     req: Request,
     url: URL,
     localFallback?: () => Promise<Response>,
+    opts?: {
+      readonly streaming?: boolean;
+      readonly connectTimeoutMs?: number;
+    },
   ): Promise<Response> {
-    if (req.method === "GET" || req.method === "HEAD") {
-      try {
-        const upstreamUrl = `${companionOrigin}${url.pathname}${url.search}`;
-        const upstream =
-          req.method === "HEAD"
-            ? await fetch(upstreamUrl, {
-                method: "HEAD",
-                signal: AbortSignal.timeout(1500),
-              })
-            : await fetch(upstreamUrl, {
-                method: "GET",
-                signal: AbortSignal.timeout(1500),
-              });
-        if (
-          upstream.status < 500 &&
-          !(upstream.status === 404 && localFallback !== undefined)
-        ) {
-          return new Response(upstream.body, {
-            status: upstream.status,
-            headers: {
-              "Content-Type":
-                upstream.headers.get("Content-Type") ??
-                "application/octet-stream",
-              "Cache-Control": "no-store",
-            },
-          });
-        }
-      } catch {
-        // signal-honesty: intentional-companion-4020-offline-fallback
-      }
+    if (isDashboardAuthRequired()) {
+      const denied = await enforceOptionalAuth(req);
+      if (denied) return denied;
     }
+
+    const method = req.method.toUpperCase();
+    const headers = new Headers(req.headers);
+    for (const hopHeader of HOP_BY_HOP_REQUEST_HEADERS) {
+      headers.delete(hopHeader);
+    }
+    headers.set("accept-encoding", "identity");
+
+    const controller = new AbortController();
+    const onReqAbort = () => {
+      controller.abort(req.signal.reason);
+    };
+    if (req.signal.aborted) {
+      controller.abort(req.signal.reason);
+    } else {
+      req.signal.addEventListener("abort", onReqAbort, { once: true });
+    }
+
+    const connectTimer = setTimeout(() => {
+      controller.abort(new Error("companion :4020 connect timeout"));
+    }, opts?.connectTimeoutMs ?? 3_000);
+
+    try {
+      const upstreamUrl = `${companionOrigin}${url.pathname}${url.search}`;
+      const upstream = await fetch(upstreamUrl, {
+        method,
+        headers,
+        body: method === "GET" || method === "HEAD" ? undefined : req.body,
+        signal: controller.signal,
+        redirect: "manual",
+      });
+      clearTimeout(connectTimer);
+
+      if (upstream.status === 404 && localFallback !== undefined) {
+        void upstream.body?.cancel();
+        req.signal.removeEventListener("abort", onReqAbort);
+        return await localFallback();
+      }
+
+      const outHeaders = new Headers(upstream.headers);
+      outHeaders.delete("content-encoding");
+      outHeaders.delete("content-length");
+      outHeaders.delete("transfer-encoding");
+      outHeaders.delete("connection");
+      const isSse = (outHeaders.get("content-type") ?? "")
+        .toLowerCase()
+        .includes("text/event-stream");
+      if (!outHeaders.has("cache-control")) {
+        outHeaders.set("Cache-Control", isSse ? "no-cache" : "no-store");
+      }
+
+      if (opts?.streaming === true || isSse) {
+        return new Response(method === "HEAD" ? null : upstream.body, {
+          status: upstream.status,
+          statusText: upstream.statusText,
+          headers: outHeaders,
+        });
+      }
+
+      const bodyBytes = method === "HEAD" ? null : await upstream.arrayBuffer();
+      req.signal.removeEventListener("abort", onReqAbort);
+      return new Response(bodyBytes, {
+        status: upstream.status,
+        statusText: upstream.statusText,
+        headers: outHeaders,
+      });
+    } catch {
+      clearTimeout(connectTimer);
+      req.signal.removeEventListener("abort", onReqAbort);
+      // signal-honesty: intentional-companion-4020-offline-fallback
+    }
+
     if (localFallback) {
       return localFallback();
     }
@@ -1096,6 +1548,13 @@ export function startDashboardServer(
 
   const companionApiRoutes = {
     "/api/live-bets": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url), () =>
+        serveStaticFileResponse(
+          resolve(cwd, "data/live-bets.json"),
+          "application/json; charset=utf-8",
+        ),
+      ),
+    "/api/v1/live-bets": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url), () =>
         serveStaticFileResponse(
           resolve(cwd, "data/live-bets.json"),
@@ -1144,50 +1603,20 @@ export function startDashboardServer(
     },
     "/api/live-bets/summary": (req: Request) => {
       const url = new URL(req.url);
-      return proxy4020OrFallback(req, url, async () => {
-        const rawSource = (url.searchParams.get("source") ?? "auto").trim();
-        if (
-          rawSource !== "auto" &&
-          rawSource !== "live" &&
-          rawSource !== "file"
-        ) {
-          return Response.json(
-            { success: false, error: "source must be auto, live or file" },
-            { status: 400 },
-          );
-        }
-        const [{ resolveLiveBets }, { summarizeGames }] = await Promise.all([
-          import("../src/live_bets/resolve.ts"),
-          import("../lib/live_bets.ts"),
-        ]);
-        const v2 = await resolveLiveBets(
-          {
-            source: rawSource === "live" ? "db" : "file",
-            fallback: "sample",
-          },
-          { repoRoot: cwd },
-        );
-        const summary = summarizeGames(
-          v2.games,
-          v2.pendingCount,
-          v2.summary.dataSource,
-          v2.provenance.capturedAt ?? null,
-        );
-        return Response.json(
-          {
-            success: true,
-            games: v2.games,
-            agents: v2.agents,
-            pendingCount: summary.totalPending,
-            summary,
-            scoreboard: v2.scoreboard,
-            sports: v2.sports,
-            provenance: v2.provenance,
-            generatedAt: v2.provenance.generatedAt,
-          },
-          { headers: { "Cache-Control": "no-store" } },
-        );
-      });
+      return proxy4020OrFallback(req, url, () =>
+        buildLiveBetsSummaryFallback(url),
+      );
+    },
+    "/api/live-wagers": (req: Request) => {
+      const url = new URL(req.url);
+      if (
+        (req.method === "GET" || req.method === "HEAD") &&
+        url.searchParams.has("source") &&
+        !Bun.env.SPORTSDESK_LIVE_WAGERS_JSON
+      ) {
+        return proxy4020OrFallback(req, url, () => api.fetch(req));
+      }
+      return api.fetch(req);
     },
     "/api/agent-tree": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url), () =>
@@ -1196,6 +1625,70 @@ export function startDashboardServer(
           "application/json; charset=utf-8",
         ),
       ),
+    "/api/agents/search": (req: Request) => {
+      const url = new URL(req.url);
+      return proxy4020OrFallback(req, url, () => serveLocalAgentSearch(url));
+    },
+    "/api/analysis": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/analysis/filters": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/analysis/reports": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/scoreboard": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url), () =>
+        serveStaticFileResponse(
+          resolve(cwd, "data/scoreboard.json"),
+          "application/json; charset=utf-8",
+        ),
+      ),
+    "/api/sports": (req: Request) => proxy4020OrFallback(req, new URL(req.url)),
+    "/api/sports/catalog": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/game-admin": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/game-admin/board": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url), () =>
+        serveStaticFileResponse(
+          resolve(cwd, "data/game-admin-board.json"),
+          "application/json; charset=utf-8",
+        ),
+      ),
+    "/api/contests": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url), () =>
+        serveStaticFileResponse(
+          resolve(cwd, "data/contests.json"),
+          "application/json; charset=utf-8",
+        ),
+      ),
+    "/api/bridge3c/status": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/xml-odds/soa": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/f402/get-pending": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/watchlist": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/telegram/*": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/parse-formdata": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/parse-xml": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/parse-customer-profile": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/parse-customer-performance": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/parse-transactions": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/parse-ajax-xml": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/parse-fantasy402-ajax": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/parse-toml": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
+    "/api/parse-bet-ticker": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url)),
     "/api/status": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url), async () =>
         Response.json({
@@ -1212,8 +1705,12 @@ export function startDashboardServer(
           "application/json; charset=utf-8",
         ),
       ),
-    "/api/graph/stream": (req: Request) =>
+    "/api/graph/summary": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url)),
+    "/api/graph/stream": (req: Request) =>
+      proxy4020OrFallback(req, new URL(req.url), undefined, {
+        streaming: true,
+      }),
     "/api/execution/*": (req: Request) =>
       proxy4020OrFallback(req, new URL(req.url)),
     "/api/gslive/*": (req: Request) =>
@@ -1259,13 +1756,19 @@ export function startDashboardServer(
       ),
   };
 
+  const serverRoutes = (apiOnly
+    ? api.routes
+    : {
+        ...uiRoutes,
+        ...api.routes,
+        ...companionApiRoutes,
+      }) as unknown as Bun.Serve.RoutesWithUpgrade<undefined, string>;
+
   const server: Server<undefined> = Bun.serve({
     port,
     hostname,
     development: serveDevelopment,
-    routes: apiOnly
-      ? api.routes
-      : { ...uiRoutes, ...api.routes, ...companionApiRoutes },
+    routes: serverRoutes,
     async fetch(req, srv) {
       const url = new URL(req.url);
       if (url.pathname === "/ws") {
@@ -1289,12 +1792,24 @@ export function startDashboardServer(
             ),
           );
         }
-        if (path === "/status" || path === "/status/") {
+        if (path === "/live-bets/summary") {
           return proxy4020OrFallback(req, url, () =>
-            serveStaticFileResponse(
-              resolve(cwd, "static/status.html"),
-              "text/html; charset=utf-8",
-            ),
+            buildLiveBetsSummaryFallback(url),
+          );
+        }
+        if (path === "/status" || path === "/status/") {
+          return serveStaticFileResponse(
+            resolve(cwd, "static/status.html"),
+            "text/html; charset=utf-8",
+          );
+        }
+        if (path === "/status.json") {
+          return proxy4020OrFallback(req, url, async () =>
+            Response.json({
+              ok: false,
+              daemon4020Online: false,
+              note: "Daemon :4020 offline",
+            }),
           );
         }
         if (path === "/miniapp" || path === "/miniapp/") {
@@ -1304,6 +1819,22 @@ export function startDashboardServer(
               "text/html; charset=utf-8",
             ),
           );
+        }
+        if (path === "/tracker") {
+          return proxy4020OrFallback(req, url);
+        }
+        if (
+          path === "/governance" ||
+          path === "/governance/" ||
+          path === "/governance.json"
+        ) {
+          return proxy4020OrFallback(req, url);
+        }
+        if (path === "/agent-graph.webp") {
+          return proxy4020OrFallback(req, url);
+        }
+        if (path === "/telegram/webhook") {
+          return proxy4020OrFallback(req, url);
         }
         if (
           path === "/graph" ||
@@ -1326,7 +1857,7 @@ export function startDashboardServer(
             ),
           );
         }
-        if (path === "/graph-live-feed.json" || path === "/api/graph-feed") {
+        if (path === "/graph-live-feed.json") {
           return proxy4020OrFallback(req, url, () =>
             serveStaticFileResponse(
               resolve(cwd, "docs/graph-live-feed.json"),
@@ -1354,42 +1885,6 @@ export function startDashboardServer(
               "Cache-Control": "no-store",
             },
           });
-        }
-        if (path === "/api/live-bets") {
-          return proxy4020OrFallback(req, url, () =>
-            serveStaticFileResponse(
-              resolve(cwd, "data/live-bets.json"),
-              "application/json; charset=utf-8",
-            ),
-          );
-        }
-        if (path === "/api/agent-tree") {
-          return proxy4020OrFallback(req, url, () =>
-            serveStaticFileResponse(
-              resolve(cwd, "data/agent-tree.json"),
-              "application/json; charset=utf-8",
-            ),
-          );
-        }
-        if (path === "/api/status") {
-          return proxy4020OrFallback(req, url, async () =>
-            Response.json({
-              ok: false,
-              daemon4020Online: false,
-              note: "Daemon :4020 offline",
-            }),
-          );
-        }
-        if (
-          path === "/api/v2/live-bets" ||
-          path === "/api/kpis" ||
-          path === "/api/graph/stream" ||
-          path.startsWith("/api/execution/") ||
-          path.startsWith("/api/gslive/") ||
-          path.startsWith("/api/signals/") ||
-          path.startsWith("/api/logo/")
-        ) {
-          return proxy4020OrFallback(req, url);
         }
       }
       return new Response("Not Found", { status: 404 });
@@ -1506,39 +2001,74 @@ if (import.meta.main) {
     }
   }
 
-  const apiOnly = Bun.argv.includes("--api-only");
-  const noDev = Bun.argv.includes("--no-dev") || Bun.argv.includes("--prod");
-  const noHmr = Bun.argv.includes("--no-hmr");
-  const noConsole = Bun.argv.includes("--no-console");
-  const mcpStateless =
-    Bun.argv.includes("--stateless") || Bun.argv.includes("--mcp-stateless");
+  const parsedArgs = parseDevDashboardCliArgs(Bun.argv.slice(2));
+  if (!parsedArgs.ok) {
+    console.error(parsedArgs.error);
+    console.error("Run with '--help' for usage and flags.");
+    process.exit(2);
+  }
+  const flags = parsedArgs.flags;
+  if (flags.help) {
+    console.log(devDashboardHelpText());
+    process.exit(0);
+  }
+  if (flags.printUrl) {
+    console.log(
+      buildDashboardLaunchUrl(`http://${flags.hostname}:${flags.port}/`, {
+        tab: flags.tab,
+        matrix: flags.matrix,
+      }),
+    );
+    process.exit(0);
+  }
+
   prefetchSportsDeskEndpoints();
   const handle = startDashboardServer({
-    watchFiles: !noDev,
-    apiOnly,
-    development: noDev
+    port: flags.port,
+    hostname: flags.hostname,
+    companionOrigin: flags.companionOrigin,
+    watchFiles: !flags.noDev && !flags.noWatch,
+    apiOnly: flags.apiOnly,
+    development: flags.noDev
       ? false
       : {
-          hmr: !noHmr,
-          console: !noConsole,
+          hmr: !flags.noHmr,
+          console: !flags.noConsole,
         },
-    ...(mcpStateless ? { mcpStateless: true } : {}),
+    ...(flags.mcpStateless ? { mcpStateless: true } : {}),
+  });
+
+  const launchUrl = buildDashboardLaunchUrl(handle.url, {
+    tab: flags.tab,
+    matrix: flags.matrix,
   });
 
   console.log(
-    `\n⚡ SportsDesk ${apiOnly ? "API-Only" : "Enhanced Dashboard"} Server running!`,
+    `\n⚡ SportsDesk ${flags.apiOnly ? "API-Only" : "Enhanced Dashboard"} Server running!`,
   );
-  console.log(`   ➜ Local URL:    ${handle.url.href}`);
+  console.log(`   ➜ Local URL:      ${handle.url.href}`);
+  if (launchUrl !== handle.url.href) {
+    console.log(`   ➜ Launch URL:     ${launchUrl}`);
+  }
+  console.log(`   ➜ Status Console: ${handle.url.href}status`);
+  console.log(`   ➜ Companion API:  ${flags.companionOrigin}`);
   console.log(
-    `   ➜ Dev Overlay:  ${handle.development ? `enabled (hmr: ${!noHmr}, console: ${!noConsole} · Bun v${Bun.version})` : "disabled"}`,
+    `   ➜ Dev Overlay:    ${handle.development ? `enabled (hmr: ${!flags.noHmr}, console: ${!flags.noConsole}, watch: ${!flags.noDev && !flags.noWatch} · Bun v${Bun.version})` : "disabled"}`,
   );
-  console.log(`   ➜ Health Probe: ${handle.url.href}health`);
-  console.log(`   ➜ Markdown API: ${handle.url.href}api/dashboard`);
-  console.log(`   ➜ Shadow API:   ${handle.url.href}api/shadow-pricing`);
-  console.log(`   ➜ Tiers Config: ${handle.url.href}api/config/tiers`);
-  console.log(`   ➜ DCE Matrix:   ${handle.url.href}api/build-matrix`);
-  console.log(`   ➜ DNS Cache:    ${handle.url.href}api/dns`);
+  console.log(`   ➜ Health Probe:   ${handle.url.href}health`);
+  console.log(`   ➜ Markdown API:   ${handle.url.href}api/dashboard`);
+  console.log(`   ➜ Shadow API:     ${handle.url.href}api/shadow-pricing`);
+  console.log(`   ➜ Tiers Config:   ${handle.url.href}api/config/tiers`);
+  console.log(`   ➜ DCE Matrix:     ${handle.url.href}api/build-matrix`);
+  console.log(`   ➜ DNS Cache:      ${handle.url.href}api/dns`);
   console.log(
-    `   ➜ WebSocket:    ws://${handle.url.host}/ws (Topics: dashboard, live-bets, syndicate-alerts, tiers-updated)\n`,
+    `   ➜ WebSocket:      ws://${handle.url.host}/ws (Topics: dashboard, live-bets, syndicate-alerts, tiers-updated)\n`,
   );
+
+  if (flags.open) {
+    const opened = openUrlInBrowser(launchUrl);
+    if (!opened.ok) {
+      console.warn(`   ⚠ ${opened.error}`);
+    }
+  }
 }

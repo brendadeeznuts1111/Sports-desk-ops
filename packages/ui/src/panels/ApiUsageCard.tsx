@@ -1,6 +1,6 @@
 /**
  * @file panels/ApiUsageCard.tsx
- * @description Session API usage meter rendered in the Telemetry tab.
+ * @description Session API usage meter rendered in the Risk Overview tab.
  *
  * Shows one row per normalized endpoint (method + path) with calls, outcomes,
  * average latency and the last status. Backed by `trackedFetch` in

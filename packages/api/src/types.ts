@@ -119,6 +119,11 @@ export interface DashboardApiDeps {
     | undefined;
   readonly getHealthPayload: () => Promise<object> | object;
   /**
+   * Secret(s) used to HMAC-sign and verify opaque cursor pagination tokens.
+   * When an array is provided, index 0 signs new cursors and all entries verify (key rotation).
+   */
+  readonly cursorSecret?: string | readonly string[] | undefined;
+  /**
    * Live `Bun.serve` counters. Optional: a host without the `Server` reference (or the in-memory
    * test harness) omits them rather than reporting a fabricated zero.
    */

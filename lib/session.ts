@@ -198,6 +198,21 @@ export const sessionCleanup = async (db = sql): Promise<number> => {
   return rows.length;
 };
 
+/** Count active (non-expired, non-idle, enabled) operator sessions. */
+export const sessionCountActive = async (db = sql): Promise<number> => {
+  const now = nowIso();
+  const idleCutoff = new Date(Date.now() - SESSION_IDLE_MS).toISOString();
+  const rows = await db<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count
+    FROM sessions s
+    JOIN operators o ON o.id = s.operator_id
+    WHERE s.expires_at   > ${now}::timestamptz
+      AND s.last_seen_at > ${idleCutoff}::timestamptz
+      AND o.disabled = FALSE
+  `;
+  return Number(rows[0]?.count ?? 0);
+};
+
 // snake_case aliases for call sites that prefer the spec-style names.
 export {
   sessionCreate as session_create,

@@ -16,6 +16,8 @@ export interface WsLike {
   subscribe(topic: string): void;
   unsubscribe(topic: string): void;
   send(data: string): unknown;
+  /** Live send buffer depth in bytes on a `Bun.ServerWebSocket`. */
+  getBufferedAmount?(): number;
   /** Present on a real `ServerWebSocket`; used to evict a socket that dropped a frame. */
   close?(code?: number, reason?: string): unknown;
 }

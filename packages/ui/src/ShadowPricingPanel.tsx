@@ -44,6 +44,7 @@ export interface ShadowPricingPanelProps {
   readonly onInspectAccount?: ((accountId: string) => void) | undefined;
   readonly onRunPtyCommand?: ((command: string) => void) | undefined;
   readonly initialPayload?: ShadowPricingDashboardPayload | null | undefined;
+  readonly initialError?: string | null | undefined;
 }
 
 function readInitialUrlParam(key: string, fallback: string): string {
@@ -56,6 +57,7 @@ export function ShadowPricingPanel({
   onInspectAccount,
   onRunPtyCommand,
   initialPayload,
+  initialError,
 }: ShadowPricingPanelProps): React.ReactElement {
   // 4-Level Hierarchical Taxonomy Filters
   const [sport, setSport] = useState<SportFilter>(
@@ -101,8 +103,11 @@ export function ShadowPricingPanel({
   const [payload, setPayload] = useState<ShadowPricingDashboardPayload | null>(
     initialPayload ?? null,
   );
-  const [loading, setLoading] = useState<boolean>(initialPayload == null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [useFixtureSource, setUseFixtureSource] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(
+    initialPayload == null && !initialError,
+  );
+  const [errorMsg, setErrorMsg] = useState<string | null>(initialError ?? null);
   const [copiedCli, setCopiedCli] = useState<boolean>(false);
 
   // Sync active 5-level slice to URL query string for deep-linking
@@ -142,6 +147,7 @@ export function ShadowPricingPanel({
       retailElasticity: number;
       repriceMode: ShadowRepriceMode;
       routerAuditMode: RouterAuditMode;
+      useFixture: boolean;
     }) => {
       setLoading(true);
       setErrorMsg(null);
@@ -160,6 +166,9 @@ export function ShadowPricingPanel({
           mode: params.repriceMode,
           routerAudit: params.routerAuditMode,
         });
+        if (params.useFixture) {
+          qs.set("source", "fixture");
+        }
         const res = await trackedFetch(`/api/shadow-pricing?${qs.toString()}`);
         if (!res.ok) {
           const errJson = (await res
@@ -208,6 +217,7 @@ export function ShadowPricingPanel({
         retailElasticity,
         repriceMode,
         routerAuditMode,
+        useFixture: useFixtureSource,
       });
     }, 80);
     return () => clearTimeout(timer);
@@ -224,6 +234,7 @@ export function ShadowPricingPanel({
     retailElasticity,
     repriceMode,
     routerAuditMode,
+    useFixtureSource,
     fetchSimulation,
   ]);
 
@@ -508,6 +519,59 @@ export function ShadowPricingPanel({
             />
           )}
         </>
+      ) : !loading && errorMsg ? (
+        <div
+          className="sd-card"
+          style={{
+            textAlign: "center",
+            padding: "36px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "12px",
+          }}
+        >
+          <div style={{ fontWeight: 600 }}>
+            Shadow-pricing arena unavailable
+          </div>
+          <div style={{ fontSize: "12px", color: "var(--sd-text-muted)" }}>
+            {errorMsg}
+          </div>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="sd-preset-btn"
+              onClick={() => {
+                void fetchSimulation({
+                  sport,
+                  subSport,
+                  period,
+                  market,
+                  regime,
+                  ladderKey3,
+                  ladderKey7,
+                  ladderKey14_21,
+                  minVolume,
+                  retailElasticity,
+                  repriceMode,
+                  routerAuditMode,
+                  useFixture: useFixtureSource,
+                });
+              }}
+            >
+              Retry
+            </button>
+            {!useFixtureSource ? (
+              <button
+                type="button"
+                className="sd-preset-btn"
+                onClick={() => setUseFixtureSource(true)}
+              >
+                Load Fixture Cohort
+              </button>
+            ) : null}
+          </div>
+        </div>
       ) : (
         <div
           className="sd-card"

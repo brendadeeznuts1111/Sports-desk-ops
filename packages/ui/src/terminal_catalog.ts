@@ -178,6 +178,22 @@ export const TERMINAL_COMMAND_SPECS: readonly TerminalCommandSpec[] = [
     aliases: ["caps", "features"],
   },
   {
+    command: "health",
+    usage: "health [--alerts] [--status] [--schedules] [--strict] [--json]",
+    description:
+      "Inspect structured /health (schemaVersion: 1), alerts & companion probe",
+    group: "NET",
+    aliases: ["hlth", "probe"],
+  },
+  {
+    command: "status",
+    usage: "status [--schedules] [--alerts] [--json] [--strict]",
+    description:
+      "Inspect live /health + /status feeds, Telegram mode & scheduler jobs",
+    group: "NET",
+    aliases: ["st", "ops"],
+  },
+  {
     command: "markdown",
     usage: "markdown [file|text] [--theme=dark|light|mono] [--columns=N]",
     description:
@@ -316,6 +332,8 @@ export const TERMINAL_WELCOME_HELP_STDOUT =
   "  \x1b[1;32mwho\x1b[0m (alias: \x1b[32mw\x1b[0m)                Operator desk, session, worktree & Bun runtime info\n" +
   "  \x1b[1;32mkeybindings\x1b[0m (alias: \x1b[32mkb\x1b[0m)        Terminal & GUI keyboard shortcuts cheat sheet\n" +
   "  \x1b[1;32mdns <host>\x1b[0m (alias: \x1b[32md\x1b[0m)         Benchmark c-ares vs system DNS resolver latency\n" +
+  "  \x1b[1;32mhealth\x1b[0m (alias: \x1b[32mhlth\x1b[0m)         Structured /health (schemaVersion: 1), alerts & companion probe (\x1b[36m--alerts\x1b[0m, \x1b[36m--status\x1b[0m, \x1b[36m--json\x1b[0m)\n" +
+  "  \x1b[1;32mstatus\x1b[0m (alias: \x1b[32mst\x1b[0m)           Live /health + /status streams & scheduler rows (\x1b[36m--schedules\x1b[0m, \x1b[36m--alerts\x1b[0m, \x1b[36m--json\x1b[0m)\n" +
   "  \x1b[1;32mreverse <ip>\x1b[0m (alias: \x1b[32mr, ip\x1b[0m)     Reverse DNS forensics & datacenter/residential IP lookup\n" +
   "  \x1b[1;32mcron <expr>\x1b[0m (alias: \x1b[32mcr\x1b[0m)        Inspect Bun.cron() schedule triggers\n" +
   "  \x1b[1;32mmarkdown\x1b[0m (alias: \x1b[32mmd\x1b[0m)           Render Markdown via native Bun.markdown.ansi (\x1b[36m--theme\x1b[0m, \x1b[36m--columns\x1b[0m, \x1b[36m--no-color\x1b[0m)\n" +

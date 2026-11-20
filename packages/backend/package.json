@@ -12,7 +12,8 @@
     "./wagers": "./src/wagers.ts",
     "./customers": "./src/customers.ts",
     "./markdown": "./src/markdown.ts",
-    "./health": "./src/health.ts"
+    "./health": "./src/health.ts",
+    "./signed-cursor": "./src/signed_cursor.ts"
   },
   "files": [
     "src"

@@ -221,19 +221,51 @@ describe("Fantasy402 IP Tracker (getWebLog)", () => {
         );
       });
 
-      // Test Mode C
+      // Test Mode C (default lowercase ip mirror + distinct case-sensitive agentOwner + 10-field order)
+      await queryIpTrackerWebLog({
+        portalBaseUrl: "https://mock.fantasy402.com",
+        mode: "C",
+        agentId: "MASTER01",
+        agentOwner: "MASTER01v",
+        customerId: "CB112",
+        startDate: "2026-11-06",
+        endDate: "2026-11-20",
+      });
+
+      assert(captured.params !== null);
+      assert.deepEqual(
+        [...captured.params.keys()],
+        [
+          "agentID",
+          "customerID",
+          "start",
+          "end",
+          "type",
+          "actions",
+          "ip",
+          "operation",
+          "RRO",
+          "agentOwner",
+        ],
+      );
+      assert.equal(captured.params.get("type"), "C");
+      assert.equal(captured.params.get("start"), "2026-11-06");
+      assert.equal(captured.params.get("end"), "2026-11-20");
+      assert.equal(captured.params.get("customerID"), "CB112");
+      assert.equal(captured.params.get("ip"), "cb112");
+      assert.equal(captured.params.get("agentID"), "MASTER01");
+      assert.equal(captured.params.get("agentOwner"), "MASTER01v");
+
+      // Test explicit ip override in Mode C
       await queryIpTrackerWebLog({
         portalBaseUrl: "https://mock.fantasy402.com",
         mode: "C",
         customerId: "CB112",
+        ip: "",
         startDate: "2026-10-30",
         endDate: "2026-10-30",
       });
-
-      assert(captured.params !== null);
-      assert.equal(captured.params.get("type"), "C");
-      assert.equal(captured.params.get("start"), "2026-10-30");
-      assert.equal(captured.params.get("customerID"), "CB112");
+      assert.equal(captured.params?.get("ip"), "");
 
       // Test Mode B
       await queryIpTrackerWebLog({
@@ -247,6 +279,7 @@ describe("Fantasy402 IP Tracker (getWebLog)", () => {
       assert.equal(captured.params.get("type"), "B");
       assert.equal(captured.params.get("start"), "10/30/2026");
       assert.equal(captured.params.get("customerID"), "0");
+      assert.equal(captured.params.get("ip"), "");
     } finally {
       globalThis.fetch = originalFetch;
     }

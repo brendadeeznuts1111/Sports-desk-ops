@@ -4,7 +4,12 @@ import { describe, expect, test } from "bun:test";
 import { FEATURES } from "@sportsdesk-ops/contracts";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { App } from "../packages/ui/src/App.tsx";
+import {
+  App,
+  ErrorBoundary,
+  formatFooterTimestamp,
+  summarizeDaemonDegradedCause,
+} from "../packages/ui/src/App.tsx";
 import { renderAnsiReact } from "../packages/ui/src/ansi.tsx";
 import * as uiBarrel from "../packages/ui/src/index.ts";
 import {
@@ -22,6 +27,7 @@ import {
   RankingsTabPanel,
   ShiftHandoffModal,
   SurveillanceTabPanel,
+  splitTierAndClassification,
   TerminalTabPanel,
   TOKEN_ALIAS_SPECS,
 } from "../packages/ui/src/panels/index.tsx";
@@ -864,7 +870,7 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(subMillisecond).not.toContain("no runs yet");
   });
 
-  test("RankingsTabPanel renders 30d rankings and agency proxy conduits", () => {
+  test("RankingsTabPanel renders 30d rankings with separate Classification and Tier columns and agency proxy conduits", () => {
     const noop = () => {};
     const html = renderToStaticMarkup(
       React.createElement(RankingsTabPanel, {
@@ -879,6 +885,61 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(html).toContain("30-Day Sharp Bettor Rankings");
     expect(html).toContain("FAKEMONEY");
     expect(html).toContain("SINGLE BETTOR PROXY CONDUIT");
+    expect(html).toContain(">Classification</th>");
+    expect(html).toContain(">Tier</th>");
+    expect(html).not.toContain("Classification &amp; Tier");
+    expect(html).not.toContain("Classification & Tier");
+    expect(html).toContain('data-ranking-classification="true"');
+    expect(html).toContain("Disciplined Sharp");
+    expect(html).toContain('data-ranking-tier="true"');
+    expect(html).toContain("Tier 3");
+
+    const emptyHtml = renderToStaticMarkup(
+      React.createElement(RankingsTabPanel, {
+        rankingsSearch: "",
+        onRankingsSearchChange: noop,
+        rankingsFilter: "ALL",
+        onRankingsFilterChange: noop,
+        onInspectPty: noop,
+        rankings: null,
+        rankingsStatus: "pending",
+      }),
+    );
+    expect(emptyHtml).toContain('colSpan="12"');
+  });
+
+  test("splitTierAndClassification separates tier codes and classification labels honestly", () => {
+    expect(
+      splitTierAndClassification("TIER_1", "Tier 1: Elite Originator"),
+    ).toEqual({
+      tierLabelShort: "Tier 1",
+      classification: "Elite Originator",
+    });
+    expect(
+      splitTierAndClassification("TIER_3", "Tier 3: Disciplined Sharp"),
+    ).toEqual({
+      tierLabelShort: "Tier 3",
+      classification: "Disciplined Sharp",
+    });
+    expect(
+      splitTierAndClassification("TIER_5", "Tier 5: Recreational / Retail"),
+    ).toEqual({
+      tierLabelShort: "Tier 5",
+      classification: "Recreational / Retail",
+    });
+    expect(
+      splitTierAndClassification(
+        "TIER_3_SHARP_DISCIPLINED",
+        "TIER_3_SHARP_DISCIPLINED",
+      ),
+    ).toEqual({
+      tierLabelShort: "Tier 3",
+      classification: "Sharp Disciplined",
+    });
+    expect(splitTierAndClassification("TIER_3", "TIER_3")).toEqual({
+      tierLabelShort: "Tier 3",
+      classification: "—",
+    });
   });
 
   test("AlertsTabPanel renders DLQ KPIs, toast, and alert action buttons", () => {
@@ -1663,6 +1724,15 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(tickerHtml).toContain("NFL");
     expect(tickerHtml).toContain("1L");
     expect(tickerHtml).toContain("Chiefs -3");
+    // /live-bets header link must contrast against its dark pill background rather than inheriting #38bdf8 on #38bdf8.
+    const liveBetsLinkMatch = /<a href="\/live-bets"[^>]*>.*?<\/a>/.exec(
+      tickerHtml,
+    );
+    expect(liveBetsLinkMatch).not.toBeNull();
+    expect(liveBetsLinkMatch?.[0]).toContain("Open /live-bets");
+    expect(liveBetsLinkMatch?.[0]).toContain("background-color:#1e293b");
+    expect(liveBetsLinkMatch?.[0]).toContain("color:#38bdf8");
+    expect(liveBetsLinkMatch?.[0]).not.toContain("background-color:#38bdf8");
 
     const r2Html = renderToStaticMarkup(
       React.createElement(R2PipelineTabPanel, {
@@ -2519,5 +2589,207 @@ describe("UI style polish, contrast & responsive strip ergonomics", () => {
     expect(toolbarIdx).toBeGreaterThan(headerCloseIdx);
     expect(html).toContain('class="sd-ops-toolbar"');
     expect(html).toContain('class="sd-tab-btn"');
+  });
+
+  test("TerminalTabPanel preserves wide tables with white-space:pre, wrap toggle, and external Show all button", () => {
+    const noop = () => {};
+    const longOutput = Array.from({ length: 45 }, (_, i) => `row-${i}`).join(
+      "\n",
+    );
+    const html = renderToStaticMarkup(
+      React.createElement(TerminalTabPanel, {
+        terminalCategory: "ALL",
+        onTerminalCategoryChange: noop,
+        terminalHistory: [
+          {
+            command: "harvest",
+            stdout: longOutput,
+            exitCode: 0,
+            durationMs: 4,
+            timestamp: 1700000000000,
+          },
+        ],
+        onClearHistory: noop,
+        copiedTerminalIdx: null,
+        onCopyOutput: noop,
+        copiedCommandIdx: null,
+        onCopyCommand: noop,
+        terminalLoading: false,
+        terminalBottomRef: { current: null },
+        terminalCommand: "",
+        onTerminalCommandChange: noop,
+        commandHistory: ["harvest"],
+        historyIndex: -1,
+        onHistoryIndexChange: noop,
+        onAutocomplete: noop,
+        onRunCommand: noop,
+      }),
+    );
+
+    expect(html).toContain('data-terminal-wrap-toggle="true"');
+    expect(html).toContain("PTY Engine Ready");
+    expect(html).not.toContain("(Bun v1.4.4)");
+
+    const outDivMatch =
+      /<div[^>]*data-terminal-output="true"[^>]*>/.exec(html)?.[0] ?? "";
+    expect(outDivMatch).toContain('data-terminal-wrap="off"');
+    expect(outDivMatch).toContain("white-space:pre");
+    expect(outDivMatch).toContain("overflow-x:auto");
+
+    const showAllIdx = html.indexOf("Show all 45 lines");
+    expect(showAllIdx).toBeGreaterThan(0);
+    const outputEndIdx = html.indexOf("… 5 more lines (Show all)");
+    expect(showAllIdx).toBeGreaterThan(outputEndIdx);
+  });
+
+  test("ErrorBoundary isolates runtime errors with recovery controls and resetKey auto-clear", () => {
+    const healthyHtml = renderToStaticMarkup(
+      React.createElement(
+        ErrorBoundary,
+        { panelName: "surveillance" },
+        React.createElement("div", null, "Healthy panel"),
+      ),
+    );
+    expect(healthyHtml).toContain("Healthy panel");
+    expect(healthyHtml).not.toContain('data-error-boundary="true"');
+
+    const boom = new TypeError("Hydration mismatch on panel row");
+    expect(ErrorBoundary.getDerivedStateFromError(boom)).toEqual({
+      error: boom,
+    });
+
+    const boundary = new ErrorBoundary({
+      children: null,
+      resetKey: "terminal",
+      panelName: "terminal",
+      onNavigateSafe: () => {},
+    });
+    boundary.state = {
+      error: boom,
+      componentStack: "\n    at TerminalTabPanel",
+    };
+
+    const fallbackHtml = renderToStaticMarkup(
+      React.createElement(React.Fragment, null, boundary.render()),
+    );
+    expect(fallbackHtml).toContain('role="alert"');
+    expect(fallbackHtml).toContain('data-error-boundary="true"');
+    expect(fallbackHtml).toContain("panel: terminal");
+    expect(fallbackHtml).toContain(
+      "TypeError: Hydration mismatch on panel row",
+    );
+    expect(fallbackHtml).toContain('data-error-boundary-retry="true"');
+    expect(fallbackHtml).toContain("Retry Panel");
+    expect(fallbackHtml).toContain('data-error-boundary-safe="true"');
+    expect(fallbackHtml).toContain("Return to Risk Overview");
+    expect(fallbackHtml).toContain("Reload Dashboard");
+    expect(fallbackHtml).toContain("autoExecute: false");
+
+    let recordedState: unknown = null;
+    boundary.setState = ((partial: unknown) => {
+      recordedState = partial;
+    }) as typeof boundary.setState;
+    boundary.componentDidUpdate({
+      children: null,
+      resetKey: "wagers",
+    });
+    expect(recordedState).toEqual({
+      error: null,
+      componentStack: null,
+    });
+  });
+
+  test("App renders interactive telemetry pills, structured footer, and clean cause helpers", () => {
+    const html = renderToStaticMarkup(React.createElement(App));
+    expect(html).toContain('data-local-spa-pill="true"');
+    expect(html).toContain("● Local :4022 SPA");
+    expect(html).toContain('data-daemon-status-btn="true"');
+    expect(html).toContain('data-dashboard-footer="true"');
+    expect(html).toContain('href="/health"');
+    expect(html).toContain('href="/status"');
+    expect(html).toContain('href="/tracker"');
+    expect(html).toContain('href="/governance"');
+    expect(html).toContain('href="/graph"');
+    expect(html).toContain('href="/live-bets"');
+
+    const toolbarStart = html.indexOf('class="sd-ops-telemetry-row"');
+    const toolbarEnd = html.indexOf('class="sd-tab-nav"');
+    const telemetrySlice = html.slice(toolbarStart, toolbarEnd);
+    expect(telemetrySlice).not.toContain("<span>·</span>");
+
+    expect(
+      summarizeDaemonDegradedCause({
+        online: true,
+        state: "degraded",
+        operationalStatus: "degraded",
+        url: "http://127.0.0.1:4020",
+        status: 200,
+        latencyMs: 5,
+        checkedAt: "2026-11-20T16:58:39.776Z",
+        reason: "GSLive session expired; R2 sink stale",
+        auth: {
+          f402: { status: "ok", source: "session-file", remediation: null },
+          gslive: {
+            status: "expired",
+            source: "keychain",
+            remediation: "set GSID",
+          },
+        },
+      }),
+    ).toBe("GSLive expired");
+
+    expect(
+      summarizeDaemonDegradedCause({
+        online: false,
+        state: "offline",
+        operationalStatus: "down",
+        url: "http://127.0.0.1:4020",
+        status: 503,
+        latencyMs: 12,
+        checkedAt: "2026-11-20T16:58:39.776Z",
+        auth: {
+          f402: {
+            status: "expired",
+            source: "session-file",
+            remediation: null,
+          },
+          gslive: { status: "expired", source: "keychain", remediation: null },
+        },
+      }),
+    ).toBe("F402 expired · GSLive expired");
+
+    expect(
+      summarizeDaemonDegradedCause({
+        online: true,
+        state: "degraded",
+        operationalStatus: "degraded",
+        url: "http://127.0.0.1:4020",
+        status: 200,
+        latencyMs: 4,
+        checkedAt: "2026-11-20T16:58:39.776Z",
+        reason: "R2 sink 'gslive-tally' publish is stale; retry",
+      }),
+    ).toBe("R2 sink 'gslive-tally' publish is stale");
+
+    expect(
+      summarizeDaemonDegradedCause({
+        online: true,
+        state: "online",
+        operationalStatus: "ok",
+        url: "http://127.0.0.1:4020",
+        status: 200,
+        latencyMs: 3,
+        checkedAt: "2026-11-20T16:58:39.776Z",
+      }),
+    ).toBeNull();
+
+    expect(formatFooterTimestamp("2026-11-20T16:58:39.776Z")).toEqual({
+      display: "2026-11-20 16:58:39 UTC",
+      title: "2026-11-20T16:58:39.776Z",
+    });
+    expect(formatFooterTimestamp(undefined)).toEqual({
+      display: "—",
+      title: "No snapshot timestamp yet",
+    });
   });
 });

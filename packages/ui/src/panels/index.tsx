@@ -50,6 +50,8 @@ export {
 export {
   RankingsTabPanel,
   type RankingsTabPanelProps,
+  type SeparatedTierClassification,
+  splitTierAndClassification,
 } from "./RankingsTabPanel.tsx";
 export {
   ShiftHandoffModal,

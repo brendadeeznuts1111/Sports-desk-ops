@@ -4,9 +4,13 @@
  */
 
 import {
+  decodeSignedCursor,
+  paginateArrayWithSignedCursor,
+  parseCursorPageLimit,
   parseFiniteNumber,
   parseRepriceMode,
   parseRouterAuditMode,
+  resolveCursorSecrets,
 } from "@sportsdesk-ops/backend";
 import {
   type DashboardWsTopic,
@@ -206,6 +210,13 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
   options: { readonly clients?: Set<TWs> | undefined } = {},
 ) {
   const clients = options.clients ?? new Set<TWs>();
+  const NO_STORE_HEADERS = { "Cache-Control": "no-store" } as const;
+  const cursorSecrets = resolveCursorSecrets(deps.cursorSecret);
+  const cursorErrorResponse = (error: "INVALID_CURSOR" | "INVALID_LIMIT") =>
+    Response.json(
+      { ok: false, error },
+      { status: 400, headers: NO_STORE_HEADERS },
+    );
   const { websocket, buildWsStatusPayload } =
     createDashboardWebSocketHandler(clients);
   const publishTopic = (topic: DashboardWsTopic, message: string): number =>
@@ -278,14 +289,88 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
     });
   };
 
+  const handleWagersRoute = async (
+    req: Request,
+    routeScope: "wagers" | "live-wagers",
+  ): Promise<Response> => {
+    const denied = await enforceAuth(req);
+    if (denied) return denied;
+    const url = new URL(req.url);
+    const rawCursor = url.searchParams.get("cursor");
+    const rawLimit = url.searchParams.get("limit");
+
+    if (rawCursor === null && rawLimit === null) {
+      return json(
+        req,
+        await withWagersTabPolicy(deps, await deps.getLiveWagersPayload()),
+      );
+    }
+
+    const scope = ["wagers", routeScope] as const;
+    if (parseCursorPageLimit(rawLimit, 50, 500) === null) {
+      return cursorErrorResponse("INVALID_LIMIT");
+    }
+    if (
+      rawCursor !== null &&
+      decodeSignedCursor(rawCursor, scope, cursorSecrets) === null
+    ) {
+      return cursorErrorResponse("INVALID_CURSOR");
+    }
+
+    const basePayload = await withWagersTabPolicy(
+      deps,
+      await deps.getLiveWagersPayload(),
+    );
+    const payloadObj =
+      typeof basePayload === "object" && basePayload !== null
+        ? (basePayload as Record<string, unknown>)
+        : {};
+    const wagers = Array.isArray(payloadObj.wagers) ? payloadObj.wagers : [];
+    const page = paginateArrayWithSignedCursor(wagers, {
+      rawLimit,
+      rawCursor,
+      scope,
+      secret: cursorSecrets,
+      defaultLimit: 50,
+      maxLimit: 500,
+    });
+    if (!page.ok) {
+      return cursorErrorResponse(page.error);
+    }
+    return json(req, {
+      ...payloadObj,
+      wagers: page.items,
+      pageInfo: page.pageInfo,
+    });
+  };
+
   const staticRoutes = {
     "/health": {
       GET: async (): Promise<Response> => {
         const payload = await deps.getHealthPayload();
         const telemetry = deps.getServerTelemetry?.();
         if (telemetry === undefined) return Response.json(payload);
+        let wsBackpressureBytes = 0;
+        for (const ws of clients) {
+          wsBackpressureBytes += ws.getBufferedAmount?.() ?? 0;
+        }
+        const rec = payload as Record<string, unknown>;
+        const existingServer =
+          typeof rec.server === "object" && rec.server !== null
+            ? (rec.server as Record<string, unknown>)
+            : null;
         return Response.json({
           ...payload,
+          ...(existingServer !== null
+            ? {
+                server: {
+                  ...existingServer,
+                  pendingRequests: telemetry.pendingRequests,
+                  pendingWebSockets: telemetry.pendingWebSockets,
+                  wsBackpressureBytes,
+                },
+              }
+            : {}),
           pendingRequests: telemetry.pendingRequests,
           pendingWebSockets: telemetry.pendingWebSockets,
         });
@@ -529,11 +614,75 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
             Number.isFinite(parsedLimit) && parsedLimit > 0
               ? Math.min(Math.trunc(parsedLimit), 25_000)
               : 100;
-          const { generatedAtIso, payload } = await deps.rankings.getAll(limit);
+          const rawCursor = url.searchParams.get("cursor");
+          const rawPageSize = url.searchParams.get("pageSize");
+
+          if (rawCursor === null && rawPageSize === null) {
+            const { generatedAtIso, payload } =
+              await deps.rankings.getAll(limit);
+            return await encodeResponse(req, {
+              version: `dev-rankings|${generatedAtIso}|${limit}`,
+              contentType: "application/json; charset=utf-8",
+              produce: () => textEncoder.encode(JSON.stringify(payload)),
+            });
+          }
+
+          const scope = ["rankings", "all"] as const;
+          const pageSize = parseCursorPageLimit(rawPageSize, 50, 500);
+          if (pageSize === null) {
+            return cursorErrorResponse("INVALID_LIMIT");
+          }
+          let offset = 0;
+          if (rawCursor !== null) {
+            const decoded = decodeSignedCursor(rawCursor, scope, cursorSecrets);
+            if (decoded === null) {
+              return cursorErrorResponse("INVALID_CURSOR");
+            }
+            offset = decoded;
+          }
+
+          const fetchLimit = Math.min(
+            25_000,
+            Math.max(limit, offset + pageSize + 1),
+          );
+          const { generatedAtIso, payload } =
+            await deps.rankings.getAll(fetchLimit);
+          const payloadObj =
+            typeof payload === "object" && payload !== null
+              ? (payload as Record<string, unknown>)
+              : {};
+          const arrayKey = Array.isArray(payloadObj.topRankedPlayers)
+            ? "topRankedPlayers"
+            : Array.isArray(payloadObj.players)
+              ? "players"
+              : null;
+          const sourceRows =
+            arrayKey !== null && Array.isArray(payloadObj[arrayKey])
+              ? (payloadObj[arrayKey] as unknown[])
+              : [];
+          const page = paginateArrayWithSignedCursor(sourceRows, {
+            rawLimit: String(pageSize),
+            rawCursor,
+            scope,
+            secret: cursorSecrets,
+            defaultLimit: 50,
+            maxLimit: 500,
+          });
+          if (!page.ok) {
+            return cursorErrorResponse(page.error);
+          }
+
           return await encodeResponse(req, {
-            version: `dev-rankings|${generatedAtIso}|${limit}`,
+            version: `dev-rankings|${generatedAtIso}|${fetchLimit}|${page.pageInfo.limit}|${page.offset}`,
             contentType: "application/json; charset=utf-8",
-            produce: () => textEncoder.encode(JSON.stringify(payload)),
+            produce: () =>
+              textEncoder.encode(
+                JSON.stringify({
+                  ...payloadObj,
+                  ...(arrayKey !== null ? { [arrayKey]: page.items } : {}),
+                  pageInfo: page.pageInfo,
+                }),
+              ),
           });
         } catch (err) {
           return Response.json(
@@ -561,24 +710,12 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
     },
 
     "/api/wagers": {
-      GET: async (req: Request): Promise<Response> => {
-        const denied = await enforceAuth(req);
-        if (denied) return denied;
-        return json(
-          req,
-          await withWagersTabPolicy(deps, await deps.getLiveWagersPayload()),
-        );
-      },
+      GET: (req: Request): Promise<Response> =>
+        handleWagersRoute(req, "wagers"),
     },
     "/api/live-wagers": {
-      GET: async (req: Request): Promise<Response> => {
-        const denied = await enforceAuth(req);
-        if (denied) return denied;
-        return json(
-          req,
-          await withWagersTabPolicy(deps, await deps.getLiveWagersPayload()),
-        );
-      },
+      GET: (req: Request): Promise<Response> =>
+        handleWagersRoute(req, "live-wagers"),
     },
 
     "/api/config/tiers": {
@@ -647,13 +784,53 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
         const statusParam = (
           url.searchParams.get("status") ?? "all"
         ).toLowerCase();
+        const rawCursor = url.searchParams.get("cursor");
+        const rawLimit = url.searchParams.get("limit");
+
+        if (rawCursor === null && rawLimit === null) {
+          const alerts = deps.alerts.list(statusParam);
+          return Response.json({
+            alerts,
+            total: alerts.length,
+            status: statusParam,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        const safeStatusScope = encodeURIComponent(statusParam) || "empty";
+        const scope = ["alerts", safeStatusScope] as const;
+        if (parseCursorPageLimit(rawLimit, 50, 200) === null) {
+          return cursorErrorResponse("INVALID_LIMIT");
+        }
+        if (
+          rawCursor !== null &&
+          decodeSignedCursor(rawCursor, scope, cursorSecrets) === null
+        ) {
+          return cursorErrorResponse("INVALID_CURSOR");
+        }
+
         const alerts = deps.alerts.list(statusParam);
-        return Response.json({
-          alerts,
-          total: alerts.length,
-          status: statusParam,
-          timestamp: new Date().toISOString(),
+        const page = paginateArrayWithSignedCursor(alerts, {
+          rawLimit,
+          rawCursor,
+          scope,
+          secret: cursorSecrets,
+          defaultLimit: 50,
+          maxLimit: 200,
         });
+        if (!page.ok) {
+          return cursorErrorResponse(page.error);
+        }
+        return Response.json(
+          {
+            alerts: page.items,
+            total: alerts.length,
+            status: statusParam,
+            pageInfo: page.pageInfo,
+            timestamp: new Date().toISOString(),
+          },
+          { headers: NO_STORE_HEADERS },
+        );
       },
     },
 
@@ -1059,6 +1236,9 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
     },
   } satisfies Record<string, SimpleMethodHandlers>;
 
+  const apiFallbackResponse = () =>
+    Response.json({ error: "Dashboard API route not found" }, { status: 404 });
+
   const paramRoutes = {
     "/api/alerts/:id/ack": {
       POST: async (
@@ -1151,9 +1331,13 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
       GET: async (
         req: RouteRequestWithParams<{ readonly id: string }>,
       ): Promise<Response> => {
+        const agentId = decodeURIComponent(req.params.id);
+        // `/api/agents/search` is a distinct daemon route (not an agent ID lookup).
+        if (agentId.trim().toLowerCase() === "search") {
+          return apiFallbackResponse();
+        }
         const denied = await enforceAuth(req);
         if (denied) return denied;
-        const agentId = decodeURIComponent(req.params.id);
         if (!deps.getAgentDetailPayload) {
           return Response.json({
             schemaVersion: 1,
@@ -1174,9 +1358,6 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
       },
     },
   } satisfies Record<string, IdParamMethodHandlers>;
-
-  const apiFallbackResponse = () =>
-    Response.json({ error: "Dashboard API route not found" }, { status: 404 });
 
   const routes = {
     ...staticRoutes,
@@ -1224,19 +1405,24 @@ export function createDashboardApi<TWs extends WsLike = WsLike>(
 
     const agentDetailMatch = /^\/api\/agents?\/([^/]+)$/.exec(url.pathname);
     if (agentDetailMatch?.[1]) {
-      const routeKey = url.pathname.startsWith("/api/agents/")
-        ? "/api/agents/:id"
-        : "/api/agent/:id";
-      const handlers = paramRoutes[routeKey] as IdParamMethodHandlers;
-      const handler =
-        handlers[method] ?? (method === "HEAD" ? handlers.GET : undefined);
-      if (!handler) return methodNotAllowed(handlers);
       const id = decodeURIComponent(agentDetailMatch[1]);
-      const reqWithParams = Object.assign(req, {
-        params: { id },
-      }) as RouteRequestWithParams<{ readonly id: string }>;
-      const response = await handler(reqWithParams);
-      return method === "HEAD" ? headOnly(response) : response;
+      const isPluralSearch =
+        url.pathname.startsWith("/api/agents/") &&
+        id.trim().toLowerCase() === "search";
+      if (!isPluralSearch) {
+        const routeKey = url.pathname.startsWith("/api/agents/")
+          ? "/api/agents/:id"
+          : "/api/agent/:id";
+        const handlers = paramRoutes[routeKey] as IdParamMethodHandlers;
+        const handler =
+          handlers[method] ?? (method === "HEAD" ? handlers.GET : undefined);
+        if (!handler) return methodNotAllowed(handlers);
+        const reqWithParams = Object.assign(req, {
+          params: { id },
+        }) as RouteRequestWithParams<{ readonly id: string }>;
+        const response = await handler(reqWithParams);
+        return method === "HEAD" ? headOnly(response) : response;
+      }
     }
 
     if (url.pathname.startsWith("/api/")) {

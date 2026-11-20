@@ -337,6 +337,9 @@ describe("Surveillance Alert Queue & DLQ Substrate (lib/alerts.ts)", () => {
     const r2 = await dispatcher.sweepOnce();
     expect(r2.sent).toBe(0);
     expect(sentAlerts.length).toBe(1);
+
+    const metricsAfterDelivery = getAlertHealthMetrics();
+    expect(typeof metricsAfterDelivery.lastDeliveryAt).toBe("string");
   });
 
   it("formats HTML alert safely without markdown escape fragility", () => {
@@ -368,6 +371,8 @@ describe("Surveillance Alert Queue & DLQ Substrate (lib/alerts.ts)", () => {
     const m1 = getAlertHealthMetrics();
     expect(m1.status).toBe("ok");
     expect(m1.backlog).toBe(0);
+    expect(m1.oldestQueuedAgeMs).toBe(0);
+    expect(m1.lastDeliveryAt).toBeNull();
 
     // 2. Queue an alert
     await enqueueAlert({
@@ -378,6 +383,7 @@ describe("Surveillance Alert Queue & DLQ Substrate (lib/alerts.ts)", () => {
     const m2 = getAlertHealthMetrics();
     expect(m2.backlog).toBe(1);
     expect(m2.status).toBe("ok");
+    expect(m2.oldestQueuedAgeMs).toBeGreaterThanOrEqual(0);
 
     // 3. When an alert enters dead-letter state, health degrades to degraded
     const _dId = await enqueueAlert({

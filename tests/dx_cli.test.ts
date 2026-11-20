@@ -409,3 +409,40 @@ describe("dx scripts", () => {
     expect(miss.stderr).toContain("no script name contains");
   });
 });
+
+describe("dx health & dev commands", () => {
+  test("dx health --help and dx dev --help exit 0 with flag docs", async () => {
+    const healthHelp = await dx(["health", "--help"]);
+    expect(healthHelp.code).toBe(0);
+    expect(healthHelp.stdout).toContain("--strict");
+    expect(healthHelp.stdout).toContain("--schedules");
+    expect(healthHelp.stderr).toBe("");
+
+    const devHelp = await dx(["dev", "--help"]);
+    expect(devHelp.code).toBe(0);
+    expect(devHelp.stdout).toContain("--companion");
+    expect(devHelp.stdout).toContain("--print-url");
+    expect(devHelp.stderr).toBe("");
+  });
+
+  test("dx dev --port 4024 --tab risk-overview --matrix --print-url prints canonical URL", async () => {
+    const res = await dx([
+      "dev",
+      "--port",
+      "4024",
+      "--tab",
+      "risk-overview",
+      "--matrix",
+      "--print-url",
+    ]);
+    expect(res.code).toBe(0);
+    expect(res.stdout.trim()).toBe(
+      "http://127.0.0.1:4024/?matrix=1#risk-overview",
+    );
+    expect(res.stderr).toBe("");
+
+    const bad = await dx(["dev", "--tab", "not-a-tab"]);
+    expect(bad.code).toBe(2);
+    expect(bad.stderr).toContain('unknown tab "not-a-tab"');
+  });
+});

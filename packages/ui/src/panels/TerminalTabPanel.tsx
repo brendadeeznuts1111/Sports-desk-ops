@@ -15,12 +15,13 @@ import type { TerminalCategory, TerminalHistoryEntry } from "../types.ts";
 const TERMINAL_OUTPUT_PREVIEW_LINES = 40;
 
 const ENTRY_ACTION_STYLE: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  color: "#64748b",
+  backgroundColor: "rgba(15, 23, 42, 0.6)",
+  border: "1px solid rgba(51, 65, 85, 0.7)",
+  borderRadius: "4px",
+  color: "#94a3b8",
   cursor: "pointer",
   fontSize: "11px",
-  padding: "0 4px",
+  padding: "2px 6px",
 };
 
 export interface TerminalTabPanelProps {
@@ -80,6 +81,8 @@ const QUICK_TERMINAL_CHIPS: readonly {
     cat: "RISK",
   },
   { label: "🌐 ws", cmd: "ws", cat: "NET" },
+  { label: "🩺 health", cmd: "health --alerts", cat: "NET" },
+  { label: "📋 status", cmd: "status --schedules", cat: "NET" },
   { label: "🌐 d fantasy402.com", cmd: "d fantasy402.com", cat: "NET" },
   { label: "🛡️ r 1.1.1.1", cmd: "r 1.1.1.1", cat: "NET" },
   { label: "👤 w", cmd: "w", cat: "NET" },
@@ -108,6 +111,7 @@ export function TerminalTabPanel({
 }: TerminalTabPanelProps): React.ReactElement {
   const [pinnedToLatest, setPinnedToLatest] = useState<boolean>(true);
   const [expandedEntries, setExpandedEntries] = useState<readonly number[]>([]);
+  const [wrapLines, setWrapLines] = useState<boolean>(false);
   const [filter, setFilter] = useState<string>("");
   const [suggestionIndex, setSuggestionIndex] = useState<number>(0);
   const [paletteDismissed, setPaletteDismissed] = useState<boolean>(false);
@@ -298,8 +302,29 @@ export function TerminalTabPanel({
                 "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
             }}
           >
-            ● PTY Engine Ready (Bun v1.4.4)
+            ● PTY Engine Ready
           </span>
+          <button
+            type="button"
+            data-terminal-wrap-toggle="true"
+            aria-pressed={wrapLines}
+            style={{
+              ...styles.actionBtn,
+              padding: "3px 8px",
+              fontSize: "11px",
+              ...(wrapLines
+                ? {
+                    backgroundColor: "rgba(56, 189, 248, 0.16)",
+                    border: "1px solid rgba(56, 189, 248, 0.45)",
+                    color: "#7dd3fc",
+                  }
+                : {}),
+            }}
+            onClick={() => setWrapLines((prev) => !prev)}
+            title="Toggle line wrapping (off preserves box-drawing tables via horizontal scroll)"
+          >
+            {wrapLines ? "↩ Wrap: On" : "↔ Wrap: Off"}
+          </button>
           <button
             type="button"
             style={{
@@ -438,6 +463,7 @@ export function TerminalTabPanel({
       {/* Scrollable Terminal Screen */}
       <div
         ref={bodyRef}
+        className="sd-terminal-body"
         data-terminal-body="true"
         onScroll={handleBodyScroll}
         style={styles.terminalBody}
@@ -467,6 +493,17 @@ export function TerminalTabPanel({
                   style={{
                     fontSize: "10px",
                     fontWeight: 700,
+                    padding: "1px 6px",
+                    borderRadius: "4px",
+                    border: `1px solid ${
+                      item.exitCode === 0
+                        ? "rgba(74, 222, 128, 0.35)"
+                        : "rgba(248, 113, 113, 0.35)"
+                    }`,
+                    backgroundColor:
+                      item.exitCode === 0
+                        ? "rgba(34, 197, 94, 0.12)"
+                        : "rgba(239, 68, 68, 0.14)",
                     color: item.exitCode === 0 ? "#4ade80" : "#f87171",
                   }}
                 >
@@ -498,22 +535,54 @@ export function TerminalTabPanel({
                 </button>
               </div>
             </div>
-            <div style={styles.terminalOutput}>
+            <div
+              className="sd-terminal-output"
+              data-terminal-output="true"
+              data-terminal-wrap={wrapLines ? "on" : "off"}
+              style={
+                wrapLines
+                  ? {
+                      ...styles.terminalOutput,
+                      whiteSpace: "pre-wrap",
+                      overflowX: "hidden",
+                      wordBreak: "break-word",
+                      lineHeight: "1.45",
+                    }
+                  : styles.terminalOutput
+              }
+            >
               {renderAnsiReact(visibleOutput(idx, item.stdout))}
-              {!filterResult.active &&
-                item.stdout.split("\n").length >
-                  TERMINAL_OUTPUT_PREVIEW_LINES && (
+            </div>
+            {!filterResult.active &&
+              item.stdout.split("\n").length >
+                TERMINAL_OUTPUT_PREVIEW_LINES && (
+                <div
+                  style={{
+                    padding: "6px 12px 10px",
+                    borderTop: "1px solid rgba(30, 41, 59, 0.6)",
+                    backgroundColor: "rgba(15, 23, 42, 0.45)",
+                  }}
+                >
                   <button
                     type="button"
-                    style={{ ...ENTRY_ACTION_STYLE, marginTop: "6px" }}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: "5px",
+                      border: "1px solid rgba(56, 189, 248, 0.35)",
+                      backgroundColor: "rgba(56, 189, 248, 0.12)",
+                      color: "#7dd3fc",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
                     onClick={() => toggleEntry(idx)}
                   >
                     {expandedEntries.includes(idx)
                       ? "Collapse output"
                       : `Show all ${item.stdout.split("\n").length} lines`}
                   </button>
-                )}
-            </div>
+                </div>
+              )}
           </div>
         ))}
 

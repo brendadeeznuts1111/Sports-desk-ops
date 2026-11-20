@@ -154,6 +154,7 @@ export interface ReconstructedAlertState {
   retrySchedules: Map<string, number>;
   queued: Map<string, QueuedAlert>;
   surveilledWagers: Set<string>;
+  lastDeliveryAt: string | null;
 }
 
 /**
@@ -168,6 +169,7 @@ export function recoverAlertState(now = new Date()): ReconstructedAlertState {
   const retrySchedules = new Map<string, number>();
   const queued = new Map<string, QueuedAlert>();
   const surveilledWagers = new Set<string>();
+  let lastDeliveryAt: string | null = null;
 
   const daysToScan = Math.max(2, Math.ceil(RECOVERY_WINDOW_SEC / 86400));
   const dates: Date[] = [];
@@ -203,6 +205,7 @@ export function recoverAlertState(now = new Date()): ReconstructedAlertState {
     if (entry.category === "alert_delivered") {
       delivered.add(deliveryId);
       queued.delete(deliveryId);
+      lastDeliveryAt = entry.ts;
     } else if (entry.category === "alert_dead") {
       dead.add(deliveryId);
       queued.delete(deliveryId);
@@ -249,7 +252,23 @@ export function recoverAlertState(now = new Date()): ReconstructedAlertState {
     retrySchedules,
     queued,
     surveilledWagers,
+    lastDeliveryAt,
   };
+}
+
+function computeOldestQueuedAgeMs(
+  queued: ReadonlyMap<string, QueuedAlert>,
+  nowMs: number,
+): number {
+  if (queued.size === 0) return 0;
+  let minTs = Number.POSITIVE_INFINITY;
+  for (const record of queued.values()) {
+    const parsed = Date.parse(record.createdAt);
+    if (Number.isFinite(parsed) && parsed < minTs) {
+      minTs = parsed;
+    }
+  }
+  return Number.isFinite(minTs) ? Math.max(0, nowMs - minTs) : 0;
 }
 
 const inMemorySurveilledTickets = new Set<string>();
@@ -472,6 +491,8 @@ export class AlertDispatcher {
     const dead = state.dead.size;
     const backlog = state.queued.size;
     const acknowledged = state.acknowledged.size;
+    const oldestQueuedAgeMs = computeOldestQueuedAgeMs(state.queued, now);
+    const lastDeliveryAt = state.lastDeliveryAt;
     const status: "ok" | "warning" | "degraded" =
       dead > 0 ? "degraded" : backlog > 10 ? "warning" : "ok";
 
@@ -482,6 +503,8 @@ export class AlertDispatcher {
       dead,
       backlog,
       acknowledged,
+      oldestQueuedAgeMs,
+      lastDeliveryAt,
     };
     this.lastMetricsSync = now;
     return this.liveMetrics;
@@ -537,7 +560,9 @@ export interface AlertHealthMetrics {
   delivered: number;
   dead: number;
   backlog: number;
-  acknowledged?: number | undefined;
+  acknowledged: number;
+  oldestQueuedAgeMs: number;
+  lastDeliveryAt: string | null;
 }
 
 /**
@@ -555,6 +580,11 @@ export function getAlertHealthMetrics(now = new Date()): AlertHealthMetrics {
   const dead = state.dead.size;
   const backlog = state.queued.size;
   const acknowledged = state.acknowledged.size;
+  const oldestQueuedAgeMs = computeOldestQueuedAgeMs(
+    state.queued,
+    now.getTime(),
+  );
+  const lastDeliveryAt = state.lastDeliveryAt;
 
   const status: "ok" | "warning" | "degraded" =
     dead > 0 ? "degraded" : backlog > 10 ? "warning" : "ok";
@@ -566,6 +596,8 @@ export function getAlertHealthMetrics(now = new Date()): AlertHealthMetrics {
     dead,
     backlog,
     acknowledged,
+    oldestQueuedAgeMs,
+    lastDeliveryAt,
   };
 }
 

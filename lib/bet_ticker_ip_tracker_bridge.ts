@@ -44,7 +44,6 @@ export interface RawWebLogMatcherRow {
 
 export interface WebLogWireRequestParams {
   readonly agentID: string;
-  readonly agentOwner: string;
   readonly customerID: string;
   readonly start: string;
   readonly end: string;
@@ -53,6 +52,7 @@ export interface WebLogWireRequestParams {
   readonly ip: string;
   readonly operation: "getWebLog";
   readonly RRO: "1";
+  readonly agentOwner: string;
 }
 
 export interface OfficeIpClusterSummary {
@@ -103,11 +103,13 @@ export function formatWebLogDateForMode(
  */
 export function buildPerOfficeIpMatcherPayload(options: {
   masterAgentId?: string;
+  agentOwner?: string;
   officeAgentId?: string | null; // Pass AgentLogin (e.g. "MJ2026", "CUB22HR", "BIGDAD") for per-office match, or null/"0" for master global
   startDateMdy?: string;
   endDateMdy?: string;
 }): WebLogWireRequestParams {
   const master = (options.masterAgentId ?? "BILLY666").trim().toUpperCase();
+  const agentOwner = (options.agentOwner ?? master).trim();
   const officeTarget =
     options.officeAgentId &&
     options.officeAgentId.trim() !== "" &&
@@ -122,7 +124,6 @@ export function buildPerOfficeIpMatcherPayload(options: {
 
   return {
     agentID: master,
-    agentOwner: master,
     customerID: officeTarget,
     start,
     end,
@@ -131,6 +132,7 @@ export function buildPerOfficeIpMatcherPayload(options: {
     ip: "",
     operation: "getWebLog",
     RRO: "1",
+    agentOwner,
   };
 }
 
@@ -139,27 +141,31 @@ export function buildPerOfficeIpMatcherPayload(options: {
  */
 export function buildPlayerIpMatcherPayload(options: {
   masterAgentId?: string;
+  agentOwner?: string;
   customerLogin: string;
   startDate?: string;
   endDate?: string;
+  ip?: string;
 }): WebLogWireRequestParams {
   const master = (options.masterAgentId ?? "BILLY666").trim().toUpperCase();
+  const agentOwner = (options.agentOwner ?? master).trim();
   const cleanLogin = options.customerLogin
     .trim()
     .toUpperCase()
     .replace(/\.$/, "")
     .replace(/^\./, "");
+  const ip = options.ip ?? cleanLogin.toLowerCase();
   return {
     agentID: master,
-    agentOwner: master,
     customerID: cleanLogin,
     start: formatWebLogDateForMode(options.startDate ?? "10/31/2026", "C"),
     end: formatWebLogDateForMode(options.endDate ?? "10/31/2026", "C"),
     type: "C",
     actions: "ALL",
-    ip: "",
+    ip,
     operation: "getWebLog",
     RRO: "1",
+    agentOwner,
   };
 }
 

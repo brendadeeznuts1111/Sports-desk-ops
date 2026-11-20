@@ -62,6 +62,16 @@ describe("dashboard header", () => {
     expect(html).toContain('data-dashboard-section="risk-overview"');
     expect(html).toContain("scroll-margin-top:96px");
   });
+
+  test("the workspace tab bar and primary nav agree on Risk Overview", () => {
+    const tab =
+      /<button[^>]*data-tab-id="surveillance"[^>]*>[\s\S]*?<\/button>/.exec(
+        html,
+      )?.[0] ?? "";
+    expect(tab).toContain('aria-pressed="true"');
+    expect(tab).toContain("Risk Overview");
+    expect(html).not.toContain("📊 Telemetry");
+  });
 });
 
 describe("section hashes are routes", () => {

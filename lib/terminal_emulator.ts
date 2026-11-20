@@ -53,6 +53,13 @@ import {
 } from "./downline_trunks.ts";
 import { harvestLiveCustomerProfiles } from "./live_profile_harvester.ts";
 import { resolveTerminalCustomer } from "./terminal_customer_resolve.ts";
+import {
+  buildHealthJsonPayload,
+  formatHealthReportAnsi,
+  healthHelpText,
+  parseHealthCliArgs,
+  probeSportsDeskHealth,
+} from "./health_cli.ts";
 import { TIER, SURFACE, composite, type WagerTier } from "./wager_tokens.ts";
 
 const FG = (c: string) =>
@@ -142,6 +149,17 @@ function getCachedRanking(): Promise<BatchedRankingResult> {
 
 export interface TerminalQueryOptions extends SpawnInPtyOptions {
   readonly timeoutMs?: number;
+  readonly getHealthPayload?:
+    | (() => Promise<Record<string, unknown>> | Record<string, unknown>)
+    | undefined;
+  readonly getStatusPayload?:
+    | (() =>
+        | Promise<Record<string, unknown> | null>
+        | Record<string, unknown>
+        | null)
+    | undefined;
+  readonly dashboardOrigin?: string | undefined;
+  readonly companionOrigin?: string | undefined;
 }
 
 export interface TerminalQueryResult {
@@ -300,6 +318,12 @@ export const COMMAND_ALIASES: Readonly<Record<string, string>> = {
   capabilities: "capabilities",
   caps: "capabilities",
   features: "capabilities",
+  health: "health",
+  hlth: "health",
+  probe: "health",
+  status: "status",
+  st: "status",
+  ops: "status",
   harvest: "harvest",
   hv: "harvest",
   anomalies: "harvest",
@@ -332,6 +356,8 @@ export const AUTOCOMPLETE_COMMANDS: readonly string[] = [
   "cron",
   "markdown",
   "capabilities",
+  "health",
+  "status",
   "clear",
   "help",
   "--help",
@@ -354,6 +380,8 @@ export const AUTOCOMPLETE_COMMANDS: readonly string[] = [
   "t",
   "cr",
   "md",
+  "hlth",
+  "st",
   "cls",
   "h",
   "kb",
@@ -372,7 +400,7 @@ export const KEYBINDINGS_REFERENCE = [
     key: "Ctrl + 1",
     desc: "Switch to Showcase & Multi-Dimensional Matrix tab",
   },
-  { key: "Ctrl + 2", desc: "Switch to Live Surveillance & IP Forensics tab" },
+  { key: "Ctrl + 2", desc: "Switch to Risk Overview & Telemetry tab" },
   { key: "Ctrl + 3", desc: "Switch to Interactive Terminal Emulator tab" },
   { key: "Ctrl + L", desc: "Clear terminal screen buffer" },
   { key: "Ctrl + C", desc: "Cancel / clear current terminal input line" },
@@ -1604,7 +1632,12 @@ async function runMarkdownTerminalCommand(
   startedAt: number,
 ): Promise<TerminalQueryResult> {
   const argTokens = tokenizeMarkdownArgs(trimmed);
-  const parsed = parseAnsiMarkdownCliArgs(argTokens.map((t) => t.text));
+  // The dashboard web terminal renders full 24-bit ANSI & OSC 8 hyperlinks even when
+  // the server process runs headless (TERM="dumb"), unless --no-color/--theme=mono overrides it.
+  const parsed = parseAnsiMarkdownCliArgs(
+    argTokens.map((t) => t.text),
+    { defaultColors: true, defaultLight: false },
+  );
 
   const callerColumns =
     parsed.themeOptions.columns === undefined &&
@@ -2654,6 +2687,86 @@ async function executeTerminalQueryInner(
       command: trimmed,
       stdout,
       exitCode: 0,
+      durationMs: Date.now() - startedAt,
+      timestamp: startedAt,
+    };
+  }
+
+  // Quick Command: Structured /health (schemaVersion: 1) and /status diagnostics
+  if (canonicalCmd === "health" || canonicalCmd === "status") {
+    const wantsHelp = cmdArgs.includes("--help") || cmdArgs.includes("-h");
+    const effectiveArgs =
+      canonicalCmd === "status" && !wantsHelp
+        ? ["--status", ...cmdArgs]
+        : [...cmdArgs];
+    const parsed = parseHealthCliArgs(effectiveArgs);
+    if (!parsed.ok) {
+      return {
+        command: trimmed,
+        stdout: `\x1b[31m${parsed.error}\x1b[0m`,
+        exitCode: 2,
+        durationMs: Date.now() - startedAt,
+        timestamp: startedAt,
+      };
+    }
+    if (parsed.flags.help) {
+      return {
+        command: trimmed,
+        stdout: healthHelpText(),
+        exitCode: 0,
+        durationMs: Date.now() - startedAt,
+        timestamp: startedAt,
+      };
+    }
+    if (parsed.flags.watch) {
+      return {
+        command: trimmed,
+        stdout:
+          "\x1b[33m[HEALTH_CLI] --watch is only available in an interactive shell (use `./bin/dx health --watch`).\x1b[0m",
+        exitCode: 2,
+        durationMs: Date.now() - startedAt,
+        timestamp: startedAt,
+      };
+    }
+
+    const effectiveFlags = {
+      ...parsed.flags,
+      url: parsed.flags.hasExplicitDashboardTarget
+        ? parsed.flags.url
+        : (options.dashboardOrigin ?? parsed.flags.url),
+      daemonUrl: parsed.flags.hasExplicitDaemonTarget
+        ? parsed.flags.daemonUrl
+        : (options.companionOrigin ?? parsed.flags.daemonUrl),
+    };
+    const localHealthPayload =
+      !effectiveFlags.hasExplicitDashboardTarget &&
+      !effectiveFlags.daemonOnly &&
+      options.getHealthPayload
+        ? await options.getHealthPayload()
+        : undefined;
+    const localStatusPayload =
+      !effectiveFlags.hasExplicitDashboardTarget &&
+      !effectiveFlags.daemonOnly &&
+      (effectiveFlags.status || effectiveFlags.schedules) &&
+      options.getStatusPayload
+        ? await options.getStatusPayload()
+        : undefined;
+
+    const report = await probeSportsDeskHealth(effectiveFlags, {
+      localHealthPayload,
+      localStatusPayload,
+    });
+    const stdout = effectiveFlags.json
+      ? JSON.stringify(buildHealthJsonPayload(report), null, 2)
+      : formatHealthReportAnsi(report, {
+          color: !effectiveFlags.noColor,
+          alerts: effectiveFlags.alerts,
+          schedules: effectiveFlags.schedules,
+        });
+    return {
+      command: trimmed,
+      stdout,
+      exitCode: report.exitCode,
       durationMs: Date.now() - startedAt,
       timestamp: startedAt,
     };

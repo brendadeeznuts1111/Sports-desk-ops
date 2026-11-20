@@ -14,6 +14,8 @@ describe("resolveInitialTab", () => {
     expect(resolveInitialTab("", "/live-bets")).toBe("wagers");
     expect(resolveInitialTab("", "/bet-ticker")).toBe("bet-ticker");
     expect(resolveInitialTab("", "/surveillance")).toBe("surveillance");
+    expect(resolveInitialTab("", "/risk-overview")).toBe("surveillance");
+    expect(resolveInitialTab("", "/telemetry")).toBe("surveillance");
   });
 
   test("works under the /app mount", () => {

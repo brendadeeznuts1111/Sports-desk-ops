@@ -10,6 +10,57 @@ import { PopulationStrip } from "./PopulationStrip.tsx";
 
 export type RankingsSourceStatus = "pending" | "ready" | "unavailable";
 
+export interface SeparatedTierClassification {
+  readonly tierLabelShort: string;
+  readonly classification: string;
+}
+
+/**
+ * Split combined rankings metadata (`tier` / `tierLabel`) into separate
+ * Classification text and Tier label values for distinct table columns.
+ */
+export function splitTierAndClassification(
+  tier: string,
+  tierLabel: string,
+): SeparatedTierClassification {
+  const rawTier = tier.trim();
+  const rawLabel = tierLabel.trim();
+
+  // Standard format: "Tier 3: Disciplined Sharp" or "Tier 2 - Steam Syndicate"
+  const prefixed = /^(Tier\s+\d+)\s*[:\-–—]\s*(.+)$/i.exec(rawLabel);
+  if (prefixed) {
+    const num = /\d+/.exec(prefixed[1] ?? "")?.[0];
+    return {
+      tierLabelShort: num ? `Tier ${num}` : prefixed[1]!.trim(),
+      classification: prefixed[2]!.trim(),
+    };
+  }
+
+  // Parse tier code such as "TIER_3" or "TIER_3_SHARP_DISCIPLINED"
+  const codeMatch = /^TIER_(\d+)(?:_(.+))?$/i.exec(rawTier);
+  const tierLabelShort = codeMatch ? `Tier ${codeMatch[1]}` : rawTier || "—";
+
+  if (
+    rawLabel &&
+    rawLabel.toUpperCase() !== rawTier.toUpperCase() &&
+    !/^Tier\s+\d+$/i.test(rawLabel)
+  ) {
+    return { tierLabelShort, classification: rawLabel };
+  }
+
+  if (codeMatch?.[2]) {
+    const humanized = codeMatch[2]
+      .split("_")
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+    return { tierLabelShort, classification: humanized };
+  }
+
+  // Signal Honesty: if the source carried only a tier code with no classification text, show "—"
+  return { tierLabelShort, classification: "—" };
+}
+
 export interface RankingsTabPanelProps {
   readonly rankingsSearch: string;
   readonly onRankingsSearchChange: (value: string) => void;
@@ -315,7 +366,8 @@ export function RankingsTabPanel({
                 <th style={styles.th}>Stake Gini</th>
                 <th style={styles.th}>Alert Rate</th>
                 <th style={styles.th}>Composite Score</th>
-                <th style={styles.th}>Classification & Tier</th>
+                <th style={styles.th}>Classification</th>
+                <th style={styles.th}>Tier</th>
                 <th style={styles.th}>Risk Directives</th>
                 <th style={styles.th}>Actions</th>
               </tr>
@@ -324,7 +376,7 @@ export function RankingsTabPanel({
               {players.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={12}
                     data-rankings-empty="players"
                     style={{
                       ...styles.td,
@@ -340,188 +392,212 @@ export function RankingsTabPanel({
                   </td>
                 </tr>
               ) : null}
-              {pagedPlayers.map((p) => (
-                <tr key={p.id}>
-                  <td style={styles.td}>
-                    <span style={{ fontWeight: 700, color: "#38bdf8" }}>
-                      #{p.rank}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      <a
-                        href={getLocalCustomerHref(p.id)}
-                        onClick={(e) => {
-                          if (
-                            onSelectCustomerById &&
-                            !e.metaKey &&
-                            !e.ctrlKey &&
-                            e.button === 0
-                          ) {
-                            e.preventDefault();
-                            onSelectCustomerById(p.id);
-                          }
-                        }}
-                        style={{
-                          ...styles.custLogin,
-                          textDecoration: "none",
-                        }}
-                        title="Inspect Customer in SportsDesk Profiles"
-                      >
-                        {p.id}
-                      </a>
-                      <a
-                        href={`https://fantasy402.com/manager.html?customer=${p.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          color: "#64748b",
-                          textDecoration: "none",
-                          fontSize: "11px",
-                        }}
-                        title="Open in external Fantasy402 Manager Portal (requires active F402 session)"
-                      >
-                        ↗
-                      </a>
-                      {p.isProxy && (
-                        <span
-                          style={{
-                            fontSize: "9px",
-                            padding: "1px 5px",
-                            borderRadius: "3px",
-                            backgroundColor: "rgba(239, 68, 68, 0.2)",
-                            border: "1px solid #ef4444",
-                            color: "#ef4444",
-                            fontWeight: 700,
-                          }}
-                        >
-                          PROXY
-                        </span>
-                      )}
-                    </div>
-                    <div style={styles.custSub}>{p.dominantSport}</div>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={{ fontWeight: 600 }}>
-                      <a
-                        href={getLocalAgentHref(p.agentId)}
-                        onClick={(e) => {
-                          if (
-                            onSelectAgent &&
-                            !e.metaKey &&
-                            !e.ctrlKey &&
-                            e.button === 0
-                          ) {
-                            e.preventDefault();
-                            onSelectAgent(p.agentId);
-                          }
-                        }}
-                        style={{
-                          color: "#38bdf8",
-                          textDecoration: "none",
-                        }}
-                        title="Open SportsDesk Agent Inspector"
-                      >
-                        {p.agentId} ↗
-                      </a>
-                    </div>
-                    <div style={styles.custSub}>Master: {p.masterAgent}</div>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={{ fontWeight: 600 }}>
-                      ${p.handleUsd.toLocaleString()}
-                    </div>
-                    <div style={styles.custSub}>
-                      Avg:{" "}
-                      {p.wagers > 0
-                        ? `$${(p.handleUsd / p.wagers).toFixed(0)}`
-                        : "—"}
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    <div>{p.wagers}</div>
-                  </td>
-                  <td style={styles.td}>
-                    <span
-                      style={{
-                        color: p.gini <= 0.15 ? "#4ade80" : "#f59e0b",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {p.gini.toFixed(3)}
-                    </span>
-                    <div style={styles.custSub}>
-                      {p.gini <= 0.15 ? "Flat-Unit" : "Variable"}
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    <span
-                      style={{
-                        color: p.alertRate >= 50 ? "#ef4444" : "#94a3b8",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {p.alertRate}%
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <span
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: 700,
-                        color: p.score >= 7.0 ? "#f59e0b" : "#38bdf8",
-                      }}
-                    >
-                      {p.score.toFixed(2)}
-                    </span>
-                    {typeof p.clvBps === "number" &&
-                    Number.isFinite(p.clvBps) ? (
+              {pagedPlayers.map((p) => {
+                const { tierLabelShort, classification } =
+                  splitTierAndClassification(p.tier, p.tierLabel);
+                return (
+                  <tr key={p.id}>
+                    <td style={styles.td}>
+                      <span style={{ fontWeight: 700, color: "#38bdf8" }}>
+                        #{p.rank}
+                      </span>
+                    </td>
+                    <td style={styles.td}>
                       <div
                         style={{
-                          ...styles.custSub,
-                          color:
-                            p.clvBps > 0
-                              ? "#4ade80"
-                              : p.clvBps < 0
-                                ? "#f87171"
-                                : "#94a3b8",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
                         }}
                       >
-                        CLV: {p.clvBps > 0 ? `+${p.clvBps}` : `${p.clvBps}`} bps
+                        <a
+                          href={getLocalCustomerHref(p.id)}
+                          onClick={(e) => {
+                            if (
+                              onSelectCustomerById &&
+                              !e.metaKey &&
+                              !e.ctrlKey &&
+                              e.button === 0
+                            ) {
+                              e.preventDefault();
+                              onSelectCustomerById(p.id);
+                            }
+                          }}
+                          style={{
+                            ...styles.custLogin,
+                            textDecoration: "none",
+                          }}
+                          title="Inspect Customer in SportsDesk Profiles"
+                        >
+                          {p.id}
+                        </a>
+                        <a
+                          href={`https://fantasy402.com/manager.html?customer=${p.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            color: "#64748b",
+                            textDecoration: "none",
+                            fontSize: "11px",
+                          }}
+                          title="Open in external Fantasy402 Manager Portal (requires active F402 session)"
+                        >
+                          ↗
+                        </a>
+                        {p.isProxy && (
+                          <span
+                            style={{
+                              fontSize: "9px",
+                              padding: "1px 5px",
+                              borderRadius: "3px",
+                              backgroundColor: "rgba(239, 68, 68, 0.2)",
+                              border: "1px solid #ef4444",
+                              color: "#ef4444",
+                              fontWeight: 700,
+                            }}
+                          >
+                            PROXY
+                          </span>
+                        )}
                       </div>
-                    ) : null}
-                  </td>
-                  <td style={styles.td}>
-                    <span style={styles.tierBadge(p.tier)}>{p.tierLabel}</span>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={{ fontSize: "11px", color: "#f87171" }}>
-                      Limit: ${p.limitUsd.toLocaleString()}
-                    </div>
-                    <div style={styles.custSub}>Live Delay: 2-3s</div>
-                  </td>
-                  <td style={styles.td}>
-                    <button
-                      type="button"
-                      style={{
-                        ...styles.actionBtn,
-                        padding: "4px 8px",
-                        fontSize: "11px",
-                        cursor: "pointer",
-                      }}
-                      onClick={() => onInspectPty(p.id)}
-                    >
-                      Inspect PTY
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                      <div style={styles.custSub}>{p.dominantSport}</div>
+                    </td>
+                    <td style={styles.td}>
+                      <div style={{ fontWeight: 600 }}>
+                        <a
+                          href={getLocalAgentHref(p.agentId)}
+                          onClick={(e) => {
+                            if (
+                              onSelectAgent &&
+                              !e.metaKey &&
+                              !e.ctrlKey &&
+                              e.button === 0
+                            ) {
+                              e.preventDefault();
+                              onSelectAgent(p.agentId);
+                            }
+                          }}
+                          style={{
+                            color: "#38bdf8",
+                            textDecoration: "none",
+                          }}
+                          title="Open SportsDesk Agent Inspector"
+                        >
+                          {p.agentId} ↗
+                        </a>
+                      </div>
+                      <div style={styles.custSub}>Master: {p.masterAgent}</div>
+                    </td>
+                    <td style={styles.td}>
+                      <div style={{ fontWeight: 600 }}>
+                        ${p.handleUsd.toLocaleString()}
+                      </div>
+                      <div style={styles.custSub}>
+                        Avg:{" "}
+                        {p.wagers > 0
+                          ? `$${(p.handleUsd / p.wagers).toFixed(0)}`
+                          : "—"}
+                      </div>
+                    </td>
+                    <td style={styles.td}>
+                      <div>{p.wagers}</div>
+                    </td>
+                    <td style={styles.td}>
+                      <span
+                        style={{
+                          color: p.gini <= 0.15 ? "#4ade80" : "#f59e0b",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {p.gini.toFixed(3)}
+                      </span>
+                      <div style={styles.custSub}>
+                        {p.gini <= 0.15 ? "Flat-Unit" : "Variable"}
+                      </div>
+                    </td>
+                    <td style={styles.td}>
+                      <span
+                        style={{
+                          color: p.alertRate >= 50 ? "#ef4444" : "#94a3b8",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {p.alertRate}%
+                      </span>
+                    </td>
+                    <td style={styles.td}>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: 700,
+                          color: p.score >= 7.0 ? "#f59e0b" : "#38bdf8",
+                        }}
+                      >
+                        {p.score.toFixed(2)}
+                      </span>
+                      {typeof p.clvBps === "number" &&
+                      Number.isFinite(p.clvBps) ? (
+                        <div
+                          style={{
+                            ...styles.custSub,
+                            color:
+                              p.clvBps > 0
+                                ? "#4ade80"
+                                : p.clvBps < 0
+                                  ? "#f87171"
+                                  : "#94a3b8",
+                          }}
+                        >
+                          CLV: {p.clvBps > 0 ? `+${p.clvBps}` : `${p.clvBps}`}{" "}
+                          bps
+                        </div>
+                      ) : null}
+                    </td>
+                    <td style={styles.td} data-ranking-classification="true">
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: "#e2e8f0",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {classification}
+                      </span>
+                    </td>
+                    <td style={styles.td} data-ranking-tier="true">
+                      <span
+                        style={{
+                          ...styles.tierBadge(p.tier),
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {tierLabelShort}
+                      </span>
+                    </td>
+                    <td style={styles.td}>
+                      <div style={{ fontSize: "11px", color: "#f87171" }}>
+                        Limit: ${p.limitUsd.toLocaleString()}
+                      </div>
+                      <div style={styles.custSub}>Live Delay: 2-3s</div>
+                    </td>
+                    <td style={styles.td}>
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.actionBtn,
+                          padding: "4px 8px",
+                          fontSize: "11px",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => onInspectPty(p.id)}
+                      >
+                        Inspect PTY
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

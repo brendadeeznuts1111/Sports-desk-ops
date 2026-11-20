@@ -268,6 +268,14 @@ export const SECRET_MANIFEST: readonly SecretDefinition[] = [
       "Shared secret for native Bun.CSRF token issuance across processes",
   },
   {
+    envName: "SPORTSDESK_CURSOR_SECRET",
+    keychainName: null,
+    groups: ["daemon", "deploy"],
+    inject: false,
+    description:
+      "HMAC-SHA256 signing secret for opaque tenant/route-scoped API pagination cursors",
+  },
+  {
     envName: "SPORTSDESK_AUDIT_DIR",
     keychainName: null,
     groups: ["deploy"],

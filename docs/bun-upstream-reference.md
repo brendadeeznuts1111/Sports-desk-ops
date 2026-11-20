@@ -291,6 +291,126 @@ runtime (`--minimum-release-age`, `--minimum-release-age-excludes`), including a
 interpreted as seconds. The per-version exclusion (`typescript@5.9.3`) and the "security fix
 today, rest of the package waits" semantics are release-note statements, not re-measured here.
 
+<!-- bun-behavior: install-resolution-and-lockb -->
+
+## `bun install` version-selection edge cases and mutated `bun.lockb` resilience (measured 2026-11-19)
+
+- **Release-note statements (external, not re-run at upstream scale here):** the
+  [`bun-v1.4.4` release notes (`#133-bun-install-issues-closed`)](https://bun.com/blog/release-notes/bun-v1.4.4#133-bun-install-issues-closed)
+  and [`bun-v1.4.4` release tag](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) report
+  133 `bun install` issues closed, equivalence testing across 600 generated projects (all
+  dependency types, both linkers, both lockfile formats), 7 commands across 90,000 mutated
+  `bun.lockb` files without a crash or hang, and 200,000 generated `npm-pick-manifest`
+  version-selection comparisons differing in two cases: a `latest` tag pointing to a missing
+  version, and `^1.0.0-a.0`.
+- **Measured locally** (`tests/bun_install_resolution_resilience.test.ts`, measured 2026-11-19
+  against an in-process `Bun.serve` mock registry and mutated binary `bun.lockb` fixtures):
+
+| Surface / Case                                                                         | Input / Packument                                                                                                         | Measured Result                                                                                                                   |
+| :------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------- |
+| Missing `latest` dist-tag target (`latest`, `*`, `^1.0.0`)                             | `dist-tags.latest = "9.9.9"`, `versions = ["1.0.0", "1.0.1"]`                                                             | Exit `0`, resolves fallback highest version `"1.0.1"`                                                                             |
+| `^1.0.0` vs `dist-tags.latest` (control)                                               | `dist-tags.latest = "1.0.0"`, `versions = ["1.0.0-a.0", "1.0.0", "1.0.1"]`                                                | Exit `0`, installs `"1.0.0"` (`dist-tags.latest` honored)                                                                         |
+| `^1.0.0-a.0` with stable `latest`                                                      | `dist-tags.latest = "1.0.0"`, `versions = ["1.0.0-a.0", "1.0.0", "1.0.1"]`                                                | Exit `0`, skips `latest = "1.0.0"` and installs `"1.0.1"`                                                                         |
+| `^1.0.0-a.0` on prerelease-only packument                                              | `dist-tags.latest = "1.0.0-a.1"`, `versions = ["1.0.0-a.0", "1.0.0-a.1", "1.0.0-b.0"]`                                    | Exit `0`, skips `latest = "1.0.0-a.1"` and installs `"1.0.0-b.0"`                                                                 |
+| `^1.0.0-a.0` with exact lower-bound `latest`                                           | `dist-tags.latest = "1.0.0-a.0"`, `versions = ["1.0.0-a.0", "1.0.0-a.1", "1.0.0", "1.0.1"]`                               | Exit `0`, installs `"1.0.0-a.0"`                                                                                                  |
+| `^1.0.0-a.0` tuple-bound exclusion                                                     | `dist-tags.latest = "2.0.0"`, `versions = ["1.0.1-a.0", "2.0.0"]`                                                         | Exit `1`, `No version matching "^1.0.0-a.0"`                                                                                      |
+| Synthetic & real mutated `bun.lockb` (`install --frozen-lockfile`, `pm ls`, `pm hash`) | Empty, truncated magic, garbage, zeroed 4 KiB, half-truncated, header byte-40 XOR, plus 12 deterministic slices/bit-flips | Zero crash signals (`signalCode === null`) and bounded clean exits (`InvalidLockfile`, `EndOfStream`, `Lockfile is missing data`) |
+
+<!-- bun-behavior: serve-static-vs-file-routes -->
+
+## `Bun.serve` static buffered (`.bytes()`) vs file-backed (`Bun.file()`) routes (measured 2026-11-19)
+
+`tests/bun_serve_static_vs_file_routes.test.ts` measures the differences between passing a
+startup-buffered `new Response(await Bun.file(p).bytes())` vs a lazy `new Response(Bun.file(p))`
+in `Bun.serve({ routes })`:
+
+| Behavior                 | Static buffered (`new Response(await Bun.file(p).bytes())`)          | File-backed (`new Response(Bun.file(p))`)                                                                                     |
+| :----------------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------- |
+| `Content-Type`           | Omitted (`null`) unless explicitly passed in `Response` headers      | Inferred from extension (e.g. `application/zip` for `.zip`)                                                                   |
+| `ETag` & `If-None-Match` | Strong quoted `ETag`; matching `If-None-Match` returns `304`         | No `ETag` (`null`)                                                                                                            |
+| `Range` requests         | Ignored (`200` full payload, no `Accept-Ranges` / `Content-Range`)   | `206` with `Accept-Ranges: bytes` + `Content-Range`; `416` (`bytes */len`) when out of range                                  |
+| `HEAD` & `POST`          | `200` (`HEAD` empty body with `Content-Length`; `POST` returns body) | `200` (`HEAD` empty body with `Content-Length`; `POST` returns body)                                                          |
+| Live disk edit           | Serves original startup-buffered bytes and unchanged `ETag`          | Serves updated bytes, updated `Content-Length`, and updated `Range` slices                                                    |
+| File deletion (`unlink`) | Continues serving `200` from memory                                  | Falls through to `fetch()` if configured (returning `fetch()`'s response), or returns `404` when no `fetch()` fallback exists |
+
+- For `/static/*` directories needing strong `ETag`, `Range`, and symlink containment, this repo uses
+  `lib/serve_file.ts` (see [`docs/runbooks/bun_server_runtime_shapes_runbook.md`](./runbooks/bun_server_runtime_shapes_runbook.md)).
+
+<!-- bun-behavior: serve-directory-routes -->
+
+## `Bun.serve` directory routes (`{ dir, statCache }`) (measured 2026-11-19)
+
+Reference: [`bun.sh/docs/runtime/http/routing#directory-routes`](https://bun.sh/docs/runtime/http/routing#directory-routes).
+`tests/bun_serve_directory_routes.test.ts` measures `{ dir }` and `{ dir, statCache: false }` on
+the active runtime (`darwin` and `linux` branches):
+
+| Surface / Case                                         | Input / Probe                                                                                                                                         | Measured Behavior                                                                                                                                                                                                                                                                                          |
+| :----------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mount path constraint                                  | `routes: { "/static": { dir } }`                                                                                                                      | Throws `TypeError`: `To mount a directory, make sure the path ends in \`/*\``                                                                                                                                                                                                                              |
+| Decoded path, MIME, `ETag` & `Last-Modified`           | `GET /static/hello.txt`, `GET /static/my%20file.txt`                                                                                                  | `200`, extension `Content-Type`, weak `ETag` (`W/"<size>-<mtime>"`), `Last-Modified`, `Accept-Ranges: bytes`                                                                                                                                                                                               |
+| Non-canonical wire paths                               | `/static/./hello.txt`, `/static/../outside.txt`, `/static//hello.txt`, `/static/sub%2Findex.html`, `/static/%68ello.txt`                              | Rejected with `404` on raw wire requests                                                                                                                                                                                                                                                                   |
+| Directory without/with `/` & missing files             | `GET /static/sub`, `GET /static/sub/`, `GET /static/missing.txt`                                                                                      | `301` (`Location: /static/sub/`), `200` (`sub/index.html`), and `404`                                                                                                                                                                                                                                      |
+| Conditional GET (`304`)                                | `If-None-Match: <weak ETag>` or `If-Modified-Since: <Last-Modified>`                                                                                  | `304 Not Modified` with empty body                                                                                                                                                                                                                                                                         |
+| `Range` & `If-Range`                                   | `Range: bytes=0-4`, `bytes=999-1000`, `If-Range` (`Last-Modified` vs stale date vs weak `ETag`)                                                       | `206` (`bytes 0-4/21`), `416` (`bytes */21`); `If-Range` matches `Last-Modified` (`206`) and falls back to full `200` on stale dates or weak `ETag`                                                                                                                                                        |
+| `statCache: false`                                     | `routes: { "/nocache/*": { dir, statCache: false } }` + disk edit                                                                                     | Serves `200` and reflects live edits with updated weak `ETag`                                                                                                                                                                                                                                              |
+| Case-sensitive routing vs FS                           | `/static/admin/*` (`403`) + `/static/*` (`{ dir }`), requesting `/static/Admin/secret.txt`                                                            | Route match is case-sensitive (`Admin` misses `/static/admin/*`), returning `200` on case-insensitive APFS (`darwin`) or `404` on case-sensitive FS                                                                                                                                                        |
+| Symlink containment (`RESOLVE_IN_ROOT` drift on macOS) | `rel-escape.txt -> ../outside.txt`, `abs-escape.txt -> <outsidePath>`, `rel-clamp.txt -> ../../../inside.txt`, `abs-inroot.txt -> /var/data/logo.txt` | **Measured macOS drift:** contrary to the docs' macOS `RESOLVE_IN_ROOT` claim, `darwin` follows escaping symlinks (`200` `"SECRET-OUTSIDE"`) and returns `404` on in-root-clamped targets; `lib/asset_path.ts` (`containedAssetPath`) + `lib/serve_file.ts` enforce `realpath` containment for `/static/*` |
+
+<!-- bun-behavior: websocket-client-options -->
+
+## `WebSocket` client options (`Bun.WebSocketOptions`) (measured 2026-11-19)
+
+Reference: [`bun.sh/reference/bun/WebSocketOptions`](https://bun.sh/reference/bun/WebSocketOptions).
+`tests/bun_websocket_options.test.ts` measures the second-argument options object against local
+`ws://`/`wss://` echo servers and HTTP/HTTPS `CONNECT` tunnel proxies (targeting
+`ws-target.local` via local proxies so host `NO_PROXY="localhost,127.0.0.1,::1"` does not bypass
+explicit proxy tests):
+
+| Option / Surface                                              | Probe / Input                                                                                                                                          | Measured Behavior                                                                                                                                                                                                                           |
+| :------------------------------------------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `protocols` / `protocol`                                      | `new URL(wsUrl)` + `{ protocols: ["p1", "p2"] }`, `{ protocols: "single-p" }`, `{ protocol: "solo-p" }`, `{ protocols: ["arr-p"], protocol: "str-p" }` | Sends `Sec-WebSocket-Protocol` and populates `ws.protocol`; when both are supplied at runtime, `protocols` wins (`"arr-p"`)                                                                                                                 |
+| `headers`                                                     | Plain object (`OutgoingHttpHeaders` incl. string arrays), `Headers` instance, and `[string, string][]` tuple list                                      | All three forward on the upgrade request (`X-Arr` joins with `,`, duplicate tuple names join with `, `)                                                                                                                                     |
+| `perMessageDeflate`                                           | Omitted, `{}`, `true` vs falsy `false`, `null`, `0`, `""`, and explicit `undefined`                                                                    | Default/`{}`/`true` send `Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits`; all five falsy values omit `Sec-WebSocket-Extensions` entirely                                                                             |
+| `tls` (`ca`, `rejectUnauthorized`, `servername`/`serverName`) | `Bun.file()`, `Buffer`, PEM string, `rejectUnauthorized: false`, and SAN-mismatched cert with `servername` / `serverName`                              | Rejects untrusted cert (`unable to verify the first certificate`) and SAN mismatch (`does not match certificate's altnames`); both `servername` and `serverName` pass SNI verification                                                      |
+| `tls.checkServerIdentity`                                     | Sync `undefined`, `new Error(...)`, `async () => undefined`, and `rejectUnauthorized: false` + valid `ca`                                              | Receives `(hostname, leafCert)` with `subject`/`subjectaltname` and **no** `issuerCertificate`; async Promise return is truthy and rejects; with `rejectUnauthorized: false` it still runs but its error is not enforced                    |
+| HTTP `proxy` (`CONNECT`)                                      | String URL, `new URL(...)`, `http://user:pass@...`, and `{ url, headers }` (`OutgoingHttpHeaders` / `Headers`) for `ws://` & `wss://`                  | Issues `CONNECT host:port HTTP/1.1` with `Proxy-Connection: Keep-Alive`; emits Basic `Proxy-Authorization` or custom `headers` to proxy only (not leaked to origin); host `NO_PROXY` overrides explicit `proxy` for matching loopback hosts |
+| HTTPS `proxy.tls` isolation                                   | Separate `proxy.tls` + `tls`, omitted `proxy.tls` + shared `tls.ca` array, and `proxy.tls: {}` or `true`                                               | Separate `proxy.tls` runs proxy `checkServerIdentity` before target; omitted `proxy.tls` shares `tls.ca` across both hops while running top-level `checkServerIdentity` only for target; `{}`/`true` isolates proxy from top-level `tls.ca` |
+
+<!-- bun-behavior: terminal-write-buffer-source -->
+
+## `Bun.Terminal.write` & `BufferSource` (measured 2026-11-20)
+
+References: [`bun.sh/reference/bun/BufferSource`](https://bun.sh/reference/bun/BufferSource) and [`bun.sh/reference/bun/Terminal/write`](https://bun.sh/reference/bun/Terminal/write). Covered by `tests/bun_terminal_write_buffer_source.test.ts` and `lib/bun_terminal.ts` (`terminalInputByteLength`, `requireSubprocessTerminal`):
+
+| Input / Surface                         | Probe / Input                                                                           | Measured Behavior                                                                                                                                                          |
+| :-------------------------------------- | :-------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Strings (UTF-8 byte length)             | `""`, `"hello"`, `"€🚀"` (`.length === 3`), lone surrogate `"\uD800"` (`.length === 1`) | Returns UTF-8 byte count (`0`, `5`, `7`, and `3` for U+FFFD replacement), not UTF-16 `.length`                                                                             |
+| `ArrayBufferView` & `Buffer` slices     | `Uint8Array` / `Buffer` `.subarray(offset, end)` and `DataView(ab, 2, 3)`               | Returns exact `view.byteLength` and writes only `[byteOffset, byteOffset + byteLength)` with zero adjacent sentinel leakage                                                |
+| Raw `ArrayBuffer` & `SharedArrayBuffer` | `ArrayBuffer`, `SharedArrayBuffer`, `Uint8Array(sab)`, and `DataView(sab, 1, 2)`        | All four are accepted and return exact `byteLength`                                                                                                                        |
+| Multi-byte `TypedArray`s                | `Uint16Array`, `Int32Array`, `Float64Array`, `BigInt64Array`                            | Return `byteLength` (not element `.length`) and transmit raw native-endian bytes                                                                                           |
+| Internal buffering & `drain`            | Single 128 KiB (`131072` B) write exceeding kernel PTY ring capacity                    | Returns full `131072` immediately (no partial write), buffers internally, invokes `drain`, and delivers all 131,072 bytes with matching SHA-256 in raw mode                |
+| Detached buffers                        | Transferred `ArrayBuffer` and `Uint8Array` view over detached buffer                    | Both return `0` without throwing                                                                                                                                           |
+| Invalid inputs & closed terminal        | `null`/`undefined`, `42`/`{}`, and `write()` after `close()`                            | Throws `Error: write() requires data argument` (`null`/`undefined`), `Error: write() argument must be a string or ArrayBuffer` (`42`/`{}`), or `Error: Terminal is closed` |
+
+<!-- bun-behavior: formats-and-utilities -->
+
+## Built-in Formats & 40+ Utilities (measured 2026-11-20)
+
+Reference: [`bun.sh/#:~:text=Formats,40+%20utilities`](https://bun.sh/#:~:text=Formats,40+%20utilities). Covered by `tests/bun_formats_and_utilities.test.ts`:
+
+| Area / Surface                          | Probe / Input                                                                                                               | Measured Behavior                                                                                                                                                                           |
+| :-------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Bun.YAML`                              | Multi-doc `---`, anchors (`&b` / `<<: *b`), `stringify(v)` vs `stringify(v, null, 2)`                                       | Multi-doc `parse()` returns an array; anchors/merge keys resolve; `stringify(v)` defaults to flow syntax (`{a: 1,b: [2,3]}`), while `space: 2` emits block YAML                             |
+| `Bun.TOML` & native config imports      | `Bun.TOML.parse` / `stringify`; `import()` on `.yaml`, `.toml`, `.json5`, `.jsonc`                                          | `Bun.TOML` parses and serializes tables; dynamic `import()` resolves all four formats onto `.default`                                                                                       |
+| `Bun.JSON5` / `Bun.JSONC` / `Bun.JSONL` | Comments, trailing commas, unquoted keys, hex `0x10`, `Infinity`, `-Infinity`, `NaN`; partial JSONL chunk                   | `JSON5` parses extended literals (`Infinity`/`-Infinity`/`NaN`/`0x10`); `JSONL.parseChunk` returns complete objects with `{ done: false, error: null }` on trailing incomplete line         |
+| `Bun.markdown`                          | GFM (`tables`, `strikethrough`, `tasklists`, `autolinks`), raw `<script>` default vs `{ tagFilter: true }`, `render()`      | Raw `<script>` passes through verbatim by default unless `{ tagFilter: true }` escapes it (`&lt;script>`); `render()` invokes AST callbacks                                                 |
+| `Bun.escapeHTML`, ANSI & `Bun.color`    | HTML chars, emoji width, SGR strip/slice/wrap, `rgb(...)` → `hex` / `ansi-16m`                                              | `escapeHTML` escapes 5 chars (`'` → `&#x27;`); `stringWidth` counts wide emoji as `2` ignoring ANSI; `sliceAnsi`/`wrapAnsi` close/reopen SGR across cuts                                    |
+| `Bun.deepEquals` & `Bun.deepMatch`      | `{ a: 1, b: undefined }` vs `{ a: 1 }` (`strict` false/true); subset/object/array order                                     | `deepEquals` distinguishes `strict: true`; `deepMatch(subset, object)` expects `(subset, object)` (reversing returns `false`), and arrays require equal length                              |
+| `Bun.peek` & `Bun.peek.status`          | Fulfilled, pending, rejected promises + primitive value                                                                     | Synchronous state (`fulfilled`/`pending`/`rejected`) and value/`Error` access without `await`; non-promises pass through unchanged                                                          |
+| `Bun.randomUUIDv7` & `Bun.randomUUIDv5` | Fixed timestamp repeated `hex`/`base64url`/`buffer`; `dns`/`url`/custom UUID namespace                                      | UUIDv7 is lexicographically monotonic within the same millisecond (`buffer` = 16 bytes); UUIDv5 is deterministic per namespace                                                              |
+| Zstd, Binary & Stream helpers           | `zstdCompressSync`/`zstdCompress`, `concatArrayBuffers`, `ArrayBufferSink`, `readableStreamTo*`, `readableStreamToFormData` | Zstd roundtrips losslessly; `readableStreamToFormData(stream, boundary)` expects raw boundary token (full `Content-Type` header throws `boundary is too long`), omitting parses URL-encoded |
+| URL, Cookies & Timing                   | `pathToFileURL`/`fileURLToPath`, `Cookie`/`CookieMap`, `nanoseconds()`, `hash.crc32`                                        | Spaces percent-encode and roundtrip cleanly; `Cookie`/`CookieMap` parse & serialize flags; `nanoseconds()` is monotonic numeric                                                             |
+
 <!-- bun-behavior: bun-test-api -->
 
 ## `bun:test` API surface (measured 2026-11-18)
@@ -333,7 +453,9 @@ Measured on the pin with throwaway suites (`tests/bun_test_runner_cli.test.ts`):
 | `CLAUDECODE=1`                | hides `(pass)`/`(todo)` lines, keeps failure detail and summary counts          |
 
 Not re-measured here: `--randomize`/`--seed`, `--concurrent`, `--max-concurrency`, `--aot`,
-`--check`, coverage, snapshots, and `--environment`/`--globals`.
+`--check`, and `--environment`/`--globals` (coverage and snapshot `--update-snapshots --bail=1`
+safety are measured below under `bun test` coverage accuracy, LCOV `DA:` counts & snapshot
+safety).
 
 <!-- bun-behavior: bun-test-writing -->
 
@@ -378,8 +500,9 @@ Measured with throwaway projects (`tests/bun_test_config.test.ts`):
 | `.env.test`                           | loaded automatically by `bun test`                                                                           |
 
 Not re-measured here: `environment` (jsdom/happy-dom), `globals = "vitest"`, `reactCompiler`,
-`concurrentTestGlob`, `smol`, the mock-cleanup options, coverage options, and `[install]`
-inheritance.
+`concurrentTestGlob`, `smol`, the mock-cleanup options, and `[install]` inheritance (`coverageDir`,
+`coverageReporter`, `coverageSkipTestFiles`, `lcov`, and `coverageThreshold` are measured below
+under `bun test` coverage accuracy, LCOV `DA:` counts & snapshot safety).
 
 <!-- bun-behavior: bun-test-runtime -->
 
@@ -404,6 +527,29 @@ Drift: the live runtime docs describe Vite-style `import.meta.env` variables and
 not encoded: a probe with `await new Promise(() => {})` did not exit within 120 s, so there is no
 bounded failure to assert. Timers, watch/hot mode, signal handling, and the `vitest` unhandled-error
 listener difference are also not re-measured here.
+
+<!-- bun-behavior: bun-test-coverage-and-snapshots -->
+
+## `bun test` coverage accuracy, LCOV `DA:` counts & snapshot safety (measured 2026-11-19)
+
+Reference: [`bun.com/blog/release-notes/bun-v1.4.4#bun-test`](https://bun.com/blog/release-notes/bun-v1.4.4#bun-test).
+`tests/bun_test_coverage_and_snapshots.test.ts` measures the v1.4.4 fixes against throwaway
+projects with `bunfig.toml` / CLI coverage options and isolated git worktrees:
+
+| Behavior / Case                                                        | Probe / Input                                                                                        | Measured Behavior                                                                                                                           |
+| :--------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--update-snapshots --bail=1` on early failure                         | Pre-populated 2-snapshot file; 2nd test fails under `--update-snapshots --bail=1`                    | Exits non-zero while preserving the prior `.snap` contents byte-for-byte instead of truncating the file                                     |
+| `--changed=HEAD` module graph scoping                                  | Isolated git repo with `a.ts` -> `a.test.ts` and `b.ts` -> `b.test.ts`; touch only `a.ts`            | Runs `a.test.ts` and skips `b.test.ts`                                                                                                      |
+| Skipped short-circuit, optional, logical-assign, default & break lines | Multiline `\|\|`, `&&`, `??`, `?:`, `?.`, `\|\|=`, `&&=`, `??=`, unused default, untaken `break`     | Every skipped subexpression line stays uncovered (`65.62%` lines; `DA:<line>,0` in `lcov.info`)                                             |
+| Lines after unresumed `await` / `yield`                                | Rejected `await`, never-resolving pending `await`, and single-stepped generator `yield`              | Statements after the suspension point remain uncovered (`50.00%` lines; `3-4,8-9,13-14`)                                                    |
+| Uncalled function `Uncovered Line #s` bounds                           | Uncalled function after a `//` comment and immediately adjacent to a called function                 | Reports exact declaration-to-body lines (`5-8` skipping comment line 4; `4-6` with no two-line lead-in shift)                               |
+| Executed block `break` & `import` above `class extends`                | `import { Base }` above `export class Derived extends Base() {}` plus `{ count += 1; break; }`       | Reports `100.00%` lines with `DA:1,1` and `DA:8,1`                                                                                          |
+| Switch `default:` and multiline `case` value lines                     | Executed and unexecuted `case\n  1:` and standalone `default:` branches                              | Executed branch lines record `DA:<line>,1`; unexecuted `case`/value/`default:` lines show uncovered (`6-10` / `3-5`)                        |
+| Allman-style `else` on its own line                                    | `else` on line 6, `{` on line 7, body on line 8                                                      | Uncovered `else` is attributed to line `6` and body `8` (`Uncovered Line #s`: `6,8`), not `{` on line 7                                     |
+| Top-of-file comments with non-empty `--define` object/array            | Leading `//` and `/* */` comments plus `--define CFG_OBJ={"mode":"prod"}` / `--define CFG_ARR=[...]` | Top comments and `declare` lines are excluded from `LF`/`LH`; `defined.ts` reports `100.00%` (`LF:2`/`LH:2`) and `def_top.ts` `LF:1`/`LH:1` |
+| Class `% Funcs` accounting                                             | Class with implicit constructor, field initializers, `static {}`, `async`, and generator methods     | Counts only explicit methods (`FNF:2`/`FNH:2` for 2 methods, `FNF:1`/`FNH:1` for 1 method), reporting `100.00%` `% Funcs`                   |
+| `lcov.info` `DA:` execution counts                                     | Multi-op single-shot line (`once.ts`), inline `.map()` line (`complex_hit.ts`), and 4x `for` loop    | Single-execution multi-op line records `DA:2,1`; loop body records `DA:5,4`; inline 3-element `.map()` callback records `DA:2,3`            |
+| `coverageThreshold` enforcement & defaults                             | Numeric `0.5`/`0.51`, `{ lines = 0.5 }`/`0.8`, typo `{ line = 0.8 }`, and partial `{ functions }`    | Enforces exact bounds (`0.5` pass / `0.51` fail), silently ignores unknown keys (`line`), and defaults omitted keys in a table to `0.90`    |
 
 <!-- bun-behavior: bunx-minimum-release-age -->
 

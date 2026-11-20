@@ -29,53 +29,166 @@ export function formatWebLogDate(mode: WebLogMode, date: string): string {
 export interface WebLogRequest {
   readonly mode: WebLogMode;
   readonly date: string;
+  readonly endDate?: string;
   readonly customerId?: string;
   readonly ip?: string;
+  readonly actions?: string;
   readonly agentId?: string;
   readonly agentOwner?: string;
 }
 
-/** Observed Manager HAR wire: `application/x-www-form-urlencoded` with `start`/`end`. */
+export const OBSERVED_WEBLOG_WIRE_ORDER = [
+  "agentID",
+  "customerID",
+  "start",
+  "end",
+  "type",
+  "actions",
+  "ip",
+  "operation",
+  "RRO",
+  "agentOwner",
+] as const;
+
+export interface ParsedWebLogFormBody {
+  readonly agentID: string;
+  readonly customerID: string;
+  readonly start: string;
+  readonly end: string;
+  readonly type: WebLogMode;
+  readonly actions: string;
+  readonly ip: string;
+  readonly operation: "getWebLog";
+  readonly RRO: string;
+  readonly agentOwner: string;
+  readonly wireFieldOrder: readonly string[];
+  readonly matchesObservedWireOrder: boolean;
+  readonly hasDistinctAgentOwner: boolean;
+  readonly isDateRange: boolean;
+  readonly modeCIpMatchesCustomer: boolean | null;
+  readonly isActivityStream: boolean;
+}
+
+/** Observed Manager HAR & Mode C wire: `application/x-www-form-urlencoded` with `start`/`end`. */
 export function buildWebLogFormFields(
   request: WebLogRequest,
 ): Record<string, string> {
-  const agentId = request.agentId ?? Bun.env.F402_AGENT_ID ?? "";
-  const agentOwner = request.agentOwner ?? Bun.env.F402_AGENT_OWNER ?? "";
-  const common = {
+  const agentId = (request.agentId ?? Bun.env.F402_AGENT_ID ?? "").trim();
+  const agentOwner = (
+    request.agentOwner ??
+    Bun.env.F402_AGENT_OWNER ??
+    ""
+  ).trim();
+  const actions = request.actions ?? "ALL";
+
+  let customerID: string;
+  let start: string;
+  let end: string;
+  let ip: string;
+
+  if (request.mode === "I") {
+    customerID = "0";
+    start = request.date.trim();
+    end = (request.endDate ?? request.date).trim();
+    ip = request.ip ?? "";
+  } else if (request.mode === "C") {
+    const startYmd = formatWebLogDate("C", request.date);
+    const endYmd = formatWebLogDate("C", request.endDate ?? request.date);
+    if (endYmd < startYmd) {
+      throw new F402WebLogFetchError(
+        `Mode C endDate ${endYmd} cannot precede start ${startYmd}`,
+      );
+    }
+    customerID = request.customerId ?? "";
+    start = startYmd;
+    end = endYmd;
+    ip = request.ip ?? customerID.trim().toLowerCase();
+  } else {
+    const endInput = request.endDate ?? request.date;
+    start = formatWebLogDate(request.mode, request.date);
+    end = formatWebLogDate(request.mode, endInput);
+    if (endInput < request.date) {
+      throw new F402WebLogFetchError(
+        `Mode ${request.mode} endDate ${endInput} cannot precede start ${request.date}`,
+      );
+    }
+    customerID = request.customerId ?? (request.mode === "B" ? "0" : "");
+    ip = request.ip ?? "";
+  }
+
+  return {
+    agentID: agentId,
+    customerID,
+    start,
+    end,
+    type: request.mode,
+    actions,
+    ip,
     operation: "getWebLog",
     RRO: "1",
-    agentID: agentId,
     agentOwner,
-    type: request.mode,
-    actions: "ALL",
   };
-  if (request.mode === "I") {
-    const day = request.date.trim();
-    return {
-      ...common,
-      customerID: "0",
-      ip: request.ip ?? "",
-      start: day,
-      end: day,
-    };
+}
+
+/**
+ * Parse and validate an `application/x-www-form-urlencoded` `Manager/getWebLog` wire body
+ * against the observed 10-field wire contract (Modes A/B/C/I).
+ */
+export function parseWebLogFormBody(rawBody: string): ParsedWebLogFormBody {
+  const params = new URLSearchParams(rawBody);
+  const operation = params.get("operation");
+  if (operation !== "getWebLog") {
+    throw new F402WebLogFetchError(
+      `Invalid getWebLog form operation: ${JSON.stringify(operation)}`,
+    );
   }
-  if (request.mode === "C") {
-    const day = formatWebLogDate("C", request.date);
-    return {
-      ...common,
-      customerID: request.customerId ?? "",
-      ip: "",
-      start: day,
-      end: day,
-    };
+  const typeRaw = params.get("type");
+  if (
+    typeRaw !== "A" &&
+    typeRaw !== "B" &&
+    typeRaw !== "C" &&
+    typeRaw !== "I"
+  ) {
+    throw new F402WebLogFetchError(
+      `Invalid getWebLog mode type: ${JSON.stringify(typeRaw)}`,
+    );
   }
-  const day = formatWebLogDate(request.mode, request.date);
+
+  const agentID = params.get("agentID") ?? "";
+  const customerID = params.get("customerID") ?? "";
+  const start = params.get("start") ?? "";
+  const end = params.get("end") ?? "";
+  const actions = params.get("actions") ?? "";
+  const ip = params.get("ip") ?? "";
+  const rro = params.get("RRO") ?? "";
+  const agentOwner = params.get("agentOwner") ?? "";
+
+  const wireFieldOrder = [...params.keys()];
+  const matchesObservedWireOrder =
+    wireFieldOrder.length === OBSERVED_WEBLOG_WIRE_ORDER.length &&
+    wireFieldOrder.every((key, idx) => key === OBSERVED_WEBLOG_WIRE_ORDER[idx]);
+
   return {
-    ...common,
-    customerID: request.customerId ?? (request.mode === "B" ? "0" : ""),
-    ip: "",
-    start: day,
-    end: day,
+    agentID,
+    customerID,
+    start,
+    end,
+    type: typeRaw,
+    actions,
+    ip,
+    operation: "getWebLog",
+    RRO: rro,
+    agentOwner,
+    wireFieldOrder,
+    matchesObservedWireOrder,
+    hasDistinctAgentOwner: agentOwner !== "" && agentOwner !== agentID,
+    isDateRange: start !== "" && end !== "" && start !== end,
+    modeCIpMatchesCustomer:
+      typeRaw === "C"
+        ? ip.trim().toLowerCase() === customerID.trim().toLowerCase() &&
+          customerID.trim() !== ""
+        : null,
+    isActivityStream: typeRaw === "A",
   };
 }
 

@@ -25,6 +25,8 @@ const PATH_TABS: Readonly<Record<string, DashboardTabId>> = {
   wagers: "wagers",
   "bet-ticker": "bet-ticker",
   customers: "customers",
+  "risk-overview": "surveillance",
+  telemetry: "surveillance",
   surveillance: "surveillance",
   shadow: "shadow",
   terminal: "terminal",

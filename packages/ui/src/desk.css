@@ -79,6 +79,71 @@ button.sd-kpi-card:hover {
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
 }
 
+.sd-telemetry-btn,
+.sd-telemetry-link,
+.sd-footer-link {
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.sd-telemetry-btn:hover {
+  filter: brightness(1.12);
+}
+
+.sd-telemetry-link:hover,
+.sd-footer-link:hover {
+  border-color: rgba(56, 189, 248, 0.55) !important;
+  background-color: rgba(56, 189, 248, 0.16) !important;
+  color: #bae6fd !important;
+}
+
+.sd-telemetry-btn:focus-visible,
+.sd-telemetry-link:focus-visible,
+.sd-footer-link:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.sd-terminal-body,
+.sd-terminal-output {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 #060913;
+}
+
+.sd-terminal-body::-webkit-scrollbar,
+.sd-terminal-output::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.sd-terminal-body::-webkit-scrollbar-track,
+.sd-terminal-output::-webkit-scrollbar-track {
+  background: #060913;
+}
+
+.sd-terminal-body::-webkit-scrollbar-thumb,
+.sd-terminal-output::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 999px;
+}
+
+.sd-terminal-body::-webkit-scrollbar-thumb:hover,
+.sd-terminal-output::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+.sd-terminal-output a {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.sd-terminal-output a:hover {
+  color: #7dd3fc !important;
+  background-color: rgba(56, 189, 248, 0.12);
+}
+
 /* ── Framed table: enables sticky header + frozen directive column ── */
 .profiles-wrap {
   max-height: min(62vh, 720px);

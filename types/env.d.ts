@@ -34,6 +34,7 @@ declare module "bun" {
     readonly SPORTSDESK_AUTH_REQUIRED?: string;
     readonly SPORTSDESK_AUTH_DISABLED?: string;
     readonly SPORTSDESK_CSRF_SECRET?: string;
+    readonly SPORTSDESK_CURSOR_SECRET?: string;
     readonly SPORTSDESK_AUDIT_DIR?: string;
     readonly SPORTSDESK_AUDIT_MAX_BYTES?: string;
     readonly SPORTSDESK_AUDIT_RETENTION_DAYS?: string;

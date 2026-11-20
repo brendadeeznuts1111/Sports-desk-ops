@@ -216,10 +216,15 @@ export function BetTickerTabPanel({
             rel="noreferrer"
             style={{
               ...styles.actionBtn,
+              backgroundColor: "#1e293b",
+              border: "1px solid rgba(56, 189, 248, 0.45)",
               padding: "5px 10px",
               fontSize: "12px",
               textDecoration: "none",
               color: "#38bdf8",
+              display: "inline-flex",
+              alignItems: "center",
+              whiteSpace: "nowrap",
             }}
             title="Open Standalone Pending Scoreboard (/live-bets)"
           >

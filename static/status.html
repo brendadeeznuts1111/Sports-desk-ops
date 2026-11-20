@@ -3,78 +3,2987 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
     <title>SportsDesk Status</title>
     <style>
+      :root {
+        color-scheme: dark;
+        --bg: #070b14;
+        --topbar: #0b1120;
+        --card: #0d1527;
+        --inset: #131d33;
+        --inset-hover: #182540;
+        --border: #1e293b;
+        --border-strong: #334155;
+        --text: #f1f5f9;
+        --text-soft: #94a3b8;
+        --muted: #64748b;
+        --sky: #38bdf8;
+        --sky-bg: rgba(56, 189, 248, 0.12);
+        --sky-border: rgba(56, 189, 248, 0.32);
+        --ok: #4ade80;
+        --ok-bg: rgba(74, 222, 128, 0.12);
+        --ok-border: rgba(74, 222, 128, 0.32);
+        --warn: #fbbf24;
+        --warn-bg: rgba(251, 191, 36, 0.12);
+        --warn-border: rgba(251, 191, 36, 0.35);
+        --bad: #f87171;
+        --bad-bg: rgba(248, 113, 113, 0.12);
+        --bad-border: rgba(248, 113, 113, 0.38);
+        --mono:
+          ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas,
+          "Liberation Mono", monospace;
+        --sans:
+          system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      html,
       body {
-        font-family: system-ui, sans-serif;
-        background: #070b14;
-        color: #f1f5f9;
         margin: 0;
-        padding: 2rem;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 14px;
+        line-height: 1.45;
+        -webkit-font-smoothing: antialiased;
       }
-      h1 {
-        margin: 0 0 1rem;
+
+      a {
+        color: inherit;
+        text-decoration: none;
       }
-      pre {
-        background: #0d1527;
-        border: 1px solid #1e293b;
-        border-radius: 8px;
-        padding: 1rem;
-        overflow: auto;
+
+      button,
+      input {
+        font: inherit;
+        color: inherit;
+      }
+
+      .mono {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* Sticky Topbar */
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        background: rgba(11, 17, 32, 0.92);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .topbar-inner {
+        max-width: 1480px;
+        margin: 0 auto;
+        padding: 10px 20px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px 16px;
+      }
+
+      .brand-group {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .brand-mark {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        background: linear-gradient(135deg, #0284c7, #16a34a);
+        display: grid;
+        place-items: center;
+        font-weight: 800;
         font-size: 12px;
+        letter-spacing: 0.04em;
+        color: #f8fafc;
+        flex: none;
       }
-      .ok {
-        color: #10b981;
+
+      .topbar h1 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
       }
-      .bad {
-        color: #ef4444;
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border-strong);
+        background: var(--inset);
+        font-size: 12px;
+        line-height: 1.2;
+      }
+
+      .status-pill.ok {
+        background: var(--ok-bg);
+        border-color: var(--ok-border);
+        color: #dcfce7;
+      }
+
+      .status-pill.warn {
+        background: var(--warn-bg);
+        border-color: var(--warn-border);
+        color: #fef3c7;
+      }
+
+      .status-pill.bad {
+        background: var(--bad-bg);
+        border-color: var(--bad-border);
+        color: #fee2e2;
+      }
+
+      .status-pill.info {
+        background: var(--sky-bg);
+        border-color: var(--sky-border);
+        color: #e0f2fe;
+      }
+
+      .dot-ok {
+        color: var(--ok);
+      }
+      .dot-warn {
+        color: var(--warn);
+      }
+      .dot-bad {
+        color: var(--bad);
+      }
+      .dot-info {
+        color: var(--sky);
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--inset);
+        color: var(--text-soft);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .chip.ok {
+        border-color: var(--ok-border);
+        background: var(--ok-bg);
+        color: var(--ok);
+      }
+
+      .chip.warn {
+        border-color: var(--warn-border);
+        background: var(--warn-bg);
+        color: var(--warn);
+      }
+
+      .chip.bad {
+        border-color: var(--bad-border);
+        background: var(--bad-bg);
+        color: var(--bad);
+      }
+
+      .chip.info {
+        border-color: var(--sky-border);
+        background: var(--sky-bg);
+        color: var(--sky);
+      }
+
+      .nav-links {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .nav-link {
+        padding: 4px 9px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text-soft);
+        font-size: 12px;
+        transition:
+          border-color 0.15s ease,
+          color 0.15s ease,
+          background 0.15s ease;
+      }
+
+      .nav-link:hover {
+        border-color: var(--sky-border);
+        background: var(--inset);
+        color: var(--text);
+      }
+
+      .actions-group {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .clock-readout {
+        font-size: 11px;
+        color: var(--text-soft);
+        padding: 4px 8px;
+        border-radius: 6px;
+        background: var(--inset);
+        border: 1px solid var(--border);
+        white-space: nowrap;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border-strong);
+        background: var(--inset);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition:
+          border-color 0.15s ease,
+          background 0.15s ease;
+        white-space: nowrap;
+      }
+
+      .btn:hover:not(:disabled) {
+        border-color: var(--sky);
+        background: var(--inset-hover);
+      }
+
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+
+      .btn.active {
+        border-color: var(--sky-border);
+        background: var(--sky-bg);
+        color: var(--sky);
+      }
+
+      .btn-sm {
+        padding: 3px 8px;
+        font-size: 11px;
+      }
+
+      /* Main Layout */
+      .container {
+        max-width: 1480px;
+        margin: 0 auto;
+        padding: 18px 20px 36px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      /* Alert & Notice Banners */
+      .banner {
+        border-radius: 10px;
+        border: 1px solid var(--warn-border);
+        background: rgba(251, 191, 36, 0.08);
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .banner.bad {
+        border-color: var(--bad-border);
+        background: rgba(248, 113, 113, 0.09);
+      }
+
+      .banner.info {
+        border-color: var(--sky-border);
+        background: rgba(56, 189, 248, 0.08);
+      }
+
+      .banner[hidden] {
+        display: none;
+      }
+
+      .banner-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .banner-title {
+        font-weight: 700;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .issue-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .issue-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px 12px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(7, 11, 20, 0.55);
+        border: 1px solid var(--border);
+      }
+
+      .issue-main {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .issue-msg {
+        font-size: 12.5px;
+        color: var(--text);
+      }
+
+      .remediation-box {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        max-width: 100%;
+      }
+
+      .remediation-code {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: #cbd5e1;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 3px 8px;
+        overflow-x: auto;
+        max-width: 520px;
+        white-space: nowrap;
+      }
+
+      /* Grids & Cards */
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .ops-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+        gap: 14px;
+      }
+
+      @media (max-width: 1240px) {
+        .kpi-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 1024px) {
+        .ops-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+
+      @media (max-width: 680px) {
+        .kpi-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .topbar-inner,
+        .container {
+          padding-left: 12px;
+          padding-right: 12px;
+        }
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .card-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .card-title {
+        margin: 0;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-soft);
+      }
+
+      .hero-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .hero-value {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--text);
+      }
+
+      .hero-sub {
+        font-size: 12px;
+        color: var(--text-soft);
+      }
+
+      .kv-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .kv-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 12px;
+        border-top: 1px solid rgba(30, 41, 59, 0.65);
+        padding-top: 5px;
+      }
+
+      .kv-row:first-child {
+        border-top: none;
+        padding-top: 0;
+      }
+
+      .kv-label {
+        color: var(--muted);
+        flex: none;
+      }
+
+      .kv-value {
+        color: var(--text);
+        text-align: right;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+      }
+
+      /* Progress Bars */
+      .bar-group {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+
+      .bar-item {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .bar-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-size: 11.5px;
+      }
+
+      .bar-track {
+        width: 100%;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--inset);
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: var(--sky);
+        transition: width 0.25s ease;
+      }
+
+      .bar-fill.ok {
+        background: var(--ok);
+      }
+
+      .bar-fill.warn {
+        background: var(--warn);
+      }
+
+      .subbox {
+        background: var(--inset);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 9px 11px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .muted-note {
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .host-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        max-height: 128px;
+        overflow-y: auto;
+      }
+
+      .host-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        padding: 3px 6px;
+        border-radius: 5px;
+        background: rgba(7, 11, 20, 0.45);
+      }
+
+      .host-name {
+        color: var(--text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .host-service {
+        color: var(--text-soft);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* Tables */
+      .table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: rgba(7, 11, 20, 0.45);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+
+      th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        padding: 8px 9px;
+        border-bottom: 1px solid var(--border);
+        background: var(--inset);
+        white-space: nowrap;
+      }
+
+      td {
+        padding: 8px 9px;
+        border-bottom: 1px solid rgba(30, 41, 59, 0.65);
+        vertical-align: top;
+      }
+
+      .chip-wrap {
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+
+      .col-nowrap {
+        white-space: nowrap;
+      }
+
+      tr:last-child td {
+        border-bottom: none;
+      }
+
+      .job-name {
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      .job-id {
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .job-desc {
+        margin-top: 3px;
+        font-size: 12px;
+        color: var(--text-soft);
+        max-width: 340px;
+      }
+
+      .job-error {
+        margin-top: 5px;
+        font-size: 11.5px;
+        color: #fecaca;
+        background: rgba(248, 113, 113, 0.1);
+        border: 1px solid var(--bad-border);
+        border-radius: 6px;
+        padding: 6px 8px;
+      }
+
+      .artifact-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 10px;
+      }
+
+      /* Telegram & Schedules Toolbar */
+      .telegram-strip {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px 14px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: var(--inset);
+        border: 1px solid var(--border);
+      }
+
+      .schedule-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .search-input {
+        flex: 1 1 280px;
+        max-width: 440px;
+        background: var(--bg);
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        padding: 7px 11px;
+        font-size: 12.5px;
+        color: var(--text);
+        outline: none;
+      }
+
+      .search-input:focus {
+        border-color: var(--sky);
+      }
+
+      .filter-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+
+      /* Raw JSON Inspector */
+      details.raw-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 16px;
+      }
+
+      details.raw-card summary {
+        cursor: pointer;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        list-style: none;
+        user-select: none;
+        font-weight: 600;
+        color: var(--text-soft);
+      }
+
+      details.raw-card summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .raw-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 12px 0 8px;
+      }
+
+      pre#payload {
+        margin: 0;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+        overflow: auto;
+        max-height: 460px;
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1.45;
+        color: #cbd5e1;
+      }
+
+      .empty-row {
+        text-align: center;
+        color: var(--muted);
+        padding: 18px 12px;
+      }
+
+      .mini-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .mini-stat {
+        background: var(--inset);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px 8px;
+      }
+
+      .mini-stat-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+      }
+
+      .mini-stat-val {
+        margin-top: 2px;
+        font-size: 13px;
+        font-weight: 650;
+        color: var(--text);
       }
     </style>
   </head>
   <body>
-    <h1>SportsDesk Status</h1>
-    <p id="summary">Loading…</p>
-    <pre id="payload"></pre>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand-group">
+          <div class="brand-mark" aria-hidden="true">SD</div>
+          <h1>SportsDesk Status</h1>
+          <p id="summary" class="status-pill" aria-live="polite">
+            <span class="dot-info" aria-hidden="true">&#9679;</span>
+            <strong>Loading&#8230;</strong>
+          </p>
+          <span id="host-chip" class="chip mono"></span>
+          <span id="sha-chip" class="chip mono" hidden></span>
+        </div>
+
+        <nav class="nav-links" aria-label="SportsDesk Surfaces">
+          <a class="nav-link" href="/">Dashboard</a>
+          <a class="nav-link" href="/live-bets">Live Bets</a>
+          <a class="nav-link" href="/graph">Graph</a>
+          <a class="nav-link" href="/tracker">Tracker</a>
+          <a class="nav-link" href="/governance">Governance</a>
+          <a class="nav-link mono" href="/status.json">status.json</a>
+          <a class="nav-link mono" href="/health">health</a>
+        </nav>
+
+        <div class="actions-group">
+          <span id="clock-readout" class="clock-readout mono"
+            >Waiting for sample&#8230;</span
+          >
+          <button id="btn-auto" class="btn active" type="button">
+            Auto 15s: ON
+          </button>
+          <button id="btn-refresh" class="btn" type="button">
+            &#8635; Refresh
+          </button>
+          <button id="btn-copy-json" class="btn" type="button">
+            &#9112; Copy JSON
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section
+        id="alert-banner"
+        class="banner"
+        role="alert"
+        aria-live="polite"
+        hidden
+      ></section>
+
+      <section
+        id="sim-notice"
+        class="banner info"
+        role="status"
+        aria-live="polite"
+        hidden
+      ></section>
+
+      <section class="kpi-grid" aria-label="Operational Summary KPIs">
+        <article class="card" id="card-process">
+          <div class="card-head">
+            <h2 class="card-title">Process &amp; Runtime</h2>
+            <span id="process-latency" class="chip mono">--</span>
+          </div>
+          <div id="process-body"></div>
+        </article>
+
+        <article class="card" id="card-feeds">
+          <div class="card-head">
+            <h2 class="card-title">Live Feeds &amp; Loop</h2>
+            <span id="feeds-badge" class="chip mono">--</span>
+          </div>
+          <div id="feeds-body"></div>
+        </article>
+
+        <article class="card" id="card-memory">
+          <div class="card-head">
+            <h2 class="card-title">Memory &amp; Cumulative CPU</h2>
+            <span id="memory-badge" class="chip mono">--</span>
+          </div>
+          <div id="memory-body"></div>
+        </article>
+
+        <article class="card" id="card-dns">
+          <div class="card-head">
+            <h2 class="card-title">DNS Resolver Cache</h2>
+            <span id="dns-badge" class="chip mono">--</span>
+          </div>
+          <div id="dns-body"></div>
+        </article>
+      </section>
+
+      <section class="ops-grid" aria-label="Bridge Rollups and Daemon Health">
+        <article class="card" id="card-bridge">
+          <div class="card-head">
+            <h2 class="card-title">Bridge Rollup Jobs &amp; Gate Artifacts</h2>
+            <div id="bridge-head-chips" class="pill-row"></div>
+          </div>
+          <div id="bridge-body"></div>
+        </article>
+
+        <article class="card" id="card-health">
+          <div class="card-head">
+            <h2 class="card-title">Auth, Pipelines &amp; Host Health</h2>
+            <span id="health-mode-chip" class="chip mono">--</span>
+          </div>
+          <div id="health-body"></div>
+        </article>
+      </section>
+
+      <section
+        class="card"
+        id="card-telegram"
+        aria-label="Telegram & Schedules"
+      >
+        <div class="card-head">
+          <h2 class="card-title">Telegram Bot &amp; Scheduled Jobs</h2>
+          <span id="schedule-count-chip" class="chip mono">0 schedules</span>
+        </div>
+        <div id="telegram-strip" class="telegram-strip"></div>
+        <div class="schedule-toolbar">
+          <input
+            id="schedule-search"
+            class="search-input"
+            type="search"
+            placeholder="Filter schedules by name, id, cron, report type, or dependency&#8230;"
+            aria-label="Filter scheduled jobs"
+          />
+          <div
+            id="schedule-filter-tabs"
+            class="filter-tabs"
+            role="group"
+            aria-label="Filter schedules by category"
+          ></div>
+        </div>
+        <div id="schedules-body"></div>
+      </section>
+
+      <details id="raw-details" class="raw-card">
+        <summary>
+          <span>Raw JSON Inspector</span>
+          <span id="raw-summary-hint" class="chip mono">Collapsed</span>
+        </summary>
+        <div
+          id="raw-tabs"
+          class="raw-controls"
+          role="group"
+          aria-label="Raw payload endpoint tabs"
+        ></div>
+        <pre id="payload"></pre>
+      </details>
+    </main>
+
     <script>
-      // No innerHTML: the repo's check:innerhtml gate treats a dynamic assignment as unsafe even
-      // when every branch is a literal. Build the status line from DOM nodes instead.
-      function setSummary(tone, label, detail) {
-        const summary = document.getElementById("summary");
-        const dot = document.createElement("span");
-        dot.className = tone;
-        dot.textContent = "\u25cf ";
-        dot.setAttribute("aria-hidden", "true");
-        const text = document.createElement("strong");
-        text.textContent = label;
-        summary.replaceChildren(dot, text);
-        if (detail) {
-          const rest = document.createElement("span");
-          rest.textContent = " \u2014 " + detail;
-          summary.appendChild(rest);
+      // No innerHTML: the repo's check:innerhtml gate enforces DOM creation APIs
+      // exclusively so dynamic payloads can never inject raw HTML.
+
+      const POLL_INTERVAL_SEC = 15;
+      const REQUEST_TIMEOUT_MS = 10000;
+      const ENDPOINTS = {
+        status: "/api/status",
+        health: "/health",
+        bridge3c: "/api/bridge3c/status",
+        dns: "/api/dns/telemetry",
+      };
+
+      const state = {
+        status: null,
+        health: null,
+        bridge3c: null,
+        dns: null,
+        lastUpdatedAt: null,
+        refreshing: false,
+        autoRefresh: true,
+        countdownSec: POLL_INTERVAL_SEC,
+        scheduleQuery: "",
+        scheduleCategory: "all",
+        rawTab: "all",
+      };
+
+      function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined && text !== null) {
+          node.textContent = String(text);
+        }
+        return node;
+      }
+
+      function makeChip(text, tone) {
+        const cls = tone ? "chip " + tone : "chip";
+        return el("span", cls, text);
+      }
+
+      function makeKvRow(label, valueNodeOrText, valueClass) {
+        const row = el("div", "kv-row");
+        const k = el("span", "kv-label", label);
+        const v = el(
+          "span",
+          valueClass ? "kv-value " + valueClass : "kv-value",
+        );
+        if (valueNodeOrText instanceof Node) {
+          v.appendChild(valueNodeOrText);
+        } else {
+          v.textContent =
+            valueNodeOrText === undefined || valueNodeOrText === null
+              ? "--"
+              : String(valueNodeOrText);
+        }
+        row.append(k, v);
+        return row;
+      }
+
+      function formatDurationSec(totalSeconds) {
+        if (
+          typeof totalSeconds !== "number" ||
+          !Number.isFinite(totalSeconds)
+        ) {
+          return "--";
+        }
+        const s = Math.max(0, Math.floor(totalSeconds));
+        const d = Math.floor(s / 86400);
+        const h = Math.floor((s % 86400) / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const rem = s % 60;
+        const parts = [];
+        if (d > 0) parts.push(d + "d");
+        if (h > 0 || d > 0) parts.push(h + "h");
+        if (m > 0 || h > 0 || d > 0) parts.push(m + "m");
+        parts.push(rem + "s");
+        return parts.join(" ");
+      }
+
+      function formatMiB(bytes) {
+        if (typeof bytes !== "number" || !Number.isFinite(bytes)) return "--";
+        return (bytes / (1024 * 1024)).toFixed(1) + " MiB";
+      }
+
+      function formatMicrosSec(micros) {
+        if (typeof micros !== "number" || !Number.isFinite(micros)) return "--";
+        return (micros / 1e6).toFixed(2) + "s";
+      }
+
+      function formatMs(ms) {
+        if (typeof ms !== "number" || !Number.isFinite(ms)) return "--";
+        if (ms >= 1000) return (ms / 1000).toFixed(2) + "s";
+        return Math.round(ms) + "ms";
+      }
+
+      function formatRelativeIso(iso) {
+        if (!iso) return "--";
+        const ts = Date.parse(iso);
+        if (!Number.isFinite(ts)) return String(iso);
+        const diffSec = Math.round((Date.now() - ts) / 1000);
+        if (diffSec < 0) return "just now";
+        if (diffSec < 60) return diffSec + "s ago";
+        if (diffSec < 3600) return Math.floor(diffSec / 60) + "m ago";
+        if (diffSec < 86400) return Math.floor(diffSec / 3600) + "h ago";
+        return Math.floor(diffSec / 86400) + "d ago";
+      }
+
+      function formatZoneTime(date, timeZone) {
+        try {
+          return new Intl.DateTimeFormat("en-US", {
+            timeZone,
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+          }).format(date);
+        } catch (err) {
+          // signal-honesty: intentional-timezone-fallback-utc
+          console.warn("Timezone formatting failed for", timeZone, err);
+          return date.toISOString().slice(11, 19);
         }
       }
 
-      fetch("/api/status", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((d) => {
-          const failed = Object.entries(d.checks || {})
-            .filter(([, state]) => state !== "ok")
-            .map(([name]) => name);
-          setSummary(
-            d.ok ? "ok" : "bad",
-            d.ok ? "serving" : "degraded",
-            failed.length > 0 ? "failed checks: " + failed.join(", ") : "",
-          );
-          document.getElementById("payload").textContent = JSON.stringify(
-            d,
+      function extractCommand(text) {
+        if (typeof text !== "string" || !text) return null;
+        const printfIdx = text.indexOf("printf ");
+        if (printfIdx >= 0) return text.slice(printfIdx).trim();
+        const bunIdx = text.indexOf("bun run ");
+        if (bunIdx >= 0) return text.slice(bunIdx).trim();
+        return null;
+      }
+
+      async function copyText(text, button, resetLabel) {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.setAttribute("readonly", "");
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+          }
+          if (button) {
+            button.textContent = "Copied";
+            setTimeout(() => {
+              button.textContent = resetLabel;
+            }, 1600);
+          }
+        } catch (err) {
+          console.error("Clipboard write failed:", err);
+          if (button) {
+            button.textContent = "Copy failed";
+            setTimeout(() => {
+              button.textContent = resetLabel;
+            }, 2000);
+          }
+        }
+      }
+
+      async function requestEndpoint(path) {
+        const startedAt = performance.now();
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        try {
+          const response = await fetch(path, {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          const latencyMs = Math.round(performance.now() - startedAt);
+          const rawText = await response.text();
+          let data = null;
+          if (rawText) {
+            try {
+              data = JSON.parse(rawText);
+            } catch (parseErr) {
+              return {
+                ok: false,
+                status: response.status,
+                latencyMs,
+                error:
+                  "Invalid JSON from " +
+                  path +
+                  ": " +
+                  (parseErr instanceof Error
+                    ? parseErr.message
+                    : String(parseErr)),
+                data: null,
+              };
+            }
+          }
+          if (!response.ok && response.status !== 200) {
+            const msg =
+              data && typeof data.error === "string"
+                ? data.error
+                : "HTTP " + response.status + " from " + path;
+            return {
+              ok: false,
+              status: response.status,
+              latencyMs,
+              error: msg,
+              data,
+            };
+          }
+          return {
+            ok: true,
+            status: response.status,
+            latencyMs,
+            error: null,
+            data,
+          };
+        } catch (err) {
+          const latencyMs = Math.round(performance.now() - startedAt);
+          const isAbort = err instanceof Error && err.name === "AbortError";
+          return {
+            ok: false,
+            status: 0,
+            latencyMs,
+            error: isAbort
+              ? "Request to " +
+                path +
+                " timed out after " +
+                REQUEST_TIMEOUT_MS +
+                "ms"
+              : "Network error on " +
+                path +
+                ": " +
+                (err instanceof Error ? err.message : String(err)),
+            data: null,
+          };
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      function resolveDaemonHealthPayload(healthData) {
+        if (!healthData || typeof healthData !== "object") return null;
+        if (
+          healthData.checks &&
+          (healthData.checks.auth || healthData.checks.pipelines)
+        ) {
+          return healthData;
+        }
+        if (
+          healthData.daemon4020 &&
+          typeof healthData.daemon4020 === "object"
+        ) {
+          return healthData.daemon4020;
+        }
+        return null;
+      }
+
+      function computeOperationalSignals() {
+        const sRes = state.status;
+        const hRes = state.health;
+        const bRes = state.bridge3c;
+        const dRes = state.dns;
+
+        const statusData = sRes && sRes.data ? sRes.data : null;
+        const healthData = hRes && hRes.data ? hRes.data : null;
+        const bridgeData = bRes && bRes.data ? bRes.data : null;
+        const dnsData = dRes && dRes.data ? dRes.data : null;
+
+        const issues = [];
+        const seenKeys = new Set();
+        function pushIssue(severity, kind, message, action) {
+          const cmd = action || extractCommand(message) || null;
+          const cleanMsg =
+            cmd && message.includes(cmd)
+              ? message
+                  .replace(cmd, "")
+                  .replace(/[:.\s]+$/, "")
+                  .trim()
+              : message;
+          const dedupKey = (kind + "|" + cleanMsg).toLowerCase();
+          if (seenKeys.has(dedupKey)) return;
+          seenKeys.add(dedupKey);
+          issues.push({
+            severity,
+            kind,
+            message: cleanMsg || message,
+            action: cmd,
+          });
+        }
+
+        // 1. Endpoint / daemon offline signals
+        if (!sRes || !sRes.ok) {
+          pushIssue(
+            "bad",
+            "DAEMON",
+            sRes && sRes.error ? sRes.error : "Unable to reach /api/status",
             null,
-            2,
           );
-        })
-        .catch((e) => {
-          setSummary("bad", "unreachable", String(e));
-          document.getElementById("payload").textContent = String(e);
+        } else if (statusData) {
+          if (
+            statusData.daemon4020Online === false ||
+            statusData.ok === false
+          ) {
+            pushIssue(
+              "bad",
+              "DAEMON",
+              statusData.note ||
+                statusData.error ||
+                "SportsDesk daemon reported ok: false",
+              null,
+            );
+          }
+          for (const [name, checkState] of Object.entries(
+            statusData.checks || {},
+          )) {
+            if (checkState !== "ok") {
+              pushIssue(
+                "warn",
+                "CHECK",
+                "Status check '" + name + "' is " + String(checkState),
+                null,
+              );
+            }
+          }
+          const live = statusData.live || {};
+          if (live.ticker && live.ticker.ok === false) {
+            pushIssue(
+              "warn",
+              "STREAM",
+              "Live bet ticker degraded: " +
+                (live.ticker.diagnostic || live.ticker.status || "not ok"),
+              null,
+            );
+          }
+          if (live.pending && live.pending.ok === false) {
+            pushIssue(
+              "warn",
+              "STREAM",
+              "Live pending feed degraded: " +
+                (live.pending.diagnostic || live.pending.status || "not ok"),
+              null,
+            );
+          }
+          if (live.refresh && live.refresh.lastTickOk === false) {
+            pushIssue(
+              "warn",
+              "LOOP",
+              "Live refresh tick failed" +
+                (live.refresh.lastError ? ": " + live.refresh.lastError : ""),
+              null,
+            );
+          }
+        }
+
+        // 2. /health signals (supports both direct daemon :4020 and enriched :4024 proxy health.daemon4020)
+        const daemonHealth = resolveDaemonHealthPayload(healthData);
+        if (!hRes || !hRes.ok) {
+          pushIssue(
+            "warn",
+            "HEALTH",
+            hRes && hRes.error ? hRes.error : "/health endpoint failed",
+            null,
+          );
+        } else if (healthData) {
+          if (
+            daemonHealth &&
+            daemonHealth !== healthData &&
+            daemonHealth.online === false
+          ) {
+            pushIssue(
+              "bad",
+              "DAEMON",
+              daemonHealth.error || "Companion daemon /health unreachable",
+              null,
+            );
+          }
+
+          const healthTarget = daemonHealth || healthData;
+          const reasons = Array.isArray(healthTarget.degradedReasons)
+            ? healthTarget.degradedReasons
+            : [];
+          for (const r of reasons) {
+            const sev =
+              r.severity === "error" || r.severity === "bad" ? "bad" : "warn";
+            pushIssue(
+              sev,
+              String(r.kind || "HEALTH").toUpperCase(),
+              String(r.message || "Degraded health check"),
+              r.action || null,
+            );
+          }
+          if (
+            reasons.length === 0 &&
+            daemonHealth?.online !== false &&
+            (healthTarget.operationalStatus === "down" ||
+              healthTarget.operationalStatus === "degraded" ||
+              healthTarget.status === "degraded" ||
+              healthTarget.dataStatus === "stale")
+          ) {
+            pushIssue(
+              healthTarget.operationalStatus === "down" ? "bad" : "warn",
+              "HEALTH",
+              "Operational health reports " +
+                String(
+                  healthTarget.operationalStatus ||
+                    healthTarget.status ||
+                    "degraded",
+                ) +
+                (healthTarget.dataStatus
+                  ? " (data: " + healthTarget.dataStatus + ")"
+                  : ""),
+              null,
+            );
+          }
+          if (
+            daemonHealth !== healthData &&
+            healthData.service === "sportsdesk-dev-dashboard"
+          ) {
+            const deps = healthData.dependencies || {};
+            const dbDep = deps.db && deps.db.status ? deps.db.status : null;
+            const r2Dep = deps.r2 && deps.r2.status ? deps.r2.status : null;
+            const buildInfo = healthData.build || {};
+            const deadCount =
+              healthData.alerts && typeof healthData.alerts.dead === "number"
+                ? healthData.alerts.dead
+                : 0;
+            const causes = [];
+            if (dbDep === "error" || dbDep === "unconfigured") {
+              causes.push("db: " + dbDep);
+            }
+            if (r2Dep === "error" || r2Dep === "degraded") {
+              causes.push("r2: " + r2Dep);
+            }
+            if (deadCount > 0) {
+              causes.push("dead alerts: " + deadCount);
+            }
+            if (buildInfo.bunVersionDrift) {
+              causes.push(
+                "Bun drift (" +
+                  buildInfo.bunVersion +
+                  " vs " +
+                  buildInfo.expectedBunVersion +
+                  ")",
+              );
+            }
+            if (healthData.status && healthData.status !== "ok") {
+              pushIssue(
+                healthData.status === "down" ? "bad" : "warn",
+                "PROXY",
+                "Dev proxy " +
+                  String(healthData.status) +
+                  (causes.length > 0 ? " (" + causes.join(", ") + ")" : ""),
+                null,
+              );
+            } else if (buildInfo.bunVersionDrift) {
+              pushIssue(
+                "warn",
+                "RUNTIME",
+                "Dev proxy Bun version drift (" +
+                  buildInfo.bunVersion +
+                  " vs pinned " +
+                  buildInfo.expectedBunVersion +
+                  ")",
+                null,
+              );
+            }
+          } else if (
+            daemonHealth !== healthData &&
+            healthData.status &&
+            healthData.status !== "ok"
+          ) {
+            pushIssue(
+              "warn",
+              "PROXY",
+              "Dev dashboard proxy reports status: " +
+                String(healthData.status),
+              null,
+            );
+          }
+        }
+
+        // 3. Bridge 3c / rollup job failures
+        if (!bRes || !bRes.ok) {
+          pushIssue(
+            "warn",
+            "BRIDGE",
+            bRes && bRes.error
+              ? bRes.error
+              : "/api/bridge3c/status unavailable",
+            null,
+          );
+        } else if (bridgeData && bridgeData.rollup) {
+          const jobs = Array.isArray(bridgeData.rollup.jobs)
+            ? bridgeData.rollup.jobs
+            : [];
+          for (const job of jobs) {
+            if (job && job.ok === false) {
+              pushIssue(
+                "warn",
+                "BRIDGE",
+                (job.label || job.id) + ": " + (job.error || "job failed"),
+                extractCommand(job.error || ""),
+              );
+            }
+          }
+          const alerts = Array.isArray(bridgeData.rollup.alerts)
+            ? bridgeData.rollup.alerts
+            : [];
+          for (const al of alerts) {
+            pushIssue("warn", "ALERT", String(al), null);
+          }
+        }
+
+        // 4. DNS resolver errors
+        if (!dRes || !dRes.ok) {
+          pushIssue(
+            "warn",
+            "DNS",
+            dRes && dRes.error ? dRes.error : "/api/dns/telemetry unavailable",
+            null,
+          );
+        } else if (
+          dnsData &&
+          dnsData.telemetry &&
+          Number(dnsData.telemetry.errors) > 0
+        ) {
+          pushIssue(
+            "warn",
+            "DNS",
+            "DNS cache recorded " + dnsData.telemetry.errors + " error(s)",
+            null,
+          );
+        }
+
+        const isDaemonUnreachable =
+          !sRes ||
+          !sRes.ok ||
+          !statusData ||
+          statusData.ok === false ||
+          statusData.daemon4020Online === false;
+        const isAuthDown =
+          daemonHealth &&
+          daemonHealth.online !== false &&
+          daemonHealth.operationalStatus === "down";
+        const hasAnyDegraded = issues.length > 0;
+        const telegramSim =
+          statusData &&
+          statusData.telegram &&
+          statusData.telegram.status &&
+          statusData.telegram.status.mode === "simulation";
+
+        let tone = "ok";
+        let label = "serving · operational";
+        let detail = "";
+
+        if (isDaemonUnreachable) {
+          tone = "bad";
+          label =
+            statusData && statusData.daemon4020Online === false
+              ? "daemon offline"
+              : "unreachable";
+          detail =
+            (statusData && statusData.note) ||
+            (sRes && sRes.error) ||
+            "Status probe failed";
+        } else if (isAuthDown) {
+          tone = "bad";
+          label = "auth down";
+          detail = issues[0] ? issues[0].message : "Daemon authentication down";
+        } else if (hasAnyDegraded) {
+          tone = "warn";
+          label = "serving · degraded";
+          detail =
+            issues.length +
+            (issues.length === 1 ? " active issue" : " active issues");
+        } else if (telegramSim) {
+          tone = "info";
+          label = "serving · simulation";
+          detail = "Telegram outbound disabled (simulation mode)";
+        }
+
+        return {
+          tone,
+          label,
+          detail,
+          issues,
+          telegramSim,
+          telegramReason:
+            telegramSim && statusData.telegram.status.modeReason
+              ? statusData.telegram.status.modeReason
+              : null,
+        };
+      }
+
+      function renderSummaryAndBanners(signals) {
+        const summary = document.getElementById("summary");
+        summary.className = "status-pill " + signals.tone;
+        const dot = el("span", "dot-" + signals.tone, "\u25cf ");
+        dot.setAttribute("aria-hidden", "true");
+        const strong = el("strong", "", signals.label);
+        summary.replaceChildren(dot, strong);
+        if (signals.detail) {
+          summary.appendChild(el("span", "", " \u2014 " + signals.detail));
+        }
+
+        const shaChip = document.getElementById("sha-chip");
+        const daemonHealth = resolveDaemonHealthPayload(
+          state.health && state.health.data,
+        );
+        const gitSha =
+          (daemonHealth &&
+            daemonHealth.version &&
+            daemonHealth.version.gitSha) ||
+          (state.health &&
+            state.health.data &&
+            state.health.data.version &&
+            state.health.data.version.gitSha);
+        if (gitSha) {
+          shaChip.textContent = "sha " + String(gitSha);
+          shaChip.hidden = false;
+        } else {
+          shaChip.hidden = true;
+        }
+
+        const banner = document.getElementById("alert-banner");
+        if (signals.issues.length === 0) {
+          banner.hidden = true;
+          banner.replaceChildren();
+        } else {
+          const hasBad = signals.issues.some((i) => i.severity === "bad");
+          banner.className = hasBad ? "banner bad" : "banner";
+          banner.hidden = false;
+
+          const head = el("div", "banner-head");
+          const title = el("div", "banner-title");
+          title.appendChild(
+            el("span", hasBad ? "dot-bad" : "dot-warn", "\u25b2"),
+          );
+          title.appendChild(
+            el(
+              "span",
+              "",
+              hasBad
+                ? "Operational Degradation / Outage Detected"
+                : "Operational Warnings & Stale Pipelines",
+            ),
+          );
+          head.append(
+            title,
+            makeChip(
+              signals.issues.length +
+                (signals.issues.length === 1 ? " signal" : " signals"),
+              hasBad ? "bad" : "warn",
+            ),
+          );
+
+          const list = el("div", "issue-list");
+          for (const issue of signals.issues) {
+            const row = el("div", "issue-row");
+            const main = el("div", "issue-main");
+            main.append(
+              makeChip(issue.kind, issue.severity === "bad" ? "bad" : "warn"),
+              el("span", "issue-msg", issue.message),
+            );
+            row.appendChild(main);
+
+            if (issue.action) {
+              const remBox = el("div", "remediation-box");
+              remBox.appendChild(el("code", "remediation-code", issue.action));
+              const copyBtn = el("button", "btn btn-sm", "Copy cmd");
+              copyBtn.type = "button";
+              copyBtn.addEventListener("click", () => {
+                copyText(issue.action, copyBtn, "Copy cmd");
+              });
+              remBox.appendChild(copyBtn);
+              row.appendChild(remBox);
+            }
+            list.appendChild(row);
+          }
+          banner.replaceChildren(head, list);
+        }
+
+        const simBanner = document.getElementById("sim-notice");
+        if (signals.telegramSim) {
+          simBanner.hidden = false;
+          const head = el("div", "banner-head");
+          const left = el("div", "banner-title");
+          left.append(
+            makeChip("TELEGRAM SIMULATION", "info"),
+            el(
+              "span",
+              "issue-msg",
+              "Outbound Telegram delivery is inactive" +
+                (signals.telegramReason ? ": " + signals.telegramReason : ""),
+            ),
+          );
+          head.appendChild(left);
+          simBanner.replaceChildren(head);
+        } else {
+          simBanner.hidden = true;
+          simBanner.replaceChildren();
+        }
+      }
+
+      function renderProcessCard() {
+        const body = document.getElementById("process-body");
+        const latencyChip = document.getElementById("process-latency");
+        const sRes = state.status;
+        if (!sRes) {
+          latencyChip.textContent = "--";
+          body.replaceChildren(el("div", "muted-note", "Loading\u2026"));
+          return;
+        }
+        latencyChip.textContent = formatMs(sRes.latencyMs);
+        latencyChip.className = sRes.ok ? "chip ok mono" : "chip bad mono";
+
+        const data = sRes.data;
+        if (!data || data.daemon4020Online === false) {
+          body.replaceChildren(
+            el(
+              "div",
+              "muted-note",
+              (data && data.note) ||
+                sRes.error ||
+                "Daemon process telemetry unavailable.",
+            ),
+          );
+          return;
+        }
+
+        const h = data.health || {};
+        const hero = el("div", "hero-row");
+        hero.append(
+          el("div", "hero-value mono", formatDurationSec(h.uptimeSeconds)),
+          makeChip("PID " + (h.pid ?? "--"), "info"),
+        );
+
+        const checksWrap = el("div", "pill-row");
+        const checks = data.checks || {};
+        for (const [k, v] of Object.entries(checks)) {
+          checksWrap.appendChild(
+            makeChip(k + ": " + String(v), v === "ok" ? "ok" : "bad"),
+          );
+        }
+        if (Object.keys(checks).length === 0) {
+          checksWrap.appendChild(makeChip("no checks reported", "warn"));
+        }
+
+        const kv = el("div", "kv-list");
+        kv.append(
+          makeKvRow("Runtime", h.runtime || "--", "mono"),
+          makeKvRow(
+            "Daemon Timestamp",
+            data.timestamp
+              ? data.timestamp + " (" + formatRelativeIso(data.timestamp) + ")"
+              : "--",
+            "mono",
+          ),
+        );
+
+        const proxyHealth =
+          state.health &&
+          state.health.data &&
+          state.health.data.service === "sportsdesk-dev-dashboard"
+            ? state.health.data
+            : null;
+        if (proxyHealth) {
+          kv.appendChild(
+            makeKvRow(
+              "Local Proxy Host",
+              ":" +
+                proxyHealth.port +
+                " \u00b7 Bun " +
+                proxyHealth.bunVersion +
+                " \u00b7 " +
+                (proxyHealth.pendingWebSockets ?? 0) +
+                " WS \u00b7 " +
+                (proxyHealth.pendingRequests ?? 0) +
+                " inflight",
+              "mono",
+            ),
+          );
+        }
+
+        body.replaceChildren(hero, checksWrap, kv);
+      }
+
+      function renderFeedsCard() {
+        const body = document.getElementById("feeds-body");
+        const badge = document.getElementById("feeds-badge");
+        const live =
+          state.status && state.status.data && state.status.data.live;
+        if (!live) {
+          badge.textContent = "unavailable";
+          badge.className = "chip warn mono";
+          body.replaceChildren(
+            el("div", "muted-note", "Live feed telemetry unavailable."),
+          );
+          return;
+        }
+
+        const ticker = live.ticker || {};
+        const pending = live.pending || {};
+        const refresh = live.refresh || {};
+        const persistence = live.persistence || {};
+        const allOk =
+          ticker.ok !== false &&
+          pending.ok !== false &&
+          refresh.lastTickOk !== false;
+
+        badge.textContent =
+          (ticker.status || "unknown") +
+          " \u00b7 " +
+          (refresh.ticks ?? 0) +
+          " ticks";
+        badge.className = allOk ? "chip ok mono" : "chip warn mono";
+
+        const hero = el("div", "hero-row");
+        hero.append(
+          el("div", "hero-value mono", String(refresh.ticks ?? 0) + " ticks"),
+          el("span", "hero-sub mono", "every " + formatMs(refresh.intervalMs)),
+        );
+
+        const kv = el("div", "kv-list");
+        kv.append(
+          makeKvRow(
+            "Ticker",
+            (ticker.status || "--") +
+              " (" +
+              (ticker.transport || "--") +
+              ") \u00b7 " +
+              formatRelativeIso(ticker.fetchedAt) +
+              " \u00b7 TTL " +
+              formatMs(ticker.ttlMs) +
+              (ticker.servedFromCache ? " [cached]" : " [fresh]"),
+            "mono",
+          ),
+          makeKvRow(
+            "Pending",
+            (pending.status || "--") +
+              " \u00b7 " +
+              (pending.customersAttempted ?? 0) +
+              " accts (" +
+              (pending.customersFailed ?? 0) +
+              " failed) \u00b7 " +
+              formatRelativeIso(pending.fetchedAt),
+            "mono",
+          ),
+          makeKvRow(
+            "Refresh Loop",
+            (refresh.enabled ? "enabled" : "paused") +
+              " \u00b7 last tick " +
+              (refresh.lastTickOk ? "ok" : "error") +
+              " (" +
+              formatRelativeIso(refresh.lastTickAt) +
+              ")",
+            "mono",
+          ),
+          makeKvRow(
+            "Persistence",
+            (persistence.enabled ? "enabled" : "disabled") +
+              " (" +
+              (persistence.artifactRoot || "--") +
+              ", throttle " +
+              formatMs(persistence.throttleMs) +
+              ")",
+            "mono",
+          ),
+        );
+        if (refresh.lastError) {
+          kv.appendChild(
+            makeKvRow("Last Loop Error", refresh.lastError, "mono dot-bad"),
+          );
+        }
+
+        body.replaceChildren(hero, kv);
+      }
+
+      function renderMemoryCard() {
+        const body = document.getElementById("memory-body");
+        const badge = document.getElementById("memory-badge");
+        const h = state.status && state.status.data && state.status.data.health;
+        const mem = h && h.memory;
+        if (!mem) {
+          badge.textContent = "--";
+          badge.className = "chip mono";
+          body.replaceChildren(
+            el("div", "muted-note", "Memory & CPU telemetry unavailable."),
+          );
+          return;
+        }
+
+        badge.textContent = "RSS " + formatMiB(mem.rss);
+        badge.className = "chip info mono";
+
+        const maxBytes = Math.max(
+          Number(mem.rss) || 0,
+          Number(mem.heapUsed) || 0,
+          Number(mem.heapTotal) || 0,
+          Number(mem.external) || 0,
+          Number(mem.arrayBuffers) || 0,
+          1,
+        );
+
+        const bars = el("div", "bar-group");
+        const entries = [
+          ["RSS", mem.rss, "ok"],
+          ["Heap Used", mem.heapUsed, ""],
+          ["Heap Total", mem.heapTotal, ""],
+          ["External", mem.external, "warn"],
+          ["ArrayBuffers", mem.arrayBuffers, "warn"],
+        ];
+
+        for (const [label, val, fillTone] of entries) {
+          const item = el("div", "bar-item");
+          const meta = el("div", "bar-meta");
+          meta.append(
+            el("span", "kv-label", label),
+            el("span", "mono", formatMiB(val)),
+          );
+          const track = el("div", "bar-track");
+          const pct = Math.min(
+            100,
+            Math.max(0, Math.round(((Number(val) || 0) / maxBytes) * 100)),
+          );
+          const fill = el(
+            "div",
+            fillTone ? "bar-fill " + fillTone : "bar-fill",
+          );
+          fill.style.width = pct + "%";
+          track.appendChild(fill);
+          item.append(meta, track);
+          bars.appendChild(item);
+        }
+
+        const cpu = h.cpuUsageSinceStartMicros || {};
+        const cpuBox = el("div", "subbox");
+        const cpuTop = el("div", "kv-row");
+        cpuTop.append(
+          el("span", "kv-label", "Cumulative CPU"),
+          el(
+            "span",
+            "mono",
+            "user " +
+              formatMicrosSec(cpu.user) +
+              " \u00b7 sys " +
+              formatMicrosSec(cpu.system),
+          ),
+        );
+        const cpuNote = el(
+          "div",
+          "muted-note",
+          "Cumulative CPU since start (not load %)",
+        );
+        cpuBox.append(cpuTop, cpuNote);
+
+        body.replaceChildren(bars, cpuBox);
+      }
+
+      function renderDnsCard() {
+        const body = document.getElementById("dns-body");
+        const badge = document.getElementById("dns-badge");
+        const dRes = state.dns;
+        if (!dRes || !dRes.ok || !dRes.data || !dRes.data.telemetry) {
+          badge.textContent =
+            dRes && dRes.status ? "HTTP " + dRes.status : "offline";
+          badge.className = "chip warn mono";
+          body.replaceChildren(
+            el(
+              "div",
+              "muted-note",
+              (dRes && dRes.error) || "DNS resolver telemetry unavailable.",
+            ),
+          );
+          return;
+        }
+
+        const t = dRes.data.telemetry;
+        const rate =
+          typeof t.cacheHitRatePercent === "number"
+            ? t.cacheHitRatePercent
+            : Number(t.hitRatePercent) || 0;
+        badge.textContent =
+          (t.errors > 0 ? t.errors + " err \u00b7 " : "") +
+          (t.totalCount ?? 0) +
+          " reqs";
+        badge.className = t.errors > 0 ? "chip bad mono" : "chip ok mono";
+
+        const hero = el("div", "hero-row");
+        hero.append(
+          el("div", "hero-value mono", rate.toFixed(1) + "% hit"),
+          el(
+            "span",
+            "hero-sub mono",
+            "TTL " + (t.defaultTtlSeconds ?? "--") + "s",
+          ),
+        );
+
+        const barItem = el("div", "bar-item");
+        const track = el("div", "bar-track");
+        const fill = el("div", "bar-fill ok");
+        fill.style.width = Math.min(100, Math.max(0, rate)) + "%";
+        track.appendChild(fill);
+        barItem.appendChild(track);
+
+        const mini = el("div", "mini-grid");
+        const stats = [
+          ["Completed", t.cacheHitsCompleted ?? 0],
+          ["Inflight", t.cacheHitsInflight ?? 0],
+          ["Misses", t.cacheMisses ?? 0],
+          ["Size", t.size ?? 0],
+          ["Errors", t.errors ?? 0],
+          ["Total", t.totalCount ?? 0],
+        ];
+        for (const [k, v] of stats) {
+          const card = el("div", "mini-stat");
+          card.append(
+            el("div", "mini-stat-label", k),
+            el("div", "mini-stat-val mono", String(v)),
+          );
+          mini.appendChild(card);
+        }
+
+        const hosts = Array.isArray(dRes.data.coreHosts)
+          ? dRes.data.coreHosts
+          : Array.isArray(dRes.data.hosts)
+            ? dRes.data.hosts
+            : [];
+        const hostList = el("div", "host-list");
+        for (const h of hosts) {
+          const row = el("div", "host-row");
+          row.append(
+            el("span", "host-name mono", h.hostname),
+            el("span", "host-service", h.serviceName || ""),
+          );
+          hostList.appendChild(row);
+        }
+
+        body.replaceChildren(hero, barItem, mini, hostList);
+      }
+
+      function renderBridgeCard() {
+        const body = document.getElementById("bridge-body");
+        const chipsWrap = document.getElementById("bridge-head-chips");
+        const bRes = state.bridge3c;
+        if (!bRes || !bRes.ok || !bRes.data || !bRes.data.rollup) {
+          chipsWrap.replaceChildren(makeChip("unavailable", "warn"));
+          body.replaceChildren(
+            el(
+              "div",
+              "muted-note",
+              (bRes && bRes.error) || "Bridge 3c rollup telemetry unavailable.",
+            ),
+          );
+          return;
+        }
+
+        const d = bRes.data;
+        const rollup = d.rollup;
+        const jobs = Array.isArray(rollup.jobs) ? rollup.jobs : [];
+        const passing = jobs.filter((j) => j.ok).length;
+        const artifactStatus = rollup.artifactStatus || {};
+
+        chipsWrap.replaceChildren(
+          makeChip(
+            passing + "/" + jobs.length + " passing",
+            passing === jobs.length ? "ok" : "warn",
+          ),
+          makeChip(d.readOnly ? "read-only" : "writable", "info"),
+          makeChip(String(d.boundary || "bridge"), ""),
+          makeChip(formatRelativeIso(rollup.updatedAt), "mono"),
+        );
+
+        const wrap = el("div", "table-wrap");
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const headTr = document.createElement("tr");
+        for (const col of ["Job", "Status", "Duration", "Artifact"]) {
+          headTr.appendChild(el("th", "", col));
+        }
+        thead.appendChild(headTr);
+
+        const tbody = document.createElement("tbody");
+        for (const job of jobs) {
+          const tr = document.createElement("tr");
+          const tdJob = document.createElement("td");
+          tdJob.append(
+            el("div", "job-name", job.label || job.id),
+            el("div", "job-id mono", job.id),
+          );
+          if (!job.ok && job.error) {
+            const errBox = el("div", "job-error mono", job.error);
+            tdJob.appendChild(errBox);
+          }
+
+          const tdStatus = document.createElement("td");
+          tdStatus.appendChild(
+            makeChip(job.ok ? "OK" : "FAIL", job.ok ? "ok" : "bad"),
+          );
+
+          const tdDur = el("td", "mono", formatMs(job.durationMs));
+
+          const artState = artifactStatus[job.id];
+          const tdArt = document.createElement("td");
+          tdArt.appendChild(
+            artState
+              ? makeChip(artState, artState === "ok" ? "ok" : "warn")
+              : el("span", "muted-note", "--"),
+          );
+
+          tr.append(tdJob, tdStatus, tdDur, tdArt);
+          tbody.appendChild(tr);
+        }
+        table.append(thead, tbody);
+        wrap.appendChild(table);
+
+        // Gate & Artifact cards
+        const artifacts = rollup.artifacts || {};
+        const artGrid = el("div", "artifact-grid");
+        for (const [key, art] of Object.entries(artifacts)) {
+          if (!art) continue;
+          const gates = Array.isArray(art.gates) ? art.gates : [];
+          const flagEntries = Object.entries(art.flags || {}).filter(
+            ([, count]) => Number(count) > 0,
+          );
+          const hasRows = art.rows && typeof art.rows.total === "number";
+          if (
+            gates.length === 0 &&
+            flagEntries.length === 0 &&
+            !hasRows &&
+            !art.deskDate
+          ) {
+            continue;
+          }
+
+          const card = el("div", "subbox");
+          const cardHead = el("div", "card-head");
+          cardHead.appendChild(el("strong", "mono", key));
+          if (art.deskDate) {
+            cardHead.appendChild(makeChip("desk " + art.deskDate, "info"));
+          } else if (hasRows) {
+            cardHead.appendChild(
+              makeChip(
+                art.rows.parsed +
+                  "/" +
+                  art.rows.total +
+                  " parsed" +
+                  (art.rows.malformed
+                    ? " (" + art.rows.malformed + " bad)"
+                    : ""),
+                art.rows.malformed ? "warn" : "ok",
+              ),
+            );
+          }
+          card.appendChild(cardHead);
+
+          if (gates.length > 0) {
+            const gateRow = el("div", "pill-row");
+            for (const g of gates) {
+              const tone =
+                g.status === "pass"
+                  ? "ok"
+                  : g.status === "skipped"
+                    ? "warn"
+                    : "bad";
+              gateRow.appendChild(makeChip(g.gate + ": " + g.status, tone));
+            }
+            card.appendChild(gateRow);
+          }
+
+          if (flagEntries.length > 0) {
+            const flagRow = el("div", "pill-row");
+            for (const [flagName, count] of flagEntries) {
+              flagRow.appendChild(makeChip(flagName + ": " + count, "info"));
+            }
+            card.appendChild(flagRow);
+          }
+          artGrid.appendChild(card);
+        }
+
+        const nodes = [wrap];
+        if (artGrid.childElementCount > 0) nodes.push(artGrid);
+        body.replaceChildren(...nodes);
+      }
+
+      function buildDaemonHealthFragments(dh) {
+        const fragments = [];
+        const checks = dh.checks || {};
+        const auth = checks.auth || {};
+
+        if (auth.f402 || auth.gslive) {
+          const authGrid = el("div", "artifact-grid");
+          if (auth.f402) {
+            const c = el("div", "subbox");
+            const top = el("div", "card-head");
+            top.append(
+              el("strong", "", "F402 Session Auth"),
+              makeChip(
+                auth.f402.status || "unknown",
+                auth.f402.status === "ok" ? "ok" : "bad",
+              ),
+            );
+            const kv = el("div", "kv-list");
+            kv.append(
+              makeKvRow("Source", auth.f402.source || "--", "mono"),
+              makeKvRow(
+                "TTL Remaining",
+                typeof auth.f402.expiresInSeconds === "number"
+                  ? formatDurationSec(auth.f402.expiresInSeconds)
+                  : "--",
+                "mono",
+              ),
+              makeKvRow(
+                "Auto-Mint",
+                auth.f402.mintCapable ? "capable" : "disabled",
+                "mono",
+              ),
+            );
+            c.append(top, kv);
+            authGrid.appendChild(c);
+          }
+
+          if (auth.gslive) {
+            const c = el("div", "subbox");
+            const top = el("div", "card-head");
+            top.append(
+              el("strong", "", "GSLive Dual Auth"),
+              makeChip(
+                auth.gslive.status || "unknown",
+                auth.gslive.status === "ok" ? "ok" : "bad",
+              ),
+            );
+            const kv = el("div", "kv-list");
+            kv.append(
+              makeKvRow("Source", auth.gslive.source || "--", "mono"),
+              makeKvRow("Probe HTTP", auth.gslive.probeStatus ?? "--", "mono"),
+              makeKvRow(
+                "User / Partner",
+                (auth.gslive.user || "--") +
+                  " / " +
+                  (auth.gslive.partner ?? "--"),
+                "mono",
+              ),
+              makeKvRow(
+                "Auto-Mint Blocked",
+                auth.gslive.automintBlocked || "none",
+                "mono",
+              ),
+            );
+            c.append(top, kv);
+            authGrid.appendChild(c);
+          }
+          fragments.push(authGrid);
+        }
+
+        if (checks.pipelines) {
+          const p = checks.pipelines;
+          const pBox = el("div", "subbox");
+          const pTop = el("div", "card-head");
+          pTop.append(
+            el("strong", "", "R2 Pipelines"),
+            makeChip(
+              (p.r2Fresh ?? 0) + "/" + (p.r2Total ?? 0) + " fresh",
+              p.r2Fresh === p.r2Total ? "ok" : "warn",
+            ),
+          );
+          const sinkPills = el("div", "pill-row");
+          for (const [k, v] of Object.entries(p.checks || {})) {
+            sinkPills.appendChild(
+              makeChip(k + ": " + String(v), v === "ok" ? "ok" : "warn"),
+            );
+          }
+          const kv = el("div", "kv-list");
+          if (Array.isArray(p.r2StaleKeys) && p.r2StaleKeys.length > 0) {
+            kv.appendChild(
+              makeKvRow("R2 Publish Stale", p.r2StaleKeys.join(", "), "mono"),
+            );
+          }
+          if (Array.isArray(p.dataStaleKeys) && p.dataStaleKeys.length > 0) {
+            kv.appendChild(
+              makeKvRow("Data Age Stale", p.dataStaleKeys.join(", "), "mono"),
+            );
+          }
+          pBox.append(pTop, sinkPills);
+          if (kv.childElementCount > 0) pBox.appendChild(kv);
+          fragments.push(pBox);
+        }
+
+        const metaBox = el("div", "subbox");
+        const metaKv = el("div", "kv-list");
+        metaKv.append(
+          makeKvRow("Node Env", dh.nodeEnv || "--", "mono"),
+          makeKvRow(
+            "Ingress",
+            "proxied=" +
+              Boolean(dh.ingress && dh.ingress.proxied) +
+              ", trustProxy=" +
+              Boolean(dh.ingress && dh.ingress.trustProxy),
+            "mono",
+          ),
+          makeKvRow(
+            "Build Time",
+            (dh.version && dh.version.buildTime) || "--",
+            "mono",
+          ),
+        );
+        if (typeof dh.latencyMs === "number") {
+          metaKv.appendChild(
+            makeKvRow(
+              "Daemon Probe",
+              formatMs(dh.latencyMs) +
+                (dh.origin ? " (" + dh.origin + ")" : ""),
+              "mono",
+            ),
+          );
+        }
+        metaBox.appendChild(metaKv);
+        fragments.push(metaBox);
+
+        return fragments;
+      }
+
+      function renderHealthCard() {
+        const body = document.getElementById("health-body");
+        const modeChip = document.getElementById("health-mode-chip");
+        const hRes = state.health;
+        if (!hRes || !hRes.ok || !hRes.data) {
+          modeChip.textContent = "unavailable";
+          modeChip.className = "chip bad mono";
+          body.replaceChildren(
+            el(
+              "div",
+              "muted-note",
+              (hRes && hRes.error) || "/health telemetry unavailable.",
+            ),
+          );
+          return;
+        }
+
+        const h = hRes.data;
+        const hasDaemonAuth = h.checks && (h.checks.auth || h.checks.pipelines);
+
+        if (hasDaemonAuth) {
+          modeChip.textContent = "daemon /health";
+          modeChip.className =
+            h.operationalStatus === "ok"
+              ? "chip ok mono"
+              : h.operationalStatus === "down"
+                ? "chip bad mono"
+                : "chip warn mono";
+
+          body.replaceChildren(...buildDaemonHealthFragments(h));
+          return;
+        }
+
+        if (h.service === "sportsdesk-dev-dashboard") {
+          const d4020 =
+            h.daemon4020 && typeof h.daemon4020 === "object"
+              ? h.daemon4020
+              : null;
+          const alerts = h.alerts || {};
+          const fragments = [];
+
+          if (d4020 && d4020.online) {
+            modeChip.textContent = "daemon + proxy :" + (h.port ?? "--");
+            modeChip.className =
+              d4020.operationalStatus === "ok"
+                ? "chip ok mono"
+                : d4020.operationalStatus === "down"
+                  ? "chip bad mono"
+                  : "chip warn mono";
+            fragments.push(...buildDaemonHealthFragments(d4020));
+          } else if (d4020 && !d4020.online) {
+            modeChip.textContent =
+              "daemon offline · proxy :" + (h.port ?? "--");
+            modeChip.className = "chip bad mono";
+            const errBox = el("div", "subbox");
+            const errHead = el("div", "card-head");
+            errHead.append(
+              el("strong", "", "Companion Daemon Unreachable"),
+              makeChip("offline", "bad"),
+            );
+            const errKv = el("div", "kv-list");
+            errKv.append(
+              makeKvRow("Origin", d4020.origin || "--", "mono"),
+              makeKvRow(
+                "Error",
+                d4020.error || "Unable to reach companion /health",
+                "mono dot-bad",
+              ),
+            );
+            errBox.append(errHead, errKv);
+            fragments.push(errBox);
+          } else {
+            modeChip.textContent = "dev proxy :" + (h.port ?? "--");
+            modeChip.className = "chip info mono";
+          }
+
+          const proxyBox = el("div", "subbox");
+          const proxyHead = el("div", "card-head");
+          const proxyPort =
+            (h.server && h.server.port !== undefined
+              ? h.server.port
+              : h.port) ?? "--";
+          const proxyHeadChips = el("div", "pill-row");
+          const buildInfo = h.build || {};
+          if (buildInfo.bunVersionDrift) {
+            proxyHeadChips.appendChild(
+              makeChip(
+                "drift (pin " +
+                  String(buildInfo.expectedBunVersion || "?") +
+                  ")",
+                "warn",
+              ),
+            );
+          }
+          proxyHeadChips.appendChild(
+            makeChip(
+              "proxy " + String(h.status || "ok"),
+              h.status === "ok" ? "ok" : h.status === "down" ? "bad" : "warn",
+            ),
+          );
+          proxyHead.append(
+            el("strong", "", "Dev Proxy Host :" + proxyPort),
+            proxyHeadChips,
+          );
+
+          const runtimeInfo = h.runtime || {};
+          const serverInfo = h.server || {};
+          const deps = h.dependencies || {};
+          const sessionsInfo = h.sessions || {};
+          const uptimeVal =
+            typeof runtimeInfo.uptimeSeconds === "number"
+              ? runtimeInfo.uptimeSeconds
+              : h.uptimeSeconds;
+          const pendingReq =
+            serverInfo.pendingRequests !== undefined
+              ? serverInfo.pendingRequests
+              : h.pendingRequests;
+          const pendingWs =
+            serverInfo.pendingWebSockets !== undefined
+              ? serverInfo.pendingWebSockets
+              : h.pendingWebSockets;
+          const wsBackpressure = serverInfo.wsBackpressureBytes ?? 0;
+
+          const mini = el("div", "mini-grid");
+          const proxyStats = [
+            ["Bun", String(buildInfo.bunVersion || h.bunVersion || "--")],
+            ["Uptime", formatDurationSec(uptimeVal)],
+            [
+              "Mem RSS / Heap",
+              typeof runtimeInfo.rssBytes === "number"
+                ? formatMiB(runtimeInfo.rssBytes) +
+                  " / " +
+                  formatMiB(runtimeInfo.heapUsedBytes)
+                : "--",
+            ],
+            [
+              "WS / Req / Back",
+              String(pendingWs ?? 0) +
+                " / " +
+                String(pendingReq ?? 0) +
+                " / " +
+                String(wsBackpressure) +
+                "B",
+            ],
+            ["Alerts Queued", String(alerts.queued ?? 0)],
+            ["Dead Alerts", String(alerts.dead ?? 0)],
+          ];
+          for (const [k, v] of proxyStats) {
+            const card = el("div", "mini-stat");
+            card.append(
+              el("div", "mini-stat-label", k),
+              el("div", "mini-stat-val mono", v),
+            );
+            mini.appendChild(card);
+          }
+
+          const dbStatusStr =
+            (deps.db && deps.db.status) || h.db || "unconfigured";
+          const r2StatusStr = deps.r2 && deps.r2.status ? deps.r2.status : "--";
+          const r2AgeStr =
+            deps.r2 && typeof deps.r2.lastSnapshotAgeMs === "number"
+              ? " (" + formatMs(deps.r2.lastSnapshotAgeMs) + ")"
+              : "";
+          const activeSess = sessionsInfo.active ?? 0;
+          const purgedSess =
+            sessionsInfo.purged !== undefined
+              ? sessionsInfo.purged
+              : (h.purgedSessions ?? 0);
+
+          const kv = el("div", "kv-list");
+          kv.append(
+            makeKvRow(
+              "Schema / Service",
+              (h.schemaVersion ? "v" + h.schemaVersion + " \u00b7 " : "") +
+                String(h.service || "--"),
+              "mono",
+            ),
+            makeKvRow("DB Dependency", String(dbStatusStr), "mono"),
+            makeKvRow("R2 Dependency", String(r2StatusStr) + r2AgeStr, "mono"),
+            makeKvRow(
+              "Sessions (Active / Purged)",
+              String(activeSess) + " / " + String(purgedSess),
+              "mono",
+            ),
+            makeKvRow(
+              "Alert Queue",
+              (alerts.status || "--") +
+                " (deliv " +
+                (alerts.delivered ?? 0) +
+                ", backlog " +
+                (alerts.backlog ?? 0) +
+                ", ack " +
+                (alerts.acknowledged ?? 0) +
+                (typeof alerts.oldestQueuedAgeMs === "number"
+                  ? ", oldest " + formatMs(alerts.oldestQueuedAgeMs)
+                  : "") +
+                ")",
+              "mono",
+            ),
+            makeKvRow(
+              "Last Alert Delivery",
+              alerts.lastDeliveryAt
+                ? String(alerts.lastDeliveryAt) +
+                    " (" +
+                    formatRelativeIso(alerts.lastDeliveryAt) +
+                    ")"
+                : "none",
+              "mono",
+            ),
+          );
+          proxyBox.append(proxyHead, mini, kv);
+          if (!d4020) {
+            proxyBox.appendChild(
+              el(
+                "div",
+                "muted-note",
+                "On this dev proxy port, /health reports the local dashboard host while /api/status, /api/bridge3c/status, and /api/dns/telemetry proxy live from the SportsDesk daemon.",
+              ),
+            );
+          }
+          fragments.push(proxyBox);
+
+          body.replaceChildren(...fragments);
+          return;
+        }
+
+        modeChip.textContent = String(h.status || "custom");
+        modeChip.className = "chip mono";
+        const genericKv = el("div", "kv-list");
+        for (const [k, v] of Object.entries(h)) {
+          genericKv.appendChild(
+            makeKvRow(
+              k,
+              typeof v === "object" && v !== null
+                ? JSON.stringify(v)
+                : String(v),
+              "mono",
+            ),
+          );
+        }
+        body.replaceChildren(genericKv);
+      }
+
+      function scheduleCategoryOf(job) {
+        if (job.reportType === "BRIDGE_ROLLUP_DIGEST")
+          return "BRIDGE_ROLLUP_DIGEST";
+        if (job.reportType === "SHELL_CAPTURE") return "SHELL_CAPTURE";
+        return "REPORTS";
+      }
+
+      function extractShellTarget(shellJob) {
+        if (!shellJob || typeof shellJob !== "object") return null;
+        const args = Array.isArray(shellJob.args) ? shellJob.args : [];
+        const runIdx = args.indexOf("run");
+        if (runIdx >= 0 && runIdx + 1 < args.length) {
+          return args.slice(runIdx + 1).join(" ");
+        }
+        const parts = [shellJob.bin, ...args].filter(Boolean);
+        return parts.length > 0 ? parts.join(" ") : null;
+      }
+
+      function renderTelegramAndSchedules() {
+        const strip = document.getElementById("telegram-strip");
+        const tabs = document.getElementById("schedule-filter-tabs");
+        const countChip = document.getElementById("schedule-count-chip");
+        const tableWrap = document.getElementById("schedules-body");
+
+        const telegram =
+          state.status && state.status.data && state.status.data.telegram;
+        if (!telegram) {
+          countChip.textContent = "0 schedules";
+          strip.replaceChildren(
+            el("div", "muted-note", "Telegram telemetry unavailable."),
+          );
+          tabs.replaceChildren();
+          tableWrap.replaceChildren(
+            el("div", "empty-row", "No schedule data loaded."),
+          );
+          return;
+        }
+
+        const ts = telegram.status || {};
+        const mode = ts.mode || (ts.tokenConfigured ? "live" : "unknown");
+        const stripLeft = el("div", "pill-row");
+        stripLeft.append(
+          makeChip(
+            "mode: " + mode,
+            mode === "simulation" ? "warn" : mode === "live" ? "ok" : "",
+          ),
+          makeChip(
+            "token: " + (ts.tokenConfigured ? "configured" : "unset"),
+            ts.tokenConfigured ? "ok" : "warn",
+          ),
+          makeChip(
+            "default chat: " + (ts.defaultChatConfigured ? "set" : "unset"),
+            ts.defaultChatConfigured ? "ok" : "",
+          ),
+          makeChip("auth chats: " + (ts.authorizedChatCount ?? 0), "info"),
+          makeChip("inbound: " + (ts.inbound ?? "none"), ""),
+        );
+
+        const stripRight = el(
+          "div",
+          "muted-note",
+          ts.error
+            ? "Error: " + ts.error
+            : ts.modeReason || "Telegram runtime healthy",
+        );
+        strip.replaceChildren(stripLeft, stripRight);
+
+        const schedules = Array.isArray(telegram.schedules)
+          ? telegram.schedules
+          : [];
+
+        const counts = {
+          all: schedules.length,
+          BRIDGE_ROLLUP_DIGEST: schedules.filter(
+            (s) => scheduleCategoryOf(s) === "BRIDGE_ROLLUP_DIGEST",
+          ).length,
+          SHELL_CAPTURE: schedules.filter(
+            (s) => scheduleCategoryOf(s) === "SHELL_CAPTURE",
+          ).length,
+          REPORTS: schedules.filter((s) => scheduleCategoryOf(s) === "REPORTS")
+            .length,
+        };
+
+        const tabDefs = [
+          ["all", "All (" + counts.all + ")"],
+          [
+            "BRIDGE_ROLLUP_DIGEST",
+            "Bridge Rollup (" + counts.BRIDGE_ROLLUP_DIGEST + ")",
+          ],
+          ["SHELL_CAPTURE", "Shell Capture (" + counts.SHELL_CAPTURE + ")"],
+          ["REPORTS", "Reports (" + counts.REPORTS + ")"],
+        ];
+        const tabNodes = [];
+        for (const [id, label] of tabDefs) {
+          const btn = el(
+            "button",
+            state.scheduleCategory === id ? "btn btn-sm active" : "btn btn-sm",
+            label,
+          );
+          btn.type = "button";
+          btn.addEventListener("click", () => {
+            state.scheduleCategory = id;
+            renderTelegramAndSchedules();
+          });
+          tabNodes.push(btn);
+        }
+        tabs.replaceChildren(...tabNodes);
+
+        const q = state.scheduleQuery.trim().toLowerCase();
+        const filtered = schedules.filter((job) => {
+          if (
+            state.scheduleCategory !== "all" &&
+            scheduleCategoryOf(job) !== state.scheduleCategory
+          ) {
+            return false;
+          }
+          if (!q) return true;
+          const haystack = [
+            job.id,
+            job.name,
+            job.scheduleTime,
+            job.reportType,
+            job.description,
+            job.tz,
+            ...(Array.isArray(job.bridgeJobs) ? job.bridgeJobs : []),
+            ...(job.shellJob && Array.isArray(job.shellJob.requires)
+              ? job.shellJob.requires
+              : []),
+            ...(job.shellJob && Array.isArray(job.shellJob.args)
+              ? job.shellJob.args
+              : []),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(q);
         });
+
+        countChip.textContent =
+          "Showing " +
+          filtered.length +
+          " of " +
+          schedules.length +
+          " schedules";
+
+        if (filtered.length === 0) {
+          tableWrap.replaceChildren(
+            el("div", "empty-row", "No schedules match the current filter."),
+          );
+          return;
+        }
+
+        const wrap = el("div", "table-wrap");
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const headTr = document.createElement("tr");
+        for (const col of [
+          "State",
+          "Scheduled Job",
+          "Cron",
+          "TZ",
+          "Report Type",
+          "Dependencies",
+          "Targets",
+        ]) {
+          headTr.appendChild(el("th", "", col));
+        }
+        thead.appendChild(headTr);
+
+        const tbody = document.createElement("tbody");
+        for (const job of filtered) {
+          const tr = document.createElement("tr");
+
+          const tdState = el("td", "col-nowrap");
+          tdState.appendChild(
+            makeChip(
+              job.enabled ? "ENABLED" : "DISABLED",
+              job.enabled ? "ok" : "warn",
+            ),
+          );
+
+          const tdJob = document.createElement("td");
+          tdJob.append(
+            el("div", "job-name", job.name || job.id),
+            el("div", "job-id mono", job.id),
+          );
+          if (job.description) {
+            tdJob.appendChild(el("div", "job-desc", job.description));
+          }
+
+          const tdCron = el(
+            "td",
+            "col-nowrap mono",
+            job.scheduleTime || "\u2014",
+          );
+          tdCron.setAttribute("data-schedule-col", "cron");
+
+          const tdTz = el(
+            "td",
+            "col-nowrap muted-note mono",
+            job.tz || "daemon local",
+          );
+          tdTz.setAttribute("data-schedule-col", "tz");
+
+          const tdType = el("td", "col-nowrap");
+          tdType.appendChild(makeChip(job.reportType || "UNKNOWN", "info"));
+
+          const tdDeps = document.createElement("td");
+          tdDeps.setAttribute("data-schedule-col", "dependencies");
+          const depPills = el("div", "pill-row");
+          if (job.shellJob && Array.isArray(job.shellJob.requires)) {
+            for (const req of job.shellJob.requires) {
+              depPills.appendChild(makeChip(req, "warn chip-wrap mono"));
+            }
+          }
+          if (depPills.childElementCount === 0) {
+            depPills.appendChild(el("span", "muted-note", "\u2014"));
+          }
+          tdDeps.appendChild(depPills);
+
+          const tdTargets = document.createElement("td");
+          tdTargets.setAttribute("data-schedule-col", "targets");
+          const targetPills = el("div", "pill-row");
+          if (Array.isArray(job.bridgeJobs)) {
+            for (const b of job.bridgeJobs) {
+              targetPills.appendChild(makeChip(b, "info chip-wrap mono"));
+            }
+          }
+          const shellTarget = extractShellTarget(job.shellJob);
+          if (shellTarget) {
+            targetPills.appendChild(
+              makeChip(shellTarget, "info chip-wrap mono"),
+            );
+          }
+          if (job.shellJob && job.shellJob.timeoutSeconds) {
+            targetPills.appendChild(
+              makeChip("timeout " + job.shellJob.timeoutSeconds + "s", "mono"),
+            );
+          }
+          if (targetPills.childElementCount === 0) {
+            targetPills.appendChild(el("span", "muted-note", "\u2014"));
+          }
+          tdTargets.appendChild(targetPills);
+
+          tr.append(tdState, tdJob, tdCron, tdTz, tdType, tdDeps, tdTargets);
+          tbody.appendChild(tr);
+        }
+        table.append(thead, tbody);
+        wrap.appendChild(table);
+        tableWrap.replaceChildren(wrap);
+      }
+
+      function combinedSnapshotObject() {
+        return {
+          fetchedAt: state.lastUpdatedAt
+            ? state.lastUpdatedAt.toISOString()
+            : null,
+          status: state.status
+            ? (state.status.data ?? { error: state.status.error })
+            : null,
+          health: state.health
+            ? (state.health.data ?? { error: state.health.error })
+            : null,
+          bridge3c: state.bridge3c
+            ? (state.bridge3c.data ?? { error: state.bridge3c.error })
+            : null,
+          dns: state.dns
+            ? (state.dns.data ?? { error: state.dns.error })
+            : null,
+        };
+      }
+
+      function renderRawInspector() {
+        const details = document.getElementById("raw-details");
+        const hint = document.getElementById("raw-summary-hint");
+        const tabs = document.getElementById("raw-tabs");
+        const pre = document.getElementById("payload");
+
+        hint.textContent = details.open ? "Expanded" : "Collapsed";
+
+        const tabDefs = [
+          ["all", "All Endpoints"],
+          ["status", "/api/status"],
+          ["health", "/health"],
+          ["bridge3c", "/api/bridge3c/status"],
+          ["dns", "/api/dns/telemetry"],
+        ];
+        const buttons = [];
+        for (const [id, label] of tabDefs) {
+          const btn = el(
+            "button",
+            state.rawTab === id ? "btn btn-sm active mono" : "btn btn-sm mono",
+            label,
+          );
+          btn.type = "button";
+          btn.addEventListener("click", () => {
+            state.rawTab = id;
+            renderRawInspector();
+          });
+          buttons.push(btn);
+        }
+        tabs.replaceChildren(...buttons);
+
+        let target = null;
+        if (state.rawTab === "all") {
+          target = combinedSnapshotObject();
+        } else {
+          const res = state[state.rawTab];
+          target = res
+            ? {
+                ok: res.ok,
+                status: res.status,
+                latencyMs: res.latencyMs,
+                error: res.error,
+                data: res.data,
+              }
+            : null;
+        }
+        pre.textContent = JSON.stringify(target, null, 2);
+      }
+
+      function renderClockReadout() {
+        const node = document.getElementById("clock-readout");
+        if (!state.lastUpdatedAt) {
+          node.textContent = "Waiting for sample\u2026";
+          return;
+        }
+        const ageSec = Math.max(
+          0,
+          Math.floor((Date.now() - state.lastUpdatedAt.getTime()) / 1000),
+        );
+        const et = formatZoneTime(state.lastUpdatedAt, "America/New_York");
+        const ct = formatZoneTime(state.lastUpdatedAt, "America/Chicago");
+        node.textContent =
+          et + " ET \u00b7 " + ct + " CT (" + ageSec + "s ago)";
+      }
+
+      function renderAutoButton() {
+        const btn = document.getElementById("btn-auto");
+        if (state.autoRefresh) {
+          btn.className = "btn active";
+          btn.textContent =
+            "Auto " + POLL_INTERVAL_SEC + "s: ON (" + state.countdownSec + "s)";
+        } else {
+          btn.className = "btn";
+          btn.textContent = "Auto " + POLL_INTERVAL_SEC + "s: PAUSED";
+        }
+      }
+
+      function renderAll() {
+        const signals = computeOperationalSignals();
+        renderSummaryAndBanners(signals);
+        renderProcessCard();
+        renderFeedsCard();
+        renderMemoryCard();
+        renderDnsCard();
+        renderBridgeCard();
+        renderHealthCard();
+        renderTelegramAndSchedules();
+        renderRawInspector();
+        renderClockReadout();
+        renderAutoButton();
+      }
+
+      async function refreshAll() {
+        if (state.refreshing) return;
+        state.refreshing = true;
+        const btnRefresh = document.getElementById("btn-refresh");
+        btnRefresh.disabled = true;
+        btnRefresh.textContent = "Refreshing\u2026";
+
+        try {
+          const [statusRes, healthRes, bridgeRes, dnsRes] = await Promise.all([
+            requestEndpoint(ENDPOINTS.status),
+            requestEndpoint(ENDPOINTS.health),
+            requestEndpoint(ENDPOINTS.bridge3c),
+            requestEndpoint(ENDPOINTS.dns),
+          ]);
+          state.status = statusRes;
+          state.health = healthRes;
+          state.bridge3c = bridgeRes;
+          state.dns = dnsRes;
+          state.lastUpdatedAt = new Date();
+          state.countdownSec = POLL_INTERVAL_SEC;
+          renderAll();
+        } finally {
+          state.refreshing = false;
+          btnRefresh.disabled = false;
+          btnRefresh.textContent = "\u21bb Refresh";
+        }
+      }
+
+      function wireUiEvents() {
+        document.getElementById("host-chip").textContent =
+          window.location.host || "local";
+
+        document.getElementById("btn-refresh").addEventListener("click", () => {
+          void refreshAll();
+        });
+
+        document.getElementById("btn-auto").addEventListener("click", () => {
+          state.autoRefresh = !state.autoRefresh;
+          if (state.autoRefresh) {
+            state.countdownSec = POLL_INTERVAL_SEC;
+          }
+          renderAutoButton();
+        });
+
+        const copyBtn = document.getElementById("btn-copy-json");
+        copyBtn.addEventListener("click", () => {
+          void copyText(
+            JSON.stringify(combinedSnapshotObject(), null, 2),
+            copyBtn,
+            "\u2398 Copy JSON",
+          );
+        });
+
+        document
+          .getElementById("schedule-search")
+          .addEventListener("input", (event) => {
+            state.scheduleQuery = event.target.value || "";
+            renderTelegramAndSchedules();
+          });
+
+        document
+          .getElementById("raw-details")
+          .addEventListener("toggle", () => {
+            renderRawInspector();
+          });
+
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible" && state.autoRefresh) {
+            state.countdownSec = POLL_INTERVAL_SEC;
+            void refreshAll();
+          }
+        });
+
+        setInterval(() => {
+          renderClockReadout();
+          if (!state.autoRefresh || document.visibilityState !== "visible") {
+            return;
+          }
+          if (state.refreshing) return;
+          state.countdownSec -= 1;
+          if (state.countdownSec <= 0) {
+            state.countdownSec = POLL_INTERVAL_SEC;
+            void refreshAll();
+          } else {
+            renderAutoButton();
+          }
+        }, 1000);
+      }
+
+      wireUiEvents();
+      void refreshAll();
     </script>
   </body>
 </html>

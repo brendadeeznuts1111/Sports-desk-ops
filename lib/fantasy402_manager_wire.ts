@@ -137,10 +137,12 @@ export interface WebLogQueryOptions {
   jwtToken?: string;
   mode: WebLogMode;
   agentId?: string;
+  agentOwner?: string;
   officeAgentId?: string; // For Mode B Per-Office IP Match (passed in customerID per ip-tracker.js)
   customerId?: string;
   startDate?: string;
   endDate?: string;
+  actions?: string;
   ip?: string;
   timeoutMilliseconds?: number;
 }
@@ -606,20 +608,29 @@ export async function queryIpTrackerWebLog(
   const endDate =
     options.endDate ?? (options.mode === "C" ? defaultDateYmd : defaultDateMdy);
 
+  const agentId = (options.agentId ?? "BILLY666").trim();
+  const agentOwner = (options.agentOwner ?? agentId).trim();
+  const customerId =
+    options.mode === "B" && options.officeAgentId
+      ? options.officeAgentId.trim().toUpperCase()
+      : (options.customerId ?? "0");
+  const ip =
+    options.ip ??
+    (options.mode === "C" && customerId !== "0"
+      ? customerId.trim().toLowerCase()
+      : "");
+
   const bodyParams = new URLSearchParams({
-    operation: "getWebLog",
-    type: options.mode,
-    agentID: options.agentId ?? "BILLY666",
-    agentOwner: options.agentId ?? "BILLY666",
-    customerID:
-      options.mode === "B" && options.officeAgentId
-        ? options.officeAgentId.trim().toUpperCase()
-        : (options.customerId ?? "0"),
+    agentID: agentId,
+    customerID: customerId,
     start: startDate,
     end: endDate,
-    actions: "ALL",
-    ip: options.ip ?? "",
+    type: options.mode,
+    actions: options.actions ?? "ALL",
+    ip,
+    operation: "getWebLog",
     RRO: "1",
+    agentOwner,
   });
 
   const headers: Record<string, string> = {

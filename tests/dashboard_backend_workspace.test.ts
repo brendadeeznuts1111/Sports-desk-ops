@@ -4,12 +4,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   BoundedStampCache,
+  buildHealthPayload,
   computeCustomersCohortPayload,
   createCachedJsonReader,
   createCustomerRowFinder,
   createDevLiveWagersLoader,
   DashboardHealthTracker,
   DashboardMarkdownCache,
+  deriveOverallStatus,
   isDashboardAuthRequired,
   parseFiniteNumber,
   parseRepriceMode,
@@ -352,6 +354,132 @@ describe("@sportsdesk-ops/backend workspace services", () => {
     expect(dbProbes).toBe(2);
     expect(cleanups).toBe(1);
     expect(alertReads).toBe(2); // constructor + initial sample
+  });
+
+  test("DashboardHealthTracker throttles companion daemon4020 probe, preserves local status, and catches probe errors", async () => {
+    let clock = 10_000;
+    let probeCalls = 0;
+    let shouldFail = false;
+
+    const tracker = new DashboardHealthTracker({
+      daemonProbeMs: 5_000,
+      isDbConfigured: () => false,
+      probeDb: async () => {},
+      cleanupSessions: async () => 0,
+      getAlertMetrics: () => ({ status: "ok", dead: 0, backlog: 0 }),
+      getPort: () => 4024,
+      probeDaemon4020: async () => {
+        probeCalls++;
+        if (shouldFail) {
+          throw new Error("companion connect refused");
+        }
+        return {
+          online: true,
+          origin: "http://daemon.local:4020",
+          httpStatus: 200,
+          latencyMs: 3,
+          status: "degraded",
+          operationalStatus: "degraded",
+          dataStatus: "stale",
+          checks: { daemon: "ok" },
+          degradedReasons: [{ message: "GSLive expired", kind: "auth" }],
+          error: null,
+          sampledAt: new Date(clock).toISOString(),
+        };
+      },
+      now: () => clock,
+    });
+
+    const first = await tracker.sample();
+    expect(first.schemaVersion).toBe(1);
+    expect(first.status).toBe("degraded");
+    expect(first.dependencies.db.status).toBe("unconfigured");
+    expect(first.daemon4020?.online).toBe(true);
+    expect(first.daemon4020?.operationalStatus).toBe("degraded");
+    expect(first.daemon4020?.degradedReasons).toHaveLength(1);
+    expect(probeCalls).toBe(1);
+
+    clock += 2_000;
+    const second = await tracker.sample();
+    expect(probeCalls).toBe(1);
+    expect(second.daemon4020?.online).toBe(true);
+
+    clock += 4_000;
+    shouldFail = true;
+    const third = await tracker.sample();
+    expect(probeCalls).toBe(2);
+    expect(third.status).toBe("degraded");
+    expect(third.daemon4020?.online).toBe(false);
+    expect(third.daemon4020?.operationalStatus).toBe("down");
+    expect(third.daemon4020?.error).toContain("companion connect refused");
+
+    const plainTracker = new DashboardHealthTracker({
+      isDbConfigured: () => false,
+      probeDb: async () => {},
+      cleanupSessions: async () => 0,
+      getAlertMetrics: () => ({ status: "ok" }),
+      getPort: () => 4024,
+    });
+    const plain = await plainTracker.sample();
+    expect(plain.status).toBe("degraded");
+    expect(plain.daemon4020).toBeUndefined();
+  });
+
+  test("deriveOverallStatus and buildHealthPayload follow schemaVersion 1 contract", () => {
+    expect(deriveOverallStatus("ok", "ok", 0)).toBe("ok");
+    expect(deriveOverallStatus("unconfigured", "ok", 0)).toBe("degraded");
+    expect(deriveOverallStatus("ok", "degraded", 0)).toBe("degraded");
+    expect(deriveOverallStatus("ok", "ok", 1)).toBe("degraded");
+    expect(deriveOverallStatus("error", "ok", 0)).toBe("down");
+    expect(deriveOverallStatus("ok", "error", 0)).toBe("down");
+
+    const startedAtNs = Bun.nanoseconds() - 2_000_000_000;
+    const payload = buildHealthPayload(
+      { port: 4024, pendingRequests: 2, pendingWebSockets: 3 },
+      "1.4.4",
+      {
+        startedAtNs,
+        dbStatus: "ok",
+        r2Status: "degraded",
+        lastSnapshotAgeMs: 4200,
+        activeSessions: 4,
+        purgedSessions: 1,
+        wsBackpressureBytes: 128,
+        alerts: {
+          status: "degraded",
+          queued: 5,
+          delivered: 3,
+          dead: 1,
+          backlog: 1,
+          acknowledged: 0,
+          oldestQueuedAgeMs: 900,
+          lastDeliveryAt: "2026-11-20T18:00:00.000Z",
+        },
+      },
+    );
+    expect(payload.schemaVersion).toBe(1);
+    expect(payload.status).toBe("degraded");
+    expect(payload.service).toBe("sportsdesk-dev-dashboard");
+    expect(payload.build).toEqual({
+      bunVersion: Bun.version,
+      expectedBunVersion: "1.4.4",
+      bunVersionDrift: Bun.version !== "1.4.4",
+    });
+    expect(payload.runtime.uptimeSeconds).toBeGreaterThanOrEqual(2);
+    expect(payload.runtime.rssBytes).toBeGreaterThan(0);
+    expect(payload.runtime.heapUsedBytes).toBeGreaterThan(0);
+    expect(payload.server).toEqual({
+      port: 4024,
+      pendingRequests: 2,
+      pendingWebSockets: 3,
+      wsBackpressureBytes: 128,
+    });
+    expect(payload.dependencies).toEqual({
+      db: { status: "ok" },
+      r2: { status: "degraded", lastSnapshotAgeMs: 4200 },
+    });
+    expect(payload.sessions).toEqual({ active: 4, purged: 1 });
+    expect(payload.alerts.lastDeliveryAt).toBe("2026-11-20T18:00:00.000Z");
   });
 
   test("DashboardMarkdownCache renders local markdown and handles missing files", async () => {

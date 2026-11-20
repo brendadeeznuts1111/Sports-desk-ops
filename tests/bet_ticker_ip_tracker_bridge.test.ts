@@ -36,14 +36,36 @@ describe("bet_ticker_ip_tracker_bridge (ip-tracker.js & bet-ticker.js)", () => {
 
     const modeC = buildPlayerIpMatcherPayload({
       masterAgentId: "BILLY666",
+      agentOwner: "BILLY666v",
       customerLogin: "CB112_1",
-      startDate: "10/28/2026",
-      endDate: "10/31/2026",
+      startDate: "2026-11-06",
+      endDate: "2026-11-20",
     });
     assert.equal(modeC.type, "C");
+    assert.equal(modeC.agentID, "BILLY666");
+    assert.equal(modeC.agentOwner, "BILLY666v");
     assert.equal(modeC.customerID, "CB112_1");
-    assert.equal(modeC.start, "2026-10-28");
-    assert.equal(modeC.end, "2026-10-31");
+    assert.equal(modeC.ip, "cb112_1");
+    assert.equal(modeC.start, "2026-11-06");
+    assert.equal(modeC.end, "2026-11-20");
+    assert.deepEqual(Object.keys(modeC), [
+      "agentID",
+      "customerID",
+      "start",
+      "end",
+      "type",
+      "actions",
+      "ip",
+      "operation",
+      "RRO",
+      "agentOwner",
+    ]);
+    assert.equal(
+      new URLSearchParams(
+        modeC as unknown as Record<string, string>,
+      ).toString(),
+      "agentID=BILLY666&customerID=CB112_1&start=2026-11-06&end=2026-11-20&type=C&actions=ALL&ip=cb112_1&operation=getWebLog&RRO=1&agentOwner=BILLY666v",
+    );
   });
 
   test("normalizes LoginID strings and resolves Per-Office & Cross-Office IP matches for Bet-Ticker rows", () => {

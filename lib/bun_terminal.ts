@@ -24,6 +24,12 @@ export const BUN_TERMINAL_DOCS = bunUrl(
   "/docs/runtime/child-process#terminal-pty-support",
 );
 
+export const BUN_TERMINAL_WRITE_REF_URL = bunUrl(
+  "/reference/bun/Terminal/write",
+);
+
+export const BUN_BUFFER_SOURCE_REF_URL = bunUrl("/reference/bun/BufferSource");
+
 export const BUN_TERMINAL_V14_BLOG_URL = bunUrl("/blog/bun-v1.4#bun-terminal");
 
 export const BUN_TERMINAL_V14_BLOG_SHIP_NOTE =
@@ -116,17 +122,34 @@ export type PtyRunUntilResult = PtyRunResult & {
     | { readonly mode: "watch"; readonly killed: boolean }
   );
 
+/** Accepted input data types for writing to a terminal (`string | BufferSource`). */
+export type TerminalInputData = Parameters<Bun.Terminal["write"]>[0];
+
+/**
+ * Compute the exact byte count `Bun.Terminal.write(data)` will accept for any
+ * `string | BufferSource` payload (UTF-8 byte length for strings, including
+ * multi-byte code points and lone surrogates; `.byteLength` for views/buffers).
+ */
+export function terminalInputByteLength(data: TerminalInputData): number {
+  return typeof data === "string"
+    ? Buffer.byteLength(data, "utf8")
+    : data.byteLength;
+}
+
 /** Narrow `proc.terminal` after `Bun.spawn({ terminal })` — boundary guard. */
 export function requireSubprocessTerminal(proc: {
   readonly terminal?: unknown;
-}): { write: (input: string) => number; close: () => void } {
+}): { write: (data: TerminalInputData) => number; close: () => void } {
   const terminal = proc.terminal;
   if (terminal === undefined || terminal === null) {
     throw new Error(
       "Subprocess has no terminal handle; pass terminal to Bun.spawn",
     );
   }
-  return terminal as { write: (input: string) => number; close: () => void };
+  return terminal as {
+    write: (data: TerminalInputData) => number;
+    close: () => void;
+  };
 }
 
 /**
@@ -279,9 +302,6 @@ export async function spawnBunInPty(
 
   return await spawnInPty(fullCmd, options);
 }
-
-/** Accepted input data types for writing to a terminal. */
-export type TerminalInputData = Parameters<Bun.Terminal["write"]>[0];
 
 /** Thrown when a terminal session operation times out. */
 export class TerminalTimeoutError extends Error {

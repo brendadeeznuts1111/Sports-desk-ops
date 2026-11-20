@@ -12,8 +12,15 @@ describe("pickApiTarget", () => {
 
   test("sends the React feed reads to the feed host", () => {
     for (const path of [
+      "/api/agency/conduits",
+      "/api/auth/login",
+      "/api/auth/logout",
+      "/api/auth/me",
+      "/api/automations",
       "/api/config/tiers",
       "/api/customers",
+      "/api/daemon/status",
+      "/api/gslive/verify-tickets",
       "/api/wagers",
       "/api/dashboard",
       "/api/bet-ticker",
@@ -24,7 +31,9 @@ describe("pickApiTarget", () => {
       "/api/r2/image-provenance",
       "/api/shadow-pricing",
       "/api/shift/summary",
+      "/api/taxonomy-catalog",
       "/api/terminal/exec",
+      "/api/ws/status",
     ]) {
       expect(pickApiTarget(path, { api, feedsApi })).toBe(feedsApi);
     }
@@ -49,8 +58,9 @@ describe("pickApiTarget", () => {
     }
   });
 
-  test("leaves daemon-only routes and health alone", () => {
+  test("keeps daemon-only routes (including /api/agents/search) on the daemon host", () => {
     for (const path of [
+      "/api/agents/search",
       "/api/kpis",
       "/api/live-bets",
       "/api/graph",

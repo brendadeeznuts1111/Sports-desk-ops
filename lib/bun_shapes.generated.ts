@@ -102,8 +102,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "test:lib/bun_cron.test.ts",
       "test:lib/wagers_capture_config.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_pr_cli.test.ts",
-      "test:tests/bun_url_native_utils.test.ts",
     ],
   },
   {
@@ -180,10 +180,10 @@ export const BUN_SHAPES: readonly BunShape[] = [
     subsystem: "process",
     heading: "Bun.nanoseconds",
     evidence: [
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_test_patterns.test.ts",
+      "test:tests/dashboard_backend_workspace.test.ts",
       "test:tests/dashboard_build_and_markdown.test.ts",
-      "test:tests/nsh_frame_evidence.test.ts",
-      "test:tests/wagers_report.test.ts",
     ],
   },
   {
@@ -200,9 +200,9 @@ export const BUN_SHAPES: readonly BunShape[] = [
     heading: "Bun.pathToFileURL",
     evidence: [
       "test:tests/bun_file_response.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/config_file.test.ts",
       "test:tests/sqlite_schema_snapshot.test.ts",
-      "test:tests/worker_options_contract.test.ts",
     ],
   },
   {
@@ -211,7 +211,10 @@ export const BUN_SHAPES: readonly BunShape[] = [
     subsystem: "process",
     heading: "Bun.peek",
     status: "declared-only",
-    evidence: ["test:tests/bun_modules_surface.test.ts"],
+    evidence: [
+      "test:tests/bun_formats_and_utilities.test.ts",
+      "test:tests/bun_modules_surface.test.ts",
+    ],
   },
   {
     name: "plugin",
@@ -328,6 +331,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "test:tests/bun_capabilities.test.ts",
       "test:tests/bun_eval_patterns.test.ts",
+      "test:tests/bun_terminal_write_buffer_source.test.ts",
       "probe:proc.stdio",
     ],
   },
@@ -362,8 +366,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "surface:Terminal",
       "test:tests/bun_aspects_contract.test.ts",
+      "test:tests/bun_terminal_write_buffer_source.test.ts",
       "test:tests/bun_urls.test.ts",
-      "test:tests/pty_feature_flags.test.ts",
     ],
   },
   {
@@ -429,10 +433,10 @@ export const BUN_SHAPES: readonly BunShape[] = [
     subsystem: "text",
     heading: "Bun.color",
     evidence: [
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/token_automation.test.ts",
       "test:tests/token_theme_registry.test.ts",
       "test:tests/verify_tokens.test.ts",
-      "probe:text.ansi",
     ],
   },
   {
@@ -466,6 +470,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
     heading: "Bun.escapeHTML",
     evidence: [
       "test:tests/bun_capabilities.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_url_native_utils.test.ts",
       "probe:text.ansi",
     ],
@@ -502,6 +507,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "surface:sliceAnsi",
       "test:tests/bun_builtin_replacements.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
     ],
   },
   {
@@ -513,7 +519,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
       "test:scripts/gslive_wagers_by_state.test.ts",
       "test:tests/ansi_markdown_theme.test.ts",
       "test:tests/bun_builtin_replacements.test.ts",
-      "test:tests/bun_url_native_utils.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
     ],
   },
   {
@@ -535,9 +541,9 @@ export const BUN_SHAPES: readonly BunShape[] = [
     heading: "Bun.wrapAnsi",
     evidence: [
       "test:tests/bun_builtin_replacements.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_url_native_utils.test.ts",
       "test:tests/bun_v140_primitives.test.ts",
-      "test:tests/dashboard_build_and_markdown.test.ts",
     ],
   },
   {
@@ -545,7 +551,11 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "data",
     heading: "Bun.Cookie",
-    evidence: ["test:tests/cookie_jar.test.ts", "probe:data.cookies"],
+    evidence: [
+      "test:tests/bun_formats_and_utilities.test.ts",
+      "test:tests/cookie_jar.test.ts",
+      "probe:data.cookies",
+    ],
   },
   {
     name: "CookieMap",
@@ -555,8 +565,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "surface:CookieMap",
       "test:tests/bun_capabilities.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_request_contract.test.ts",
-      "test:tests/bun_urls.test.ts",
     ],
   },
   {
@@ -579,6 +589,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
     status: "declared-only",
     evidence: [
       "test:tests/agent_tree_matcher.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_modules_surface.test.ts",
     ],
   },
@@ -634,8 +645,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "surface:JSON5",
       "test:tests/bun_builtin_replacements.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/language_coverage.test.ts",
-      "test:tests/runtime_compat_contract.test.ts",
     ],
   },
   {
@@ -645,9 +656,9 @@ export const BUN_SHAPES: readonly BunShape[] = [
     heading: "Bun.JSONC",
     evidence: [
       "test:tests/bun_builtin_replacements.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_radix_literal_rounding.test.ts",
       "test:tests/react_version_pairing.test.ts",
-      "probe:data.json",
     ],
   },
   {
@@ -682,8 +693,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "surface:TOML",
       "test:tests/bun_builtin_replacements.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_runtime_contracts.test.ts",
-      "test:tests/bun_toml.test.ts",
     ],
   },
   {
@@ -691,7 +702,11 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "data",
     heading: "Bun.Transpiler",
-    evidence: ["surface:Transpiler", "test:tests/nsh_desk_contract.test.ts"],
+    evidence: [
+      "surface:Transpiler",
+      "test:tests/nsh_desk_contract.test.ts",
+      "test:tests/status_page.test.ts",
+    ],
   },
   {
     name: "XML",
@@ -712,9 +727,9 @@ export const BUN_SHAPES: readonly BunShape[] = [
     heading: "Bun.YAML",
     evidence: [
       "surface:YAML",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_loaders_and_import_attributes.test.ts",
       "test:tests/bun_runtime.test.ts",
-      "test:tests/bun_runtime_contracts.test.ts",
     ],
   },
   {
@@ -915,6 +930,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
     heading: "Bun.ArrayBufferSink",
     evidence: [
       "test:tests/bun_capabilities.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/shared_array_buffer_contract.test.ts",
       "probe:crypto.compress",
     ],
@@ -924,7 +940,11 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "crypto",
     heading: "Bun.concatArrayBuffers",
-    evidence: ["test:tests/bun_urls.test.ts", "probe:crypto.compress"],
+    evidence: [
+      "test:tests/bun_formats_and_utilities.test.ts",
+      "test:tests/bun_urls.test.ts",
+      "probe:crypto.compress",
+    ],
   },
   {
     name: "CryptoHasher",
@@ -935,7 +955,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
       "test:lib/live_provenance.test.ts",
       "test:scripts/r2_manifest_cas_promote.test.ts",
       "test:tests/bun_runtime_contracts.test.ts",
-      "test:tests/bun_urls.test.ts",
+      "test:tests/bun_terminal_write_buffer_source.test.ts",
     ],
   },
   {
@@ -1004,8 +1024,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "test:tests/audit_bun_glob_scan.test.ts",
       "test:tests/bun_capabilities.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_runtime_contracts.test.ts",
-      "test:tests/bun_v144_hardened_surfaces.test.ts",
     ],
   },
   {
@@ -1064,7 +1084,10 @@ export const BUN_SHAPES: readonly BunShape[] = [
     subsystem: "crypto",
     heading: "Bun.randomUUIDv5",
     status: "declared-only",
-    evidence: ["test:tests/bun_modules_surface.test.ts"],
+    evidence: [
+      "test:tests/bun_formats_and_utilities.test.ts",
+      "test:tests/bun_modules_surface.test.ts",
+    ],
   },
   {
     name: "randomUUIDv7",
@@ -1073,9 +1096,9 @@ export const BUN_SHAPES: readonly BunShape[] = [
     heading: "Bun.randomUUIDv7",
     evidence: [
       "test:tests/bun_eval_patterns.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_surface_cli.test.ts",
       "test:tests/bun_test_patterns.test.ts",
-      "probe:crypto.hash",
     ],
   },
   {
@@ -1084,7 +1107,10 @@ export const BUN_SHAPES: readonly BunShape[] = [
     subsystem: "crypto",
     heading: "Bun.readableStreamToArray",
     status: "declared-only",
-    evidence: ["test:tests/bun_modules_surface.test.ts"],
+    evidence: [
+      "test:tests/bun_formats_and_utilities.test.ts",
+      "test:tests/bun_modules_surface.test.ts",
+    ],
   },
   {
     name: "readableStreamToArrayBuffer",
@@ -1094,8 +1120,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "surface:readableStreamToArrayBuffer",
       "test:tests/bun_capabilities.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_urls.test.ts",
-      "test:tests/bun_v140_primitives.test.ts",
     ],
   },
   {
@@ -1104,7 +1130,10 @@ export const BUN_SHAPES: readonly BunShape[] = [
     subsystem: "crypto",
     heading: "Bun.readableStreamToFormData",
     status: "declared-only",
-    evidence: ["test:tests/bun_modules_surface.test.ts"],
+    evidence: [
+      "test:tests/bun_formats_and_utilities.test.ts",
+      "test:tests/bun_modules_surface.test.ts",
+    ],
   },
   {
     name: "sha",
@@ -1170,7 +1199,10 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "crypto",
     heading: "Bun.zstdCompress",
-    evidence: ["probe:crypto.compress"],
+    evidence: [
+      "test:tests/bun_formats_and_utilities.test.ts",
+      "probe:crypto.compress",
+    ],
   },
   {
     name: "zstdCompressSync",
@@ -1179,9 +1211,9 @@ export const BUN_SHAPES: readonly BunShape[] = [
     heading: "Bun.zstdCompressSync",
     evidence: [
       "test:tests/bun_compression_contract.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/bun_modules_surface.test.ts",
       "test:tests/gslive_tally_rollup.test.ts",
-      "probe:crypto.compress",
     ],
   },
   {
@@ -1190,7 +1222,10 @@ export const BUN_SHAPES: readonly BunShape[] = [
     subsystem: "crypto",
     heading: "Bun.zstdDecompress",
     status: "declared-only",
-    evidence: ["test:tests/bun_modules_surface.test.ts"],
+    evidence: [
+      "test:tests/bun_formats_and_utilities.test.ts",
+      "test:tests/bun_modules_surface.test.ts",
+    ],
   },
   {
     name: "zstdDecompressSync",
@@ -1199,9 +1234,9 @@ export const BUN_SHAPES: readonly BunShape[] = [
     heading: "Bun.zstdDecompressSync",
     evidence: [
       "test:tests/bun_compression_contract.test.ts",
+      "test:tests/bun_formats_and_utilities.test.ts",
       "test:tests/docs_render_cache.test.ts",
       "test:tests/docs_server.test.ts",
-      "test:tests/server_compression.test.ts",
     ],
   },
   {

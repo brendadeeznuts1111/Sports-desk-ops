@@ -328,6 +328,9 @@ describe("DashboardTabId registry & sort guards", () => {
     expect(resolveDashboardTabId("#/bet-ticker")).toBe("bet-ticker");
     expect(resolveDashboardTabId("profiles")).toBe("customers");
     expect(resolveDashboardTabId("#shadow-pricing")).toBe("shadow");
+    expect(DASHBOARD_TAB_SPECS.surveillance.label).toBe("Risk Overview");
+    expect(resolveDashboardTabId("risk-overview")).toBe("surveillance");
+    expect(resolveDashboardTabId("risk")).toBe("surveillance");
     expect(resolveDashboardTabId("telemetry")).toBe("surveillance");
     expect(resolveDashboardTabId("unknown-tab", "r2")).toBe("r2");
     expect(resolveDashboardTabId("", "alerts")).toBe("alerts");

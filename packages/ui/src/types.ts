@@ -318,19 +318,59 @@ export interface DashboardAlertRecord {
 }
 
 export interface HealthData {
+  readonly schemaVersion?: number | undefined;
   readonly status: "ok" | "warning" | "degraded" | "healthy" | "down";
   readonly operationalStatus?: "ok" | "degraded" | "down" | undefined;
   readonly dataStatus?: "ok" | "stale" | undefined;
   readonly httpStatus?: number | undefined;
   readonly uptimeSeconds: number;
+  readonly build?:
+    | {
+        readonly bunVersion: string;
+        readonly expectedBunVersion: string;
+        readonly bunVersionDrift: boolean;
+      }
+    | undefined;
+  readonly runtime?:
+    | {
+        readonly uptimeSeconds: number;
+        readonly rssBytes: number;
+        readonly heapUsedBytes: number;
+      }
+    | undefined;
+  readonly server?:
+    | {
+        readonly port: number | undefined;
+        readonly pendingRequests: number;
+        readonly pendingWebSockets: number;
+        readonly wsBackpressureBytes: number;
+      }
+    | undefined;
+  readonly dependencies?:
+    | {
+        readonly db: { readonly status: "ok" | "unconfigured" | "error" };
+        readonly r2: {
+          readonly status: "ok" | "degraded" | "error";
+          readonly lastSnapshotAgeMs: number | null;
+        };
+      }
+    | undefined;
+  readonly sessions?:
+    | {
+        readonly active: number;
+        readonly purged: number;
+      }
+    | undefined;
   readonly alerts?:
     | {
-        readonly status: "ok" | "warning" | "degraded";
+        readonly status: "ok" | "warning" | "degraded" | "down";
         readonly queued: number;
         readonly delivered: number;
         readonly dead: number;
         readonly backlog: number;
         readonly acknowledged?: number | undefined;
+        readonly oldestQueuedAgeMs?: number | undefined;
+        readonly lastDeliveryAt?: string | null | undefined;
       }
     | undefined;
   readonly degradedReasons?:
@@ -442,11 +482,12 @@ export const DASHBOARD_TAB_SPECS: Readonly<
   },
   surveillance: {
     id: "surveillance",
-    label: "Telemetry",
+    label: "Risk Overview",
     icon: "📊",
     shortcut: "Ctrl+2",
-    description: "Bun.dns cache telemetry, dispatch thresholds & risk brief",
-    aliases: ["telemetry", "dns", "overview"],
+    description:
+      "Risk overview, dispatch thresholds, Bun.dns cache telemetry & risk brief",
+    aliases: ["risk-overview", "risk", "telemetry", "dns", "overview"],
   },
   terminal: {
     id: "terminal",

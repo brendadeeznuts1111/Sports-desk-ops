@@ -1049,4 +1049,19 @@ describe("server telemetry (Bun.serve counters)", () => {
     expect(status.pendingRequests).toBeUndefined();
     expect(status.serverSubscriberCounts).toBeUndefined();
   });
+
+  test("/api/agents/search returns 404 instead of colliding with /api/agents/:id", async () => {
+    const api = createDashboardApi(buildMockDeps());
+    const searchRes = await api.fetch(
+      new Request("http://dashboard.local/api/agents/search?q=BI"),
+    );
+    expect(searchRes.status).toBe(404);
+
+    const agentRes = await api.fetch(
+      new Request("http://dashboard.local/api/agents/42"),
+    );
+    expect(agentRes.status).toBe(200);
+    const agentBody = (await agentRes.json()) as { readonly agentId: string };
+    expect(agentBody.agentId).toBe("42");
+  });
 });

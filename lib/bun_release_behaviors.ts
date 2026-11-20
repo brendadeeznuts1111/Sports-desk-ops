@@ -92,6 +92,12 @@ const BEHAVIOR_METADATA: Readonly<Record<string, BehaviorMetadata>> = {
     docsPage: "/docs/test/runtime",
     shapes: [],
   },
+  "bun-test-coverage-and-snapshots": {
+    title:
+      "bun test --coverage accounting, lcov DA hit counts, --update-snapshots --bail preservation, and --changed scoping",
+    docsPage: "/docs/test/code-coverage",
+    shapes: [],
+  },
   "publish-recursive": {
     title: "bun publish --recursive workspace publishing",
     docsPage: "/docs/cli/publish",
@@ -131,6 +137,66 @@ const BEHAVIOR_METADATA: Readonly<Record<string, BehaviorMetadata>> = {
     title: "minimumReleaseAge units and exclusions",
     docsPage: "/docs/install/lifecycle",
     shapes: [],
+  },
+  "install-resolution-and-lockb": {
+    title:
+      "bun install version-selection edge cases and mutated bun.lockb resilience",
+    docsPage: "/docs/cli/install",
+    shapes: [],
+  },
+  "serve-static-vs-file-routes": {
+    title:
+      "Bun.serve static buffered (.bytes()) vs file-backed (Bun.file()) routes",
+    docsPage: "/docs/api/http",
+    shapes: ["serve"],
+  },
+  "serve-directory-routes": {
+    title:
+      "Bun.serve directory routes ({ dir, statCache }): canonical paths, If-Range, case sensitivity, and macOS symlink drift",
+    docsPage: "/docs/runtime/http/routing",
+    shapes: ["serve"],
+  },
+  "websocket-client-options": {
+    title:
+      "WebSocket client options (protocols, headers, tls, proxy, proxy.tls isolation, perMessageDeflate)",
+    docsPage: "/reference/bun/WebSocketOptions",
+    shapes: ["WebSocket"],
+  },
+  "terminal-write-buffer-source": {
+    title:
+      "Bun.Terminal.write(string | BufferSource): UTF-8/byteLength returns, view slicing, SharedArrayBuffer, internal buffering/drain, and closed/invalid refusals",
+    docsPage: "/reference/bun/Terminal/write",
+    shapes: ["Terminal"],
+  },
+  "formats-and-utilities": {
+    title:
+      "Built-in Formats (YAML/TOML/JSON5/JSONC/JSONL/markdown, native config imports) and core Bun.* utilities (escapeHTML, ANSI/color, deepEquals/deepMatch, peek, UUIDv5/v7, zstd, binary/stream helpers, cookies)",
+    docsPage: "/docs/runtime/utils",
+    shapes: [
+      "YAML",
+      "TOML",
+      "JSON5",
+      "JSONC",
+      "JSONL",
+      "markdown",
+      "escapeHTML",
+      "stringWidth",
+      "stripANSI",
+      "wrapAnsi",
+      "sliceAnsi",
+      "color",
+      "deepEquals",
+      "deepMatch",
+      "peek",
+      "randomUUIDv7",
+      "randomUUIDv5",
+      "zstdCompressSync",
+      "concatArrayBuffers",
+      "ArrayBufferSink",
+      "readableStreamToFormData",
+      "Cookie",
+      "CookieMap",
+    ],
   },
 };
 

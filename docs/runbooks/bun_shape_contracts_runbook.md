@@ -78,7 +78,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/fileURLToPath)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/schema_cli_errors.ts`, `packages/contracts/scripts/build.ts`
-- **Evidence:** `test:lib/bun_cron.test.ts`, `test:lib/wagers_capture_config.test.ts`, `test:tests/bun_pr_cli.test.ts`, `test:tests/bun_url_native_utils.test.ts`
+- **Evidence:** `test:lib/bun_cron.test.ts`, `test:lib/wagers_capture_config.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_pr_cli.test.ts`
 
 #### Bun.gc
 
@@ -139,7 +139,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/nanoseconds)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `scripts/probe/parse-tree-only.ts`, `scripts/nsh_desk_cli.ts`
-- **Evidence:** `test:tests/bun_test_patterns.test.ts`, `test:tests/dashboard_build_and_markdown.test.ts`, `test:tests/nsh_frame_evidence.test.ts`, `test:tests/wagers_report.test.ts`
+- **Evidence:** `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_test_patterns.test.ts`, `test:tests/dashboard_backend_workspace.test.ts`, `test:tests/dashboard_build_and_markdown.test.ts`
 
 #### Bun.openInEditor
 
@@ -153,7 +153,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/pathToFileURL)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/schema_report.ts`, `scripts/capture/shot.ts`
-- **Evidence:** `test:tests/bun_file_response.test.ts`, `test:tests/config_file.test.ts`, `test:tests/sqlite_schema_snapshot.test.ts`, `test:tests/worker_options_contract.test.ts`
+- **Evidence:** `test:tests/bun_file_response.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/config_file.test.ts`, `test:tests/sqlite_schema_snapshot.test.ts`
 
 #### Bun.peek
 
@@ -162,7 +162,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Members (1):** `status`
 - **Here:** no call site
-- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+- **Evidence:** `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_modules_surface.test.ts`
 
 #### Bun.plugin
 
@@ -244,7 +244,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/stdin)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Here:** `bin/image-meta.ts`, `scripts/gdocs_template_instantiate.ts`
-- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_eval_patterns.test.ts`, `probe:proc.stdio`
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_eval_patterns.test.ts`, `test:tests/bun_terminal_write_buffer_source.test.ts`, `probe:proc.stdio`
 
 #### Bun.stdout
 
@@ -265,7 +265,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/Terminal)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/bun_terminal.ts`, `bin/bun_surface.ts`
-- **Evidence:** `surface:Terminal`, `test:tests/bun_aspects_contract.test.ts`, `test:tests/bun_urls.test.ts`, `test:tests/pty_feature_flags.test.ts`
+- **Evidence:** `surface:Terminal`, `test:tests/bun_aspects_contract.test.ts`, `test:tests/bun_terminal_write_buffer_source.test.ts`, `test:tests/bun_urls.test.ts`
 
 #### Bun.TerminalOptions (type)
 
@@ -316,7 +316,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/color)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/token_automation.ts`, `cli/sportsdesk_cli.ts`
-- **Evidence:** `test:tests/token_automation.test.ts`, `test:tests/token_theme_registry.test.ts`, `test:tests/verify_tokens.test.ts`, `probe:text.ansi`
+- **Evidence:** `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/token_automation.test.ts`, `test:tests/token_theme_registry.test.ts`, `test:tests/verify_tokens.test.ts`
 
 #### Bun.ColorInput (type)
 
@@ -337,7 +337,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/escapeHTML)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/telegram.ts`, `services/sportsdesk_telegram_bot.ts`
-- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_url_native_utils.test.ts`, `probe:text.ansi`
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_url_native_utils.test.ts`, `probe:text.ansi`
 
 #### Bun.inspect
 
@@ -360,14 +360,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/sliceAnsi)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`, `lib/token_watch_native.ts`
-- **Evidence:** `surface:sliceAnsi`, `test:tests/bun_builtin_replacements.test.ts`
+- **Evidence:** `surface:sliceAnsi`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`
 
 #### Bun.stringWidth
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/stringWidth)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/terminal_format.ts`
-- **Evidence:** `test:scripts/gslive_wagers_by_state.test.ts`, `test:tests/ansi_markdown_theme.test.ts`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_url_native_utils.test.ts`
+- **Evidence:** `test:scripts/gslive_wagers_by_state.test.ts`, `test:tests/ansi_markdown_theme.test.ts`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`
 
 #### Bun.stripANSI
 
@@ -381,7 +381,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/wrapAnsi)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/terminal_format.ts`
-- **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_url_native_utils.test.ts`, `test:tests/bun_v140_primitives.test.ts`, `test:tests/dashboard_build_and_markdown.test.ts`
+- **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_url_native_utils.test.ts`, `test:tests/bun_v140_primitives.test.ts`
 
 ## Data formats and parsing
 
@@ -397,14 +397,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable false · enumerable true
 - **Members (2):** `from`, `parse`
 - **Here:** `lib/cookie_jar.ts`
-- **Evidence:** `test:tests/cookie_jar.test.ts`, `probe:data.cookies`
+- **Evidence:** `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/cookie_jar.test.ts`, `probe:data.cookies`
 
 #### Bun.CookieMap
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/CookieMap)
 - **Shape:** value: `function` · writable false · enumerable true
 - **Here:** `lib/cookie_jar.ts`, `bin/bun_surface.ts`
-- **Evidence:** `surface:CookieMap`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_request_contract.test.ts`, `test:tests/bun_urls.test.ts`
+- **Evidence:** `surface:CookieMap`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_request_contract.test.ts`
 
 #### Bun.deepEquals
 
@@ -419,7 +419,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Here:** no call site
-- **Evidence:** `test:tests/agent_tree_matcher.test.ts`, `test:tests/bun_modules_surface.test.ts`
+- **Evidence:** `test:tests/agent_tree_matcher.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_modules_surface.test.ts`
 
 #### Bun.Glob
 
@@ -455,7 +455,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `parse`, `stringify`
 - **Here:** `bin/bun_surface.ts`, `lib/bun_xml_golden_ast.ts`
-- **Evidence:** `surface:JSON5`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/language_coverage.test.ts`, `test:tests/runtime_compat_contract.test.ts`
+- **Evidence:** `surface:JSON5`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/language_coverage.test.ts`
 
 #### Bun.JSONC
 
@@ -463,7 +463,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (1):** `parse`
 - **Here:** `lib/pm_policy.ts`, `scripts/bun_native_rules.ts`
-- **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_radix_literal_rounding.test.ts`, `test:tests/react_version_pairing.test.ts`, `probe:data.json`
+- **Evidence:** `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_radix_literal_rounding.test.ts`, `test:tests/react_version_pairing.test.ts`
 
 #### Bun.JSONL
 
@@ -487,14 +487,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `parse`, `stringify`
 - **Here:** `bin/bun_surface.ts`, `lib/config_file.ts`
-- **Evidence:** `surface:TOML`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_runtime_contracts.test.ts`, `test:tests/bun_toml.test.ts`
+- **Evidence:** `surface:TOML`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_runtime_contracts.test.ts`
 
 #### Bun.Transpiler
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/Transpiler)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`, `lib/code_mode.ts`
-- **Evidence:** `surface:Transpiler`, `test:tests/nsh_desk_contract.test.ts`
+- **Evidence:** `surface:Transpiler`, `test:tests/nsh_desk_contract.test.ts`, `test:tests/status_page.test.ts`
 
 #### Bun.XML
 
@@ -510,7 +510,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `parse`, `stringify`
 - **Here:** `bin/bun_surface.ts`, `bin/desk-provenance.ts`
-- **Evidence:** `surface:YAML`, `test:tests/bun_loaders_and_import_attributes.test.ts`, `test:tests/bun_runtime.test.ts`, `test:tests/bun_runtime_contracts.test.ts`
+- **Evidence:** `surface:YAML`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_loaders_and_import_attributes.test.ts`, `test:tests/bun_runtime.test.ts`
 
 ## Storage and scheduling
 
@@ -656,14 +656,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/ArrayBufferSink)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/schema_binary.ts`
-- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/shared_array_buffer_contract.test.ts`, `probe:crypto.compress`
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/shared_array_buffer_contract.test.ts`, `probe:crypto.compress`
 
 #### Bun.concatArrayBuffers
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/concatArrayBuffers)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `services/blob_and_live_bets_server.ts`, `lib/jsonl_stream_replay.ts`
-- **Evidence:** `test:tests/bun_urls.test.ts`, `probe:crypto.compress`
+- **Evidence:** `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_urls.test.ts`, `probe:crypto.compress`
 
 #### Bun.CryptoHasher
 
@@ -671,7 +671,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (2):** `algorithms`, `hash`
 - **Here:** `lib/gslive_users_report.ts`, `lib/r2_manifest_cas.ts`
-- **Evidence:** `test:lib/live_provenance.test.ts`, `test:scripts/r2_manifest_cas_promote.test.ts`, `test:tests/bun_runtime_contracts.test.ts`, `test:tests/bun_urls.test.ts`
+- **Evidence:** `test:lib/live_provenance.test.ts`, `test:scripts/r2_manifest_cas_promote.test.ts`, `test:tests/bun_runtime_contracts.test.ts`, `test:tests/bun_terminal_write_buffer_source.test.ts`
 
 #### Bun.CryptoHashInterface (type, declared-only)
 
@@ -717,7 +717,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (12):** `adler32`, `cityHash32`, `cityHash64`, `crc32`, `murmur32v2`, `murmur32v3`, `murmur64v2`, `rapidhash`, `wyhash`, `xxHash3`, `xxHash32`, `xxHash64`
 - **Here:** `lib/manager_fetch.ts`, `lib/f402_figure_date_enricher.ts`
-- **Evidence:** `test:tests/audit_bun_glob_scan.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_runtime_contracts.test.ts`, `test:tests/bun_v144_hardened_surfaces.test.ts`
+- **Evidence:** `test:tests/audit_bun_glob_scan.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_runtime_contracts.test.ts`
 
 #### Bun.inflateSync
 
@@ -766,14 +766,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Here:** no call site
-- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+- **Evidence:** `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_modules_surface.test.ts`
 
 #### Bun.randomUUIDv7
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/randomUUIDv7)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `cli/flags.ts`, `lib/audit_run_id.ts`
-- **Evidence:** `test:tests/bun_eval_patterns.test.ts`, `test:tests/bun_surface_cli.test.ts`, `test:tests/bun_test_patterns.test.ts`, `probe:crypto.hash`
+- **Evidence:** `test:tests/bun_eval_patterns.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_surface_cli.test.ts`, `test:tests/bun_test_patterns.test.ts`
 
 #### Bun.readableStreamToArray
 
@@ -781,14 +781,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Here:** no call site
-- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+- **Evidence:** `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_modules_surface.test.ts`
 
 #### Bun.readableStreamToArrayBuffer
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/readableStreamToArrayBuffer)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`, `bin/image-meta.ts`
-- **Evidence:** `surface:readableStreamToArrayBuffer`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_urls.test.ts`, `test:tests/bun_v140_primitives.test.ts`
+- **Evidence:** `surface:readableStreamToArrayBuffer`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_urls.test.ts`
 
 #### Bun.readableStreamToFormData
 
@@ -796,7 +796,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Here:** no call site
-- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+- **Evidence:** `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_modules_surface.test.ts`
 
 #### Bun.sha
 
@@ -865,14 +865,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/zstdCompress)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/f402_hierarchy_pack.ts`
-- **Evidence:** `probe:crypto.compress`
+- **Evidence:** `test:tests/bun_formats_and_utilities.test.ts`, `probe:crypto.compress`
 
 #### Bun.zstdCompressSync
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/zstdCompressSync)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/schema_binary.ts`, `lib/docs_render_cache.ts`
-- **Evidence:** `test:tests/bun_compression_contract.test.ts`, `test:tests/bun_modules_surface.test.ts`, `test:tests/gslive_tally_rollup.test.ts`, `probe:crypto.compress`
+- **Evidence:** `test:tests/bun_compression_contract.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_modules_surface.test.ts`, `test:tests/gslive_tally_rollup.test.ts`
 
 #### Bun.zstdDecompress
 
@@ -880,14 +880,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Here:** no call site
-- **Evidence:** `test:tests/bun_modules_surface.test.ts`
+- **Evidence:** `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_modules_surface.test.ts`
 
 #### Bun.zstdDecompressSync
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/zstdDecompressSync)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/f402_weblog.ts`, `lib/schema_binary.ts`
-- **Evidence:** `test:tests/bun_compression_contract.test.ts`, `test:tests/docs_render_cache.test.ts`, `test:tests/docs_server.test.ts`, `test:tests/server_compression.test.ts`
+- **Evidence:** `test:tests/bun_compression_contract.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/docs_render_cache.test.ts`, `test:tests/docs_server.test.ts`
 
 ## Network and serving
 
@@ -1092,7 +1092,7 @@ Bun implements a broad subset of the browser `Window` surface as true globals on
 
 | Global                        | Category             | Topic               | `typeof`   | Static members                                               | Prototype members                                          | Here                                                                                 | Notes                                                                                                                                                                                                                                                            |
 | ----------------------------- | -------------------- | ------------------- | ---------- | ------------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `URL`                         | URL                  | WHATWG URL          | `function` | `canParse`, `createObjectURL`, `parse`, `revokeObjectURL`    | 13 (snapshot)                                              | `lib/urls.ts`, `packages/api/src/router.ts` (+101)                                   | Full WHATWG URL (`URL.canParse`, `URL.parse`). `Bun.file(url)` accepts `file:` `URL` instances only (`new URL("s3://...")` throws `ERR_INVALID_URL_SCHEME`, whereas string `Bun.file("s3://bucket/key")` or `Bun.s3.file(...)` works) and ignores query strings. |
+| `URL`                         | URL                  | WHATWG URL          | `function` | `canParse`, `createObjectURL`, `parse`, `revokeObjectURL`    | 13 (snapshot)                                              | `packages/api/src/router.ts`, `lib/urls.ts` (+103)                                   | Full WHATWG URL (`URL.canParse`, `URL.parse`). `Bun.file(url)` accepts `file:` `URL` instances only (`new URL("s3://...")` throws `ERR_INVALID_URL_SCHEME`, whereas string `Bun.file("s3://bucket/key")` or `Bun.s3.file(...)` works) and ignores query strings. |
 | `URLPattern`                  | URL                  | URL routing         | `function` | —                                                            | 11 (snapshot)                                              | `src/lib/route_audit_table.ts`                                                       | WHATWG URLPattern matcher (`exec`, `test`).                                                                                                                                                                                                                      |
 | `URLSearchParams`             | URL                  | Query params        | `function` | —                                                            | 13 (snapshot)                                              | `lib/fantasy402_manager_wire.ts`, `client/auth/auth.js` (+46)                        | Standalone or via `url.searchParams`.                                                                                                                                                                                                                            |
 | `Blob`                        | Binary & Files       | Binary blob         | `function` | —                                                            | 17 (snapshot)                                              | `lib/blob_ingest.ts`, `lib/desk-parser.ts` (+16)                                     | Base of `BunFile`.                                                                                                                                                                                                                                               |
@@ -1105,9 +1105,9 @@ Bun implements a broad subset of the browser `Window` surface as true globals on
 | `WritableStream`              | Web Streams          | Byte streams        | `function` | —                                                            | `abort`, `close`, `getWriter`, `locked`                    | declared-only                                                                        | WHATWG writable stream.                                                                                                                                                                                                                                          |
 | `atob`                        | Encoding             | Base64              | `function` | —                                                            | —                                                          | `lib/f402_browser_token_manager.ts`                                                  | Base64 decode.                                                                                                                                                                                                                                                   |
 | `btoa`                        | Encoding             | Base64              | `function` | —                                                            | —                                                          | declared-only                                                                        | Base64 encode.                                                                                                                                                                                                                                                   |
-| `TextDecoder`                 | Encoding             | Text encoding       | `function` | —                                                            | `decode`, `encoding`, `fatal`, `ignoreBOM`                 | `scripts/pin_cdn_assets.ts`, `lib/f402_cdn_pin.ts` (+48)                             | UTF-8 / text decoder.                                                                                                                                                                                                                                            |
+| `TextDecoder`                 | Encoding             | Text encoding       | `function` | —                                                            | `decode`, `encoding`, `fatal`, `ignoreBOM`                 | `scripts/pin_cdn_assets.ts`, `lib/f402_cdn_pin.ts` (+49)                             | UTF-8 / text decoder.                                                                                                                                                                                                                                            |
 | `TextDecoderStream`           | Encoding             | Streaming decode    | `function` | —                                                            | `encoding`, `fatal`, `ignoreBOM`, `readable`, `writable`   | `lib/token_watch_native.ts`                                                          | WHATWG streaming text decoder.                                                                                                                                                                                                                                   |
-| `TextEncoder`                 | Encoding             | Text encoding       | `function` | —                                                            | `encode`, `encodeInto`, `encoding`                         | `services/sportsdesk_webview_server.ts`, `lib/desk-parser.ts` (+47)                  | UTF-8 encoder.                                                                                                                                                                                                                                                   |
+| `TextEncoder`                 | Encoding             | Text encoding       | `function` | —                                                            | `encode`, `encodeInto`, `encoding`                         | `services/sportsdesk_webview_server.ts`, `lib/desk-parser.ts` (+48)                  | UTF-8 encoder.                                                                                                                                                                                                                                                   |
 | `AbortController`             | HTTP & Fetch         | Cancellation        | `function` | —                                                            | `abort`, `signal`                                          | `dsh-plugin-sidebar/client.js`, `dsh-plugin-watchlist-autobet/client.js` (+8)        | Cancellation controller for fetch/streams/timers.                                                                                                                                                                                                                |
 | `AbortSignal`                 | HTTP & Fetch         | Cancellation        | `function` | `abort`, `any`, `timeout`                                    | 7 (snapshot)                                               | `lib/fantasy402_manager_wire.ts`, `services/sportsdesk_telegram_bot.ts` (+59)        | Cancellation signal (`AbortSignal.timeout`, `any`, `abort`).                                                                                                                                                                                                     |
 | `fetch`                       | HTTP & Fetch         | Fetch client        | `function` | `preconnect`                                                 | —                                                          | `docs/graph.js`, `lib/gslive_auto_session.ts` (+104)                                 | Standard Fetch API (`fetch.preconnect` extension in Bun).                                                                                                                                                                                                        |
@@ -1124,19 +1124,19 @@ Bun implements a broad subset of the browser `Window` surface as true globals on
 | `self`                        | Workers & IPC        | Global alias        | `object`   | `globalThis` alias                                           | —                                                          | `client/overlay/security-seams.preload.js`, `lib/desk_enhanced_health.ts`            | Worker-compatible alias for `globalThis` (`self === globalThis`).                                                                                                                                                                                                |
 | `structuredClone`             | Workers & IPC        | Deep clone          | `function` | —                                                            | —                                                          | `scripts/apply_captures.ts`                                                          | Deep structured clone.                                                                                                                                                                                                                                           |
 | `Worker`                      | Workers & IPC        | Worker threads      | `function` | —                                                            | 16 (snapshot)                                              | `lib/f402_agent_graph_layouts.ts`                                                    | JS worker thread alternative to `Bun.spawn`.                                                                                                                                                                                                                     |
-| `crypto`                      | WebCrypto            | WebCrypto           | `object`   | `getRandomValues`, `randomUUID`, `subtle`, `timingSafeEqual` | —                                                          | `lib/auth.ts`, `lib/f402_hierarchy_hash.ts` (+13)                                    | WebCrypto (`getRandomValues`, `randomUUID`, `subtle`, `timingSafeEqual`).                                                                                                                                                                                        |
+| `crypto`                      | WebCrypto            | WebCrypto           | `object`   | `getRandomValues`, `randomUUID`, `subtle`, `timingSafeEqual` | —                                                          | `lib/auth.ts`, `lib/f402_hierarchy_hash.ts` (+14)                                    | WebCrypto (`getRandomValues`, `randomUUID`, `subtle`, `timingSafeEqual`).                                                                                                                                                                                        |
 | `CryptoKey`                   | WebCrypto            | WebCrypto           | `function` | —                                                            | `algorithm`, `extractable`, `type`, `usages`               | `types/bun-api.d.ts`                                                                 | WebCrypto key handle.                                                                                                                                                                                                                                            |
 | `SubtleCrypto`                | WebCrypto            | WebCrypto           | `function` | `supports`                                                   | 17 (snapshot)                                              | declared-only                                                                        | WebCrypto subtle operations (`SubtleCrypto.supports`).                                                                                                                                                                                                           |
 | `clearInterval`               | Timers & Performance | Timers & microtasks | `function` | —                                                            | —                                                          | `packages/ui/src/App.tsx`, `docs/graph.js` (+14)                                     | Cancels a `setInterval` handle.                                                                                                                                                                                                                                  |
-| `clearTimeout`                | Timers & Performance | Timers & microtasks | `function` | —                                                            | —                                                          | `dsh-plugin-sidebar/client.js`, `dsh-plugin-sidebar/index.js` (+28)                  | Cancels a `setTimeout` handle.                                                                                                                                                                                                                                   |
+| `clearTimeout`                | Timers & Performance | Timers & microtasks | `function` | —                                                            | —                                                          | `dsh-plugin-sidebar/client.js`, `dsh-plugin-sidebar/index.js` (+30)                  | Cancels a `setTimeout` handle.                                                                                                                                                                                                                                   |
 | `performance`                 | Timers & Performance | High-res timing     | `object`   | 21 (snapshot)                                                | —                                                          | `cli/sportsdesk_bet_flags_cli.ts`, `lib/code_mode.ts` (+22)                          | High-resolution timing (`now`, `mark`, `measure`, `eventLoopUtilization`).                                                                                                                                                                                       |
 | `queueMicrotask`              | Timers & Performance | Timers & microtasks | `function` | —                                                            | —                                                          | `services/sportsdesk_webview_server.ts`                                              | Microtask queue scheduler.                                                                                                                                                                                                                                       |
 | `setInterval`                 | Timers & Performance | Timers & microtasks | `function` | —                                                            | —                                                          | `docs/graph.js`, `packages/ui/src/App.tsx` (+15)                                     | Standard repeating timer.                                                                                                                                                                                                                                        |
-| `setTimeout`                  | Timers & Performance | Timers & microtasks | `function` | —                                                            | —                                                          | `packages/ui/src/App.tsx`, `lib/bun_terminal.ts` (+35)                               | Standard timer.                                                                                                                                                                                                                                                  |
+| `setTimeout`                  | Timers & Performance | Timers & microtasks | `function` | —                                                            | —                                                          | `packages/ui/src/App.tsx`, `lib/bun_terminal.ts` (+37)                               | Standard timer.                                                                                                                                                                                                                                                  |
 | `Temporal`                    | Timers & Performance | Date & time         | `object`   | 9 (snapshot)                                                 | —                                                          | `lib/desk-parser.ts`, `scripts/batch_rank_all_players.ts`                            | TC39 `Temporal` namespace (`Instant`, `PlainDate`, `ZonedDateTime`, `Duration`).                                                                                                                                                                                 |
 | `alert`                       | Console & CLI        | CLI prompts         | `function` | —                                                            | —                                                          | `packages/ui/src/panels/AlertsTabPanel.tsx`, `packages/ui/src/alert_audit.ts` (+14)  | CLI-friendly prompt (not a browser dialog).                                                                                                                                                                                                                      |
 | `confirm`                     | Console & CLI        | CLI prompts         | `function` | —                                                            | —                                                          | `dsh-plugin-security/index.js`, `dsh-plugin-watchlist-autobet/verify-load.mjs` (+1)  | CLI-friendly y/n confirmation (not a browser dialog).                                                                                                                                                                                                            |
-| `console`                     | Console & CLI        | Structured logging  | `object`   | 30 (snapshot)                                                | —                                                          | `cli/sportsdesk_cli.ts`, `scripts/governance_check.ts` (+311)                        | Structured console (`log`, `warn`, `error`, `table`, `write`).                                                                                                                                                                                                   |
+| `console`                     | Console & CLI        | Structured logging  | `object`   | 30 (snapshot)                                                | —                                                          | `cli/sportsdesk_cli.ts`, `scripts/governance_check.ts` (+312)                        | Structured console (`log`, `warn`, `error`, `table`, `write`).                                                                                                                                                                                                   |
 | `navigator`                   | Console & CLI        | Runtime info        | `object`   | `hardwareConcurrency`, `platform`, `userAgent`               | —                                                          | `dsh-plugin-sidebar/client.js`, `packages/ui/src/clipboard.ts` (+2)                  | Runtime hardware/platform info (`hardwareConcurrency`, `platform`, `userAgent`).                                                                                                                                                                                 |
 | `prompt`                      | Console & CLI        | CLI prompts         | `function` | —                                                            | —                                                          | `scripts/create_operator.ts`, `scripts/secrets_github.ts`                            | CLI-friendly stdin line prompt (not a browser dialog).                                                                                                                                                                                                           |
 | `CloseEvent`                  | Events               | DOM-free events     | `function` | `AT_TARGET`, `BUBBLING_PHASE`, `CAPTURING_PHASE`, `NONE`     | 24 (snapshot)                                              | declared-only                                                                        | WebSocket close event.                                                                                                                                                                                                                                           |

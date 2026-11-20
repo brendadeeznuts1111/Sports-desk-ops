@@ -461,4 +461,132 @@ describe("SportsDesk Terminal Emulator & Query Engine", () => {
     expect(result.stdout).toContain("live-bets");
     expect(result.stdout).toContain("syndicate-alerts");
   });
+
+  test("executeTerminalQuery markdown defaults to dark ANSI colors & OSC 8 links even under TERM=dumb", async () => {
+    const prevTerm = Bun.env.TERM;
+    Bun.env.TERM = "dumb";
+    try {
+      const showcase = await executeTerminalQuery("markdown", { cols: 110 });
+      expect(showcase.exitCode).toBe(0);
+      expect(showcase.stdout).toContain("colors=true");
+      expect(showcase.stdout).toContain("hyperlinks=true");
+      expect(showcase.stdout).toContain("light=false");
+      expect(showcase.stdout).toContain("┌");
+      expect(showcase.stdout).toContain("\x1b[");
+      expect(showcase.stdout).toContain("\x1b]8;;");
+
+      const inlineMd = await executeTerminalQuery(
+        "md # Alert **bold** `code`",
+        { cols: 110 },
+      );
+      expect(inlineMd.exitCode).toBe(0);
+      expect(inlineMd.stdout).toContain("colors=true");
+      expect(inlineMd.stdout).toContain("hyperlinks=true");
+      expect(inlineMd.stdout).toContain("light=false");
+      expect(inlineMd.stdout).toContain("\x1b[");
+
+      const noColor = await executeTerminalQuery("markdown --no-color");
+      expect(noColor.exitCode).toBe(0);
+      expect(noColor.stdout).toContain("colors=false, hyperlinks=false");
+      expect(noColor.stdout).not.toContain("\x1b");
+
+      const mono = await executeTerminalQuery("markdown --theme=mono");
+      expect(mono.exitCode).toBe(0);
+      expect(mono.stdout).toContain("colors=false, hyperlinks=false");
+      expect(mono.stdout).not.toContain("\x1b");
+    } finally {
+      if (prevTerm === undefined) delete Bun.env.TERM;
+      else Bun.env.TERM = prevTerm;
+    }
+  });
+
+  test("executeTerminalQuery handles health/status commands and flags in-process", async () => {
+    const sampleHealth = () => ({
+      schemaVersion: 1,
+      status: "ok",
+      service: "sportsdesk-dev-dashboard",
+      timestamp: "2026-11-20T18:30:00.000Z",
+      build: {
+        bunVersion: "1.4.4",
+        expectedBunVersion: "1.4.4",
+        bunVersionDrift: false,
+      },
+      runtime: {
+        uptimeSeconds: 95,
+        rssBytes: 40 * 1024 * 1024,
+        heapUsedBytes: 12 * 1024 * 1024,
+      },
+      server: {
+        port: 4024,
+        pendingRequests: 1,
+        pendingWebSockets: 2,
+        wsBackpressureBytes: 128,
+      },
+      dependencies: {
+        db: { status: "ok" },
+        r2: { status: "ok", lastSnapshotAgeMs: 1200 },
+      },
+      sessions: { active: 2, purged: 0 },
+      alerts: {
+        status: "ok",
+        queued: 0,
+        delivered: 5,
+        dead: 0,
+        backlog: 0,
+        acknowledged: 5,
+        oldestQueuedAgeMs: 0,
+        lastDeliveryAt: "2026-11-20T18:29:00.000Z",
+      },
+    });
+    const sampleStatus = () => ({
+      ok: true,
+      status: "serving",
+      live: {
+        ticker: { status: "live" },
+        pending: { status: "live" },
+        refresh: { ticks: 17, lastTickOk: true },
+      },
+      telegram: {
+        status: { mode: "simulation", modeReason: "TELEGRAM_BOT_TOKEN unset" },
+        schedules: [
+          {
+            id: "sched_bridge_rollup_15m",
+            name: "Bridge Rollup Cycle",
+            scheduleTime: "*/15 * * * *",
+            tz: "America/Chicago",
+            reportType: "BRIDGE_ROLLUP_DIGEST",
+            enabled: true,
+          },
+        ],
+      },
+    });
+
+    const healthJson = await executeTerminalQuery(
+      "hlth --dashboard-only --json --strict",
+      {
+        getHealthPayload: sampleHealth,
+      },
+    );
+    expect(healthJson.exitCode).toBe(0);
+    const parsed = JSON.parse(healthJson.stdout);
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.overallStatus).toBe("ok");
+    expect(parsed.dashboard.structured.server.wsBackpressureBytes).toBe(128);
+
+    const statusSchedules = await executeTerminalQuery(
+      "st --dashboard-only --schedules --alerts --no-color",
+      {
+        getHealthPayload: sampleHealth,
+        getStatusPayload: sampleStatus,
+      },
+    );
+    expect(statusSchedules.exitCode).toBe(0);
+    expect(statusSchedules.stdout).toContain("wsBackpressure=128 B");
+    expect(statusSchedules.stdout).toContain("sched_bridge_rollup_15m");
+    expect(statusSchedules.stdout).not.toContain("\x1b[");
+
+    const watchDenied = await executeTerminalQuery("health --watch");
+    expect(watchDenied.exitCode).toBe(2);
+    expect(watchDenied.stdout).toContain("--watch is only available");
+  });
 });

@@ -1,14 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
   buildWebLogBody,
+  buildWebLogFormBody,
   F402WebLogFetchError,
   fetchAndPersistWebLog,
   fetchWebLog,
   formatWebLogDate,
   explainWebLogListParseFailure,
+  OBSERVED_WEBLOG_WIRE_ORDER,
+  parseWebLogFormBody,
   parseWebLogListPayload,
   resolveF402BearerToken,
 } from "../lib/f402_weblog_fetch.ts";
@@ -164,5 +167,90 @@ describe("f402 weblog fetch", () => {
         }),
       ).toThrow();
     }
+  });
+
+  test("emits observed 10-field wire order, multi-day Mode C range, lowercase ip echo, and distinct agentOwner", () => {
+    const modeBBody = buildWebLogFormBody({
+      mode: "B",
+      date: "2026-10-28",
+      agentId: "MASTER01",
+      agentOwner: "MASTER01",
+    });
+    expect(modeBBody).toBe(
+      "agentID=MASTER01&customerID=0&start=10%2F28%2F2026&end=10%2F28%2F2026&type=B&actions=ALL&ip=&operation=getWebLog&RRO=1&agentOwner=MASTER01",
+    );
+
+    const fixturePath = resolve(
+      import.meta.dir,
+      "fixtures/f402-weblog-mode-c-observed-2026-11-20.json",
+    );
+    const observedFixture = JSON.parse(readFileSync(fixturePath, "utf8")) as {
+      wireOrder: readonly string[];
+      fields: Record<string, string>;
+    };
+    const expectedFixtureBody = new URLSearchParams(
+      Object.entries(observedFixture.fields),
+    ).toString();
+    const builtFromPlaceholders = buildWebLogFormBody({
+      mode: "C",
+      date: observedFixture.fields.start!,
+      endDate: observedFixture.fields.end!,
+      agentId: observedFixture.fields.agentID!,
+      agentOwner: observedFixture.fields.agentOwner!,
+      customerId: observedFixture.fields.customerID!,
+      ip: observedFixture.fields.ip!,
+    });
+    expect(builtFromPlaceholders).toBe(expectedFixtureBody);
+
+    const modeCBody = buildWebLogFormBody({
+      mode: "C",
+      date: "2026-11-06",
+      endDate: "2026-11-20",
+      customerId: "CUST99",
+      agentId: "MASTER01",
+      agentOwner: "MASTER01v",
+    });
+    expect(modeCBody).toBe(
+      "agentID=MASTER01&customerID=CUST99&start=2026-11-06&end=2026-11-20&type=C&actions=ALL&ip=cust99&operation=getWebLog&RRO=1&agentOwner=MASTER01v",
+    );
+
+    const parsedC = parseWebLogFormBody(modeCBody);
+    expect(parsedC.wireFieldOrder).toEqual([...OBSERVED_WEBLOG_WIRE_ORDER]);
+    expect(parsedC.wireFieldOrder).toEqual([...observedFixture.wireOrder]);
+    expect(parsedC.matchesObservedWireOrder).toBe(true);
+    expect(parsedC.hasDistinctAgentOwner).toBe(true);
+    expect(parsedC.agentOwner).toBe("MASTER01v");
+    expect(parsedC.isDateRange).toBe(true);
+    expect(parsedC.modeCIpMatchesCustomer).toBe(true);
+    expect(parsedC.isActivityStream).toBe(false);
+
+    const parsedA = parseWebLogFormBody(
+      buildWebLogFormBody({
+        mode: "A",
+        date: "2026-11-20",
+        customerId: "CUST99",
+        agentId: "MASTER01",
+        agentOwner: "MASTER01",
+      }),
+    );
+    expect(parsedA.isActivityStream).toBe(true);
+    expect(parsedA.modeCIpMatchesCustomer).toBeNull();
+    expect(parsedA.hasDistinctAgentOwner).toBe(false);
+
+    expect(() =>
+      buildWebLogFormBody({
+        mode: "C",
+        date: "2026-11-20",
+        endDate: "2026-11-06",
+        customerId: "CUST99",
+      }),
+    ).toThrow(/cannot precede/);
+
+    expect(() => parseWebLogFormBody("operation=other&type=C")).toThrow(
+      /Invalid getWebLog form operation/,
+    );
+    expect(() => parseWebLogFormBody("operation=getWebLog&type=Z")).toThrow(
+      /Invalid getWebLog mode type/,
+    );
   });
 });

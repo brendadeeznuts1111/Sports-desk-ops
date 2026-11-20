@@ -89,4 +89,15 @@ describe("@sportsdesk-ops/ui ShadowPricingPanel", () => {
     expect(html).not.toContain("Retail Turnover Elasticity Frontier");
     expect(html).not.toContain("Key-Number Margin Clustering");
   });
+
+  test("renders non-loading error fallback with Retry and Load Fixture Cohort actions when initialError is set", () => {
+    const html = renderToStaticMarkup(
+      <ShadowPricingPanel initialError="GET /api/shadow-pricing returned 500: authorization denied" />,
+    );
+
+    expect(html).toContain("Shadow-pricing arena unavailable");
+    expect(html).toContain("Retry");
+    expect(html).toContain("Load Fixture Cohort");
+    expect(html).not.toContain("Loading multi-sport taxonomy cube");
+  });
 });
