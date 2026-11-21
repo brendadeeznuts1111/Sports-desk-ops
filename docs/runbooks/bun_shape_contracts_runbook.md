@@ -562,7 +562,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/s3)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (9):** `delete`, `exists`, `file`, `list`, `presign`, `size`, `stat`, `unlink`, `write`
-- **Here:** `scripts/verify-gslive-tickets.ts`, `src/telemetry/runtime-preflight.ts`
+- **Here:** `src/runtime-preflight.ts`, `scripts/verify-gslive-tickets.ts`
 - **Evidence:** `surface:s3`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_runtime_contracts.test.ts`, `test:tests/bun_s3client_contract.test.ts`
 
 #### Bun.S3Client
