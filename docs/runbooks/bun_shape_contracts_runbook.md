@@ -171,7 +171,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Members (1):** `clearAll`
 - **Here:** no call site
-- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_modules_surface.test.ts`
+- **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_modules_surface.test.ts`, `test:tests/bun_strict_codegen_and_jsc.test.ts`
 
 #### Bun.resolve
 

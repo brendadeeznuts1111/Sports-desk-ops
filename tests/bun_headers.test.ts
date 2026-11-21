@@ -82,4 +82,42 @@ describe("Bun Headers extensions", () => {
     // The reference says insertion order is not preserved; it is, in this build.
     expect(Object.keys(ordered.toJSON())).toEqual(["z", "a", "m"]);
   });
+
+  test("iteration methods sort non-cookie names, preserve duplicate set-cookie, and Object.fromEntries keeps only the last set-cookie", () => {
+    const headers = new Headers([
+      ["x-b", "2"],
+      ["x-a", "1"],
+    ]);
+    headers.append("set-cookie", "s1=a");
+    headers.append("set-cookie", "s2=b");
+
+    const expectedPairs: [string, string][] = [
+      ["x-a", "1"],
+      ["x-b", "2"],
+      ["set-cookie", "s1=a"],
+      ["set-cookie", "s2=b"],
+    ];
+    expect([...headers]).toEqual(expectedPairs);
+    expect([...headers.entries()]).toEqual(expectedPairs);
+    expect([...headers.keys()]).toEqual([
+      "x-a",
+      "x-b",
+      "set-cookie",
+      "set-cookie",
+    ]);
+    expect([...headers.values()]).toEqual(["1", "2", "s1=a", "s2=b"]);
+
+    const pairs: [string, string][] = [];
+    headers.forEach((value, key) => {
+      pairs.push([key, value]);
+    });
+    expect(pairs).toEqual(expectedPairs);
+
+    expect(Object.fromEntries(headers)).toEqual({
+      "x-a": "1",
+      "x-b": "2",
+      "set-cookie": "s2=b",
+    });
+    expect(headers.toJSON()["set-cookie"]).toEqual(["s1=a", "s2=b"]);
+  });
 });

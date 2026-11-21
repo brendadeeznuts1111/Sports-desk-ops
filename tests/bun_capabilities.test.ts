@@ -463,7 +463,10 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(matches("v{01..10}.ts", "v07.ts")).toBe(true);
     expect(matches("v{a..e}.ts", "vc.ts")).toBe(true);
 
-    // extended globs: one-or-more, zero-or-more, exactly-one, negation
+    // extended globs: zero-or-one, one-or-more, zero-or-more, exactly-one, negation
+    expect(matches("?(a|b).ts", ".ts")).toBe(true);
+    expect(matches("?(a|b).ts", "a.ts")).toBe(true);
+    expect(matches("?(a|b).ts", "ab.ts")).toBe(false);
     expect(matches("+(a|b).ts", "ab.ts")).toBe(true);
     expect(matches("*(a|b).ts", "abba.ts")).toBe(true);
     expect(matches("@(a|b).ts", "c.ts")).toBe(false);

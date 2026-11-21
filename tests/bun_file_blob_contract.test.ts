@@ -218,3 +218,73 @@ describe("Bun.image", () => {
     }
   });
 });
+
+async function readStreamText(
+  stream: ReadableStream<Uint8Array> | null,
+): Promise<string> {
+  if (!stream) return "";
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let out = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      out += decoder.decode(value, { stream: true });
+    }
+    return out + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function readStreamAsyncIterText(
+  stream: ReadableStream<Uint8Array> | null,
+): Promise<string> {
+  if (!stream) return "";
+  const decoder = new TextDecoder();
+  let out = "";
+  for await (const chunk of stream) {
+    out += decoder.decode(chunk, { stream: true });
+  }
+  return out + decoder.decode();
+}
+
+describe("In-memory body streams (v1.4.4)", () => {
+  test("Response.body, Request.body, and Blob.stream() round-trip via getReader() and for-await", async () => {
+    const utf8 = "hello-🚀-desk";
+    const large = "x".repeat(64 * 1024);
+
+    for (const payload of ["", utf8, large]) {
+      expect(await readStreamText(new Response(payload).body)).toBe(payload);
+      expect(await readStreamAsyncIterText(new Response(payload).body)).toBe(
+        payload,
+      );
+
+      expect(
+        await readStreamText(
+          new Request("http://example.com", {
+            method: "POST",
+            body: payload,
+          }).body,
+        ),
+      ).toBe(payload);
+      expect(
+        await readStreamAsyncIterText(
+          new Request("http://example.com", {
+            method: "POST",
+            body: payload,
+          }).body,
+        ),
+      ).toBe(payload);
+    }
+
+    const blobParts = ["hello-🚀", "-desk"];
+    expect(await readStreamText(new Blob(blobParts).stream())).toBe(utf8);
+    expect(await readStreamAsyncIterText(new Blob(blobParts).stream())).toBe(
+      utf8,
+    );
+    expect(await readStreamText(new Blob([]).stream())).toBe("");
+    expect(await readStreamText(new Blob([large]).stream())).toBe(large);
+  });
+});

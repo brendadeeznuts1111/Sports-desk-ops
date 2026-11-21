@@ -73,4 +73,18 @@ describe("bun run --filter on the ba-example reference workspace", () => {
     expect(exact.code).toBe(0);
     expect(exact.out.split("\n")[0]).toStartWith("ba-example schema:");
   }, 30_000);
+
+  test("extglob patterns work in --filter for name and ./path filters", () => {
+    const byName = runFilter(["--filter", "@(ba-example)", "schema"]);
+    expect(byName.code).toBe(0);
+    expect(byName.out.split("\n")[0]).toStartWith("ba-example schema:");
+
+    const byPath = runFilter([
+      "--filter",
+      "./packages/@(ba-example)",
+      "schema",
+    ]);
+    expect(byPath.code).toBe(0);
+    expect(byPath.out.split("\n")[0]).toStartWith("ba-example schema:");
+  }, 30_000);
 });

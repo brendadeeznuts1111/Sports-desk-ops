@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import bunfig from "../bunfig.toml" with { type: "toml" };
+import oxlintConfig from "../.oxlintrc.json" with { type: "json" };
+import oxlintTypeAwareConfig from "../.oxlintrc.type-aware.json" with { type: "json" };
 import pkg from "../package.json";
 import {
   analyzeWorkspaceGraph,
@@ -224,5 +226,202 @@ describe("minimumReleaseAgeExcludes", () => {
     expect(invalidReleaseAgeExcludes(undefined)).toEqual([]);
     expect(invalidReleaseAgeExcludes("typescript")).toEqual([]);
     expect(invalidReleaseAgeExcludes({})).toEqual([]);
+  });
+});
+
+interface RootBunfigShape {
+  readonly fmt: {
+    readonly printWidth: number;
+    readonly tabWidth: number;
+    readonly useTabs: boolean;
+    readonly semi: boolean;
+    readonly singleQuote: boolean;
+    readonly ignorePatterns: readonly string[];
+    readonly overrides: readonly {
+      readonly files: string | readonly string[];
+      readonly options: { readonly sortImports?: boolean };
+    }[];
+  };
+  readonly install: {
+    readonly exact: boolean;
+    readonly ignoreScripts: boolean;
+  };
+  readonly lint: {
+    readonly ignorePatterns: readonly string[];
+    readonly categories: Readonly<Record<string, string>>;
+    readonly rules: Readonly<Record<string, unknown>>;
+  };
+  readonly run: {
+    readonly noOrphans: boolean;
+  };
+  readonly console: {
+    readonly depth: number;
+  };
+  readonly test: {
+    readonly pathIgnorePatterns: readonly string[];
+    readonly coverageReporter: readonly string[];
+    readonly coverageDir: string;
+    readonly coverageSkipTestFiles: boolean;
+    readonly coveragePathIgnorePatterns: string | readonly string[];
+  };
+}
+
+const LINT_SEVERITY_PATTERN = /^(off|warn|error)$/;
+
+const normalizeRuleName = (name: string): string =>
+  name.replace(/^@typescript-eslint\//, "typescript/");
+
+function normalizedRuleMap(
+  rules: Readonly<Record<string, unknown>>,
+): ReadonlyMap<string, unknown> {
+  const mapped = new Map<string, unknown>();
+  for (const [name, value] of Object.entries(rules)) {
+    mapped.set(normalizeRuleName(name), value);
+  }
+  return mapped;
+}
+
+describe("root bunfig.toml contract", () => {
+  const parsedBunfig = bunfig as unknown as RootBunfigShape;
+
+  test("top-level section allowlist and property-matcher schema", () => {
+    expect(Object.keys(bunfig).sort()).toEqual([
+      "console",
+      "fmt",
+      "install",
+      "lint",
+      "run",
+      "test",
+    ]);
+
+    // Clone before toMatchObject: bun:test replaces matched properties on the received
+    // object in place with asymmetric matchers (e.g. `expect.any(...)`).
+    expect(structuredClone(parsedBunfig)).toMatchObject({
+      fmt: {
+        printWidth: expect.any(Number),
+        tabWidth: expect.any(Number),
+        useTabs: expect.any(Boolean),
+        semi: expect.any(Boolean),
+        singleQuote: expect.any(Boolean),
+        ignorePatterns: expect.arrayContaining([expect.any(String)]),
+        overrides: expect.arrayContaining([
+          expect.objectContaining({
+            files: expect.arrayContaining([expect.any(String)]),
+            options: expect.objectContaining({
+              sortImports: expect.any(Boolean),
+            }),
+          }),
+        ]),
+      },
+      install: {
+        exact: expect.any(Boolean),
+        ignoreScripts: expect.any(Boolean),
+      },
+      lint: {
+        ignorePatterns: expect.arrayContaining([expect.any(String)]),
+        categories: {
+          correctness: expect.stringMatching(LINT_SEVERITY_PATTERN),
+        },
+        rules: expect.any(Object),
+      },
+      run: {
+        noOrphans: expect.any(Boolean),
+      },
+      console: {
+        depth: expect.any(Number),
+      },
+      test: {
+        pathIgnorePatterns: expect.arrayContaining([expect.any(String)]),
+        coverageReporter: expect.arrayContaining(["text", "lcov"]),
+        coverageDir: expect.any(String),
+        coverageSkipTestFiles: expect.any(Boolean),
+        coveragePathIgnorePatterns: expect.arrayContaining([
+          expect.any(String),
+        ]),
+      },
+    });
+  });
+
+  test("pins [fmt], [install], [run], [console], and [test] root policy values", () => {
+    expect(parsedBunfig.fmt.printWidth).toBe(80);
+    expect(parsedBunfig.fmt.tabWidth).toBe(2);
+    expect(parsedBunfig.fmt.useTabs).toBe(false);
+    expect(parsedBunfig.fmt.semi).toBe(true);
+    expect(parsedBunfig.fmt.singleQuote).toBe(false);
+    expect(parsedBunfig.fmt.ignorePatterns).toContain(
+      "verification/manager-boot-oracle/pinned/*.js",
+    );
+    expect(parsedBunfig.fmt.ignorePatterns).toContain(
+      "data/profile-snapshot.json",
+    );
+    expect(parsedBunfig.fmt.overrides.length).toBeGreaterThan(0);
+    for (const override of parsedBunfig.fmt.overrides) {
+      const files = Array.isArray(override.files)
+        ? override.files
+        : [override.files];
+      expect(files.length).toBeGreaterThan(0);
+      expect(override.options.sortImports).toBe(true);
+    }
+
+    expect(parsedBunfig.install.exact).toBe(true);
+    expect(parsedBunfig.install.ignoreScripts).toBe(true);
+
+    expect(parsedBunfig.run.noOrphans).toBe(true);
+
+    expect(parsedBunfig.console.depth).toBe(8);
+    expect(Number.isInteger(parsedBunfig.console.depth)).toBe(true);
+    expect(parsedBunfig.console.depth).toBeGreaterThanOrEqual(0);
+
+    for (const pattern of [
+      "scratch/**",
+      "tests/fixtures/**",
+      "packages/nsh-desk/**",
+      "scripts/author_openapi_spec.mjs",
+    ]) {
+      expect(parsedBunfig.test.pathIgnorePatterns).toContain(pattern);
+    }
+    expect(parsedBunfig.test.coverageReporter).toEqual(["text", "lcov"]);
+    expect(parsedBunfig.test.coverageDir).toBe("coverage");
+    expect(parsedBunfig.test.coverageSkipTestFiles).toBe(true);
+    const covIgnore = Array.isArray(
+      parsedBunfig.test.coveragePathIgnorePatterns,
+    )
+      ? parsedBunfig.test.coveragePathIgnorePatterns
+      : [parsedBunfig.test.coveragePathIgnorePatterns];
+    for (const pattern of ["tests/**", "dist/**", "docs/**"]) {
+      expect(covIgnore).toContain(pattern);
+    }
+  });
+
+  test("[lint] parsed TOML stays in parity with .oxlintrc.json and .oxlintrc.type-aware.json", () => {
+    expect(parsedBunfig.lint.ignorePatterns).toEqual(
+      oxlintConfig.ignorePatterns,
+    );
+    expect(parsedBunfig.lint.categories).toEqual(oxlintConfig.categories);
+
+    for (const value of Object.values(parsedBunfig.lint.rules)) {
+      if (typeof value === "string") {
+        expect(value).toMatch(LINT_SEVERITY_PATTERN);
+      } else {
+        expect(Array.isArray(value)).toBe(true);
+        const tuple = value as readonly unknown[];
+        expect(tuple).toHaveLength(2);
+        expect(String(tuple[0])).toMatch(LINT_SEVERITY_PATTERN);
+      }
+    }
+
+    const bunfigRules = normalizedRuleMap(parsedBunfig.lint.rules);
+    const baseRules = normalizedRuleMap(oxlintConfig.rules);
+    const typeAwareRules = normalizedRuleMap(oxlintTypeAwareConfig.rules);
+
+    for (const [name, expected] of [...baseRules, ...typeAwareRules]) {
+      expect(bunfigRules.get(name)).toEqual(expected);
+    }
+
+    for (const [name, value] of bunfigRules) {
+      if (!baseRules.has(name) && !typeAwareRules.has(name)) {
+        expect(value).toBe("off");
+      }
+    }
   });
 });
