@@ -5,12 +5,14 @@ import {
   BUN_SHAPES,
   BUN_SUBMODULE_SHAPES,
   BUN_WEB_GLOBAL_SHAPES,
+  PROTOTYPE_SNAPSHOT_EXCLUDED,
   VOLATILE_SHAPES,
   analyzeBunShapes,
   catalogHeadings,
   collectBunShapeUsage,
   listBunShapeScannedFiles,
   surfaceMembers,
+  surfacePrototypeMembers,
   webGlobalSurfaceMembers,
 } from "../lib/bun_shapes.ts";
 import { declarationDrift } from "../bin/bun_types.ts";
@@ -195,6 +197,39 @@ describe("Bun shape coverage", () => {
       join(await bunTypesDir(), "package.json"),
     ).json();
     expect(String(typesPkg.version)).toBe(String(BUN_SHAPE_PINS.typesVersion));
+  });
+
+  test("Bun.* prototype members match the snapshot", async () => {
+    const snapshot = (await Bun.file(
+      join(root, "tests/bun_shape_members.json"),
+    ).json()) as { prototypes?: Record<string, string[]> };
+    const expected = snapshot.prototypes ?? {};
+    const actual: Record<string, string[]> = {};
+    for (const shape of BUN_SHAPES) {
+      if (shape.kind !== "value" || VOLATILE_SHAPES.has(shape.name)) continue;
+      if (PROTOTYPE_SNAPSHOT_EXCLUDED.has(shape.name)) continue;
+      const value = (Bun as unknown as Record<string, unknown>)[shape.name];
+      const members = surfacePrototypeMembers(value);
+      if (members.length > 0) actual[shape.name] = members;
+    }
+    const drift: string[] = [];
+    const names = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+    for (const name of [...names].sort()) {
+      const before = expected[name];
+      const now = actual[name];
+      if (before === undefined) drift.push(`NEW ${name}`);
+      else if (now === undefined) drift.push(`MISSING ${name}`);
+      else {
+        const added = now.filter((m) => !before.includes(m));
+        const removed = before.filter((m) => !now.includes(m));
+        if (added.length > 0 || removed.length > 0) {
+          drift.push(
+            `DIFF ${name}: added [${added.join(", ")}] removed [${removed.join(", ")}]`,
+          );
+        }
+      }
+    }
+    expect(drift).toEqual([]);
   });
 
   test("Window-adjacent Web globals satisfy desk runtime contracts on this binary", () => {

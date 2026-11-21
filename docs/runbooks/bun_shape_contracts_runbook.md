@@ -131,6 +131,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable false · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Members (1):** `current`
+- **Instance members (3):** `dispose`, `import`, `run`
 - **Here:** no call site
 - **Evidence:** `test:tests/bun_modules_surface.test.ts`
 
@@ -264,6 +265,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.5` · [reference](https://bun.com/reference/bun/Terminal)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Instance members (11):** `close`, `closed`, `controlFlags`, `inputFlags`, `localFlags`, `outputFlags`, `ref`, `resize`, `setRawMode`, `unref`, `write`
 - **Here:** `lib/bun_terminal.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:Terminal`, `test:tests/bun_aspects_contract.test.ts`, `test:tests/bun_terminal_write_buffer_source.test.ts`, `test:tests/bun_urls.test.ts`
 
@@ -396,6 +398,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.5` · [reference](https://bun.com/reference/bun/Cookie)
 - **Shape:** value: `function` · writable false · enumerable true
 - **Members (2):** `from`, `parse`
+- **Instance members (12):** `domain`, `expires`, `httpOnly`, `isExpired`, `maxAge`, `partitioned`, `path`, `sameSite`, `secure`, `serialize`, `toJSON`, `value`
 - **Here:** `lib/cookie_jar.ts`
 - **Evidence:** `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/cookie_jar.test.ts`, `probe:data.cookies`
 
@@ -403,6 +406,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.5` · [reference](https://bun.com/reference/bun/CookieMap)
 - **Shape:** value: `function` · writable false · enumerable true
+- **Instance members (11):** `delete`, `entries`, `forEach`, `get`, `has`, `keys`, `set`, `size`, `toJSON`, `toSetCookieHeaders`, `values`
 - **Here:** `lib/cookie_jar.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:CookieMap`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_formats_and_utilities.test.ts`, `test:tests/bun_request_contract.test.ts`
 
@@ -425,6 +429,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.5` · [reference](https://bun.com/reference/bun/Glob)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Instance members (3):** `match`, `scan`, `scanSync`
 - **Here:** `lib/pm_policy.ts`, `scripts/dx_workspaces.ts`
 - **Evidence:** `test:tests/audit_bun_glob_scan.test.ts`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_reference_symbols.test.ts`
 
@@ -493,6 +498,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.5` · [reference](https://bun.com/reference/bun/Transpiler)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Instance members (4):** `scan`, `scanImports`, `transform`, `transformSync`
 - **Here:** `bin/bun_surface.ts`, `lib/code_mode.ts`
 - **Evidence:** `surface:Transpiler`, `test:tests/nsh_desk_contract.test.ts`, `test:tests/status_page.test.ts`
 
@@ -523,6 +529,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.5` · [reference](https://bun.com/reference/bun/Archive)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (1):** `write`
+- **Instance members (4):** `blob`, `bytes`, `extract`, `files`
 - **Here:** `lib/eod_archive.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:Archive`, `test:tests/bun_archive_contract.test.ts`, `test:tests/bun_builtin_replacements.test.ts`, `test:tests/bun_eval_patterns.test.ts`
 
@@ -554,6 +561,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.5` · [reference](https://bun.com/reference/bun/RedisClient)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Instance members (212):** snapshot in tests/bun_shape_members.json
 - **Here:** `bin/bun_surface.ts`
 - **Evidence:** `surface:RedisClient`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_urls.test.ts`
 
@@ -570,6 +578,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.5` · [reference](https://bun.com/reference/bun/S3Client)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (9):** `delete`, `exists`, `file`, `list`, `presign`, `size`, `stat`, `unlink`, `write`
+- **Instance members (9):** `delete`, `exists`, `file`, `list`, `presign`, `size`, `stat`, `unlink`, `write`
 - **Here:** `scripts/verify-gslive-tickets.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:S3Client`, `test:scripts/r2_manifest_cas_promote.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_s3client_contract.test.ts`
 
@@ -670,6 +679,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.5` · [reference](https://bun.com/reference/bun/CryptoHasher)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (2):** `algorithms`, `hash`
+- **Instance members (5):** `algorithm`, `byteLength`, `copy`, `digest`, `update`
 - **Here:** `lib/gslive_users_report.ts`, `lib/r2_manifest_cas.ts`
 - **Evidence:** `test:lib/live_provenance.test.ts`, `test:scripts/r2_manifest_cas_promote.test.ts`, `test:tests/bun_runtime_contracts.test.ts`, `test:tests/bun_terminal_write_buffer_source.test.ts`
 
@@ -733,6 +743,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Members (2):** `byteLength`, `hash`
+- **Instance members (3):** `byteLength`, `digest`, `update`
 - **Here:** no call site
 - **Evidence:** `test:tests/bun_modules_surface.test.ts`
 
@@ -742,6 +753,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Members (2):** `byteLength`, `hash`
+- **Instance members (3):** `byteLength`, `digest`, `update`
 - **Here:** no call site
 - **Evidence:** `test:tests/bun_modules_surface.test.ts`
 
@@ -812,6 +824,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Members (2):** `byteLength`, `hash`
+- **Instance members (3):** `byteLength`, `digest`, `update`
 - **Here:** no call site
 - **Evidence:** `test:tests/bun_modules_surface.test.ts`
 
@@ -821,6 +834,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Members (2):** `byteLength`, `hash`
+- **Instance members (3):** `byteLength`, `digest`, `update`
 - **Here:** no call site
 - **Evidence:** `test:tests/bun_modules_surface.test.ts`
 
@@ -830,6 +844,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Members (2):** `byteLength`, `hash`
+- **Instance members (3):** `byteLength`, `digest`, `update`
 - **Here:** no call site
 - **Evidence:** `test:tests/bun_modules_surface.test.ts`, `test:tests/bun_runtime_contracts.test.ts`
 
@@ -839,6 +854,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Members (2):** `byteLength`, `hash`
+- **Instance members (3):** `byteLength`, `digest`, `update`
 - **Here:** no call site
 - **Evidence:** `test:tests/bun_modules_surface.test.ts`
 
@@ -848,6 +864,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Members (2):** `byteLength`, `hash`
+- **Instance members (3):** `byteLength`, `digest`, `update`
 - **Here:** no call site
 - **Evidence:** `test:tests/bun_modules_surface.test.ts`
 
@@ -857,6 +874,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
 - **Members (2):** `byteLength`, `hash`
+- **Instance members (3):** `byteLength`, `digest`, `update`
 - **Here:** no call site
 - **Evidence:** `test:tests/bun_modules_surface.test.ts`
 
@@ -944,6 +962,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.5` · [reference](https://bun.com/reference/bun/FetchSession)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Instance members (2):** `close`, `fetch`
 - **Here:** `services/sportsdesk_telegram_bot.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:FetchSession`, `test:tests/bun_aspects_contract.test.ts`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_shapes_types.test-d.ts` · deep dive: [§7.3](./bun_server_runtime_shapes_runbook.md)
 
@@ -959,6 +978,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.5` · [reference](https://bun.com/reference/bun/FileSystemRouter)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Instance members (6):** `assetPrefix`, `match`, `origin`, `reload`, `routes`, `style`
 - **Here:** no call site
 - **Evidence:** `test:tests/bun_capabilities.test.ts`, `test:tests/bun_modules_surface.test.ts`, `test:tests/inspect_ansi_diagnostics.test.ts`
 
@@ -1021,6 +1041,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.5` · [reference](https://bun.com/reference/bun/Image)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (4):** `backend`, `clipboardChangeCount`, `fromClipboard`, `hasClipboardImage`
+- **Instance members (21):** snapshot in tests/bun_shape_members.json
 - **Here:** `services/blob_and_live_bets_server.ts`, `lib/screenshot_encode.ts`
 - **Evidence:** `surface:Image`, `test:lib/f402_agent_graph_webp.test.ts`, `test:lib/image_errors.test.ts`, `test:scripts/bun_docs_mcp.test.ts`
 

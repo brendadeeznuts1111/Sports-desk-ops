@@ -18,8 +18,10 @@ import {
   BUN_SHAPES,
   BUN_SHAPE_PINS,
   BUN_WEB_GLOBAL_SHAPES,
+  PROTOTYPE_SNAPSHOT_EXCLUDED,
   VOLATILE_SHAPES,
   surfaceMembers,
+  surfacePrototypeMembers,
   webGlobalSurfaceMembers,
 } from "../lib/bun_shapes.ts";
 
@@ -32,6 +34,23 @@ function shapeMembers(): Record<string, string[]> {
     const value = (Bun as unknown as Record<string, unknown>)[shape.name];
     if (typeof value !== "object" && typeof value !== "function") continue;
     out[shape.name] = surfaceMembers(value);
+  }
+  return out;
+}
+
+/**
+ * Instance (`prototype.*`) surface for constructor shapes. This is the half the
+ * static walk cannot see: `Bun.Image` reports four statics but twenty-one
+ * pipeline methods live on its prototype.
+ */
+function shapePrototypeMembers(): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const shape of BUN_SHAPES) {
+    if (shape.kind !== "value" || VOLATILE_SHAPES.has(shape.name)) continue;
+    if (PROTOTYPE_SNAPSHOT_EXCLUDED.has(shape.name)) continue;
+    const value = (Bun as unknown as Record<string, unknown>)[shape.name];
+    const members = surfacePrototypeMembers(value);
+    if (members.length > 0) out[shape.name] = members;
   }
   return out;
 }
@@ -57,6 +76,7 @@ if (modeIndex < 0 || args[modeIndex + 1] === undefined) {
 const mode = args[modeIndex] as "--baseline" | "--check";
 const file = resolve(args[modeIndex + 1] as string);
 const current = shapeMembers();
+const currentPrototypes = shapePrototypeMembers();
 const currentWebGlobals = webGlobalMembers();
 
 if (mode === "--baseline") {
@@ -68,6 +88,7 @@ if (mode === "--baseline") {
         bunVersion: BUN_SHAPE_PINS.bunVersion,
         bunCommit: BUN_SHAPE_PINS.bunCommit,
         shapes: current,
+        prototypes: currentPrototypes,
         webGlobals: currentWebGlobals,
       },
       null,
@@ -75,7 +96,7 @@ if (mode === "--baseline") {
     )}\n`,
   );
   console.log(
-    `wrote ${Object.keys(current).length} shape member sets and ${Object.keys(currentWebGlobals).length} web global member sets to ${file}`,
+    `wrote ${Object.keys(current).length} shape member sets, ${Object.keys(currentPrototypes).length} prototype member sets and ${Object.keys(currentWebGlobals).length} web global member sets to ${file}`,
   );
   process.exit(0);
 }
@@ -83,6 +104,7 @@ if (mode === "--baseline") {
 const baseline = (await Bun.file(file).json()) as {
   bunVersion?: string;
   shapes: Record<string, string[]>;
+  prototypes?: Record<string, string[]>;
   webGlobals?: Record<string, string[]>;
 };
 let drift = 0;
@@ -116,6 +138,7 @@ function checkSurfaceMap(
   }
 }
 checkSurfaceMap("", baseline.shapes, current);
+checkSurfaceMap("prototype.", baseline.prototypes ?? {}, currentPrototypes);
 checkSurfaceMap("globalThis.", baseline.webGlobals ?? {}, currentWebGlobals);
 console.log(
   `${drift} member-surface drift(s) against ${baseline.bunVersion ?? "unknown Bun"}`,

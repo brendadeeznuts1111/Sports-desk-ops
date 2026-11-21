@@ -21,6 +21,7 @@ import {
   BUN_SHAPE_PINS,
   BUN_SUBMODULE_SHAPES,
   BUN_WEB_GLOBAL_SHAPES,
+  PROTOTYPE_SNAPSHOT_EXCLUDED,
   RUNTIME_ONLY_SHAPES,
   SHAPE_SECTIONS,
   VOLATILE_SHAPES,
@@ -291,6 +292,14 @@ export async function renderBunShapeContractsCatalog(
           if (members.length > 0) {
             out.push(
               `- **Members (${members.length}):** ${members.length <= 12 ? members.map((m) => `\`${m}\``).join(", ") : "snapshot in tests/bun_shape_members.json"}`,
+            );
+          }
+          const prototypeMembers = PROTOTYPE_SNAPSHOT_EXCLUDED.has(shape.name)
+            ? []
+            : surfacePrototypeMembers(value);
+          if (prototypeMembers.length > 0) {
+            out.push(
+              `- **Instance members (${prototypeMembers.length}):** ${prototypeMembers.length <= 12 ? prototypeMembers.map((m) => `\`${m}\``).join(", ") : "snapshot in tests/bun_shape_members.json"}`,
             );
           }
         }

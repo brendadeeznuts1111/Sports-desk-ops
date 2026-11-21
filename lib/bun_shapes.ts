@@ -235,6 +235,16 @@ export const VOLATILE_SHAPES: ReadonlySet<string> = new Set([
   "stdout",
 ]);
 
+/**
+ * Shapes whose prototype surface comes from the host platform rather than the
+ * Bun pin (`WebView` is the host WebKit build), so comparing it against a
+ * snapshot generated on another platform would report false drift. Their static
+ * surface stays ratcheted under `shapes`.
+ */
+export const PROTOTYPE_SNAPSHOT_EXCLUDED: ReadonlySet<string> = new Set([
+  "WebView",
+]);
+
 /** Properties every function inherits that say nothing about the API surface. */
 const FUNCTION_INTERNALS = new Set([
   "length",
