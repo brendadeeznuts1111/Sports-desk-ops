@@ -29,9 +29,9 @@ jobs:
       matrix:
         include:
           - libc: musl
-            image: oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
+            image: oven/bun:1.4.5-alpine@sha256:da816670775f4c2b4e990b6b1847cf5540dcdc721a42033dd331ce7a88ba6a3b
           - libc: glibc
-            image: oven/bun:1.4.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e
+            image: oven/bun:1.4.5-debian@sha256:3dddea58e1f8f2240eca906b023fedb944f9a8352515a35309fd0c879fe00aaa
     name: Bun on Linux (${{ matrix.libc }})
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -48,11 +48,15 @@ jobs:
         env:
           IMAGE: ${{ matrix.image }}
         run: |
-          test "$(docker run --rm --entrypoint bun "$IMAGE" -p 'Bun.revision')" = 38afee6c84fcf48c0edb2466aa4b27d287a59c30
-          report="$RUNNER_TEMP/bun-130816-alpine-x64-shard15.xml"
+          # Buildkite build 143060 is the "Bun v1.4.5" build for commit a7733435; its Alpine
+          # 3.23 x64 shard 15 job (index 15 of 20) completed exit 0. The sha256 below is
+          # Buildkite's own artifact metadata for that job; it was downloaded and checked
+          # (exactly one passing, asserted FileSink case) before this pin was committed.
+          test "$(docker run --rm --entrypoint bun "$IMAGE" -p 'Bun.revision')" = a7733435cf40429e3b35c36072769df2052b80f1
+          report="$RUNNER_TEMP/bun-143060-alpine-x64-shard15.xml"
           curl --fail --silent --show-error --location --retry 3 --max-time 30 \
-            'https://buildkite.com/organizations/bun/pipelines/bun/builds/130816/jobs/01a162c2-7220-497a-bff5-087f27bd98ca/artifacts/01a162cb-f54f-4088-9447-274bc7054f93' --output "$report"
-          echo "9313c55576ff069b3f1e923c0ba08e9fefbc4655997e00e078c53474e30e9ce4  $report" | sha256sum --check
+            'https://buildkite.com/organizations/bun/pipelines/bun/builds/143060/jobs/01a1f2c2-1fc2-4c64-8c46-ad2141af2e29/artifacts/01a1f2cc-244f-43dc-ac03-3b73314d8e19' --output "$report"
+          echo "87e01cbe45e9725886f2b63977df6879794bbd6c71a7c2fa81796267a2d827b7  $report" | sha256sum --check
           python3 - "$report" <<'PYTHON'
           import sys
           import xml.etree.ElementTree as ET

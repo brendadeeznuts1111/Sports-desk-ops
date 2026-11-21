@@ -1,9 +1,9 @@
 # AGENTS.md — sportsdesk-ops
 
 Operator tooling for the Fantasy402 sports desk: ingestion, settlement, combo/CLV analytics, the R2
-portal and the VPS service. Bun **1.4.4** (`package.json` `engines.bun` / `.bun-version`).
+portal and the VPS service. Bun **1.4.5** (`package.json` `engines.bun` / `.bun-version`).
 
-The pinned runtime is stable `1.4.4+38afee6c8`. Some notes below were first measured on canary
+The pinned runtime is stable `1.4.5+a7733435c`. Some notes below were first measured on canary
 builds (`1.4.4-canary.1`, `1.4.5-canary.1`); where a behaviour exists only on a canary the note says
 so. Re-check any version-scoped claim against the pin before relying on it.
 

@@ -8,7 +8,7 @@ repository.
 ## Testing an upstream Bun PR build
 
 Upstream Bun publishes a release build as a GitHub Actions artifact on each pull request, and its
-[CONTRIBUTING guide](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/CONTRIBUTING.md#download-release-build-from-pull-requests)
+[CONTRIBUTING guide](https://github.com/oven-sh/bun/blob/a7733435cf40429e3b35c36072769df2052b80f1/CONTRIBUTING.md#download-release-build-from-pull-requests)
 documents fetching it with the [`bun-pr`](https://www.npmjs.com/package/bun-pr) package:
 
 ```sh

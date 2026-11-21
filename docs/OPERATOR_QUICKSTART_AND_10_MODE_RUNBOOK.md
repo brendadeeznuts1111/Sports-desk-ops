@@ -126,6 +126,8 @@ F402_LIVE_LOGIN=1 ./bin/dx shot --f402-login --f402-page /manager.html --out scr
 ./bin/dx help --bun --category=monitor                             # Full live `bun run --help` slice (or `bun run cli --bun-help`)
 ./bin/dx run --profile-cpu --low-mem scripts/shadow_price.ts       # Contained run (--no-orphans, --smol, Markdown CPU hotspots)
 ./bin/dx run --isolated-env --watch-safe scripts/dev_dashboard.ts  # Skips .env FIFO (--no-env-file) + safe SIGTERM watch reload
+bun run dev --port 3000 --host 0.0.0.0                          # Also --port=3000/--host=::1; --port 0 logs a free port
+bun --port=3000 run dev                                         # Bun runtime flag; defaults BUN_PORT/PORT/NODE_PORT then 4022
 DX_BUN_FLAGS="--smol" ./bin/dx edge --min-wagers=25                # Forward validated Bun flags to any dx subcommand
 ./bin/dx monitor --watch --interval=5                              # Live Bun process RSS/CPU, :4020 /health + v2 live-bets, profiles
 ./bin/dx monitor --offline --prune --max-files=10                  # Offline process + profile inspection with artifact retention sweep

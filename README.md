@@ -1,6 +1,6 @@
 # SportsDesk & Fantasy402 Operations Suite
 
-Production intelligence, downline risk surveillance, 10-Mode Forensic/Risk/Cross-Market/Reconciliation engine, Cloudflare R2 edge portal, Qwen3.5-4B neuron token taxonomy, and automated reporting pipeline built on the **Bun runtime (v1.4.4)** for SportsDesk and Fantasy402 books.
+Production intelligence, downline risk surveillance, 10-Mode Forensic/Risk/Cross-Market/Reconciliation engine, Cloudflare R2 edge portal, Qwen3.5-4B neuron token taxonomy, and automated reporting pipeline built on the **Bun runtime (v1.4.5)** for SportsDesk and Fantasy402 books.
 
 Repository: [bw496915-cmyk/Sports-desk-ops](https://github.com/bw496915-cmyk/Sports-desk-ops)
 
@@ -33,7 +33,7 @@ Repository: [bw496915-cmyk/Sports-desk-ops](https://github.com/bw496915-cmyk/Spo
 
 If you are opening this repository for the first time or starting a desk shift, read the **[Operator Quickstart, Data Cleaning Pipeline & 10-Mode Action Runbook](docs/OPERATOR_QUICKSTART_AND_10_MODE_RUNBOOK.md)** and open the **[Live 6-Tab Surveillance, ROT Bet-Ticker & 10-Mode Forensic Portal (`graph.html`)](https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/graph.html)**.
 
-Always use **`./bin/dx`** as your primary entrypoint—it configures sandbox/host `$HOME/.gitconfig`, links your dotfiles checkout (`$DX_DOTFILES_DIR`, else `~/dotfiles`; never overwriting a real file), loads Cloudflare Pages credentials, and runs its tooling through Bun (`v1.4.4`). Run `./bin/dx help` for every command and `./bin/dx scripts` for the grouped `package.json` scripts:
+Always use **`./bin/dx`** as your primary entrypoint—it configures sandbox/host `$HOME/.gitconfig`, links your dotfiles checkout (`$DX_DOTFILES_DIR`, else `~/dotfiles`; never overwriting a real file), loads Cloudflare Pages credentials, and runs its tooling through Bun (`v1.4.5`). Run `./bin/dx help` for every command and `./bin/dx scripts` for the grouped `package.json` scripts:
 
 ```bash
 # 1. Verify environment, Git config, staged dist/ assets, and live Cloudflare R2 gateway
@@ -95,7 +95,7 @@ SPORTSDESK_LIVE_INGEST=1 ./bin/dx deploy
 git clone https://github.com/bw496915-cmyk/Sports-desk-ops.git
 cd Sports-desk-ops
 
-# Verify Bun 1.4.4, then install the locked dependencies
+# Verify Bun 1.4.5, then install the locked dependencies
 bun --version
 bun install --frozen-lockfile
 
@@ -125,7 +125,7 @@ bun run sim
 ```
 
 Repository lint uses native `bun lint`, which ships on the canary (1.4.5+) but
-not on the pinned Bun 1.4.4. `bun run lint:check` is the read-only gate and
+not on the pinned Bun 1.4.5. `bun run lint:check` is the read-only gate and
 `bun run lint` applies safe fixes; both resolve a canary binary (`BUN_LINT_BIN`,
 `bun-canary`, or `~/.bun/bin/bun-canary*`) and exit 2 when none is installed.
 CI's lint gate is the required `lint-native` job; `bun run verify:fast` fails
@@ -136,7 +136,7 @@ read-only check. `bunfig.toml` preserves the existing 80-column, two-space,
 double-quote style with semicolons. Run `bun run typecheck` for Bun's native
 strict, no-emit checker; `tsconfig.json` makes the previous inferred compiler
 defaults explicit and includes the repository's source, tests, and declarations.
-CI runs formatting and type checking before lint. Bun remains pinned to 1.4.4
+CI runs formatting and type checking before lint. Bun remains pinned to 1.4.5
 in CI and declared in `package.json` (`packageManager` and `engines`), with
 matching `@types/bun`; no Prettier or oxfmt package is required. These manifest
 fields document the required version; CI explicitly selects it. The canonical
@@ -145,7 +145,7 @@ is only a convenience pointer.
 
 ## Pinned Bun compatibility tests
 
-Tests distinguish Fetch-spec requirements from behavior observed on Bun 1.4.4.
+Tests distinguish Fetch-spec requirements from behavior observed on the 1.4.4 runtime.
 The pinned `Request` constructor retains GET/HEAD bodies and accepts spec-forbidden
 methods. It also maps mixed-case `Delete` to `GET` and uppercases custom verbs.
 These are compatibility differences, not application guarantees: use explicit
@@ -233,7 +233,7 @@ Mini App launches carry a signed `initData` payload. Server-side verification us
 
 ## Performance Telemetry & Micro-Benchmarks
 
-Empirical measurements on Bun v1.4.4 (macOS arm64, Apple Silicon). Benchmarks reflect streaming production wager corpora (`f402-bets.jsonl`, 468.8 MB / 934,246 rows) alongside lazy server handles:
+Empirical measurements on the 1.4.4 runtime (macOS arm64, Apple Silicon). Benchmarks reflect streaming production wager corpora (`f402-bets.jsonl`, 468.8 MB / 934,246 rows) alongside lazy server handles:
 
 | Operation / Workload                  | Legacy / Baseline       | Native Bun 1.4 Path        | Benchmark / Speedup                    |
 | :------------------------------------ | :---------------------- | :------------------------- | :------------------------------------- |

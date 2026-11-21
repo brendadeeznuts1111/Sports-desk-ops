@@ -50,13 +50,13 @@ describe("Bun upstream reference: XML, bun x and catalogs", () => {
       "https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4",
     );
     expect(doc).toContain(
-      "https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/runtime/xml.mdx",
+      "https://github.com/oven-sh/bun/blob/a7733435cf40429e3b35c36072769df2052b80f1/docs/runtime/xml.mdx",
     );
     expect(doc).toContain("bun.com/blog/bun-v1.4.4");
     expect(doc).toContain("ERR_DOD_CSR_CONSERVATION_BREACH");
     expect(doc).toContain("tests/bun_x_cli_help.test.ts");
     expect(doc).toContain(
-      "https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/docs/runtime/semver.mdx",
+      "https://github.com/oven-sh/bun/blob/a7733435cf40429e3b35c36072769df2052b80f1/docs/runtime/semver.mdx",
     );
     for (const flag of [
       "--immutable",

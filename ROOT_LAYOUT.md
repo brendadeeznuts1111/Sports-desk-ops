@@ -69,7 +69,7 @@ When executing `package.json` scripts (`bun run <script>`):
 
 - Bun runs the script command string inside a subshell.
 - **Linux & macOS**: Bun checks for available shells in priority order, launching the first one found: `bash` → `sh` → `zsh`.
-- **Windows**: Bun invokes the native Bun Shell (`bun:shell`; see [upstream `shell.d.ts`](https://github.com/oven-sh/bun/blob/38afee6c84fcf48c0edb2466aa4b27d287a59c30/packages/bun-types/shell.d.ts)), bringing consistent bash-like syntax and built-in utilities (`rm`, `echo`, `cp`, `mv`, pipes, redirects) to Windows without requiring WSL or MSYS2.
+- **Windows**: Bun invokes the native Bun Shell (`bun:shell`; see [upstream `shell.d.ts`](https://github.com/oven-sh/bun/blob/a7733435cf40429e3b35c36072769df2052b80f1/packages/bun-types/shell.d.ts)), bringing consistent bash-like syntax and built-in utilities (`rm`, `echo`, `cp`, `mv`, pipes, redirects) to Windows without requiring WSL or MSYS2.
 - **Startup latency**: `bun run` starts in ~6ms (Linux) / ~7–14ms (macOS), compared to ~170ms for `npm run`, because Bun is a native Zig/JSC binary with SIMD JSON parsing that bypasses Node's multi-module CLI bootstrap.
 - **Shorthand `bun <script>` vs explicit `bun run <script>`**:
   - Non-colliding scripts can be invoked directly as `bun <script>` (e.g. `bun clean`, `bun dev`, `bun health`).

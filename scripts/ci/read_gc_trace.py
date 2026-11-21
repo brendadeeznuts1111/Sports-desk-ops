@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def summarize_trace(trace: str) -> str:
-    launches = re.findall(r"^trace-process pid=(\d+) platform=Linux \S+ bun=1\.4\.4\+38afee6c8$", trace, re.M)
+    launches = re.findall(r"^trace-process pid=(\d+) platform=Linux \S+ bun=1\.4\.5\+a7733435c$", trace, re.M)
     markers = list(re.finditer(r"^array-mutation (begin|end) pid=(\d+) monotonic_ns=(\d+)$", trace, re.M))
     if len(launches) != 1 or [m[1] for m in markers] != ["begin", "end"]:
         raise ValueError("Missing or ambiguous pinned runtime or mutation boundaries")

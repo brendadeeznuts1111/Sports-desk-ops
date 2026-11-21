@@ -190,7 +190,7 @@ jobs:
       - name: Type check
         timeout-minutes: 3
         run: bun run typecheck
-      # Native `bun lint` runs in the `lint-native` job (canary) rather than on pinned 1.4.4.
+      # Native `bun lint` runs in the `lint-native` job (canary) rather than on pinned 1.4.5.
       - name: Derived contract pins
         timeout-minutes: 2
         run: bun run check:derived-contracts
@@ -250,7 +250,7 @@ jobs:
         run: GITHUB_BASE_REF="$CI_BASE_BRANCH" bash scripts/ci/test-changed-nsh.sh
 
   lint-native:
-    # Native `bun lint` ships in the canary channel, not in the pinned 1.4.4 runtime (and the
+    # Native `bun lint` ships in the canary channel, not in the pinned 1.4.5 runtime (and the
     # migrated `"lint": "bun lint"` script recurses there). This job is the parity check against
     # .oxlintrc.json; the repo pin and every other job stay on .bun-version.
     runs-on: ubuntu-latest
@@ -423,7 +423,7 @@ jobs:
       - name: Type check
         timeout-minutes: 3
         run: bun run typecheck
-      # Native `bun lint` runs in the `lint-native` job (canary) rather than on pinned 1.4.4.
+      # Native `bun lint` runs in the `lint-native` job (canary) rather than on pinned 1.4.5.
       - name: Derived contract pins
         timeout-minutes: 2
         run: bun run check:derived-contracts

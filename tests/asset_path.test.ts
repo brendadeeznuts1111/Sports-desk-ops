@@ -18,8 +18,8 @@ import {
 /**
  * `/assets/*` containment, including the case the platform does not cover.
  *
- * Bun's directory routes document that a symlink never leads out of `dir`. Measured on 1.4.4 /
- * macOS it does — an absolute or relative symlink under the directory is served with the outside
+ * Bun's directory routes document that a symlink never leads out of `dir`. Measured on 1.4.4 and
+ * 1.4.5 / macOS it does — an absolute or relative symlink under the directory is served with the outside
  * file's content. `docs/assets` has no symlinks today; these tests keep that from becoming a leak
  * if one is added, and they are the reason the handler resolves real paths instead of trusting a
  * name check.

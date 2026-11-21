@@ -1,6 +1,6 @@
 # Bun package manager policy
 
-**Runtime:** Bun 1.4.4 only. **Upstream doc routing:** [bun-upstream-reference.md](../bun-upstream-reference.md) (types, JSC, oven-sh pins).
+**Runtime:** Bun 1.4.5 only. **Upstream doc routing:** [bun-upstream-reference.md](../bun-upstream-reference.md) (types, JSC, oven-sh pins).
 
 Procedural SSOT for installs, `bun.lock`, machine bunfig, and `bun-deps`. Implementation SSOT: `lib/pm_policy.ts`, `scripts/pm_doctor.ts`, tests in [Automated gates](#automated-gates).
 
@@ -86,7 +86,7 @@ Also avoid duplicating scoped registries in bunfig; Bun reads **`~/.npmrc`** for
 | **Missing symlink**                  | Installs use Bun **defaults** (hoisted, no age gate) while you think policy is active                    | Ensure the live global file exists; doctor `global bunfig` + `isolated linker`                                      |
 | **`~/.bun/bunfig.toml`**             | Policy never applies                                                                                     | Not a Bun config path                                                                                               |
 | **Project overrides machine keys**   | Repo would fork install policy per clone                                                                 | Forbidden — `tests/bun_config_policy.test.ts`; also avoid `[install.cache]` in repo `bunfig.toml`                   |
-| **`frozenLockfile` + no `bun.lock`** | Bun **1.4.4**: install can exit **0** and write **no** lock                                              | This repo always commits `bun.lock`; CI and `lockfile` doctor check require it                                      |
+| **`frozenLockfile` + no `bun.lock`** | On the 1.4.4 runtime: install can exit **0** and write **no** lock                                       | This repo always commits `bun.lock`; CI and `lockfile` doctor check require it                                      |
 | **`bun --config` placement**         | Override ignored                                                                                         | Flag must precede the subcommand: `bun --config=… install`, not `bun install --config=…`                            |
 
 **`bun-deps` (dependency writes).** Shell wrapper in `~/dotfiles/shell/bin/bun-deps` runs `bun --config="$HOME/dotfiles/bun/unfrozen.bunfig.toml" …`. On **1.4.4**, a frozen global config is **not** cleared by `--no-frozen-lockfile` or `BUN_CONFIG_*` env vars — only a different config file via `--config` wins. The override file must contain **only** `frozenLockfile = false` (plus nothing else in `[install]`); `pm:doctor` fails if it sets other install keys. All other machine policy (isolated linker, release age, cache) still applies during `bun-deps` runs.
@@ -103,7 +103,7 @@ Root `package.json` `{pre|post}install` / `{pre|post}prepare` still run on insta
 
 ### `bun.lock` shape here
 
-Measured on the committed lock (Bun 1.4.4 text format):
+Measured on the committed lock (the 1.4.4 text format):
 
 | Field                      | Value / meaning                                                                                                    |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -144,7 +144,7 @@ Implementation: `scripts/pm_doctor.ts`. Exit **1** if any selected check has sta
 
 | Check                      | Fail / warn | What it proves                                                                    |
 | -------------------------- | ----------- | --------------------------------------------------------------------------------- |
-| `runtime pin`              | fail        | `Bun.version`, `engines.bun`, and `packageManager` agree on **1.4.4**             |
+| `runtime pin`              | fail        | `Bun.version`, `engines.bun`, and `packageManager` agree on **1.4.5**             |
 | `lifecycle scripts`        | fail        | `trustedDependencies` is exactly `[]`                                             |
 | `global bunfig`            | fail        | Live global config file exists (`globalBunfigPath`)                               |
 | `inert bunfig`             | warn        | A second `~/.bunfig.toml` path exists but is not the live file                    |
@@ -194,11 +194,11 @@ Implementation: `scripts/pm_doctor.ts`. Exit **1** if any selected check has sta
 
 Upstream frozen install can **pass** while `bun.lock` is stale. `lib/pm_policy.ts` and `pm:doctor` catch what CI frozen install does not:
 
-| Trap                                                | What happens                                                                        | Fix                                                                                                                                 |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Workspace **rename** (`package.json` `name`)        | Bun 1.4.4 does not rewrite names in an existing lock; frozen does not compare names | `bun-deps install` if enough; else delete `bun.lock` + `node_modules` and reinstall unfrozen, then commit; verify `lock workspaces` |
-| Workspace **version** bump (`bun pm version`)       | Frozen install still applies; lock can keep the old version                         | `bun-deps install`, or `./bin/dx deps version <ver>` (bumps, refreshes lock, runs doctor on lock checks)                            |
-| **`bun patch --commit`** under frozen global config | Patch file and `package.json` update; **`bun.lock` may not**                        | `bun-deps patch --commit <dir>` (plain `bun patch --commit` skips the lock)                                                         |
+| Trap                                                | What happens                                                                    | Fix                                                                                                                                 |
+| --------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Workspace **rename** (`package.json` `name`)        | 1.4.4 does not rewrite names in an existing lock; frozen does not compare names | `bun-deps install` if enough; else delete `bun.lock` + `node_modules` and reinstall unfrozen, then commit; verify `lock workspaces` |
+| Workspace **version** bump (`bun pm version`)       | Frozen install still applies; lock can keep the old version                     | `bun-deps install`, or `./bin/dx deps version <ver>` (bumps, refreshes lock, runs doctor on lock checks)                            |
+| **`bun patch --commit`** under frozen global config | Patch file and `package.json` update; **`bun.lock` may not**                    | `bun-deps patch --commit <dir>` (plain `bun patch --commit` skips the lock)                                                         |
 
 Catalog and workspace-scoped adds: run **`bun-deps`** (or `bun run deps` / `./bin/dx deps`) **in the package that should own the dependency** — `./bin/dx deps` deliberately does not `cd` to the repo root.
 
@@ -228,7 +228,7 @@ So **`[run] noOrphans`** applies to test/runtime commands even though install po
 **A. Fresh clone**
 
 ```sh
-bun --version    # 1.4.4
+bun --version    # 1.4.5
 bun install --frozen-lockfile
 bun run pm:doctor
 bun test tests/bun_config_policy.test.ts
@@ -266,7 +266,7 @@ bun run pm:doctor --only patches,lock
 
 **E. New maintainer machine**
 
-1. Install **Bun 1.4.4** (match `.bun-version`).
+1. Install **Bun 1.4.5** (match `.bun-version`).
 2. Link **`~/dotfiles/bun/bunfig.toml`** → live global path (`$XDG_CONFIG_HOME/.bunfig.toml` when XDG is set).
 3. Put **`bun-deps`** on `PATH` (`~/dotfiles/shell/bin/bun-deps` → `~/.local/bin`).
 4. Confirm **`~/dotfiles/bun/unfrozen.bunfig.toml`** exists (only `frozenLockfile = false`).
@@ -327,7 +327,7 @@ both run `ba-example`, while `--filter 'packages/ba*'` matches nothing — exit 
 packages matched the filter`. The missing prefix is the whole difference; a bare path is neither
 a package name nor a path Bun resolves. A matched package without the script fails the whole run —
 `error: Script "typecheck" not found in package "ba-example"`, exit 1 — so add `--if-present` when
-the glob can include a package that does not declare it. Measured on Bun 1.4.4, 2026-11-18; the
+the glob can include a package that does not declare it. Measured on the 1.4.4 runtime, 2026-11-18; the
 `./packages/…` forms re-measured 2026-11-19.
 
 **Workspace Dev Control CLI (`scripts/dx_workspaces.ts` / `./bin/dx workspaces`):**
@@ -417,7 +417,7 @@ Measured behaviour worth knowing before a release (2026-11-14):
 
 - `bun publish --dry-run` checks config, access and file selection but **not the token**: with a fake `_authToken` in `NPM_CONFIG_USERCONFIG` it prints `+ @sportsdesk-ops/contracts@0.1.0 (dry-run)` and exits 0. Without any token it fails with `missing authentication`. So the dry-run is a config gate; only a real publish tests the credential.
 - The name is unpublished (`bun info @sportsdesk-ops/contracts` → "does not exist"), and scope ownership cannot be checked unauthenticated: `registry.npmjs.org/-/org/sportsdesk-ops` returns 404 for a missing org _and_ for an org your token cannot see. After `bunx npm login`, run `npm org ls sportsdesk-ops` (or create it on npmjs.com).
-- Bun 1.4.4 has no `--provenance` / OIDC support in `bun publish` (checked via `--help`). Publishing with npm provenance would require `npm publish --provenance` in the workflow instead; that trades Bun's publish path for the attestation.
+- The 1.4.4 runtime has no `--provenance` / OIDC support in `bun publish` (checked via `--help`). Publishing with npm provenance would require `npm publish --provenance` in the workflow instead; that trades Bun's publish path for the attestation.
 - The workflow adds two guards: a tag/version match on `contracts-v*` (a tag that names the wrong version fails) and a dry-run before the real publish.
 
 Other workspace packages are not publishable yet: `api`, `backend` and `ui` depend on `@sportsdesk-ops/contracts` via `workspace:*`, which npm consumers cannot resolve; enabling them needs real version ranges and a publish order (contracts first).
@@ -478,7 +478,7 @@ When the root manifest gains `workspaces.catalog` / `workspaces.catalogs` ([work
 frozenLockfile = false
 ```
 
-**`bun-deps` invocation shape** (Bun 1.4.4):
+**`bun-deps` invocation shape** (1.4.4):
 
 ```sh
 bun --config="$HOME/dotfiles/bun/unfrozen.bunfig.toml" add -d <pkg>
@@ -589,7 +589,7 @@ Shape consumed by `./bin/dx deps check --json`:
     {
       "name": "runtime pin",
       "status": "ok",
-      "detail": "bun 1.4.4; engines 1.4.4; packageManager bun@1.4.4"
+      "detail": "bun 1.4.5; engines 1.4.5; packageManager bun@1.4.5"
     },
     {
       "name": "lock versions",
@@ -604,7 +604,7 @@ Only **`fail`** status sets exit code **1**; **`warn`** is informational.
 
 ## Bun pin upgrade checklist
 
-When moving off **1.4.4** ( deliberate repo event):
+When moving off **1.4.5** ( deliberate repo event):
 
 1. Update `.bun-version`, `engines.bun`, `packageManager`, `@types/bun` together.
 2. **`./bin/dx bun --strict`** and **`bun run probe:bun`** vs `tests/bun_baseline.json`.
@@ -614,7 +614,7 @@ When moving off **1.4.4** ( deliberate repo event):
 
 ## VPS / production deploy (non-parity)
 
-[`deploy_to_vps.sh`](../../scripts/deploy/deploy_to_vps.sh) pins **`BUN_VERSION=1.4.4`** when installing Bun on the server. It **copies a subset** of the repo (`cli/`, `services/`, `lib/`, …) and **`package.json`** — it does **not** replay maintainer machine bunfig, **`bun-deps`**, or **`bun install --frozen-lockfile`** on the VPS tree. Production runtime there is not the same shape as a dev monorepo checkout with isolated `node_modules`. For desk development and CI, use this runbook instead.
+[`deploy_to_vps.sh`](../../scripts/deploy/deploy_to_vps.sh) pins **`BUN_VERSION=1.4.5`** when installing Bun on the server. It **copies a subset** of the repo (`cli/`, `services/`, `lib/`, …) and **`package.json`** — it does **not** replay maintainer machine bunfig, **`bun-deps`**, or **`bun install --frozen-lockfile`** on the VPS tree. Production runtime there is not the same shape as a dev monorepo checkout with isolated `node_modules`. For desk development and CI, use this runbook instead.
 
 ## Known 1.4.4 behavior vs upstream docs (install)
 

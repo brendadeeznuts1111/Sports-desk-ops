@@ -1,7 +1,7 @@
 {
   "_bun": {
     "note": "runtime",
-    "stdout": "v1.4.4 (38afee6c8)",
+    "stdout": "v1.4.5 (a7733435c)",
     "stderr": "",
     "code": 0,
     "signal": null,
@@ -82,7 +82,7 @@
   "eval.mix": {
     "note": "require and import.meta together",
     "stdout": "",
-    "stderr": "SyntaxError: import.meta is only valid inside modules.\n      at /private<cwd>/[eval]:1\n\nBun v1.4.4 (macOS arm64)",
+    "stderr": "SyntaxError: import.meta is only valid inside modules.\n      at /private<cwd>/[eval]:1\n\nBun v1.4.5 (macOS arm64)",
     "code": 1,
     "signal": null,
     "timedOut": false
@@ -266,14 +266,14 @@
   "proc.paths": {
     "note": "which/resolveSync/fileURLToPath/openInEditor shapes",
     "stdout": "",
-    "stderr": "error: Cannot find module './package.json' from '/private<cwd>'\n\nBun v1.4.4 (macOS arm64)",
+    "stderr": "error: Cannot find module './package.json' from '/private<cwd>'\n\nBun v1.4.5 (macOS arm64)",
     "code": 1,
     "signal": null,
     "timedOut": false
   },
   "proc.meta": {
     "note": "version, revision and version_with_sha shapes",
-    "stdout": "{\"version\":\"1.4.4\",\"revisionLen\":40,\"sha\":\"v1.4.4 (38afee6c8)\"}",
+    "stdout": "{\"version\":\"1.4.5\",\"revisionLen\":40,\"sha\":\"v1.4.5 (a7733435c)\"}",
     "stderr": "",
     "code": 0,
     "signal": null,
@@ -378,7 +378,7 @@
   "storage.archive": {
     "note": "Archive round-trips through bytes and files()",
     "stdout": "",
-    "stderr": "1 | (async()=>{const b=await new Bun.Archive({\"a.txt\":\"hi\"}).bytes();const f=await new Bun.Archive(b).files();console.log(JSON.stringify([b.length>0,[...f.keys()],new TextDecoder().decode(f.get(\"a.txt\"))]))})()\n                                                                                                                                                                                     ^\nTypeError: TextDecoder.decode expects an ArrayBuffer or TypedArray\n code: \"ERR_INVALID_ARG_TYPE\"\n\n      at <anonymous> (/private<cwd>/[eval]:1:178)\n\nBun v1.4.4 (macOS arm64)",
+    "stderr": "1 | (async()=>{const b=await new Bun.Archive({\"a.txt\":\"hi\"}).bytes();const f=await new Bun.Archive(b).files();console.log(JSON.stringify([b.length>0,[...f.keys()],new TextDecoder().decode(f.get(\"a.txt\"))]))})()\n                                                                                                                                                                                     ^\nTypeError: TextDecoder.decode expects an ArrayBuffer or TypedArray\n code: \"ERR_INVALID_ARG_TYPE\"\n\n      at <anonymous> (/private<cwd>/[eval]:1:178)\n\nBun v1.4.5 (macOS arm64)",
     "code": 1,
     "signal": null,
     "timedOut": false

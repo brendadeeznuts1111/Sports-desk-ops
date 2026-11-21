@@ -5,7 +5,7 @@
  * it has to be tested against cases the route cannot easily produce (symlinks that escape).
  *
  * Why it matters on this Bun: the docs for directory routes say a symlink never leads out of
- * `dir` (openat2 RESOLVE_IN_ROOT semantics). Measured on 1.4.4 / macOS, it does. A symlink at
+ * `dir` (openat2 RESOLVE_IN_ROOT semantics). Measured on 1.4.4 and 1.4.5 / macOS, it does. A symlink at
  * `assets/link.txt` pointing outside the directory is served with the outside file's content, for
  * both absolute and relative targets:
  *

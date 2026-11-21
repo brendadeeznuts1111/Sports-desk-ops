@@ -8,7 +8,7 @@ def summarize(directory):
     log = (directory / "catalog.log").read_text()
     if "Failure to open event" in log:
         raise ValueError("Perf dropped a requested event")
-    launches = re.findall(r"^catalog-process pid=(\d+) revision=38afee6c84fcf48c0edb2466aa4b27d287a59c30$", log, re.M)
+    launches = re.findall(r"^catalog-process pid=(\d+) revision=a7733435cf40429e3b35c36072769df2052b80f1$", log, re.M)
     collectors = set(re.findall(r"\[GC<(0x[0-9a-f]+)>:", log))
     if len(launches) != 1 or "catalog fresh:" not in log or len(collectors) != 1:
         raise ValueError("Expected one successfully completed catalog check on pinned Bun")

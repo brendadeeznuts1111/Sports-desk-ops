@@ -11,8 +11,8 @@ RUN apk add --no-cache git perf binutils
 DOCKERFILE
 docker run --rm -v "$PWD:/desk" -w /desk --entrypoint bun sportsdesk-catalog-trace ci --no-env-file
 archive="$symbol_dir/profile.zip"
-curl -fsSL --retry 3 -o "$archive" https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64-musl-baseline-profile.zip
-echo "69727f81cf19c7b9d97d6bc201b6ab50cd9dc05f021b7e074dbbd920c12011cf  $archive" | sha256sum -c -
+curl -fsSL --retry 3 -o "$archive" https://github.com/oven-sh/bun/releases/download/bun-v1.4.5/bun-linux-x64-musl-baseline-profile.zip
+echo "312f29a5b7a5da87346ad07967aacfb0a7068debbab6d7241a0c770883906054  $archive" | sha256sum -c -
 unzip -jp "$archive" bun-linux-x64-musl-baseline-profile/bun-profile > "$symbol_dir/bun-profile"
 chmod 755 "$symbol_dir/bun-profile"
 mounts=(--rm --network none -v "$PWD:/desk:ro" -w /desk -v "$trace_dir:/trace" --entrypoint sh)
@@ -38,7 +38,7 @@ printf 'concurrent %s\ntransition %s\nvisit %s\n' "$concurrent" "$transition" "$
 docker run "${mounts[@]}" --cap-add PERFMON -e "BUILD_ID=$runtime_id" \
   -e "CONCURRENT=$concurrent" -e "TRANSITION=$transition" -e "VISIT=$visit" sportsdesk-catalog-trace -ec '
   test -e /lib/ld-musl-x86_64.so.1
-  test "$(bun --revision)" = 1.4.4+38afee6c8
+  test "$(bun --revision)" = 1.4.5+a7733435c
   echo "Build ID: $BUILD_ID"
   cat /etc/alpine-release
   git config --global --add safe.directory /desk

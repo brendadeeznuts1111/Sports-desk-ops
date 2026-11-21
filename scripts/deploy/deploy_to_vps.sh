@@ -66,7 +66,7 @@ fi
 echo -e "${GREEN}[2/7] Installing Bun runtime...${NC}"
 if ! command -v bun &>/dev/null; then
   # Download to a file first: no network-to-shell pipe. Pin the version so CI and the VPS agree.
-  BUN_VERSION="${BUN_VERSION:-1.4.4}"
+  BUN_VERSION="${BUN_VERSION:-1.4.5}"
   BUN_INSTALLER="$(mktemp)"
   curl -fsSL https://bun.sh/install -o "$BUN_INSTALLER"
   sh "$BUN_INSTALLER" "bun-v${BUN_VERSION}"

@@ -22,9 +22,9 @@ import { listSourceFiles } from "./source_files.ts";
 
 /** The exact upstream artifacts this table is written against. */
 export const BUN_SHAPE_PINS = {
-  bunVersion: "1.4.4",
-  bunCommit: "38afee6c84fcf48c0edb2466aa4b27d287a59c30",
-  typesVersion: "1.4.4",
+  bunVersion: "1.4.5",
+  bunCommit: "a7733435cf40429e3b35c36072769df2052b80f1",
+  typesVersion: "1.4.5",
 } as const;
 
 export const SHAPE_SUBSYSTEMS = [

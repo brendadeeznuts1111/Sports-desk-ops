@@ -621,10 +621,6 @@ const REPO_HAZARD_GLOB = new Bun.Glob("**/*.{ts,tsx,js,sh,json,css}");
 const IGNORED_HAZARD_DIRS =
   /^(node_modules|\.git|Scratch|dist|coverage|reports)\.?\//;
 
-function lineOf(text: string, index: number): number {
-  return text.slice(0, index).split("\n").length;
-}
-
 function addFileFinding(
   findings: Finding[],
   file: string,
@@ -646,9 +642,9 @@ function addFileFinding(
 }
 
 /**
- * Version-scoped CLI hazards from the 1.4.5 changelog. The pinned 1.4.4 runtime has the
- * broken behaviour; these scans are WARN because a later runtime fixes them and the
- * repo may intentionally opt in after the pin moves.
+ * Version-scoped CLI hazards. On the pinned 1.4.5 runtime, `#!/usr/bin/env -S` still does
+ * not run (fixed after 1.4.5); the dev-server `--port`/`--host` space and `::1` hazards are
+ * fixed and their scans were removed with the 1.4.5 pin.
  */
 function scanRepositoryHazards(root: string, findings: Finding[]): void {
   for (const rel of REPO_HAZARD_GLOB.scanSync({
@@ -679,32 +675,6 @@ function scanRepositoryHazards(root: string, findings: Finding[]): void {
         "BUN-ENV-S-SHEBANG",
         "`#!/usr/bin/env -S` commands do not run on the pinned 1.4.4 runtime; use a direct interpreter or upgrade past 1.4.5.",
         firstLine,
-      );
-    }
-
-    for (const match of text.matchAll(
-      /\bbun\b[^\n]*index\.html[^\n]*--(?:port|host)\s+\S+/g,
-    )) {
-      addFileFinding(
-        findings,
-        rel,
-        lineOf(text, match.index ?? 0),
-        "BUN-INDEX-HTML-SPACE-FLAG",
-        "Space-separated `--port 3000` / `--host 0.0.0.0` is ignored by the 1.4.4 HTML dev server; use `--port=…` / `--host=…`.",
-        match[0],
-      );
-    }
-
-    for (const match of text.matchAll(
-      /\bbun\b[^\n]*index\.html[^\n]*--host=::1\b/g,
-    )) {
-      addFileFinding(
-        findings,
-        rel,
-        lineOf(text, match.index ?? 0),
-        "BUN-INDEX-HTML-IPV6-HOST",
-        "`--host=::1` throws RangeError on the pinned 1.4.4 HTML dev server; fixed in 1.4.5.",
-        match[0],
       );
     }
 

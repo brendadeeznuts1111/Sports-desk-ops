@@ -34,7 +34,7 @@
     "packages/*"
   ],
   "catalog": {
-    "@types/bun": "1.4.4",
+    "@types/bun": "1.4.5",
     "@types/react": "18.3.31",
     "@types/react-dom": "18.3.7",
     "react": "18.3.1",
@@ -452,9 +452,9 @@
     "url": "https://github.com/bw496915-cmyk/Sports-desk-ops/issues"
   },
   "homepage": "https://github.com/bw496915-cmyk/Sports-desk-ops#readme",
-  "packageManager": "bun@1.4.4",
+  "packageManager": "bun@1.4.5",
   "engines": {
-    "bun": "1.4.4"
+    "bun": "1.4.5"
   },
   "dependencies": {
     "@ganchrowsci/gs-sdk": "1.0.27",
