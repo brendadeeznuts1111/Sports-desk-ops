@@ -49,9 +49,13 @@ export function devDashboardHelpText(): string {
   return `SportsDesk Enhanced Dashboard Dev Server
 
 Usage:
-  ./bin/dx dev [options]
   bun run dev -- [options]
   bun run cli dev [options]
+  bun scripts/dev_dashboard.ts [options]
+
+A runtime flag (bun --port=N run scripts/dev_dashboard.ts) is honoured on the
+direct and CLI entries; a package script (bun run dev) is a nested process, so
+pass --port=N to it instead (bun run dev --port=N).
 
 Options:
   -p, --port <N>          HTTP listen port (0..65535; default: runtime --port, then

@@ -156,6 +156,45 @@ describe("dev_dashboard_cli · subprocess --help & --print-url", () => {
     expect(printErr.trim()).toBe("");
   });
 
+  test("runtime --port applies to direct and CLI entries; package script uses argv", async () => {
+    const printUrl = async (args: string[]): Promise<string> => {
+      const proc = Bun.spawn([process.execPath, ...args], {
+        cwd: ROOT,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [out, err, code] = await Promise.all([
+        proc.stdout.text(),
+        proc.stderr.text(),
+        proc.exited,
+      ]);
+      expect(err.trim()).toBe("");
+      expect(code).toBe(0);
+      return out.trim();
+    };
+
+    // Direct entry: the runtime flag is visible in process.execArgv.
+    expect(
+      await printUrl([
+        "--port=4413",
+        "run",
+        "scripts/dev_dashboard.ts",
+        "--print-url",
+      ]),
+    ).toContain(":4413/");
+
+    // CLI entry: resolves the runtime flag before it would spawn the server.
+    expect(
+      await printUrl([
+        "--port=4415",
+        "run",
+        "cli/sportsdesk_cli.ts",
+        "dev",
+        "--print-url",
+      ]),
+    ).toContain(":4415/");
+  });
+
   test("cli/sportsdesk_cli.ts dev & health --help and --print-url exit 0", async () => {
     const devProc = Bun.spawn(
       [

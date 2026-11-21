@@ -2124,6 +2124,12 @@ export async function main(): Promise<void> {
         "run",
         resolve(import.meta.dir, "../scripts/dev_dashboard.ts"),
         ...devArgs,
+        // The parent resolved these from CLI flags, the runtime `--port`, BUN_PORT /
+        // PORT / NODE_PORT, and HOST. A nested `bun run` drops the parent's runtime
+        // flags (measured: the child sees only `--bun` in execArgv), so forward the
+        // resolved values explicitly. The child's parser takes the last occurrence.
+        `--port=${parsed.flags.port}`,
+        `--host=${parsed.flags.hostname}`,
       ],
       {
         stdin: "inherit",
