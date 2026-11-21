@@ -570,12 +570,13 @@ So the flag applies to packages `bunx` downloads, not just `bun install` resolut
 
 <!-- bun-behavior: bunx-trust -->
 
-## `bunx --trust` (measured 2026-11-18)
+## `bunx --trust` (measured 2026-11-21)
 
-Measured with a package whose `postinstall` writes a marker file: without `--trust` the bin still
-runs but the marker is absent; with `--trust` the marker is written. The release note extends the
-trust to the package's dependencies; only the package's own lifecycle script is re-measured here.
-`tests/bunx_download_flags.test.ts` owns both runs.
+Measured with a package (`trust-probe`) whose `postinstall` writes a marker file: without `--trust`
+the bin still runs but the marker is absent; with `--trust` the marker is written. The release
+note's dependency claim is measured too: `trust-probe` depends on `trust-dep`, whose own
+`postinstall` writes a second marker, and `--trust` runs both scripts while a plain `bunx` runs
+neither. `tests/bunx_download_flags.test.ts` owns all four runs.
 
 ## Named `bun` exports: `s3`, `$`, and `sql` (measured 2026-11-20)
 

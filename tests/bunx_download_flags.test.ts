@@ -3,9 +3,9 @@
  * @description `bunx --minimum-release-age` and `--trust` on packages bunx downloads.
  *
  * Re-measures the 1.4.4 release note: the age flag applies to downloaded packages (a fresh
- * version is blocked until it is old enough), and `--trust` is what allows the package's
- * lifecycle scripts to run. A local mock registry serves the packuments and tarballs; bunx runs
- * asynchronously so the in-process server can answer.
+ * version is blocked until it is old enough), and `--trust` allows the lifecycle scripts of the
+ * package **and its dependencies** to run. A local mock registry serves the packuments and
+ * tarballs; bunx runs asynchronously so the in-process server can answer.
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -48,10 +48,16 @@ function makeTarball(
     `#!/usr/bin/env bun\nconsole.log("${name}-ran");\n`,
   );
   chmodSync(join(buildDir, "package", "cli.js"), 0o755);
-  if (name === "trust-probe") {
+  const postinstallMarker =
+    name === "trust-probe"
+      ? "TRUST_MARKER"
+      : name === "trust-dep"
+        ? "TRUST_DEP_MARKER"
+        : null;
+  if (postinstallMarker !== null) {
     writeFileSync(
       join(buildDir, "package", "postinstall.js"),
-      'await Bun.write(process.env.TRUST_MARKER, "script-ran");\n',
+      `await Bun.write(process.env.${postinstallMarker}, "script-ran");\n`,
     );
   }
   const tarball = join(fixturesDir, `${name}-1.0.0.tgz`);
@@ -71,9 +77,16 @@ beforeAll(() => {
   const tarballs = new Map([
     ["age-probe", makeTarball("age-probe")],
     [
+      "trust-dep",
+      makeTarball("trust-dep", {
+        scripts: { postinstall: "bun postinstall.js" },
+      }),
+    ],
+    [
       "trust-probe",
       makeTarball("trust-probe", {
         scripts: { postinstall: "bun postinstall.js" },
+        dependencies: { "trust-dep": "1.0.0" },
       }),
     ],
   ]);
@@ -91,7 +104,12 @@ beforeAll(() => {
         return new Response(Bun.file(file));
       }
       const name = decodeURIComponent(url.pathname.replace(/^\//, ""));
-      if (name === "age-probe" || name === "trust-probe") {
+      if (
+        name === "age-probe" ||
+        name === "trust-probe" ||
+        name === "trust-dep"
+      ) {
+        const trusted = name === "trust-probe" || name === "trust-dep";
         return Response.json({
           name,
           "dist-tags": { latest: "1.0.0" },
@@ -103,8 +121,11 @@ beforeAll(() => {
               name,
               version: "1.0.0",
               bin: { [name]: "cli.js" },
-              ...(name === "trust-probe"
+              ...(trusted
                 ? { scripts: { postinstall: "bun postinstall.js" } }
+                : {}),
+              ...(name === "trust-probe"
+                ? { dependencies: { "trust-dep": "1.0.0" } }
                 : {}),
               dist: { tarball: `${registryUrl}${name}-1.0.0.tgz` },
             },
@@ -192,25 +213,31 @@ describe("bunx --minimum-release-age", () => {
 });
 
 describe("bunx --trust", () => {
-  test("skips lifecycle scripts without the flag", async () => {
+  test("skips the package and dependency lifecycle scripts without the flag", async () => {
     const { dir, npmrc } = fixture();
     const marker = join(dir, "marker-untrusted");
+    const depMarker = join(dir, "marker-dep-untrusted");
     const result = await bunx(dir, npmrc, ["trust-probe"], {
       TRUST_MARKER: marker,
+      TRUST_DEP_MARKER: depMarker,
     });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("trust-probe-ran");
     expect(existsSync(marker)).toBe(false);
+    expect(existsSync(depMarker)).toBe(false);
   }, 60_000);
 
-  test("runs the package lifecycle script with the flag", async () => {
+  test("runs the package and dependency lifecycle scripts with the flag", async () => {
     const { dir, npmrc } = fixture();
     const marker = join(dir, "marker-trusted");
+    const depMarker = join(dir, "marker-dep-trusted");
     const result = await bunx(dir, npmrc, ["--trust", "trust-probe"], {
       TRUST_MARKER: marker,
+      TRUST_DEP_MARKER: depMarker,
     });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("trust-probe-ran");
     expect(existsSync(marker)).toBe(true);
+    expect(existsSync(depMarker)).toBe(true);
   }, 60_000);
 });
