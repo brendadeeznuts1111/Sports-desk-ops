@@ -288,9 +288,11 @@ export function startDashboardServer(
   options: DashboardServerOptions = {},
 ): DashboardServerHandle {
   const cwd = process.cwd();
-  const port =
-    options.port !== undefined ? options.port : Number(Bun.env.PORT) || 4022;
-  const hostname = options.hostname ?? "127.0.0.1";
+  // Boundary discipline: this function trusts its options. Environment and CLI
+  // resolution belongs to the dev entrypoint; Bun.serve applies its own documented
+  // defaults when a library caller omits these.
+  const port = options.port;
+  const hostname = options.hostname;
   const apiOnly = options.apiOnly === true;
   const companionOrigin =
     options.companionOrigin ??
@@ -815,7 +817,7 @@ export function startDashboardServer(
       return sessionCountActive();
     },
     getAlertMetrics: () => alertDispatcher.getHealthMetrics(),
-    getPort: () => serverRef?.port ?? port,
+    getPort: () => serverRef?.port ?? port ?? 0,
     getServerCounters: () => {
       let wsBackpressureBytes = 0;
       for (const ws of clients) {
@@ -1756,6 +1758,32 @@ export function startDashboardServer(
       ),
   };
 
+  if (!apiOnly) {
+    const collisions = findRouteKeyCollisions({
+      ui: uiRoutes,
+      api: api.routes,
+      companion: companionApiRoutes,
+    }).filter(
+      (collision) =>
+        !(
+          COMPANION_WRAPPER_ROUTES.has(collision.key) &&
+          collision.tables.length === 2 &&
+          collision.tables[0] === "api" &&
+          collision.tables[1] === "companion"
+        ),
+    );
+    if (collisions.length > 0) {
+      throw new Error(
+        `ERR_DASHBOARD_ROUTE_COLLISION: ${collisions
+          .map(
+            (collision) =>
+              `${collision.key} (${collision.tables.join(" + ")}; last table wins)`,
+          )
+          .join(", ")}`,
+      );
+    }
+  }
+
   const serverRoutes = (apiOnly
     ? api.routes
     : {
@@ -1765,8 +1793,8 @@ export function startDashboardServer(
       }) as unknown as Bun.Serve.RoutesWithUpgrade<undefined, string>;
 
   const server: Server<undefined> = Bun.serve({
-    port,
-    hostname,
+    ...(port === undefined ? {} : { port }),
+    ...(hostname === undefined ? {} : { hostname }),
     development: serveDevelopment,
     routes: serverRoutes,
     async fetch(req, srv) {
@@ -1973,7 +2001,7 @@ export function startDashboardServer(
   return {
     server,
     url: server.url,
-    port: server.port ?? port,
+    port: server.port ?? port ?? 0,
     development: server.development,
     stop(closeActiveConnections = true) {
       alertDispatcher.stop();
@@ -1986,6 +2014,36 @@ export function startDashboardServer(
       server.stop(closeActiveConnections);
     },
   };
+}
+
+/**
+ * Companion routes that deliberately wrap the in-process API under the same key:
+ * the companion handler decides between the :4020 daemon and `api.fetch(req)`.
+ * Every other duplicate key is a configuration bug, so it fails startup.
+ */
+const COMPANION_WRAPPER_ROUTES: ReadonlySet<string> = new Set([
+  "/api/live-wagers",
+]);
+
+/**
+ * Route keys owned by more than one table. The server spreads `ui`, then `api`,
+ * then `companion`, so a duplicate key silently resolves to the last table; this
+ * reports them instead so `startDashboardServer` can refuse to start.
+ */
+export function findRouteKeyCollisions(
+  tables: Readonly<Record<string, Record<string, unknown>>>,
+): { key: string; tables: string[] }[] {
+  const owners = new Map<string, string[]>();
+  for (const [tableName, table] of Object.entries(tables)) {
+    for (const key of Object.keys(table)) {
+      const names = owners.get(key);
+      if (names === undefined) owners.set(key, [tableName]);
+      else names.push(tableName);
+    }
+  }
+  return [...owners.entries()]
+    .filter(([, names]) => names.length > 1)
+    .map(([key, names]) => ({ key, tables: names }));
 }
 
 if (import.meta.main) {
