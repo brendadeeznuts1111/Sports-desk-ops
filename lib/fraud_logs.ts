@@ -23,6 +23,7 @@ import { readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import { sha256Hex } from "./f402_bet_ticker_delta.ts";
+import { ipv6GroupStrings, ipv6Prefix64 } from "./ipv6.ts";
 import { classifyIp, parseAccessMs } from "./f402_weblog.ts";
 import { parseGsliveTimestampMs } from "./gslive_bet_event_log.ts";
 import {
@@ -1252,7 +1253,7 @@ function validIpv4Parts(ip: string): readonly number[] | null {
   return numbers;
 }
 
-/** `47.223.36.100` → `47.223.***.***`; IPv6 keeps its first two groups and masks the rest. */
+/** `47.223.36.100` → `47.223.***.***`; IPv6 keeps its first two /64 groups and masks the rest. */
 export function maskIp(rawIp: string): string | null {
   const ip = rawIp.trim();
   if (ip === "") return null;
@@ -1261,6 +1262,8 @@ export function maskIp(rawIp: string): string | null {
     return `${v4[0]}.${v4[1]}.***.***`;
   }
   if (!ip.includes(":")) return null;
+  const expanded = ipv6GroupStrings(ip);
+  if (expanded !== null) return `${expanded[0]}:${expanded[1]}:***:***`;
   const groups = ip
     .replace(/^\[|\]$/g, "")
     .split(":")
@@ -1276,17 +1279,15 @@ export function ipTagOf(rawIp: string): string | null {
   return sha256Hex(ip).slice(0, 8);
 }
 
-/** `/24` key for IPv4 (`47.223.36`) or a `v6:<first 4 groups>` prefix key for IPv6. */
+/** `/24` key for IPv4 (`47.223.36`) or a `v6:<first 4 expanded groups>` `/64` key for IPv6. */
 export function ipPrefixKeyOf(rawIp: string): string | null {
   const ip = rawIp.trim();
   if (ip === "") return null;
   const v4 = validIpv4Parts(ip);
   if (v4 !== null) return `${v4[0]}.${v4[1]}.${v4[2]}`;
-  const groups = ip
-    .replace(/^\[|\]$/g, "")
-    .split(":")
-    .filter((group) => group !== "");
-  return groups.length >= 2 ? `v6:${groups.slice(0, 4).join(":")}` : null;
+  const prefix64 = ipv6Prefix64(ip);
+  if (prefix64 !== null) return `v6:${prefix64}`;
+  return null;
 }
 
 export function isBotRingIp(rawIp: string): boolean {

@@ -94,6 +94,27 @@ describe("IP masking (PII boundary)", () => {
     );
   });
 
+  test("IPv6 /64 masking expands :: and normalizes groups before cutting", () => {
+    expect(maskIp("2001:db8::1")).toBe("2001:db8:***:***");
+    expect(maskIp("2001:0DB8:0:0::2")).toBe("2001:db8:***:***");
+    expect(maskIp("2001:db8:0:0:ffff::1")).toBe("2001:db8:***:***");
+    expect(maskIp("2001:db8:1::1")).toBe("2001:db8:***:***");
+    expect(maskIp("::1")).toBe("0:0:***:***");
+    expect(maskIp("::ffff:192.0.2.4")).toBe("0:0:***:***");
+    expect(maskIp("[2001:db8::1]")).toBe("2001:db8:***:***");
+    expect(maskIp("fe80::1%eth0")).toBe("fe80:0:***:***");
+
+    const samePrefix = "v6:2001:db8:0:0";
+    expect(ipPrefixKeyOf("2001:db8::1")).toBe(samePrefix);
+    expect(ipPrefixKeyOf("2001:0DB8:0:0::2")).toBe(samePrefix);
+    expect(ipPrefixKeyOf("2001:db8:0:0:ffff::1")).toBe(samePrefix);
+    expect(ipPrefixKeyOf("2001:db8:1::1")).toBe("v6:2001:db8:1:0");
+    expect(ipPrefixKeyOf("::1")).toBe("v6:0:0:0:0");
+    expect(ipPrefixKeyOf("::ffff:192.0.2.4")).toBe("v6:0:0:0:0");
+    expect(ipPrefixKeyOf("not-an-ip")).toBeNull();
+    expect(ipPrefixKeyOf("2001:db8::1::2")).toBeNull();
+  });
+
   test("classifyIp is reused for bot-ring and relay classification", () => {
     expect(ipClassOf("140.248.10.20")).toBe("BOT_RING_140_248");
     expect(ipClassOf("146.75.1.2")).toBe("ICLOUD_RELAY");

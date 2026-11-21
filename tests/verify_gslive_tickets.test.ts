@@ -202,6 +202,36 @@ describe("Fantasy402ApiClient", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("postForm raises ERR_F402_HTML_LOGIN_TRAP_200 for BOM then '<' with text/html 200", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      const bom = new Uint8Array([0xef, 0xbb, 0xbf]);
+      const html = new TextEncoder().encode("<html>login</html>");
+      const body = new Uint8Array(bom.length + html.length);
+      body.set(bom, 0);
+      body.set(html, bom.length);
+      return new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }) as unknown as typeof fetch;
+
+    try {
+      const client = new Fantasy402ApiClient({
+        baseUrl: "http://127.0.0.1:4020",
+        agentId: "LEAF101",
+        agentOwner: "MASTER100",
+        jwt: "jwt_live_test_bom",
+      });
+      await expect(
+        client.postForm("/cloud/api/Manager/getBetReport", {}),
+      ).rejects.toThrow("ERR_F402_HTML_LOGIN_TRAP_200");
+      expect(JSON.stringify(client)).toContain("<UNSET>");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 describe("createR2Client", () => {

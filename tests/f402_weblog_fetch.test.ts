@@ -38,6 +38,35 @@ describe("f402 weblog fetch", () => {
     );
   });
 
+  test("buildWebLogBody rejects a Mode C MM/DD/YYYY date before a request is sent", () => {
+    expect(() =>
+      buildWebLogBody({
+        mode: "C",
+        date: "11/02/2026",
+        customerId: "BB7884",
+        agentId: "AG",
+        agentOwner: "OWNER",
+      }),
+    ).toThrow(F402WebLogFetchError);
+    expect(() =>
+      buildWebLogBody({
+        mode: "C",
+        date: "11/02/2026",
+        customerId: "BB7884",
+        agentId: "AG",
+        agentOwner: "OWNER",
+      }),
+    ).toThrow(/Mode C date must be YYYY-MM-DD/);
+    expect(() =>
+      buildWebLogBody({
+        mode: "A",
+        date: "11/02/2026",
+        agentId: "AG",
+        agentOwner: "OWNER",
+      }),
+    ).toThrow(/A date must be YYYY-MM-DD input/);
+  });
+
   test("parseWebLogListPayload accepts array, LIST array, and LIST JSON string", () => {
     expect(parseWebLogListPayload([{ LoginID: "x" }])).toHaveLength(1);
     expect(parseWebLogListPayload({ LIST: [{ LoginID: "y" }] })).toHaveLength(

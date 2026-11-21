@@ -17,6 +17,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { ipv6Prefix64, parseIpv6Hextets, replaceIpv6InText } from "./ipv6.ts";
 import type { DeskRoleId } from "./rbac_governance.ts";
 import { manifestNames } from "./secret_manifest.ts";
 
@@ -90,12 +91,8 @@ export function isSensitiveRouteKey(key: string): boolean {
 
 const IPV4_BODY = "(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)";
 const IPV4_EXACT_RE = new RegExp(`^${IPV4_BODY}(?:\\.${IPV4_BODY}){3}$`);
-const IPV6_EXACT_RE =
-  /^(?:(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|(?:[0-9a-f]{1,4}:){1,7}:(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?)$/i;
 
 const IPV4_ANY_RE = new RegExp(IPV4_BODY + "(?:\\." + IPV4_BODY + "){3}", "g");
-const IPV6_ANY_RE =
-  /(?:\b(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}\b)|(?:\b(?:[0-9a-f]{1,4}:){1,7}:(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?\b)/gi;
 
 // oxlint-disable-next-line no-control-regex -- OSC-8 sequences are the target.
 const TERMINAL_OSC_RE = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
@@ -125,6 +122,36 @@ const REDACTED_SECRET = "[REDACTED_SECRET]";
 const REDACTED_COOKIE = "[REDACTED_COOKIE]";
 const REDACTED_IP = "[REDACTED_IP]";
 const REDACTED_ID = "[REDACTED_ID]";
+const REDACTED_ROLE = "[REDACTED_ROLE]";
+const SOR_LABEL_RE = /\b(?:ORIGIN_LEADER|BRIDGE_RELAY)\b/g;
+
+/** SOR-adjacent syndicate roles stay behind the inspect gate; auditors never see the labels. */
+export function maskSorLabelByRole(
+  value: string,
+  visibility: InspectVisibility = resolveInspectVisibility(),
+): string {
+  const trimmed = value.trim();
+  if (
+    trimmed === "" ||
+    visibility === "OWNER_ADMIN" ||
+    visibility === "RISK_MANAGER"
+  ) {
+    return trimmed;
+  }
+  if (trimmed === "ORIGIN_LEADER" || trimmed === "BRIDGE_RELAY") {
+    return REDACTED_ROLE;
+  }
+  return trimmed.replace(SOR_LABEL_RE, REDACTED_ROLE);
+}
+
+function maskSorLabelsInText(
+  text: string,
+  visibility: InspectVisibility,
+): string {
+  if (visibility === "OWNER_ADMIN" || visibility === "RISK_MANAGER")
+    return text;
+  return text.replace(SOR_LABEL_RE, REDACTED_ROLE);
+}
 
 /** Strips terminal escapes and non-printable control bytes, keeping newlines and tabs. */
 export function stripTerminalEscapes(text: string): string {
@@ -159,16 +186,19 @@ function replaceActiveSecretValues(text: string): string {
   return out;
 }
 
+function maskIpv6Literal(
+  candidate: string,
+  visibility: InspectVisibility,
+): string {
+  if (visibility !== "RISK_MANAGER") return REDACTED_IP;
+  const prefix64 = ipv6Prefix64(candidate);
+  return prefix64 === null ? REDACTED_IP : `${prefix64}::/64`;
+}
+
 function maskIpsInText(text: string, visibility: InspectVisibility): string {
   if (visibility === "OWNER_ADMIN") return text;
-  const maskedV6 = text.replace(IPV6_ANY_RE, (candidate) =>
-    visibility === "RISK_MANAGER"
-      ? `${candidate
-          .split(":")
-          .filter((group) => group.length > 0)
-          .slice(0, 4)
-          .join(":")}::/64`
-      : REDACTED_IP,
+  const maskedV6 = replaceIpv6InText(text, (candidate) =>
+    maskIpv6Literal(candidate, visibility),
   );
   return maskedV6.replace(IPV4_ANY_RE, (candidate) =>
     visibility === "RISK_MANAGER"
@@ -189,6 +219,7 @@ export function redactDiagnosticSurface(
   out = out.replace(COOKIE_HEADER_RE, `$1: ${REDACTED_COOKIE}`);
   out = out.replace(DSN_PASSWORD_RE, `$1${REDACTED_SECRET}$3`);
   out = replaceActiveSecretValues(out);
+  out = maskSorLabelsInText(out, visibility);
   return maskIpsInText(out, visibility);
 }
 
@@ -207,13 +238,8 @@ export function maskIpByRole(
         ? `${candidate.split(".").slice(0, 3).join(".")}.0/24`
         : REDACTED_IP;
     }
-    if (candidate.includes(":") && IPV6_EXACT_RE.test(candidate)) {
-      if (visibility !== "RISK_MANAGER") return REDACTED_IP;
-      const groups = candidate
-        .split(":")
-        .filter((group) => group.length > 0)
-        .slice(0, 4);
-      return `${groups.join(":")}::/64`;
+    if (candidate.includes(":") && parseIpv6Hextets(candidate) !== null) {
+      return maskIpv6Literal(candidate, visibility);
     }
     return redactDiagnosticSurface(hop, visibility);
   });

@@ -25,6 +25,10 @@ import {
   type SyndicateRingsSnapshotManifest,
 } from "../../../../src/lib/syndicate_adjacency_rollup.ts";
 import {
+  maskSorLabelByRole,
+  resolveInspectVisibility,
+} from "../../../../lib/inspect_redactor.ts";
+import {
   R2ManifestCasError,
   R2_BUCKET,
   RETIRED_FALLBACK_ENV_KEYS,
@@ -506,7 +510,7 @@ export function formatPairwiseCrossRefHumanReport(
     `  Pregame Follows (A->B)     : ${analysis.pregameFollowsAtoB} [API<=5s: ${analysis.pregameApiBotFollowsAtoB}] (B->A: ${analysis.pregameFollowsBtoA} [API<=5s: ${analysis.pregameApiBotFollowsBtoA}])`,
     `  Same-Side Lag (Avg / Min)  : ${analysis.avgSameSideLagMsU32}ms / ${analysis.minSameSideLagMsU32}ms`,
     `  Customer A Lead Share      : ${analysis.customerALeadShareBps} bps`,
-    `  Participation Lift         : ${analysis.bPresentParticipationBps} bps (A present) vs ${analysis.bAbsentParticipationBps} bps (A absent) -> ${analysis.liftRatioBps >= 0 ? "+" : ""}${analysis.liftRatioBps} bps [${analysis.inferredRoleB}]`,
+    `  Participation Lift         : ${analysis.bPresentParticipationBps} bps (A present) vs ${analysis.bAbsentParticipationBps} bps (A absent) -> ${analysis.liftRatioBps >= 0 ? "+" : ""}${analysis.liftRatioBps} bps [${maskSorLabelByRole(analysis.inferredRoleB, resolveInspectVisibility())}]`,
   ];
   return `${lines.join("\n")}\n`;
 }
