@@ -115,7 +115,7 @@ describe("language coverage", () => {
       scripts?: Record<string, string>;
     };
     const scripts = pkg.scripts ?? {};
-    expect(scripts["format:check"]).toBe("bun fmt --check");
+    expect(scripts["format:check"]).toBe("bun fmt --no-script --check");
     expect(scripts["lint:check"]).toContain("lint_native.ts");
     expect(scripts["lint:check"]).toContain("--deny-warnings");
     expect(scripts["check:innerhtml"]).toBe("bun run bin/check-innerhtml.ts");

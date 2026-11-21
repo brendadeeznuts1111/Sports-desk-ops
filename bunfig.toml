@@ -70,12 +70,19 @@ options = { sortImports = true }
 # MACHINE_OWNED_INSTALL_KEYS). Non-machine keys are safe and are pinned here.
 #
 # `exact` makes `bun add` write the resolved version instead of a caret range, matching the
-# exact-pin policy the root manifest already follows. `ignoreScripts` is a no-op today — the root
-# `trustedDependencies` is `[]` and the root has no install lifecycle — and keeps it that way if a
-# dependency or a `prepare` script is ever added. Both are project keys, not machine overrides.
+# exact-pin policy the root manifest already follows. `exact` is a project key, not a machine
+# override.
+#
+# Do not set `ignoreScripts` here. On 1.4.4 Bun applies `[install].ignoreScripts` to pack/publish
+# lifecycle too, not just install scripts: measured in a scratch package, `bun publish --dry-run`
+# ran `prepack` without it and silently skipped it with it (and `NPM_CONFIG_IGNORE_SCRIPTS=false`
+# does not override). `packages/contracts` ships `dist/`, is built by `prepack`, and `dist/` is
+# gitignored, so suppressing it publishes a tarball without `dist/`. Third-party install scripts
+# stay blocked by the root `trustedDependencies: []` allowlist (verified on 1.4.4: a tarball
+# dependency's postinstall marker does not run with `[]`, and does with the package listed); the
+# only lifecycle script in this workspace is `packages/contracts`' `prepack`.
 [install]
 exact = true
-ignoreScripts = true
 
 # Native Bun lint config. Only the native linter reads it. That linter exists on the 1.4.5
 # canary (`bun lint --no-script`), which the CI `lint-native` job runs, and is expected in

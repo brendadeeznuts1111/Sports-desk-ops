@@ -654,6 +654,6 @@ Never add `publishConfig.tag` to root `package.json`; declare it only on publish
 
 ## `packageExtensions` Governance
 
-- **Location:** Root `package.json` only (never in `bunfig.toml`, which remains restricted to `exact = true` and `ignoreScripts = true` under `[install]`).
+- **Location:** Root `package.json` only (never in `bunfig.toml`, whose `[install]` remains restricted to `exact = true`; `ignoreScripts` is deliberately not set because it also suppresses pack/publish lifecycle — see the `bunfig.toml` comment).
 - **Scope:** Use `packageExtensions` to patch missing transitive `dependencies`, `optionalDependencies`, `peerDependencies`, or `peerDependenciesMeta` on third-party packages (range keys such as `pkg@1` are supported).
 - **Lockfile Parity:** Any `packageExtensions` edit changes resolution. Regenerate `bun.lock` on the pinned `.bun-version` so CI's `bun install --frozen-lockfile && git diff --exit-code bun.lock` gate stays green.

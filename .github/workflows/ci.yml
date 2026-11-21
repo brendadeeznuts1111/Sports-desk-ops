@@ -132,11 +132,11 @@ jobs:
           CI_BASE_BRANCH: ${{ github.base_ref || 'main' }}
         run: |
           rc=0
-          bun fmt --check --changed="origin/${CI_BASE_BRANCH}" || rc=$?
+          bun fmt --no-script --check --changed="origin/${CI_BASE_BRANCH}" || rc=$?
           if [ "$rc" -eq 1 ]; then echo "::error::unformatted files (bun fmt --check)"; exit 1; fi
           if [ "$rc" -ne 0 ]; then echo "::error::bun fmt failed (exit $rc)"; exit "$rc"; fi
           debug_rc=0
-          bun fmt --debug-check --changed="origin/${CI_BASE_BRANCH}" >/tmp/bun-fmt-debug.log 2>&1 || debug_rc=$?
+          bun fmt --no-script --debug-check --changed="origin/${CI_BASE_BRANCH}" >/tmp/bun-fmt-debug.log 2>&1 || debug_rc=$?
           if [ "$debug_rc" -ne 0 ]; then
             tail -50 /tmp/bun-fmt-debug.log
             echo "::error::bun fmt --debug-check changed the meaning of a formatted file"

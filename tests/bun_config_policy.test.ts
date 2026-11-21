@@ -244,7 +244,8 @@ interface RootBunfigShape {
   };
   readonly install: {
     readonly exact: boolean;
-    readonly ignoreScripts: boolean;
+    /** Deliberately absent: it also suppresses pack/publish lifecycle on 1.4.4. */
+    readonly ignoreScripts?: boolean;
   };
   readonly lint: {
     readonly ignorePatterns: readonly string[];
@@ -315,7 +316,6 @@ describe("root bunfig.toml contract", () => {
       },
       install: {
         exact: expect.any(Boolean),
-        ignoreScripts: expect.any(Boolean),
       },
       lint: {
         ignorePatterns: expect.arrayContaining([expect.any(String)]),
@@ -364,7 +364,9 @@ describe("root bunfig.toml contract", () => {
     }
 
     expect(parsedBunfig.install.exact).toBe(true);
-    expect(parsedBunfig.install.ignoreScripts).toBe(true);
+    // Not set: `[install].ignoreScripts` also suppressed pack/publish lifecycle on 1.4.4,
+    // which stripped `dist/` from the published contracts tarball.
+    expect(parsedBunfig.install.ignoreScripts).toBeUndefined();
 
     expect(parsedBunfig.run.noOrphans).toBe(true);
 

@@ -56,6 +56,20 @@ jobs:
             echo "::error::tag $GITHUB_REF_NAME does not match package version $manifest_version"
             exit 1
           fi
+      # `dist/` is gitignored and built by packages/contracts' `prepack`; the project bunfig
+      # must not suppress lifecycle scripts or this job publishes a tarball without it. A local
+      # dry run is fooled by a stale dist/; a fresh checkout is not.
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+      - name: Packed tarball contains dist
+        run: |
+          out="$RUNNER_TEMP/contracts-pack"
+          rm -rf "$out"
+          (cd packages/contracts && bun pm pack --destination "$out" --quiet)
+          tarball=$(ls "$out"/*.tgz)
+          tar -tzf "$tarball" | grep -qE '^package/dist/.*\.js$'
+          tar -tzf "$tarball" | grep -qE '^package/src/.*\.ts$'
+          echo "packed dist files: $(tar -tzf "$tarball" | grep -c '^package/dist/')"
       # Dry-run checks config, access, and file selection; it does NOT validate the
       # token (a fake token passes it — measured 2026-11-14). It is a config gate,
       # not an auth gate.

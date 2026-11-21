@@ -3,6 +3,8 @@
  * @description Terminal avatar frames and Markdown rendering. Uses Blob.image()
  * for the decode/resize/encode pipeline and writes display frames to stdout.
  */
+import { useColor } from "../../lib/ansi_color.ts";
+
 export type TerminalImageProtocol = "kitty" | "iterm2" | "none";
 
 export interface AvatarFrameOptions {
@@ -221,7 +223,8 @@ export function buildAnsiTheme(
   env: Record<string, string | undefined> = process.env,
   isTTY: boolean = Boolean(process.stdout.isTTY),
 ): Bun.markdown.AnsiTheme {
-  const colors = opts.colors ?? (isTTY && env.NO_COLOR === undefined);
+  // FORCE_COLOR wins over NO_COLOR, matching Bun's runtime precedence.
+  const colors = opts.colors ?? useColor({ isTTY, env });
   const columns =
     opts.columns ??
     (typeof process.stdout.columns === "number" ? process.stdout.columns : 80);
