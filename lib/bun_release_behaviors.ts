@@ -198,6 +198,23 @@ const BEHAVIOR_METADATA: Readonly<Record<string, BehaviorMetadata>> = {
       "CookieMap",
     ],
   },
+  "bun-s3-globals": {
+    title: "Bun s3 / S3Client default export, presign, and lazy S3File",
+    docsPage: "/docs/runtime/s3",
+    shapes: ["s3", "S3Client"],
+  },
+  "bun-shell-globals": {
+    title:
+      "Bun $ shell escaping, streaming redirection, and tooling-only policy",
+    docsPage: "/docs/runtime/shell",
+    shapes: ["$"],
+  },
+  "bun-sql-globals": {
+    title:
+      "Bun sql / SQL tagged template parameterization, identifiers, and transactions",
+    docsPage: "/docs/runtime/sql",
+    shapes: ["sql", "SQL"],
+  },
 };
 
 const DOC_PATH = "docs/bun-upstream-reference.md";

@@ -179,4 +179,35 @@ describe("Bun upstream reference: XML, bun x and catalogs", () => {
     }>("tests/bun_docs_surface_baseline.json");
     expect(baseline.shapes?.XML?.documented).toBe(true);
   });
+
+  test("documents named bun exports s3, $, and sql with verified repo paths", async () => {
+    const behaviors = await readBunReleaseBehaviors(ROOT);
+    const ids = new Set(behaviors.map((behavior) => behavior.id));
+    for (const id of [
+      "bun-s3-globals",
+      "bun-shell-globals",
+      "bun-sql-globals",
+    ]) {
+      expect(ids.has(id)).toBe(true);
+    }
+
+    const doc = await read("docs/bun-upstream-reference.md");
+    expect(doc).toContain("## Named `bun` exports: `s3`, `$`, and `sql`");
+
+    const citedFiles = [
+      "lib/r2_s3_client.ts",
+      "lib/db.ts",
+      "bin/sql-query.ts",
+      "lib/f402_credentials_policy.ts",
+      "scripts/compute_dump_lag.ts",
+      "tests/bun_s3client_contract.test.ts",
+      "tests/bun_shell_contract.test.ts",
+      "tests/bun_sql_contract.test.ts",
+    ] as const;
+
+    for (const path of citedFiles) {
+      expect(doc).toContain(path);
+      expect(await Bun.file(join(ROOT, path)).exists()).toBe(true);
+    }
+  });
 });

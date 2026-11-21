@@ -10,23 +10,65 @@
  * argv array, and credentials/TTY reads never use a shell (lib/f402_credentials_policy.ts).
  */
 import { describe, expect, test } from "bun:test";
+import { $ as namedDollar } from "bun";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { listSourceFiles } from "../lib/source_files.ts";
+
+// @bun-behavior: bun-shell-globals
 
 const ROOT = join(import.meta.dir, "..");
 const LIBRARY_ROOTS = ["lib", "services", "cli"];
 const TOOLING_ROOTS = ["scripts", "bin"];
 const ALL_ROOTS = [...LIBRARY_ROOTS, ...TOOLING_ROOTS];
-const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
+const SOURCE_EXTENSIONS = ["ts", "tsx", "js", "jsx", "mjs", "cjs"] as const;
+const QUIETING_METHODS = new Set([
+  "quiet",
+  "text",
+  "json",
+  "bytes",
+  "arrayBuffer",
+  "blob",
+  "lines",
+]);
 
-/** Comments and string/template literals are not call sites (`Bun.${name}` is not `Bun.$`). */
+/** Comments and string/template literals are not call sites (`Bun.${name}` is not `Bun.$`); keep `"bun"` for import matching. */
 function codeOnly(text: string): string {
-  return text
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^\s*\/\/.*$/gm, "")
-    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
-    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
-    .replace(/`(?:[^`\\]|\\.)*`/g, "``");
+  return text.replace(
+    /\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\$]|\\.|(?:\$(?!\{))|\$\{(?:[^{}]|\{[^}]*\})*\})*`/g,
+    (token) => {
+      if (token.startsWith("/*") || token.startsWith("//")) return "";
+      if (token === '"bun"' || token === "'bun'") return token;
+      if (token.startsWith('"')) return '""';
+      if (token.startsWith("'")) return "''";
+      return "``";
+    },
+  );
+}
+
+/** Collect method names chained directly onto a `$`` ` invocation. */
+function readChainedMethods(code: string, startIndex: number): string[] {
+  const methods: string[] = [];
+  let cursor = startIndex;
+  while (cursor < code.length) {
+    while (cursor < code.length && /\s/.test(code[cursor]!)) cursor++;
+    if (code[cursor] !== ".") break;
+    cursor++;
+    while (cursor < code.length && /\s/.test(code[cursor]!)) cursor++;
+    const nameMatch = /^([A-Za-z_$][\w$]*)\s*\(/.exec(code.slice(cursor));
+    if (!nameMatch) break;
+    methods.push(nameMatch[1]!);
+    cursor += nameMatch[0].length;
+    let depth = 1;
+    while (cursor < code.length && depth > 0) {
+      const ch = code[cursor]!;
+      if (ch === "(") depth++;
+      else if (ch === ")") depth--;
+      cursor++;
+    }
+  }
+  return methods;
 }
 
 describe("Bun Shell contract", () => {
@@ -123,35 +165,102 @@ describe("Bun Shell contract", () => {
     expect(bare).toContain("DONE");
   });
 
-  test("the tag is tooling-only and always captures or quiets", async () => {
-    const listed = Bun.spawnSync({
-      cmd: ["git", "ls-files", ...ALL_ROOTS],
-      cwd: ROOT,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    if (listed.exitCode !== 0) {
-      throw new Error(`git ls-files failed: ${listed.stderr.toString()}`);
+  test("named export identity and auto-escaping prevent shell injection", async () => {
+    expect(namedDollar).toBe(Bun.$);
+    const injected = "foo; echo PWNED";
+    const out = await namedDollar`printf %s ${injected}`.quiet().text();
+    expect(out).toBe("foo; echo PWNED");
+  });
+
+  test("quoted flag strings are single args unless wrapped with { raw }", async () => {
+    const flags = "-n hello";
+    expect(await namedDollar`echo ${flags}`.quiet().text()).toBe("-n hello\n");
+    expect(await namedDollar`echo ${{ raw: flags }}`.quiet().text()).toBe(
+      "hello",
+    );
+  });
+
+  test("streams directly from Response, Buffer, and Blob without temp files", async () => {
+    const payload = "alpha\nbeta\ngamma\n";
+    expect(
+      await namedDollar`grep beta < ${new Response(payload)}`.quiet().text(),
+    ).toBe("beta\n");
+    expect(
+      await namedDollar`grep beta < ${Buffer.from(payload)}`.quiet().text(),
+    ).toBe("beta\n");
+    expect(
+      await namedDollar`grep beta < ${new Blob([payload])}`.quiet().text(),
+    ).toBe("beta\n");
+  });
+
+  test(".env(), .cwd(), and .nothrow().quiet() scope execution cleanly", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bun-shell-cwd-"));
+    const realDir = realpathSync(dir);
+    try {
+      const envOut = await namedDollar`printf %s "$SPORTSDESK_SHELL_SCOPED"`
+        .env({ ...process.env, SPORTSDESK_SHELL_SCOPED: "scoped-ok" })
+        .quiet()
+        .text();
+      expect(envOut).toBe("scoped-ok");
+      expect(process.env.SPORTSDESK_SHELL_SCOPED).toBeUndefined();
+
+      const cwdOut = (
+        await namedDollar`pwd`.cwd(realDir).quiet().text()
+      ).trim();
+      expect(cwdOut).toBe(realDir);
+
+      const res = await namedDollar`exit 42`.nothrow().quiet();
+      expect(res.exitCode).toBe(42);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
-    const offenders: string[] = [];
+  });
+
+  test("the tag is tooling-only and always captures or quiets", async () => {
+    const files = (await listSourceFiles(ROOT, SOURCE_EXTENSIONS)).filter(
+      (entry) => ALL_ROOTS.some((root) => entry.startsWith(`${root}/`)),
+    );
+    const libraryOffenders: string[] = [];
+    const uncapturedToolingOffenders: string[] = [];
+    const inspectedTooling: string[] = [];
     // The tag is reachable only through `Bun.$` or an imported `$`; matching the bare
     // `$` + backtick shape would also match regex template literals that end in `$`.
     const importTag =
-      /import\s*\{[^}]*\b\$\b[^}]*\}\s*from\s*["']bun["']|\{\s*\$\s*\}\s*=\s*await\s+import\(\s*["']bun["']\s*\)/;
-    for (const path of listed.stdout
-      .toString()
-      .trim()
-      .split("\n")
-      .filter((entry) =>
-        SOURCE_EXTENSIONS.some((ext) => entry.endsWith(ext)),
-      )) {
+      /import\s*\{[^}]*(?:^|[,{\s])\$(?=\s*[,}]|\s+as\b)[^}]*\}\s*from\s*["']bun["']|\{[^}]*(?:^|[,{\s])\$(?=\s*[,}]|\s*:\s*\w)[^}]*\}\s*=\s*await\s+import\(\s*["']bun["']\s*\)/;
+
+    for (const path of files) {
       const text = codeOnly(await Bun.file(join(ROOT, path)).text());
+      const usesTag = /Bun\.\$(?!\{)/.test(text) || importTag.test(text);
+      if (!usesTag) continue;
+
+      if (LIBRARY_ROOTS.some((root) => path.startsWith(`${root}/`))) {
+        libraryOffenders.push(path);
+        continue;
+      }
+
       // Presence pins in bin/bun_surface.ts read Bun.$ / $.escape / $.braces; they never invoke
       // the template tag (see docs/bun-upstream-reference.md "Bun.$ — argv-only for credentials").
       if (path === "bin/bun_surface.ts") continue;
-      if (/Bun\.\$(?!\{)/.test(text) || importTag.test(text))
-        offenders.push(path);
+
+      inspectedTooling.push(path);
+      const invocations = [...text.matchAll(/(?:Bun\.)?\$``/g)];
+      if (invocations.length === 0) {
+        uncapturedToolingOffenders.push(path);
+        continue;
+      }
+      for (const match of invocations) {
+        const methods = readChainedMethods(
+          text,
+          (match.index ?? 0) + match[0].length,
+        );
+        if (!methods.some((name) => QUIETING_METHODS.has(name))) {
+          uncapturedToolingOffenders.push(path);
+        }
+      }
     }
-    expect(offenders).toEqual([]);
+
+    expect(libraryOffenders).toEqual([]);
+    expect(uncapturedToolingOffenders).toEqual([]);
+    expect(inspectedTooling).toContain("scripts/compute_dump_lag.ts");
   });
 });

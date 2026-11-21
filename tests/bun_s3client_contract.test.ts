@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { s3 as namedS3, S3Client as NamedS3Client } from "bun";
 
 import type { BunS3Client } from "../types/bun-api.ts";
+
+// @bun-behavior: bun-s3-globals
 
 const METHODS = [
   "delete",
@@ -57,5 +60,45 @@ describe("Bun.S3Client contract", () => {
         "function",
       );
     }
+  });
+
+  test("named exports from 'bun' match Bun.s3 and Bun.S3Client by identity", () => {
+    expect(namedS3).toBe(Bun.s3);
+    expect(NamedS3Client).toBe(Bun.S3Client);
+  });
+
+  test("explicit R2 S3Client creates lazy S3File and signs presigned URLs offline", () => {
+    const r2 = new NamedS3Client({
+      accessKeyId: "test-access-key",
+      secretAccessKey: "test-secret-key",
+      bucket: "sportsdesk-ops-reports",
+      endpoint: "https://acc.r2.cloudflarestorage.com",
+    });
+
+    const file = r2.file("manifests/2026-11-20.yaml");
+    for (const name of [
+      "text",
+      "bytes",
+      "json",
+      "exists",
+      "stat",
+      "write",
+      "delete",
+      "presign",
+    ] as const) {
+      expect(typeof (file as unknown as Record<string, unknown>)[name]).toBe(
+        "function",
+      );
+    }
+    expect(Number.isNaN(file.size)).toBe(true);
+
+    const url = r2.presign("manifests/2026-11-20.yaml", { expiresIn: 300 });
+    expect(
+      url.startsWith(
+        "https://acc.r2.cloudflarestorage.com/sportsdesk-ops-reports/manifests/2026-11-20.yaml",
+      ),
+    ).toBe(true);
+    expect(url).toContain("X-Amz-Signature=");
+    expect(url).toContain("X-Amz-Expires=300");
   });
 });

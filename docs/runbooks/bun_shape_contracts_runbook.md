@@ -629,7 +629,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (18):** snapshot in tests/bun_shape_members.json
 - **Here:** `bin/bun_surface.ts`, `bin/sql-query.ts`
-- **Evidence:** `surface:sql`, `test:tests/bun_capabilities.test.ts`, `test:tests/sql_query_cli.test.ts`
+- **Evidence:** `surface:sql`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_sql_contract.test.ts`, `test:tests/sql_query_cli.test.ts`
 
 #### Bun.SQL
 
@@ -637,7 +637,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (13):** snapshot in tests/bun_shape_members.json
 - **Here:** `bin/sql-query.ts`, `lib/customer_index.ts`
-- **Evidence:** `surface:SQL`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_eval_patterns.test.ts`, `test:tests/bun_urls.test.ts`
+- **Evidence:** `surface:SQL`, `test:tests/bun_capabilities.test.ts`, `test:tests/bun_eval_patterns.test.ts`, `test:tests/bun_sql_contract.test.ts`
 
 ## Crypto, hashing and compression
 

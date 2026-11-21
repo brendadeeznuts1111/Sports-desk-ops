@@ -577,6 +577,165 @@ runs but the marker is absent; with `--trust` the marker is written. The release
 trust to the package's dependencies; only the package's own lifecycle script is re-measured here.
 `tests/bunx_download_flags.test.ts` owns both runs.
 
+## Named `bun` exports: `s3`, `$`, and `sql` (measured 2026-11-20)
+
+Declared in `bun-types@1.4.4` (`s3.d.ts`, `shell.d.ts`, and `sql.d.ts` pinned above); the
+offline/in-memory contracts below were re-measured on `2026-11-20` on the local Bun binary
+(`1.4.5`). Each named export from `"bun"` is identical by reference to the corresponding `Bun.*`
+property (`s3 === Bun.s3`, `S3Client === Bun.S3Client`, `$ === Bun.$`, `sql === Bun.sql`,
+`SQL === Bun.SQL`).
+
+| Export            | Underlying Primitive                           | Primary Use                                                                 | Bun Env / Config Source                                                             | Repo Adapter / Policy                                                                                                                                                                                                  |
+| :---------------- | :--------------------------------------------- | :-------------------------------------------------------------------------- | :---------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `s3` / `S3Client` | Default `Bun.s3` (`S3Client`) / `Bun.S3Client` | S3 / Cloudflare R2 object read, write, presign, stat                        | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_ENDPOINT` (or `AWS_*`) | [`lib/r2_s3_client.ts`](../lib/r2_s3_client.ts) (`R2S3Client`)                                                                                                                                                         |
+| `$`               | `Bun.$`                                        | Cross-platform shell scripting with auto-escaped interpolation & streaming  | Inherits `process.env`; override via `.env({...})` / `.cwd(...)`                    | Tooling-only (`scripts/`, `bin/`, e.g. [`scripts/compute_dump_lag.ts`](../scripts/compute_dump_lag.ts)); argv-only `Bun.spawn` for credentials ([`lib/f402_credentials_policy.ts`](../lib/f402_credentials_policy.ts)) |
+| `sql` / `SQL`     | Default `Bun.sql` (`SQL`) / `Bun.SQL`          | Native PostgreSQL, MySQL, and SQLite client with automatic parameterization | `DATABASE_URL` / `POSTGRES_URL` (or `new SQL(url)`)                                 | [`lib/db.ts`](../lib/db.ts) (PostgreSQL TLS/pool) & [`bin/sql-query.ts`](../bin/sql-query.ts) (read-only inspector)                                                                                                    |
+
+<!-- bun-behavior: bun-s3-globals -->
+
+### `s3` and `S3Client` — S3 / Cloudflare R2
+
+The default `s3` export reads credentials from `S3_*` / `AWS_*` environment variables; instantiate
+`new S3Client(...)` when targeting multiple buckets or explicit R2 endpoints.
+
+```ts
+import { s3, S3Client } from "bun";
+
+// Default client (reads S3_* / AWS_* env vars)
+const file = s3.file("snapshots/latest.json");
+const exists = await file.exists();
+const data = exists ? await file.json() : null;
+
+// Explicit Cloudflare R2 client
+const r2 = new S3Client({
+  accessKeyId: process.env.R2_ACCESS_KEY_ID,
+  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+  bucket: "sportsdesk-ops-reports",
+  endpoint: process.env.S3_ENDPOINT,
+});
+
+await r2.write("manifests/2026-11-20.yaml", Bun.YAML.stringify({ ok: true }), {
+  type: "application/yaml",
+});
+
+// Presigned URL (offline SigV4 signing, no network call)
+const url = r2.presign("manifests/2026-11-20.yaml", { expiresIn: 300 });
+```
+
+- **Lazy `S3File` handle:** Like `Bun.file()`, `s3.file()` performs no I/O until `.text()`,
+  `.bytes()`, `.json()`, `.exists()`, `.stat()`, `.write()`, or `.delete()` is awaited.
+  Synchronous `file.size` on an unhydrated `S3File` is `NaN` (not `0`); only `stat()` / `bytes()`
+  resolves object length.
+- **Repo adapter ([`lib/r2_s3_client.ts`](../lib/r2_s3_client.ts)):** Production R2 I/O uses
+  `resolveR2S3Options` / `resolveR2CredentialsAsync` and `R2S3Client`. Credential precedence is
+  `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` → `CLOUDFLARE_R2_TOKEN_ID`/`CLOUDFLARE_R2_API_TOKEN`
+  (secret derived as `sha256Hex`) → `S3_*` → `AWS_*` → `Bun.secrets` (`com.bookdeskops.sportsdesk`
+  with legacy `sportsdesk-ops` fallback); bucket precedence is `R2_BUCKET_NAME` → `S3_BUCKET` →
+  `AWS_BUCKET`; endpoint precedence is `S3_ENDPOINT` → `AWS_ENDPOINT` → `AWS_ENDPOINT_URL_S3` →
+  derived `https://<accountId>.r2.cloudflarestorage.com` from `CLOUDFLARE_ACCOUNT_ID` /
+  `R2_ACCOUNT_ID` (`R2_ENDPOINT` in [`runbooks/cloudflare_r2_and_api_runbook.md`](./runbooks/cloudflare_r2_and_api_runbook.md)
+  is an operator reference value and is not read by `resolveR2S3Options`).
+- **R2-specific edges:** `R2S3Client.writeWithMetadata` signs direct PUT requests for `x-amz-meta-*`
+  headers that Bun's writer does not expose, and `R2S3Client.stat` recovers `size` via a body read
+  when R2 HEAD omits `Content-Length`. Inline `fetch("s3://...", { s3: { accessKeyId, secretAccessKey } })`
+  credentials are forbidden (`BUN-FETCH-S3-INLINE-CREDENTIALS`).
+- **Evidence:** [`tests/bun_s3client_contract.test.ts`](../tests/bun_s3client_contract.test.ts),
+  [`tests/r2_s3_client.test.ts`](../tests/r2_s3_client.test.ts),
+  [`tests/bun_runtime_contracts.test.ts`](../tests/bun_runtime_contracts.test.ts).
+
+<!-- bun-behavior: bun-shell-globals -->
+
+### `$` (`Bun.$`) — Bun Shell
+
+`$` (`Bun.$`) is lazy (starts no process until awaited). Interpolated expressions are escaped
+automatically to prevent shell injection. Output methods (`.text()`, `.json()`, `.bytes()`,
+`.arrayBuffer()`, `.blob()`, `.lines()`) implicitly quiet echoing, whereas a bare `await` echoes to
+parent stdout; use `.quiet()` when discarding output and `.nothrow()` to inspect non-zero exits
+without throwing `ShellError` (`exitCode` + `Buffer` `stdout`/`stderr`).
+
+```ts
+import { $ } from "bun";
+
+const branch = "main";
+const sha = (await $`git rev-parse ${branch}`.quiet().text()).trim();
+
+// Stream directly from JS objects (Response, Buffer, Blob) without temp files
+const input = new Response("alpha\nbeta\ngamma\n");
+const lines = await $`grep beta < ${input}`.quiet().text();
+
+// Non-throwing exit inspection
+const res = await $`git diff --quiet`.nothrow().quiet();
+if (res.exitCode !== 0) {
+  console.error("Working tree dirty");
+}
+
+// Raw interpolation for intentional flags (never pass untrusted input here)
+const flags = "-n hello";
+const out = await $`echo ${{ raw: flags }}`.quiet().text();
+```
+
+- **Gotchas:** Passing a multi-token string as `${flags}` quotes the entire string as one argument;
+  wrap intentional flags or raw shell syntax with `${{ raw: "..." }}` (never with untrusted
+  input). `Bun.$.escape()` coerces non-strings (`null` → `"null"`, `true` → `"true"`) and is not
+  an input validator.
+- **Repo policy:** `Bun.$` / `$` is **tooling-only** (`scripts/`, `bin/`, e.g.
+  [`scripts/compute_dump_lag.ts`](../scripts/compute_dump_lag.ts)) and every call site must capture
+  output or call `.quiet()`. Library and daemon code (`lib/`, `services/`, `cli/`) and any code path
+  touching credentials, cookies, or sessions must use argv-only `Bun.spawn([argv…])` — see
+  [`lib/f402_credentials_policy.ts`](../lib/f402_credentials_policy.ts) and the credential audit
+  section below.
+- **Evidence:** [`tests/bun_shell_contract.test.ts`](../tests/bun_shell_contract.test.ts),
+  [`tests/bun_capabilities.test.ts`](../tests/bun_capabilities.test.ts).
+
+<!-- bun-behavior: bun-sql-globals -->
+
+### `sql` and `SQL` — Native SQL client
+
+`sql` (`Bun.sql`) resolves `DATABASE_URL` with a `POSTGRES_URL` fallback (both verified against
+`sqlite://:memory:` on Bun `1.4.5`); `new SQL(url)` connects explicitly to PostgreSQL, MySQL, or
+SQLite. Tagged template interpolation binds `${val}` as a prepared-statement parameter—never string
+concatenation.
+
+```ts
+import { sql, SQL } from "bun";
+
+// Default connection (DATABASE_URL / POSTGRES_URL)
+const active = await sql`
+  SELECT id, status FROM wagers
+  WHERE status = ${"OPEN"} AND stake_cents >= ${10000}
+`;
+
+// Explicit connection + transaction + dynamic identifier / bulk insert
+const db = new SQL(process.env.DATABASE_URL ?? "sqlite://:memory:");
+const col = "status";
+await db`INSERT INTO wagers ${db([{ id: 1, status: "OPEN", stake_cents: 15000 }])}`;
+const rows = await db`SELECT id, ${db(col)} FROM wagers`;
+await db.begin(async (tx) => {
+  await tx`UPDATE balances SET cents = cents - ${500} WHERE id = ${1}`;
+  await tx`UPDATE balances SET cents = cents + ${500} WHERE id = ${2}`;
+});
+```
+
+- **Gotcha (`sql(ident)` vs `${val}`):** Standard `${val}` interpolation is always bound as a
+  parameter (preventing SQL injection); use `db(columnName)` for table/column identifiers or
+  `INSERT INTO t ${db(rows)}` for bulk row objects, and allowlist any dynamic identifier before
+  passing it to `db(...)`.
+- **Repo adapters:** Application PostgreSQL queries import `sql` from [`lib/db.ts`](../lib/db.ts)
+  rather than raw `import { sql } from "bun"`. `lib/db.ts` reads `DATABASE_URL` (reusing default
+  `Bun.sql` only for local plaintext when `SPORTSDESK_DB_TLS !== "1"`) or `PGHOST`/`PGPORT`/
+  `PGUSER`/`PGPASSWORD`/`PGDATABASE` (it does **not** read `POSTGRES_URL`), rejects empty passwords
+  on non-local hosts, enforces TLS 1.3 only (`rejectUnauthorized: true`, optional
+  `SPORTSDESK_DB_CERT_FINGERPRINT` and `SPORTSDESK_DB_CA_FILE`), channel binding (`prefer`), pool
+  limits, and connect timeout (`10 s` default). Operator ad-hoc inspection uses
+  [`bin/sql-query.ts`](../bin/sql-query.ts) (`bun x sql-query` / `bun run sql:query`), which
+  enforces single-statement read-only `SELECT`/`WITH`/`EXPLAIN` queries and `--timeout` query
+  cancellation via `query.cancel()`.
+- **Evidence:** [`tests/bun_sql_contract.test.ts`](../tests/bun_sql_contract.test.ts),
+  [`tests/sql_query_cli.test.ts`](../tests/sql_query_cli.test.ts),
+  [`tests/db_tls_options.test.ts`](../tests/db_tls_options.test.ts),
+  [`tests/db_pool_options.test.ts`](../tests/db_pool_options.test.ts),
+  [`tests/db_connection_timeout.test.ts`](../tests/db_connection_timeout.test.ts).
+
 ## Upstream doc commit pins
 
 | Pin                                                                                                                      | Tree                               | Use                                                                       |

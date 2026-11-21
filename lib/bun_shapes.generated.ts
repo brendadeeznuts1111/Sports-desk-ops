@@ -897,6 +897,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: [
       "surface:sql",
       "test:tests/bun_capabilities.test.ts",
+      "test:tests/bun_sql_contract.test.ts",
       "test:tests/sql_query_cli.test.ts",
     ],
   },
@@ -909,7 +910,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
       "surface:SQL",
       "test:tests/bun_capabilities.test.ts",
       "test:tests/bun_eval_patterns.test.ts",
-      "test:tests/bun_urls.test.ts",
+      "test:tests/bun_sql_contract.test.ts",
     ],
   },
   {
