@@ -219,6 +219,90 @@ describe("Bun.image", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("write() equals bytes(), preserves aspect ratio, and overwrites", async () => {
+    const dir = temp();
+    try {
+      const src = join(dir, "rect.png");
+      await Bun.write(
+        src,
+        await new Bun.Image(Uint8Array.fromBase64(ONE_PX_PNG))
+          .resize(10, 5)
+          .png()
+          .bytes(),
+      );
+      const encoded = await Bun.file(src).image().resize(4).webp().bytes();
+      // One dimension scales proportionally: 10x5 resized by width 4 -> 4x2.
+      expect(await new Bun.Image(encoded).metadata()).toEqual({
+        width: 4,
+        height: 2,
+        format: "webp",
+      });
+
+      const out = join(dir, "out.webp");
+      const written = await Bun.file(src).image().resize(4).webp().write(out);
+      expect(written).toBe(encoded.byteLength);
+      expect(Bun.file(out).size).toBe(written);
+      expect(
+        Buffer.from(await Bun.file(out).arrayBuffer()).equals(
+          Buffer.from(encoded),
+        ),
+      ).toBe(true);
+
+      // write() replaces the target rather than appending to it.
+      await Bun.write(out, "not an image");
+      const rewritten = await Bun.file(src).image().resize(4).webp().write(out);
+      expect(rewritten).toBe(encoded.byteLength);
+      expect(Bun.file(out).size).toBe(encoded.byteLength);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("write() creates missing parents and fails on a non-directory parent", async () => {
+    const dir = temp();
+    try {
+      const src = join(dir, "one.png");
+      await Bun.write(src, Buffer.from(ONE_PX_PNG, "base64"));
+
+      const nested = join(dir, "deep", "a", "b", "out.webp");
+      const written = await Bun.file(src).image().webp().write(nested);
+      expect(written).toBeGreaterThan(0);
+      expect(await Bun.file(nested).exists()).toBe(true);
+
+      // Bun.write creates directories, but a regular file in the path is ENOTDIR.
+      const blocker = join(dir, "blocker");
+      await Bun.write(blocker, "x");
+      const error = await Bun.file(src)
+        .image()
+        .webp()
+        .write(join(blocker, "out.webp"))
+        .then(
+          () => null,
+          (reason: unknown) => reason,
+        );
+      expect((error as { code?: string } | null)?.code).toBe("ENOTDIR");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("image() defers the source read until a terminal runs", async () => {
+    const dir = temp();
+    try {
+      const src = join(dir, "gone.png");
+      await Bun.write(src, Buffer.from(ONE_PX_PNG, "base64"));
+      const pending = Bun.file(src).image();
+      rmSync(src);
+      const error = await pending.metadata().then(
+        () => null,
+        (reason: unknown) => reason,
+      );
+      expect((error as { code?: string } | null)?.code).toBe("ENOENT");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 async function readStreamText(

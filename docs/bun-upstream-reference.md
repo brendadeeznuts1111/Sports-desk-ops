@@ -751,6 +751,12 @@ Measured on the pinned `Bun 1.4.5+a7733435c`:
   positive byte count; the target is `image/webp` with the resized dimensions
   ([`tests/bun_capabilities.test.ts`](../tests/bun_capabilities.test.ts),
   [`tests/bun_file_blob_contract.test.ts`](../tests/bun_file_blob_contract.test.ts)).
+- **Shape:** a one-dimension resize preserves aspect ratio (measured: 10×5 at width 4 → 4×2);
+  `write()` returns the encoded byte count, equal to the target's size and `bytes().byteLength`;
+  an existing target is replaced, missing parent directories are created, and a regular file in
+  the path rejects `ENOTDIR`.
+- **Laziness:** deleting the source after `image()` but before a terminal rejects `ENOENT` — the
+  deferred read happens at the terminal, not at construction.
 - **Terminals:** `bytes()` returns the encoded `Uint8Array` when the caller needs the payload — a
   `Response` or a content ETag (`services/sportsdesk_webview_server.ts`, `scripts/optimize_assets.ts`) —
   while `write(path)` is the file terminal and needs no separate `Bun.write`.
