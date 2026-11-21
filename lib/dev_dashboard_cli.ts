@@ -54,8 +54,9 @@ Usage:
   bun run cli dev [options]
 
 Options:
-  -p, --port <N>          HTTP listen port (0..65535, default: PORT env or 4022)
-  --host, --hostname <H>  Bind hostname (default: 127.0.0.1)
+  -p, --port <N>          HTTP listen port (0..65535; default: runtime --port, then
+                          BUN_PORT, PORT, NODE_PORT, then 4022)
+  --host, --hostname <H>  Bind hostname (default: HOST env or 127.0.0.1)
   --companion <ORIGIN>    Companion API daemon origin (default: SPORTSDESK_API_ORIGIN or http://127.0.0.1:4020)
   --tab, --view <TAB>     Initial dashboard view (${validTabs}; or hashes: ${validHashes})
   --matrix                Include ?matrix=1 build matrix & Houdini palette overlay in launch URL
@@ -117,14 +118,41 @@ function normalizeHttpOrigin(raw: string): string | null {
   return parsed.origin;
 }
 
+/**
+ * Bun's runtime `--port[=N]` never reaches `Bun.argv`; it is visible in
+ * `process.execArgv`, and `Bun.serve` applies it only when no explicit port is
+ * passed. Resolve it here so `bun --port=4123 run dev` is not silently ignored.
+ */
+function portFromExecArgv(execArgv: readonly string[]): number | undefined {
+  for (let index = 0; index < execArgv.length; index += 1) {
+    const arg = execArgv[index] ?? "";
+    const raw = arg.startsWith("--port=")
+      ? arg.slice("--port=".length)
+      : arg === "--port"
+        ? (execArgv[index + 1] ?? "")
+        : null;
+    if (raw === null || !/^\d+$/.test(raw)) continue;
+    const value = Number(raw);
+    if (value >= 0 && value <= 65535) return value;
+  }
+  return undefined;
+}
+
+/**
+ * Default port precedence: Bun's runtime flag, then `BUN_PORT`, `PORT`,
+ * `NODE_PORT` (the order `Bun.serve` itself uses), then 4022.
+ */
 function defaultPortFromEnv(
   env: Readonly<Record<string, string | undefined>>,
+  execArgv: readonly string[] = [],
 ): number {
-  const raw = env.PORT?.trim();
-  if (!raw) return DEFAULT_PORT;
-  const parsed = Number(raw);
-  if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 65535) {
-    return parsed;
+  const runtime = portFromExecArgv(execArgv);
+  if (runtime !== undefined) return runtime;
+  for (const key of ["BUN_PORT", "PORT", "NODE_PORT"] as const) {
+    const raw = env[key]?.trim();
+    if (!raw || !/^\d+$/.test(raw)) continue;
+    const value = Number(raw);
+    if (Number.isInteger(value) && value >= 0 && value <= 65535) return value;
   }
   return DEFAULT_PORT;
 }
@@ -140,9 +168,11 @@ function defaultCompanionFromEnv(
 export function parseDevDashboardCliArgs(
   argv: readonly string[],
   env: Readonly<Record<string, string | undefined>> = Bun.env,
+  execArgv: readonly string[] = [],
 ): DevDashboardCliParseResult {
-  let port = defaultPortFromEnv(env);
-  let hostname = DEFAULT_HOST;
+  let port = defaultPortFromEnv(env, execArgv);
+  // `HOST` is `Bun.serve`'s documented hostname default; the CLI flag still wins.
+  let hostname = env.HOST?.trim() || DEFAULT_HOST;
   let companionOrigin = defaultCompanionFromEnv(env);
   let tab: DashboardTabId | null = null;
   let matrix = false;

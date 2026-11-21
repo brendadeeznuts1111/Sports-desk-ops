@@ -2059,7 +2059,11 @@ if (import.meta.main) {
     }
   }
 
-  const parsedArgs = parseDevDashboardCliArgs(Bun.argv.slice(2));
+  const parsedArgs = parseDevDashboardCliArgs(
+    Bun.argv.slice(2),
+    Bun.env,
+    process.execArgv,
+  );
   if (!parsedArgs.ok) {
     console.error(parsedArgs.error);
     console.error("Run with '--help' for usage and flags.");

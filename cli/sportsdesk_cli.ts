@@ -2099,7 +2099,7 @@ export async function main(): Promise<void> {
       parseDevDashboardCliArgs,
     } = await import("../lib/dev_dashboard_cli.ts");
     const devArgs = rawArgs.slice(1);
-    const parsed = parseDevDashboardCliArgs(devArgs);
+    const parsed = parseDevDashboardCliArgs(devArgs, Bun.env, process.execArgv);
     if (!parsed.ok) {
       console.error(parsed.error);
       process.exitCode = 2;

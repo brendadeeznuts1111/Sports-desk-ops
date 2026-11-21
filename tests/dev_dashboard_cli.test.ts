@@ -194,4 +194,47 @@ describe("dev_dashboard_cli · subprocess --help & --print-url", () => {
     expect(healthOut).toContain("--schedules");
     expect(healthErr.trim()).toBe("");
   });
+
+  describe("dev_dashboard_cli · port and host precedence", () => {
+    test("runtime --port and Bun's env order decide the default port", () => {
+      const port = (
+        argv: readonly string[],
+        env: Record<string, string | undefined>,
+        execArgv: readonly string[] = [],
+      ): number => {
+        const parsed = parseDevDashboardCliArgs(argv, env, execArgv);
+        expect(parsed.ok).toBe(true);
+        return parsed.ok ? parsed.flags.port : -1;
+      };
+      expect(
+        port([], { BUN_PORT: "4101", PORT: "4102", NODE_PORT: "4103" }),
+      ).toBe(4101);
+      expect(port([], { PORT: "4102", NODE_PORT: "4103" })).toBe(4102);
+      expect(port([], { NODE_PORT: "4103" })).toBe(4103);
+      expect(port([], {})).toBe(4022);
+      expect(port([], { BUN_PORT: "nope", PORT: "4102" })).toBe(4102);
+      expect(port([], { PORT: "70000" })).toBe(4022);
+      expect(port([], { PORT: "4102" }, ["--port=4123"])).toBe(4123);
+      expect(port([], { PORT: "4102" }, ["--port", "4124"])).toBe(4124);
+      expect(port([], { PORT: "4102" }, ["--port=bad"])).toBe(4102);
+      expect(
+        port(["--port", "4999"], { BUN_PORT: "4101" }, ["--port=4123"]),
+      ).toBe(4999);
+    });
+
+    test("HOST supplies the hostname default and --host still wins", () => {
+      const host = (
+        argv: readonly string[],
+        env: Record<string, string | undefined>,
+      ): string => {
+        const parsed = parseDevDashboardCliArgs(argv, env, []);
+        expect(parsed.ok).toBe(true);
+        return parsed.ok ? parsed.flags.hostname : "";
+      };
+      expect(host([], { HOST: "0.0.0.0" })).toBe("0.0.0.0");
+      expect(host([], { HOST: "   " })).toBe("127.0.0.1");
+      expect(host([], {})).toBe("127.0.0.1");
+      expect(host(["--host=10.0.0.5"], { HOST: "0.0.0.0" })).toBe("10.0.0.5");
+    });
+  });
 });
