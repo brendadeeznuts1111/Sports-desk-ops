@@ -215,6 +215,11 @@ const BEHAVIOR_METADATA: Readonly<Record<string, BehaviorMetadata>> = {
     docsPage: "/docs/runtime/sql",
     shapes: ["sql", "SQL"],
   },
+  "blob-image-pipeline": {
+    title: "FileBlob.image() lazy decode, resize, encode and write",
+    docsPage: "/reference/bun/FileBlob",
+    shapes: ["Image"],
+  },
 };
 
 const DOC_PATH = "docs/bun-upstream-reference.md";

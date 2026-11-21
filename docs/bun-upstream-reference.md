@@ -736,6 +736,32 @@ await db.begin(async (tx) => {
   [`tests/db_pool_options.test.ts`](../tests/db_pool_options.test.ts),
   [`tests/db_connection_timeout.test.ts`](../tests/db_connection_timeout.test.ts).
 
+<!-- bun-behavior: blob-image-pipeline -->
+
+## `FileBlob.image()` — lazy decode, resize, encode, write (measured 2026-11-21)
+
+`Bun.file(path).image()` wraps the file in a `Bun.Image` pipeline. The reference documents the
+constructor as synchronous with the read deferred to an awaited terminal; measured here, the
+undecoded fields confirm it: `image.width` and `image.height` report `-1` until `metadata()` (or
+another terminal) decodes, after which they report the real dimensions.
+
+Measured on the pinned `Bun 1.4.5+a7733435c`:
+
+- **Chain:** `Bun.file(src).image().resize(400).webp().write(dest)` writes a WebP and returns a
+  positive byte count; the target is `image/webp` with the resized dimensions
+  ([`tests/bun_capabilities.test.ts`](../tests/bun_capabilities.test.ts),
+  [`tests/bun_file_blob_contract.test.ts`](../tests/bun_file_blob_contract.test.ts)).
+- **Terminals:** `bytes()` returns the encoded `Uint8Array` when the caller needs the payload — a
+  `Response` or a content ETag (`services/sportsdesk_webview_server.ts`, `scripts/optimize_assets.ts`) —
+  while `write(path)` is the file terminal and needs no separate `Bun.write`.
+- **Failure:** a non-image body rejects with a `Bun.Image` code, classified as `AvatarImageError` at
+  the boundary ([`src/lib/terminal_avatar.ts`](../src/lib/terminal_avatar.ts),
+  [`tests/terminal_avatar.test.ts`](../tests/terminal_avatar.test.ts),
+  [`lib/image_errors.test.ts`](../lib/image_errors.test.ts)).
+
+- **Evidence:** [`tests/bun_file_blob_contract.test.ts`](../tests/bun_file_blob_contract.test.ts),
+  [`tests/bun_capabilities.test.ts`](../tests/bun_capabilities.test.ts).
+
 ## Upstream doc commit pins
 
 | Pin                                                                                                                      | Tree                               | Use                                                                       |

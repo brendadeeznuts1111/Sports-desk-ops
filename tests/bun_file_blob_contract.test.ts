@@ -22,6 +22,8 @@ function temp(): string {
   return mkdtempSync(join(tmpdir(), "bun-file-contract-"));
 }
 
+// @bun-behavior: blob-image-pipeline
+
 // Blob.exists() exists at runtime but is not in @types/bun 1.4.4.
 function blobExists(blob: Blob): Promise<boolean> {
   return (blob as Blob & { exists(): Promise<boolean> }).exists();
