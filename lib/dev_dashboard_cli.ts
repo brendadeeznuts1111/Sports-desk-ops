@@ -60,12 +60,14 @@ pass --port=N to it instead (bun run dev --port=N).
 Options:
   -p, --port <N>          HTTP listen port (0..65535; default: runtime --port, then
                           BUN_PORT, PORT, NODE_PORT, then 4022)
-  --host, --hostname <H>  Bind hostname (default: HOST env or 127.0.0.1)
+  --host, --hostname <H>  Bind hostname (default: HOST env or 127.0.0.1; IPv6
+                          literals are bracketed in printed URLs)
   --companion <ORIGIN>    Companion API daemon origin (default: SPORTSDESK_API_ORIGIN or http://127.0.0.1:4020)
   --tab, --view <TAB>     Initial dashboard view (${validTabs}; or hashes: ${validHashes})
   --matrix                Include ?matrix=1 build matrix & Houdini palette overlay in launch URL
   --open                  Open resolved launch URL in the default browser after startup
-  --print-url             Print the resolved launch URL and exit 0 without starting the server
+  --print-url             Print the resolved launch URL and exit 0 without starting
+                          the server (needs a concrete port, not 0)
   --api-only              Serve API & WebSocket routes without HTML bundle or UI file watchers
   --no-dev, --prod        Disable Bun development overlay and file watchers
   --no-hmr                Disable Hot Module Reloading in dev mode
@@ -379,6 +381,60 @@ export function buildDashboardLaunchUrl(
   url.search = search ? `?${search}` : "";
   url.hash = sectionHash ? `#${sectionHash}` : "";
   return url.toString();
+}
+
+/**
+ * The base URL a dev server would listen on. IPv6 literals must be bracketed in
+ * a URL authority: `--host ::1` is a valid bind address, but `http://::1:4022/`
+ * is not a valid URL.
+ */
+export function dashboardBaseUrl(hostname: string, port: number): string {
+  const host =
+    hostname.includes(":") && !hostname.startsWith("[")
+      ? `[${hostname}]`
+      : hostname;
+  return `http://${host}:${port}/`;
+}
+
+export type DashboardPrintUrlResult =
+  | { readonly ok: true; readonly url: string }
+  | { readonly ok: false; readonly error: string };
+
+/**
+ * Resolve the `--print-url` result for parsed flags. Port 0 is a request to bind
+ * an ephemeral port, so there is no URL to print yet; refuse instead of emitting
+ * a `:0` URL that can never be reached.
+ */
+export function resolveDashboardPrintUrl(
+  flags: DevDashboardCliFlags,
+): DashboardPrintUrlResult {
+  if (flags.port === 0) {
+    return {
+      ok: false,
+      error:
+        "dev_dashboard: --print-url needs a concrete port; --port 0 is assigned at bind time. Start the server to see the bound URL.",
+    };
+  }
+  return {
+    ok: true,
+    url: buildDashboardLaunchUrl(dashboardBaseUrl(flags.hostname, flags.port), {
+      tab: flags.tab,
+      matrix: flags.matrix,
+    }),
+  };
+}
+
+/**
+ * Append the resolved listen address to a dev-server child's argv. The child's
+ * parser takes the last occurrence, so an explicit CLI flag still agrees with
+ * the forwarded value.
+ */
+export function withResolvedListenArgs(
+  argv: readonly string[],
+  port: number,
+  hostname: string,
+): string[] {
+  return [...argv, `--port=${port}`, `--host=${hostname}`];
 }
 
 export function browserOpenCommandForPlatform(

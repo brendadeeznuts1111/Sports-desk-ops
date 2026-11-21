@@ -93,6 +93,7 @@ import {
   devDashboardHelpText,
   openUrlInBrowser,
   parseDevDashboardCliArgs,
+  resolveDashboardPrintUrl,
 } from "../lib/dev_dashboard_cli.ts";
 import indexHtml from "../src/dashboard/index.html";
 import { runBunBuild } from "./build.ts";
@@ -2075,12 +2076,12 @@ if (import.meta.main) {
     process.exit(0);
   }
   if (flags.printUrl) {
-    console.log(
-      buildDashboardLaunchUrl(`http://${flags.hostname}:${flags.port}/`, {
-        tab: flags.tab,
-        matrix: flags.matrix,
-      }),
-    );
+    const resolved = resolveDashboardPrintUrl(flags);
+    if (!resolved.ok) {
+      console.error(resolved.error);
+      process.exit(2);
+    }
+    console.log(resolved.url);
     process.exit(0);
   }
 

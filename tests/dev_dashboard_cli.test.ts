@@ -4,7 +4,9 @@ import {
   browserOpenCommandForPlatform,
   buildDashboardLaunchUrl,
   parseDevDashboardCliArgs,
+  resolveDashboardPrintUrl,
   resolveExplicitDashboardTab,
+  withResolvedListenArgs,
 } from "../lib/dev_dashboard_cli.ts";
 import { readDashboardUrlState } from "../packages/ui/src/url_state.ts";
 
@@ -114,6 +116,48 @@ describe("dev_dashboard_cli · argument parsing & launch URLs", () => {
   });
 });
 
+describe("dev_dashboard_cli · listen URL formatting", () => {
+  const flagsFor = (argv: string[]) => {
+    const parsed = parseDevDashboardCliArgs(argv, {}, []);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error(parsed.error);
+    return parsed.flags;
+  };
+
+  test("brackets IPv6 literals and leaves other hosts unchanged", () => {
+    const v6 = resolveDashboardPrintUrl(
+      flagsFor(["--port", "4024", "--host", "::1"]),
+    );
+    expect(v6.ok).toBe(true);
+    if (v6.ok) expect(v6.url).toBe("http://[::1]:4024/");
+
+    const already = resolveDashboardPrintUrl(
+      flagsFor(["--port", "4024", "--host", "[::1]"]),
+    );
+    expect(already.ok && already.url).toBe("http://[::1]:4024/");
+
+    const v4 = resolveDashboardPrintUrl(
+      flagsFor(["--port", "4024", "--host", "0.0.0.0"]),
+    );
+    expect(v4.ok && v4.url).toBe("http://0.0.0.0:4024/");
+  });
+
+  test("refuses to print a URL for an ephemeral port", () => {
+    const ephemeral = resolveDashboardPrintUrl(flagsFor(["--port", "0"]));
+    expect(ephemeral.ok).toBe(false);
+    if (!ephemeral.ok) expect(ephemeral.error).toContain("concrete port");
+  });
+
+  test("forwards the resolved listen address last", () => {
+    expect(withResolvedListenArgs(["dev", "--api-only"], 4123, "::1")).toEqual([
+      "dev",
+      "--api-only",
+      "--port=4123",
+      "--host=::1",
+    ]);
+  });
+});
+
 describe("dev_dashboard_cli · subprocess --help & --print-url", () => {
   test("scripts/dev_dashboard.ts --help and --print-url exit 0 cleanly", async () => {
     const helpProc = Bun.spawn(
@@ -193,6 +237,48 @@ describe("dev_dashboard_cli · subprocess --help & --print-url", () => {
         "--print-url",
       ]),
     ).toContain(":4415/");
+  });
+
+  test("--print-url brackets IPv6 and rejects an ephemeral port", async () => {
+    const ipv6 = Bun.spawn(
+      [
+        process.execPath,
+        "run",
+        "scripts/dev_dashboard.ts",
+        "--port",
+        "4024",
+        "--host",
+        "::1",
+        "--print-url",
+      ],
+      { cwd: ROOT, stdout: "pipe", stderr: "pipe" },
+    );
+    const [v6Out, v6Err, v6Code] = await Promise.all([
+      ipv6.stdout.text(),
+      ipv6.stderr.text(),
+      ipv6.exited,
+    ]);
+    expect(v6Code).toBe(0);
+    expect(v6Out.trim()).toBe("http://[::1]:4024/");
+    expect(v6Err.trim()).toBe("");
+
+    for (const args of [
+      ["run", "scripts/dev_dashboard.ts"],
+      ["run", "cli/sportsdesk_cli.ts", "dev"],
+    ]) {
+      const proc = Bun.spawn(
+        [process.execPath, ...args, "--port", "0", "--print-url"],
+        { cwd: ROOT, stdout: "pipe", stderr: "pipe" },
+      );
+      const [out, err, code] = await Promise.all([
+        proc.stdout.text(),
+        proc.stderr.text(),
+        proc.exited,
+      ]);
+      expect(code).toBe(2);
+      expect(out.trim()).toBe("");
+      expect(err).toContain("concrete port");
+    }
   });
 
   test("cli/sportsdesk_cli.ts dev & health --help and --print-url exit 0", async () => {

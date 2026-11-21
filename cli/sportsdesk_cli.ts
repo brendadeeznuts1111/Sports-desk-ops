@@ -2094,9 +2094,10 @@ export async function main(): Promise<void> {
 
   if (firstLower === "dev") {
     const {
-      buildDashboardLaunchUrl,
       devDashboardHelpText,
       parseDevDashboardCliArgs,
+      resolveDashboardPrintUrl,
+      withResolvedListenArgs,
     } = await import("../lib/dev_dashboard_cli.ts");
     const devArgs = rawArgs.slice(1);
     const parsed = parseDevDashboardCliArgs(devArgs, Bun.env, process.execArgv);
@@ -2110,12 +2111,13 @@ export async function main(): Promise<void> {
       return;
     }
     if (parsed.flags.printUrl) {
-      console.log(
-        buildDashboardLaunchUrl(
-          `http://${parsed.flags.hostname}:${parsed.flags.port}/`,
-          { tab: parsed.flags.tab, matrix: parsed.flags.matrix },
-        ),
-      );
+      const resolved = resolveDashboardPrintUrl(parsed.flags);
+      if (!resolved.ok) {
+        console.error(resolved.error);
+        process.exitCode = 2;
+        return;
+      }
+      console.log(resolved.url);
       return;
     }
     const child = Bun.spawn(
@@ -2123,13 +2125,15 @@ export async function main(): Promise<void> {
         process.execPath,
         "run",
         resolve(import.meta.dir, "../scripts/dev_dashboard.ts"),
-        ...devArgs,
-        // The parent resolved these from CLI flags, the runtime `--port`, BUN_PORT /
-        // PORT / NODE_PORT, and HOST. A nested `bun run` drops the parent's runtime
-        // flags (measured: the child sees only `--bun` in execArgv), so forward the
-        // resolved values explicitly. The child's parser takes the last occurrence.
-        `--port=${parsed.flags.port}`,
-        `--host=${parsed.flags.hostname}`,
+        // The parent resolved the listen address from CLI flags, the runtime `--port`,
+        // BUN_PORT / PORT / NODE_PORT, and HOST. A nested `bun run` drops the parent's
+        // runtime flags (measured: the child sees only `--bun` in execArgv), so the
+        // resolved values are forwarded explicitly.
+        ...withResolvedListenArgs(
+          devArgs,
+          parsed.flags.port,
+          parsed.flags.hostname,
+        ),
       ],
       {
         stdin: "inherit",
