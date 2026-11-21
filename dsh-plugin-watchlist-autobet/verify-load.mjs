@@ -192,6 +192,51 @@ check("module exports the cordis apply/name/inject contract", () => {
   );
 });
 
+/**
+ * Rows the bundle patch inserts, parsed by Bun's YAML parser rather than scanned as text.
+ * `null` when `Bun.YAML` is unavailable, because this harness also runs under plain Node.
+ */
+function insertRows(text) {
+  if (typeof Bun === "undefined" || typeof Bun.YAML?.parse !== "function") {
+    return null;
+  }
+  const parsed = Bun.YAML.parse(text);
+  const documents = Array.isArray(parsed) ? parsed : [parsed];
+  return documents.flatMap((doc) =>
+    Array.isArray(doc?.insert) ? doc.insert : [],
+  );
+}
+
+check("bundle patch inserts one row with a portable config", () => {
+  const rows = insertRows(readFileSync(join(HERE, "cordis.patch.yml"), "utf8"));
+  if (rows === null) {
+    console.log(
+      "  …     patch structure: skipped (Bun.YAML is unavailable under this runtime)",
+    );
+    return;
+  }
+  const [row] = rows;
+  assert(row !== undefined, "patch has no insert rows");
+  assert(row.id === plugin.name, `patch row id ${JSON.stringify(row.id)}`);
+  assert(
+    row.name === "dsh-plugin-watchlist-autobet",
+    `patch row name ${JSON.stringify(row.name)}`,
+  );
+  const config = row.config ?? {};
+  assert(
+    config.bunPath === "bun",
+    `patch bunPath ${JSON.stringify(config.bunPath)}`,
+  );
+  assert(
+    config.configPath === "config/watchlist-autobet.json",
+    `patch configPath ${JSON.stringify(config.configPath)}`,
+  );
+  assert(
+    !Object.hasOwn(config, "repoPath"),
+    "patch row must not bake in a repoPath",
+  );
+});
+
 check(
   "index.js imports only node: builtins (a linked bundle resolves peers from its realpath)",
   () => {

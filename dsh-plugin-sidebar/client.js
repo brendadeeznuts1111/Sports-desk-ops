@@ -254,6 +254,10 @@ window.__ModuleLoader__.load({
         reports: "Scheduled reports",
         enabledCount: "{enabled} of {total} enabled",
         off: "off",
+        runNever: "never run",
+        runOk: "ran",
+        runSkipped: "skipped",
+        runFailed: "failed",
         on: "on",
         what: "What this checks",
         explain:
@@ -492,6 +496,10 @@ window.__ModuleLoader__.load({
         reports: "定时报告",
         enabledCount: "已启用 {enabled}/{total}",
         off: "停用",
+        runNever: "从未运行",
+        runOk: "已运行",
+        runSkipped: "已跳过",
+        runFailed: "失败",
         on: "启用",
         what: "检测内容",
         explain:
@@ -827,11 +835,17 @@ window.__ModuleLoader__.load({
         if (name === null || when === null) continue;
         const isEnabled = item.enabled === true;
         if (isEnabled) enabled += 1;
+        // `/api/status` publishes the last dispatch; absent means the schedule has never fired
+        // since the daemon started, which is a different fact from "succeeded".
+        const run = isRecord(item.lastRun) ? item.lastRun : null;
         rows.push({
           id: readText(item.id) ?? `schedule-${rows.length}`,
           name,
           when,
           enabled: isEnabled,
+          runStatus: run === null ? null : readText(run.status),
+          runDetail: run === null ? null : readText(run.detail),
+          runAt: run === null ? null : readText(run.at),
         });
       }
       if (rows.length === 0) return null;
@@ -3909,8 +3923,30 @@ window.__ModuleLoader__.load({
                   h("span", { className: "spsd-list-name" }, row.name),
                   h(
                     "span",
-                    { className: "spsd-when" },
-                    row.enabled ? row.when : `${row.when} · ${t("off")}`,
+                    {
+                      className: `spsd-when${
+                        row.runStatus === null
+                          ? " spsd-run-never"
+                          : row.runStatus === "failed"
+                            ? " spsd-run-failed"
+                            : row.runStatus === "skipped"
+                              ? " spsd-run-skipped"
+                              : ""
+                      }`,
+                      title:
+                        row.runDetail !== null
+                          ? row.runDetail
+                          : (row.runAt ?? ""),
+                    },
+                    `${row.enabled ? row.when : `${row.when} · ${t("off")}`} · ${
+                      row.runStatus === null
+                        ? t("runNever")
+                        : row.runStatus === "failed"
+                          ? t("runFailed")
+                          : row.runStatus === "skipped"
+                            ? t("runSkipped")
+                            : t("runOk")
+                    }`,
                   ),
                 ),
               ),

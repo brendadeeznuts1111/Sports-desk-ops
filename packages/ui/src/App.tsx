@@ -59,10 +59,12 @@ import {
   TERMINAL_WELCOME_HELP_STDOUT,
 } from "./terminal_catalog.ts";
 import {
-  DASHBOARD_API,
-  DASHBOARD_META,
-  dashboardApiUrl,
-} from "./config/dashboard.ts";
+  DESK_API_EXTRA_ROUTES,
+  DESK_API_ROUTES,
+  deskApiUrl,
+} from "./api_routes.ts";
+import { browserDeskRequestHeaders } from "./api_request.ts";
+import { DASHBOARD_META } from "./config/dashboard.ts";
 import { TOKENS_TOML_VERSION } from "./tokens.registry.generated.ts";
 import {
   applyShadowSliceToLocation,
@@ -148,23 +150,6 @@ export const PROFILES_UNAVAILABLE_REASON =
   "sharpness score. VaR and sharpness components have no source yet, so they stay blank rather than " +
   `computed from nothing. The cohort is ${DEMO_CUSTOMER_COUNT} synthetic fixtures — a demo surface, not the book. ` +
   "Real-account profiles are a separate surface, blocked on the same exposure constraint as #242.";
-
-function getCsrfToken(): string {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie.match(/(?:^|;\s*)sd_csrf=([^;]+)/);
-  return match ? decodeURIComponent(match[1] ?? "") : "";
-}
-
-function apiPostHeaders(): HeadersInit {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  const csrf = getCsrfToken();
-  if (csrf) {
-    headers["x-csrf-token"] = csrf;
-  }
-  return headers;
-}
 
 /** Primary header navigation: each item is a real view and an in-page anchor. */
 interface PrimaryNavItem {
@@ -708,7 +693,7 @@ export function App(): React.ReactElement {
 
   const fetchTiersConfig = async () => {
     try {
-      const res = await trackedFetch(dashboardApiUrl(DASHBOARD_API.tiers));
+      const res = await trackedFetch(deskApiUrl(DESK_API_ROUTES.tiers));
       if (!res.ok) return;
       const cfg = (await res.json()) as { tiers?: TierStyleConfig } | null;
       if (cfg?.tiers) {
@@ -729,7 +714,7 @@ export function App(): React.ReactElement {
 
   const fetchLiveWagers = async () => {
     try {
-      const res = await trackedFetch(dashboardApiUrl(DASHBOARD_API.wagers));
+      const res = await trackedFetch(deskApiUrl(DESK_API_ROUTES.wagers));
       if (!res.ok) {
         failLiveWagers(
           `GET /api/wagers returned HTTP ${res.status} (${res.statusText || "error"})`,
@@ -802,7 +787,7 @@ export function App(): React.ReactElement {
 
   const fetchCustomersCohorts = async () => {
     try {
-      const res = await trackedFetch(dashboardApiUrl(DASHBOARD_API.customers));
+      const res = await trackedFetch(deskApiUrl(DESK_API_ROUTES.customers));
       if (!res.ok) {
         setCohortsStatus("unavailable");
         setCohortsError(
@@ -832,7 +817,9 @@ export function App(): React.ReactElement {
   const fetchLiveBetsSnapshot = async () => {
     try {
       const res = await trackedFetch(
-        dashboardApiUrl("/api/v2/live-bets?source=file&fallback=sample"),
+        deskApiUrl(DESK_API_EXTRA_ROUTES.liveBetsV2, {
+          params: { source: "file", fallback: "sample" },
+        }),
       );
       if (!res.ok) return;
       const parsed = normalizeLiveBetsV2Summary(await res.json());
@@ -859,7 +846,7 @@ export function App(): React.ReactElement {
   const fetchBetTicker = async () => {
     setBetTickerLoading(true);
     try {
-      const res = await trackedFetch(dashboardApiUrl(DASHBOARD_API.bet_ticker));
+      const res = await trackedFetch(deskApiUrl(DESK_API_ROUTES.betTicker));
       if (!res.ok) {
         setBetTickerError(
           `GET /api/bet-ticker returned HTTP ${res.status} (${res.statusText || "error"})`,
@@ -927,7 +914,7 @@ export function App(): React.ReactElement {
     try {
       const res = await trackedFetch("/api/gslive/verify-tickets", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: browserDeskRequestHeaders("POST"),
         body: JSON.stringify({ dryRun }),
       });
       if (!res.ok) {
@@ -1037,7 +1024,7 @@ export function App(): React.ReactElement {
   const [shiftLoading, setShiftLoading] = useState(false);
 
   const fetchHealth = () => {
-    trackedFetch("/health")
+    trackedFetch(deskApiUrl(DESK_API_ROUTES.health))
       .then(async (res) => {
         const contentType = res.headers.get("content-type") ?? "";
         if (contentType !== "" && !contentType.toLowerCase().includes("json")) {
@@ -1090,7 +1077,7 @@ export function App(): React.ReactElement {
     try {
       const res = await trackedFetch(`/api/alerts/${deliveryId}/ack`, {
         method: "POST",
-        headers: apiPostHeaders(),
+        headers: browserDeskRequestHeaders("POST"),
         body: JSON.stringify({ operatorId: shiftOperator, notes }),
       });
       if (res.ok) {
@@ -1116,7 +1103,7 @@ export function App(): React.ReactElement {
     try {
       const res = await trackedFetch(`/api/alerts/${deliveryId}/retry`, {
         method: "POST",
-        headers: apiPostHeaders(),
+        headers: browserDeskRequestHeaders("POST"),
         body: JSON.stringify({ operatorId: shiftOperator }),
       });
       if (res.ok) {
@@ -1143,7 +1130,7 @@ export function App(): React.ReactElement {
     try {
       const res = await trackedFetch(`/api/alerts/sweep`, {
         method: "POST",
-        headers: apiPostHeaders(),
+        headers: browserDeskRequestHeaders("POST"),
       });
       if (res.ok) {
         const payload = await res.json();
@@ -1392,7 +1379,7 @@ export function App(): React.ReactElement {
           : 120;
       const res = await trackedFetch("/api/terminal/exec", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: browserDeskRequestHeaders("POST"),
         body: JSON.stringify({ command: trimmed, cols, rows: 30 }),
       });
 
@@ -1815,13 +1802,20 @@ export function App(): React.ReactElement {
       return;
     }
     let cancelled = false;
-    const q = encodeURIComponent(cid);
     setSelectedCustomerRatingLoading(true);
     void Promise.all([
-      trackedFetch(dashboardApiUrl(`/api/customer/profile?id=${q}`))
+      trackedFetch(
+        deskApiUrl(DESK_API_EXTRA_ROUTES.customerProfile, {
+          params: { id: cid },
+        }),
+      )
         .then((res) => (res.ok ? res.json() : null))
         .catch(() => null),
-      trackedFetch(dashboardApiUrl(`/api/customer/rating?id=${q}`))
+      trackedFetch(
+        deskApiUrl(DESK_API_EXTRA_ROUTES.customerRating, {
+          params: { id: cid },
+        }),
+      )
         .then(async (res) => {
           if (!res.ok) return null;
           return normalizeCustomerRatingResponse(await res.json());
@@ -1934,13 +1928,20 @@ export function App(): React.ReactElement {
 
   const fetchCustomerOnDemand = (upper: string) => {
     attemptedOnDemandRef.current.add(upper);
-    const q = encodeURIComponent(upper);
     setSelectedCustomerRatingLoading(true);
     void Promise.all([
-      trackedFetch(dashboardApiUrl(`/api/customer/profile?id=${q}`))
+      trackedFetch(
+        deskApiUrl(DESK_API_EXTRA_ROUTES.customerProfile, {
+          params: { id: upper },
+        }),
+      )
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null),
-      trackedFetch(dashboardApiUrl(`/api/customer/rating?id=${q}`))
+      trackedFetch(
+        deskApiUrl(DESK_API_EXTRA_ROUTES.customerRating, {
+          params: { id: upper },
+        }),
+      )
         .then(async (r) =>
           r.ok ? normalizeCustomerRatingResponse(await r.json()) : null,
         )

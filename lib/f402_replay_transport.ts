@@ -8,6 +8,10 @@
 import { join } from "node:path";
 
 import {
+  F402_BROWSER_HEADER,
+  F402_BROWSER_HEADER_VALUE,
+} from "./f402_browser_headers.ts";
+import {
   readF402Session,
   refreshF402Session,
   writeF402Session,
@@ -67,13 +71,15 @@ export async function createF402ReplayTransport(
       async fetch(url: string, init: RequestInit): Promise<Response> {
         const target = new URL(url);
         const proxyUrl = `${proxy}${target.pathname}${target.search}`;
-        return fetch(proxyUrl, {
-          ...init,
-          headers: {
-            ...init.headers,
-            "x-f402-upstream": url,
-          },
-        });
+        // A `Headers` instance has no enumerable own keys, so spreading `init.headers` into a
+        // plain object silently dropped every caller header. Normalize, then add the browser
+        // header the manager API expects (jQuery sends it for same-origin requests only).
+        const headers = new Headers(init.headers);
+        if (!headers.has(F402_BROWSER_HEADER)) {
+          headers.set(F402_BROWSER_HEADER, F402_BROWSER_HEADER_VALUE);
+        }
+        headers.set("x-f402-upstream", url);
+        return fetch(proxyUrl, { ...init, headers });
       },
       async close(): Promise<void> {},
     };
@@ -93,6 +99,11 @@ export async function createF402ReplayTransport(
 
   async function fetchOnce(url: string, init: RequestInit): Promise<Response> {
     const headers = new Headers(init.headers);
+    // Every server-side manager call goes through here, so the browser header is attached once
+    // instead of being re-remembered by each caller.
+    if (!headers.has(F402_BROWSER_HEADER)) {
+      headers.set(F402_BROWSER_HEADER, F402_BROWSER_HEADER_VALUE);
+    }
     const session = readSession();
     if (session !== null) {
       if (!headers.has("cookie")) headers.set("cookie", session.cookieHeader);

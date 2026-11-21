@@ -3336,6 +3336,56 @@ export function apply(ctx, config) {
    *
    * @returns {Promise<Record<string, unknown>>}
    */
+  /**
+   * Per-schedule run state from `/api/status.telegram.schedules`. `lastStatus === null` means the
+   * schedule has not fired since the daemon started — a different fact from "ran fine".
+   */
+  function summarizeSchedules(statusBody) {
+    const telegram =
+      typeof statusBody === "object" && statusBody !== null
+        ? statusBody.telegram
+        : null;
+    const rows =
+      typeof telegram === "object" &&
+      telegram !== null &&
+      Array.isArray(telegram.schedules)
+        ? telegram.schedules
+        : null;
+    if (rows === null) return null;
+    const parsed = [];
+    for (const row of rows) {
+      if (typeof row !== "object" || row === null) continue;
+      const run =
+        typeof row.lastRun === "object" && row.lastRun !== null
+          ? row.lastRun
+          : null;
+      parsed.push({
+        id: typeof row.id === "string" ? row.id : null,
+        name: typeof row.name === "string" ? row.name : null,
+        when: typeof row.scheduleTime === "string" ? row.scheduleTime : null,
+        enabled: row.enabled === true,
+        lastStatus:
+          run !== null && typeof run.status === "string" ? run.status : null,
+        lastAt: run !== null && typeof run.at === "string" ? run.at : null,
+        detail:
+          run !== null && typeof run.detail === "string" ? run.detail : null,
+      });
+    }
+    const attention = parsed.filter(
+      (row) =>
+        row.lastStatus === null ||
+        row.lastStatus === "skipped" ||
+        row.lastStatus === "failed",
+    );
+    return {
+      total: parsed.length,
+      neverRun: parsed.filter((row) => row.lastStatus === null).length,
+      skipped: parsed.filter((row) => row.lastStatus === "skipped").length,
+      failed: parsed.filter((row) => row.lastStatus === "failed").length,
+      attention,
+    };
+  }
+
   async function readServiceState() {
     const health = await fetchJson(`${serviceUrl}/health`, 4_000);
     if (health.status === null) {
@@ -3351,6 +3401,9 @@ export function apply(ctx, config) {
       };
     }
     const contractProbe = await fetchJson(`${serviceUrl}/api/status`, 4_000);
+    // The status body is the only place a schedule's last dispatch is published; keep it so a
+    // job that has never run is visible to the agent, not only to the sidebar.
+    const schedules = summarizeSchedules(contractProbe.body);
     const healthBody =
       typeof health.body === "object" && health.body !== null
         ? health.body
@@ -3377,6 +3430,7 @@ export function apply(ctx, config) {
       health: health.body,
       uptimeSeconds: healthBody.uptimeSeconds ?? null,
       contract,
+      schedules,
       stale,
       message: stale
         ? "The service answers /health but does not match the current source " +
@@ -3404,6 +3458,12 @@ export function apply(ctx, config) {
     }
     if (service.stale === true) {
       return "The running service predates the current source. Restart it: bun run serve";
+    }
+    const failedSchedule = service.schedules?.attention?.find(
+      (row) => row.lastStatus === "failed",
+    );
+    if (failedSchedule !== undefined) {
+      return `Scheduled capture "${failedSchedule.id}" failed: ${failedSchedule.detail ?? "no reason published"}. Read the daemon log, then run its command by hand.`;
     }
     if (git.dirty && git.dirty.modified + git.dirty.untracked > 0) {
       return 'The working tree has uncommitted paths, and ci:local judges the working tree: run sportsdesk_dev with run:["ci"] before claiming a change works.';

@@ -94,6 +94,23 @@ export interface ScheduleDefinition {
   readonly shellJob?: ShellJobSpec;
   enabled: boolean;
   lastTriggeredAt?: string;
+  /**
+   * Outcome of the last dispatch, or absent when the schedule has never fired. `/api/status`
+   * publishes this so a job that never armed (unmet requirement, cron not started) is visible
+   * instead of being indistinguishable from a job that has been succeeding hourly.
+   */
+  lastRun?: ScheduleRunState;
+}
+
+/** What `/api/status` reports about one schedule's last attempt. */
+export interface ScheduleRunState {
+  /** ISO-8601 timestamp of the dispatch. */
+  readonly at: string;
+  readonly status: "ok" | "failed" | "skipped";
+  /** Operator-facing reason: the runner's `reason`, or the unmet requirement names. */
+  readonly detail: string | null;
+  /** Requirement names that were unmet at fire time; empty unless the run was skipped. */
+  readonly missing: readonly string[];
 }
 
 export interface GeneratedReport {
@@ -230,27 +247,7 @@ export class ReportingSchedulerService {
         started.push(`${s.scheduleTime} (${s.tz ?? "America/New_York"})`);
         return startInProcessCron(
           cronExpr,
-          async () => {
-            s.lastTriggeredAt = new Date().toISOString();
-            if (s.reportType === "TEN_MINUTE_POSITIONS_PULSE") {
-              await runLivePositionsPulse({
-                schedule: cronExpr,
-                ...(s.targetChatId ? { chatIdOverride: s.targetChatId } : {}),
-              });
-            } else if (s.reportType === "BRIDGE_ROLLUP_DIGEST") {
-              await this.dispatchBridgeDigest(s.bridgeJobs, s.targetChatId);
-            } else if (s.reportType === "SHELL_CAPTURE") {
-              if (s.shellJob === undefined) {
-                console.warn(
-                  `[Reporting Scheduler] ${s.id}: SHELL_CAPTURE without shellJob is a no-op`,
-                );
-              } else {
-                await shellCaptureRunner(s.shellJob);
-              }
-            } else {
-              await this.dispatchReportNow(s.reportType, s.targetChatId);
-            }
-          },
+          () => this.dispatchSchedule(s, cronExpr),
           { tz: s.tz ?? "America/New_York" },
         );
       });
@@ -487,6 +484,94 @@ export class ReportingSchedulerService {
         enabled: true,
       },
     ];
+  }
+
+  /**
+   * Run one schedule's work now and record the outcome, exactly as the cron tick would. Public so
+   * a test can fire a schedule without arming `Bun.cron`; it is not an operator entrypoint.
+   */
+  public async runScheduleNow(id: string): Promise<void> {
+    const schedule = this.schedules.get(id);
+    if (schedule === undefined) throw new Error(`no schedule ${id}`);
+    await this.dispatchSchedule(schedule, schedule.scheduleTime);
+  }
+
+  private async dispatchSchedule(
+    schedule: ScheduleDefinition,
+    cronExpr: string,
+  ): Promise<void> {
+    schedule.lastTriggeredAt = new Date().toISOString();
+    try {
+      if (schedule.reportType === "TEN_MINUTE_POSITIONS_PULSE") {
+        await runLivePositionsPulse({
+          schedule: cronExpr,
+          ...(schedule.targetChatId
+            ? { chatIdOverride: schedule.targetChatId }
+            : {}),
+        });
+        schedule.lastRun = {
+          at: schedule.lastTriggeredAt,
+          status: "ok",
+          detail: null,
+          missing: [],
+        };
+      } else if (schedule.reportType === "BRIDGE_ROLLUP_DIGEST") {
+        await this.dispatchBridgeDigest(
+          schedule.bridgeJobs,
+          schedule.targetChatId,
+        );
+        schedule.lastRun = {
+          at: schedule.lastTriggeredAt,
+          status: "ok",
+          detail: null,
+          missing: [],
+        };
+      } else if (schedule.reportType === "SHELL_CAPTURE") {
+        if (schedule.shellJob === undefined) {
+          console.warn(
+            `[Reporting Scheduler] ${schedule.id}: SHELL_CAPTURE without shellJob is a no-op`,
+          );
+          schedule.lastRun = {
+            at: schedule.lastTriggeredAt,
+            status: "failed",
+            detail: "SHELL_CAPTURE schedule has no shellJob",
+            missing: [],
+          };
+        } else {
+          const outcome = await shellCaptureRunner(schedule.shellJob);
+          schedule.lastRun = {
+            at: schedule.lastTriggeredAt,
+            status: outcome.status,
+            detail:
+              outcome.status === "skipped"
+                ? `missing ${outcome.missing.join(",")}`
+                : outcome.status === "failed"
+                  ? outcome.reason
+                  : null,
+            missing: outcome.status === "skipped" ? outcome.missing : [],
+          };
+        }
+      } else {
+        await this.dispatchReportNow(
+          schedule.reportType,
+          schedule.targetChatId,
+        );
+        schedule.lastRun = {
+          at: schedule.lastTriggeredAt,
+          status: "ok",
+          detail: null,
+          missing: [],
+        };
+      }
+    } catch (error) {
+      schedule.lastRun = {
+        at: schedule.lastTriggeredAt,
+        status: "failed",
+        detail: error instanceof Error ? error.message : String(error),
+        missing: [],
+      };
+      throw error;
+    }
   }
 
   private initDefaultSchedules(): void {

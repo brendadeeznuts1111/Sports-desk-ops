@@ -54,6 +54,22 @@ function readText(path) {
   return readFileSync(join(HERE, path), "utf8");
 }
 
+/**
+ * Rows the bundle patch inserts, parsed by Bun's YAML parser rather than scanned as text, so a
+ * malformed patch can no longer satisfy the check by containing the right substrings.
+ * `null` when `Bun.YAML` is unavailable (this harness also claims plain Node).
+ */
+function insertRows(text) {
+  if (typeof Bun === "undefined" || typeof Bun.YAML?.parse !== "function") {
+    return null;
+  }
+  const parsed = Bun.YAML.parse(text);
+  const documents = Array.isArray(parsed) ? parsed : [parsed];
+  return documents.flatMap((doc) =>
+    Array.isArray(doc?.insert) ? doc.insert : [],
+  );
+}
+
 /** Leaf key paths of a locale dictionary, e.g. `meta.title`. */
 function leafKeys(value, prefix = "") {
   if (value === null || typeof value !== "object") return [prefix];
@@ -128,10 +144,20 @@ check("manifest: patch, locale and icon exist", () => {
   ]) {
     assert(existsSync(join(HERE, path)), `${path} is missing`);
   }
+  const rows = insertRows(readText("cordis.patch.yml"));
+  if (rows === null) {
+    console.log(
+      "  …     patch structure: skipped (Bun.YAML is unavailable under this runtime)",
+    );
+    return;
+  }
+  const [row] = rows;
+  assert(row !== undefined, "patch has no insert rows");
   assert(
-    readText("cordis.patch.yml").includes(NAME),
-    "patch does not name the bundle",
+    row.id === "sportsdesk-desk-status",
+    `unexpected row id ${JSON.stringify(row.id)}`,
   );
+  assert(row.name === NAME, `patch does not name ${NAME}`);
 });
 
 check("locale: en and zh expose the same meta keys", () => {

@@ -3,6 +3,11 @@
  * Serialized into WebView evaluate expressions (browser context, not Bun).
  */
 
+import {
+  F402_BROWSER_HEADER,
+  F402_BROWSER_HEADER_VALUE,
+} from "./f402_browser_headers.ts";
+
 /** Chrome DevTools request headers for Manager/Report XHR (e.g. getDeletedTransactionHistory). */
 export const F402_WIRE_ACCEPT = "*/*" as const;
 
@@ -210,7 +215,7 @@ export function inPageCloudApiHeadersJs(contentType: string): string {
   return `const headers = {
     accept: ${JSON.stringify(F402_WIRE_ACCEPT)},
     "content-type": ${JSON.stringify(contentType)},
-    "x-requested-with": "XMLHttpRequest",
+    ${JSON.stringify(F402_BROWSER_HEADER)}: ${JSON.stringify(F402_BROWSER_HEADER_VALUE)},
   };
   if (token) headers.authorization = "Bearer " + token;`;
 }

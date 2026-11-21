@@ -139,6 +139,21 @@ function readText(relative) {
   return readFileSync(join(HERE, relative), "utf8");
 }
 
+/**
+ * Rows the bundle patch inserts, parsed by Bun's YAML parser rather than scanned as text.
+ * `null` when `Bun.YAML` is unavailable (this harness also claims plain Node).
+ */
+function insertRows(text) {
+  if (typeof Bun === "undefined" || typeof Bun.YAML?.parse !== "function") {
+    return null;
+  }
+  const parsed = Bun.YAML.parse(text);
+  const documents = Array.isArray(parsed) ? parsed : [parsed];
+  return documents.flatMap((doc) =>
+    Array.isArray(doc?.insert) ? doc.insert : [],
+  );
+}
+
 function readJson(relative) {
   return JSON.parse(readText(relative));
 }
@@ -295,12 +310,32 @@ async function main() {
     }
   });
   check("bundle patch inserts one row named after the package", () => {
-    const patch = readText("cordis.patch.yml");
-    assert(patch.includes("- insert:"), "patch has no insert block");
-    assert(patch.includes(`id: ${BANNER_ID}`), "patch row id mismatch");
-    assert(patch.includes(`name: ${PACKAGE_NAME}`), "patch row name mismatch");
-    assert(patch.includes("repoPath:"), "patch row has no repoPath");
-    assert(patch.includes("bunPath:"), "patch row has no bunPath");
+    const rows = insertRows(readText("cordis.patch.yml"));
+    if (rows === null) {
+      console.log(
+        "  …     patch structure: skipped (Bun.YAML is unavailable under this runtime)",
+      );
+      return;
+    }
+    const [row] = rows;
+    assert(row !== undefined, "patch has no insert rows");
+    assert(row.id === BANNER_ID, `patch row id ${JSON.stringify(row.id)}`);
+    assert(
+      row.name === PACKAGE_NAME,
+      `patch row name ${JSON.stringify(row.name)}`,
+    );
+    const config = row.config ?? {};
+    assert(
+      typeof config.bunPath === "string" && config.bunPath !== "",
+      "patch row has no bunPath",
+    );
+    assert(typeof config.timeoutMs === "number", "patch row has no timeoutMs");
+    // `repoPath:` exists only in this patch's comments: the loader resolves the checkout
+    // (repo_path_resolve.js), so baking an absolute path in would be a machine-specific bug.
+    assert(
+      !Object.hasOwn(config, "repoPath"),
+      "patch row must not bake in a repoPath",
+    );
   });
   check("icon is a bounded self-contained SVG", () => {
     const icon = readText("icon.svg");

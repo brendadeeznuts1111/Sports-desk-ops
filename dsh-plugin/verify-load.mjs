@@ -24,6 +24,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -605,6 +606,45 @@ check("module exports the cordis apply/name/inject contract", () => {
       `index.js imports a peer package: ${specifier}`,
     );
   }
+});
+
+/**
+ * Rows the bundle patch inserts, parsed by Bun's YAML parser. The patch is the row a profile
+ * enables, so a malformed file has to fail here instead of inside the loader.
+ */
+function insertRows(text) {
+  const parsed = Bun.YAML.parse(text);
+  const documents = Array.isArray(parsed) ? parsed : [parsed];
+  const rows = documents.flatMap((doc) =>
+    Array.isArray(doc?.insert) ? doc.insert : [],
+  );
+  assert(rows.length > 0, "patch has no insert rows");
+  return rows;
+}
+
+check("bundle patch inserts one row with a portable config", () => {
+  const [row] = insertRows(
+    readFileSync(join(HERE, "cordis.patch.yml"), "utf8"),
+  );
+  assert(row !== undefined, "patch has no insert rows");
+  assert(row.id === plugin.name, `patch row id ${JSON.stringify(row.id)}`);
+  assert(
+    row.name === "dsh-plugin-sportsdesk-ops",
+    `patch row name ${JSON.stringify(row.name)}`,
+  );
+  const config = row.config ?? {};
+  assert(
+    config.bunPath === "bun",
+    `patch bunPath ${JSON.stringify(config.bunPath)}`,
+  );
+  assert(typeof config.serviceUrl === "string", "patch row has no serviceUrl");
+  assert(typeof config.timeoutMs === "number", "patch row has no timeoutMs");
+  // `repoPath:` exists only in the patch's comments: the loader resolves the checkout, so an
+  // absolute path here would pin one operator's machine.
+  assert(
+    !Object.hasOwn(config, "repoPath"),
+    "patch row must not bake in a repoPath",
+  );
 });
 
 check("registers exactly the thirteen read-only tools", () => {

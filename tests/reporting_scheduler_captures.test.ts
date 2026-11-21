@@ -11,6 +11,7 @@ import {
   ReportingSchedulerService,
   resetShellCaptureRunner,
   runShellCaptureDefault,
+  setShellCaptureRunner,
   type ShellCaptureOutcome,
   type ShellJobSpec,
 } from "../services/reporting_scheduler_service.ts";
@@ -347,3 +348,78 @@ describe("shell capture dispatch", () => {
 function quietLogger() {
   return { log: () => {}, warn: () => {} };
 }
+
+describe("publishes per-schedule run state", () => {
+  const get = (scheduler: ReportingSchedulerService, id: string) => {
+    const def = scheduler.getSchedules().find((s) => s.id === id);
+    if (def === undefined) throw new Error(`no schedule ${id}`);
+    return def;
+  };
+
+  test("a schedule that never fired carries no lastRun", () => {
+    const scheduler = new ReportingSchedulerService(fakeTelegram());
+    const def = get(scheduler, "sched_agent_tree_hourly");
+    // This is the visibility the status payload was missing: "never fired" must be
+    // distinguishable from "fired successfully every hour".
+    expect(def.lastRun).toBeUndefined();
+    expect(def.lastTriggeredAt).toBeUndefined();
+  });
+
+  test("an unmet requirement is recorded with its names", async () => {
+    const scheduler = new ReportingSchedulerService(fakeTelegram());
+    setShellCaptureRunner(async () => ({
+      status: "skipped",
+      missing: ["F402_BEARER_TOKEN"],
+    }));
+    await scheduler.runScheduleNow("sched_agent_tree_hourly");
+    const def = get(scheduler, "sched_agent_tree_hourly");
+    expect(def.lastRun?.status).toBe("skipped");
+    expect(def.lastRun?.missing).toEqual(["F402_BEARER_TOKEN"]);
+    expect(def.lastRun?.detail).toBe("missing F402_BEARER_TOKEN");
+    expect(def.lastRun?.at).toBe(def.lastTriggeredAt);
+  });
+
+  test("a failed run records the runner's reason", async () => {
+    const scheduler = new ReportingSchedulerService(fakeTelegram());
+    setShellCaptureRunner(async () => ({
+      status: "failed",
+      exitCode: 2,
+      durationMs: 5,
+      reason: "exit 2",
+    }));
+    await scheduler.runScheduleNow("sched_agent_tree_hourly");
+    const def = get(scheduler, "sched_agent_tree_hourly");
+    expect(def.lastRun?.status).toBe("failed");
+    expect(def.lastRun?.detail).toBe("exit 2");
+    expect(def.lastRun?.missing).toEqual([]);
+  });
+
+  test("a successful run clears the detail", async () => {
+    const scheduler = new ReportingSchedulerService(fakeTelegram());
+    setShellCaptureRunner(async () => ({
+      status: "ok",
+      exitCode: 0,
+      durationMs: 7,
+    }));
+    await scheduler.runScheduleNow("sched_agent_tree_hourly");
+    expect(get(scheduler, "sched_agent_tree_hourly").lastRun).toMatchObject({
+      status: "ok",
+      detail: null,
+      missing: [],
+    });
+  });
+
+  test("a throwing runner is recorded as failed and still propagates", async () => {
+    const scheduler = new ReportingSchedulerService(fakeTelegram());
+    setShellCaptureRunner(async () => {
+      throw new Error("boom");
+    });
+    await expect(
+      scheduler.runScheduleNow("sched_agent_tree_hourly"),
+    ).rejects.toThrow("boom");
+    expect(get(scheduler, "sched_agent_tree_hourly").lastRun).toMatchObject({
+      status: "failed",
+      detail: "boom",
+    });
+  });
+});

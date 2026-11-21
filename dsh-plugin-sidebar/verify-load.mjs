@@ -130,6 +130,21 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+/**
+ * The rows a bundle patch inserts, parsed by Bun's YAML parser. The earlier check scanned the
+ * file as text, so a patch that was malformed YAML still passed as long as it contained
+ * `insert:` and `- id:`.
+ */
+function insertRows(text) {
+  const parsed = Bun.YAML.parse(text);
+  const documents = Array.isArray(parsed) ? parsed : [parsed];
+  const rows = documents.flatMap((doc) =>
+    Array.isArray(doc?.insert) ? doc.insert : [],
+  );
+  assert(rows.length > 0, "patch has no insert rows");
+  return rows;
+}
+
 /* --- manifest ----------------------------------------------------------- */
 
 const pkg = JSON.parse(read("package.json"));
@@ -172,11 +187,13 @@ check("manifest exports every runtime file and lists them in files", () => {
 });
 
 check("patch inserts one row named after the package", () => {
-  const patch = read("cordis.patch.yml");
-  assert(/insert:/.test(patch), "patch has no insert");
-  assert(patch.includes(pkg.name), "patch does not name the package");
-  const rowId = patch.match(/-\s+id:\s*(\S+)/)?.[1];
-  assert(rowId === "sportsdesk-desk-panel", `unexpected row id ${rowId}`);
+  const [row] = insertRows(read("cordis.patch.yml"));
+  assert(row !== undefined, "patch has no insert rows");
+  assert(row.id === "sportsdesk-desk-panel", `unexpected row id ${row.id}`);
+  assert(
+    row.name === pkg.name,
+    `patch names ${JSON.stringify(row.name)}, not ${pkg.name}`,
+  );
 });
 
 check("locale metadata is a real title and description in both locales", () => {

@@ -50,7 +50,9 @@ wagers = "/api/wagers"
 bet_ticker = "/api/bet-ticker"
 r2_pipeline = "/api/r2/pipeline"
 dns = "/api/dns"
-health = "/api/health"
+# The daemon serves `/health` (not `/api/health`, which 404s); the value is the path, so it must
+# match the route table in services/sportsdesk_webview_server.ts.
+health = "/health"
 build_matrix = "/api/build-matrix"
 
 # ------------------------------------------------------------------------------
