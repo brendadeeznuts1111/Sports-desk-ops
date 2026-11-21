@@ -11,10 +11,12 @@ import {
   hashTicketKey,
   normalizeRotation,
   packPendingKey32,
+  packPendingKey64,
   serializeF402PendingRollup,
   serializeF402PendingRollupPayload,
   toCents,
   unpackPendingKey32,
+  unpackPendingKey64,
 } from "../lib/f402_pending_rollup.ts";
 import { stableJson } from "../lib/f402_bet_ticker_delta.ts";
 import { createF402PendingSink } from "../lib/f402_pending_sink.ts";
@@ -52,11 +54,43 @@ const row = (n: number, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 describe("bridge 3b", () => {
-  test("normalizes the 20-bit rotation and Alt-Spread shift", () => {
+  test("normalizes unsigned 32-bit rotations and the Alt-Spread shift", () => {
     expect(normalizeRotation(243)).toBe(243);
     expect(normalizeRotation(5244)).toBe(244);
-    expect(() => normalizeRotation(1_048_576)).toThrow();
+    expect(normalizeRotation(11_291_201)).toBe(11_291_201);
+    expect(normalizeRotation("1311205")).toBe(1_311_205);
+    expect(normalizeRotation(0xffff_ffff)).toBe(0xffff_ffff);
+    expect(() => normalizeRotation(0x1_0000_0000)).toThrow();
+    expect(() => normalizeRotation(1.5)).toThrow();
     expect(() => normalizeRotation(-1)).toThrow();
+  });
+  test("64-bit keys preserve all rotation bits and validate each field", () => {
+    for (const rotation of [0, 1_048_575, 1_048_576, 11_291_201, 0xffff_ffff]) {
+      const dimensions = { rotation, sport: 63, period: 63 };
+      expect(unpackPendingKey64(packPendingKey64(rotation, 63, 63))).toEqual(
+        dimensions,
+      );
+    }
+    expect(() => packPendingKey64(0x1_0000_0000, 0, 0)).toThrow();
+    expect(() => packPendingKey64(1, 64, 0)).toThrow();
+    expect(() => packPendingKey64(1, 0, -1)).toThrow();
+  });
+  test("large rotations do not collide with their truncated 20-bit values", async () => {
+    const large = 11_291_201;
+    const truncated = large & 0xfffff;
+    const rows = Array.from({ length: 10 }, (_, index) =>
+      row(index, {
+        Team2RotNum: index < 5 ? large : truncated,
+      }),
+    );
+    const rollup = await buildF402PendingRollup(await fixture(rows));
+    expect(rollup.cells.map((cell) => cell.rotation)).toEqual([
+      truncated,
+      large,
+    ]);
+    expect(rollup.cells.map((cell) => cell.ticketCount)).toEqual([5, 5]);
+    expect(rollup.totals.totalStakeCents).toBe(10_000_000);
+    expect(rollup.gates.every((gate) => gate.status !== "fail")).toBe(true);
   });
   test("effective line flips for the away side", () => {
     expect(effectiveLineHundredths(-4, 0, 1)).toBe(-400);

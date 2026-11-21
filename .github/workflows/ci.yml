@@ -2,7 +2,7 @@ name: sportsdesk-ops-ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - "**.ts"
       - "**.tsx"
@@ -114,7 +114,9 @@ jobs:
         run: bash scripts/audit-plugins.sh
 
   verify-changed:
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/dev')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -127,14 +129,14 @@ jobs:
           bun-version-file: .bun-version
       - name: Format check (changed files)
         env:
-          GITHUB_BASE_REF: ${{ github.base_ref }}
+          CI_BASE_BRANCH: ${{ github.base_ref || 'main' }}
         run: |
           rc=0
-          bun fmt --check --changed="origin/${GITHUB_BASE_REF}" || rc=$?
+          bun fmt --check --changed="origin/${CI_BASE_BRANCH}" || rc=$?
           if [ "$rc" -eq 1 ]; then echo "::error::unformatted files (bun fmt --check)"; exit 1; fi
           if [ "$rc" -ne 0 ]; then echo "::error::bun fmt failed (exit $rc)"; exit "$rc"; fi
           debug_rc=0
-          bun fmt --debug-check --changed="origin/${GITHUB_BASE_REF}" >/tmp/bun-fmt-debug.log 2>&1 || debug_rc=$?
+          bun fmt --debug-check --changed="origin/${CI_BASE_BRANCH}" >/tmp/bun-fmt-debug.log 2>&1 || debug_rc=$?
           if [ "$debug_rc" -ne 0 ]; then
             tail -50 /tmp/bun-fmt-debug.log
             echo "::error::bun fmt --debug-check changed the meaning of a formatted file"
@@ -232,8 +234,8 @@ jobs:
         run: bun run test:pm-contracts
       - name: Changed dsh-plugin bundles (verify-load)
         env:
-          GITHUB_BASE_REF: ${{ github.base_ref }}
-        run: bash scripts/ci/test-changed-plugins.sh
+          CI_BASE_BRANCH: ${{ github.base_ref || 'main' }}
+        run: GITHUB_BASE_REF="$CI_BASE_BRANCH" bash scripts/ci/test-changed-plugins.sh
       - name: Cache NSH v0.5.0 toolchain & TypeScript 7 cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -244,8 +246,8 @@ jobs:
       - name: Changed NSH Desk package (pinned v0.5.0 check + build + headless test + web + signed .nshpkg)
         timeout-minutes: 5
         env:
-          GITHUB_BASE_REF: ${{ github.base_ref }}
-        run: bash scripts/ci/test-changed-nsh.sh
+          CI_BASE_BRANCH: ${{ github.base_ref || 'main' }}
+        run: GITHUB_BASE_REF="$CI_BASE_BRANCH" bash scripts/ci/test-changed-nsh.sh
 
   lint-native:
     # Native `bun lint` ships in the canary channel, not in the pinned 1.4.4 runtime (and the

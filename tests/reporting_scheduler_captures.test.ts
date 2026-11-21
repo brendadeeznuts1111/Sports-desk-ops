@@ -65,6 +65,7 @@ describe("SHELL_CAPTURE schedule definitions", () => {
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_10m_positions_pulse");
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_agent_tree_hourly");
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_customer_profiles_6h");
+    expect(BRIDGE_SCHEDULE_IDS).toContain("sched_customer_history_15m");
     expect(BRIDGE_SCHEDULE_IDS).toContain(
       "sched_customer_decision_rankings_daily",
     );
@@ -183,6 +184,26 @@ describe("SHELL_CAPTURE schedule definitions", () => {
       ]),
     );
   });
+});
+
+test("retained history schedule gates on projection configuration", () => {
+  const definition = new ReportingSchedulerService(fakeTelegram())
+    .getSchedules()
+    .find((schedule) => schedule.id === "sched_customer_history_15m");
+  expect(definition?.scheduleTime).toBe("12,27,42,57 * * * *");
+  expect(definition?.tz).toBe("America/Chicago");
+  expect(definition?.reportType).toBe("SHELL_CAPTURE");
+  expect(definition?.shellJob?.args).toEqual([
+    "--no-orphans",
+    "--no-env-file",
+    "run",
+    "scripts/refresh_customer_history.ts",
+  ]);
+  expect(definition?.shellJob?.requires).toEqual([
+    "SPORTSDESK_CUSTOMER_HISTORY_PROJECTOR",
+    "SPORTSDESK_CUSTOMER_HISTORY_SOURCES",
+    "SPORTSDESK_CUSTOMER_HISTORY_JSON",
+  ]);
 });
 
 describe("shell capture dispatch", () => {

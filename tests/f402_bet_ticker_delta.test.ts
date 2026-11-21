@@ -626,3 +626,44 @@ describe("JSC heapStats Structure and PropertyTable invariant", () => {
     expect(deltaStructure).toBeLessThan(120);
   });
 });
+
+test("snapshot data clock follows covered events instead of republication", () => {
+  const rows = [row({ insertedAt: "2026-11-03T16:00:00Z" })];
+  const first = buildF402TickerSnapshot(
+    projectF402TickerDelta([], rows, "2026-11-03T18:00:00Z"),
+    1,
+  );
+  const republished = buildF402TickerSnapshot(
+    projectF402TickerDelta([], rows, "2026-11-04T18:00:00Z"),
+    1,
+  );
+  expect(first.data_window_max_epoch_ms).toBe(
+    Date.parse("2026-11-03T16:00:00Z"),
+  );
+  expect(republished.data_window_max_epoch_ms).toBe(
+    first.data_window_max_epoch_ms,
+  );
+  expect(
+    buildF402TickerSnapshot(
+      projectF402TickerDelta([], [], "2026-11-04T18:00:00Z"),
+      0,
+    ).data_window_max_epoch_ms,
+  ).toBeNull();
+});
+
+test("a rejected overflow row cannot advance the covered-event clock", () => {
+  const store = new Bridge3aTicketColumnStore(16);
+  store.insertOrUpdate(
+    row({ insertedAt: "2026-11-03T16:00:00Z", wagerNumber: "1" }),
+  );
+  expect(
+    store.insertOrUpdate(
+      row({
+        insertedAt: "2026-11-04T18:00:00Z",
+        wagerNumber: "2",
+        amountWagered: 1e20,
+      }),
+    ),
+  ).toBe(-1);
+  expect(store.dataWindowMaxEpochMs).toBe(Date.parse("2026-11-03T16:00:00Z"));
+});

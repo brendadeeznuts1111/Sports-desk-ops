@@ -49,6 +49,7 @@ export const BRIDGE_SCHEDULE_IDS = [
   "sched_bridge_weblog_hourly",
   "sched_agent_tree_hourly",
   "sched_customer_profiles_6h",
+  "sched_customer_history_15m",
   "sched_customer_decision_rankings_daily",
   "sched_f402_session_refresh",
   "sched_weblog_sentinel_daily",
@@ -327,7 +328,7 @@ export class ReportingSchedulerService {
         scheduleTime: "7 * * * *",
         reportType: "BRIDGE_ROLLUP_DIGEST",
         description:
-          "Runs the WebLog corpus rollup hourly at minute 7 and sends an on-change Mode 6 digest. Overlaps are skipped.",
+          "Captures Mode A for recent live pending accounts, then publishes the scoped WebLog rollup hourly at minute 7. On-change Mode 6 digest; overlaps are skipped.",
         tz: "America/Chicago",
         bridgeJobs: ["weblog"],
         enabled: true,
@@ -369,6 +370,31 @@ export class ReportingSchedulerService {
             "scripts/build_customer_profiles.ts",
           ],
           requires: ["file:enriched_customers_full.json"],
+        },
+        enabled: true,
+      },
+      {
+        id: "sched_customer_history_15m",
+        name: "Retained Customer History Projection (15m)",
+        scheduleTime: "12,27,42,57 * * * *",
+        reportType: "SHELL_CAPTURE",
+        description:
+          "Captures scoped Fantasy402 graded wagers when configured, then refreshes the private dashboard projection. Missing configuration skips the job; failures preserve the last good projection.",
+        tz: "America/Chicago",
+        shellJob: {
+          bin: "bun",
+          args: [
+            "--no-orphans",
+            "--no-env-file",
+            "run",
+            "scripts/refresh_customer_history.ts",
+          ],
+          requires: [
+            "SPORTSDESK_CUSTOMER_HISTORY_PROJECTOR",
+            "SPORTSDESK_CUSTOMER_HISTORY_SOURCES",
+            "SPORTSDESK_CUSTOMER_HISTORY_JSON",
+          ],
+          timeoutSeconds: 240,
         },
         enabled: true,
       },

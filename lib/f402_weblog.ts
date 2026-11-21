@@ -1,4 +1,5 @@
 /** F402 WebLog + Mode 6 overlap bridge: streaming corpus profiling, IP clusters, sessions, gates. */
+import type { WeblogAccountCoverage } from "./f402_weblog_capture.ts";
 import { sha256Hex } from "./f402_bet_ticker_delta.ts";
 import { mergeUint8JsonlChunks } from "./jsonl_stream_replay.ts";
 
@@ -614,6 +615,7 @@ export async function readBetsWindow(
 }
 
 export interface WebLogRollup {
+  readonly coverage?: WeblogAccountCoverage;
   readonly schemaVersion: 1;
   readonly kind: typeof WEBLOG_KIND;
   readonly window: { readonly fromMs: number; readonly toMs: number };

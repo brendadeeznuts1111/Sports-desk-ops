@@ -11,7 +11,7 @@ so. Re-check any version-scoped claim against the pin before relying on it.
 
 ### Inner loop — during development
 
-Pull requests run **`verify-changed`** (`bun fmt --check --changed`, `typecheck`,
+Pull requests and `dev` pushes run **`verify-changed`** (`bun fmt --check --changed`, `typecheck`,
 `check:derived-contracts`, `verify:docs`, `test:changed`, `test:pm-contracts`,
 `test-changed-plugins`, `test-changed-nsh`, and `check:profile-code-mode-host-seal`) plus the
 required **`lint-native`** job (canary), not the full `main`-branch ratchet. Never run the whole suite (`bun test` / `bun test tests/`) on iterative
@@ -262,8 +262,10 @@ Do not delete these as redundant without reading the ADR:
 7. **#90 / #92** — Weblog cron `--from` + three-tier corpus; publish data-window log line.
 8. **#84 / GSID** — Multi-sink R2 recovery; canonical `GSLIVE_SESSION_ID`; wagers two-step
    (`--live` + `wagers:publish-snapshot`).
-9. **#91** — Weblog corpus: manual portal export + `weblog:sentinel` (08:00 Telegram if today's
-   JSONL is missing); not headless Mode A fetch.
+9. **#91** — Weblog corpus: the hourly bridge now captures account-scoped Mode A activity
+   from a recent live pending snapshot (`--capture-pending`); never call it whole-book coverage.
+   Manual `--from` remains available; `weblog:sentinel` only reminds when a corpus is absent.
+   Contract: [capture weblog](docs/runbooks/capture_weblog.md).
 10. **#93** — Wire wagers capture + `publish-snapshot` into cron (`sched_bridge_rollup_15m` in
     `services/reporting_scheduler_service.ts`).
 11. **#94** — `bridge3c` `--timeout` for large `getBetReport`

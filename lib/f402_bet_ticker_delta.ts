@@ -350,6 +350,7 @@ export class Bridge3aTicketColumnStore {
   public readonly slotMask: number;
   public count: number = 0;
   public highestNumericWagerNumber: number = 0;
+  public dataWindowMaxEpochMs: number | null = null;
   public overflowRejectionCount: number = 0;
 
   public readonly slots: Uint32Array;
@@ -446,6 +447,17 @@ export class Bridge3aTicketColumnStore {
         throw err;
       }
     }
+
+    const inserted = row.insertedAt.trim().replace(" ", "T");
+    const epoch = Date.parse(
+      /(?:Z|[+-]\d{2}:?\d{2})$/i.test(inserted) ? inserted : `${inserted}Z`,
+    );
+    if (
+      Number.isFinite(epoch) &&
+      epoch > 0 &&
+      (this.dataWindowMaxEpochMs === null || epoch > this.dataWindowMaxEpochMs)
+    )
+      this.dataWindowMaxEpochMs = epoch;
 
     if (foundIndex === -1) {
       if (this.count >= this.capacity) {
@@ -690,6 +702,8 @@ export interface F402TickerDeltaEvent {
   readonly schemaVersion: typeof F402_BET_TICKER_SCHEMA_VERSION;
   readonly kind: typeof F402_BET_TICKER_KIND;
   readonly polledAt: string;
+  /** Additive JSON lineage; excluded from the legacy aggregate digest and binary v2 layout. */
+  readonly data_window_max_epoch_ms?: number | null;
   readonly deskDate: string;
   readonly deskHour: number;
   readonly watermark: string;
@@ -710,6 +724,8 @@ export interface F402TickerSnapshot {
   readonly schemaVersion: typeof F402_BET_TICKER_SCHEMA_VERSION;
   readonly kind: typeof F402_BET_TICKER_KIND;
   readonly generatedAt: string;
+  /** Additive JSON lineage; excluded from the legacy aggregate digest and binary v2 layout. */
+  readonly data_window_max_epoch_ms?: number | null;
   readonly deskDate: string;
   readonly deskHour: number;
   readonly watermark: string;
@@ -874,6 +890,11 @@ export function projectF402TickerDeltaFromStores(
     schemaVersion: F402_BET_TICKER_SCHEMA_VERSION,
     kind: F402_BET_TICKER_KIND,
     polledAt,
+    data_window_max_epoch_ms:
+      afterStore.dataWindowMaxEpochMs !== null &&
+      afterStore.dataWindowMaxEpochMs <= Date.parse(polledAt) + 60_000
+        ? afterStore.dataWindowMaxEpochMs
+        : null,
     deskDate,
     deskHour,
     watermark,
@@ -992,6 +1013,7 @@ export function buildF402TickerSnapshot(
     schemaVersion: F402_BET_TICKER_SCHEMA_VERSION,
     kind: F402_BET_TICKER_KIND,
     generatedAt: event.polledAt,
+    data_window_max_epoch_ms: event.data_window_max_epoch_ms ?? null,
     deskDate: event.deskDate,
     deskHour: event.deskHour,
     watermark: event.watermark,

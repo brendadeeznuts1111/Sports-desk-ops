@@ -1,7 +1,7 @@
 /**
  * @file f402_pending_rollup.ts
  * @description Bridge 3b — F402 pending tickets → sanitized liability rollup. Parent-ticket
- * deduplication (`Login|WagerNumber|TicketNumber`), 20-bit rotation validation with the
+ * deduplication (`Login|WagerNumber|TicketNumber`), unsigned 32-bit rotation validation with the
  * Alt-Spread 5000 shift, effective lines in hundredths, k=5 complementary suppression, SoA
  * columns, and GATE-01..06 / GATE-08. No identifier is emitted.
  */
@@ -93,16 +93,16 @@ export function toCents(value: unknown): bigint {
       : thousandths / 10n;
 }
 
-/** Validate the 20-bit rotation and apply the Alt-Spread shift. */
+/** Validate the provider's unsigned 32-bit rotation and apply the Alt-Spread shift. */
 export function normalizeRotation(value: unknown): number {
   const rotation = num(value);
   if (
     rotation === null ||
     !Number.isInteger(rotation) ||
     rotation < 0 ||
-    rotation > 1_048_575
+    rotation > 0xffff_ffff
   ) {
-    throw new Error(`rotation out of 20-bit range: ${String(value)}`);
+    throw new Error(`rotation out of unsigned 32-bit range: ${String(value)}`);
   }
   return rotation >= 5_000 && rotation <= 5_999 ? rotation - 5_000 : rotation;
 }
@@ -162,6 +162,42 @@ export function unpackPendingKey32(key: number): {
     rotation: (key >>> 12) & 0xfffff,
     sport: (key >>> 6) & 0x3f,
     period: key & 0x3f,
+  };
+}
+
+/** Lossless pending-cell key: rotation 32 bits | sport 6 bits | period 6 bits. */
+export function packPendingKey64(
+  rotation: number,
+  sport: number,
+  period: number,
+): bigint {
+  if (
+    !Number.isInteger(rotation) ||
+    rotation < 0 ||
+    rotation > 0xffff_ffff ||
+    !Number.isInteger(sport) ||
+    sport < 0 ||
+    sport > 63 ||
+    !Number.isInteger(period) ||
+    period < 0 ||
+    period > 63
+  ) {
+    throw new Error(
+      "pending key exceeds rotation:32 | sport:6 | period:6 bounds",
+    );
+  }
+  return (BigInt(rotation) << 12n) | (BigInt(sport) << 6n) | BigInt(period);
+}
+
+export function unpackPendingKey64(key: bigint): {
+  readonly rotation: number;
+  readonly sport: number;
+  readonly period: number;
+} {
+  return {
+    rotation: Number(key >> 12n),
+    sport: Number((key >> 6n) & 63n),
+    period: Number(key & 63n),
   };
 }
 
@@ -372,7 +408,7 @@ export class Bridge3bPendingColumnStore {
   public packingRoundTripFailed: boolean = false;
 
   public readonly cellSlots: Uint32Array;
-  public readonly packedCellKeyCol: Uint32Array;
+  public readonly packedCellKeyCol: BigUint64Array;
   public readonly ticketCountCol: Uint32Array;
   public readonly legCountCol: Uint32Array;
   public readonly riskCentsCol: BigInt64Array;
@@ -392,7 +428,7 @@ export class Bridge3bPendingColumnStore {
     this.slotCount = rawSlots;
     this.slotMask = rawSlots - 1;
     this.cellSlots = new Uint32Array(rawSlots);
-    this.packedCellKeyCol = new Uint32Array(capacity);
+    this.packedCellKeyCol = new BigUint64Array(capacity);
     this.ticketCountCol = new Uint32Array(capacity);
     this.legCountCol = new Uint32Array(capacity);
     this.riskCentsCol = new BigInt64Array(capacity);
@@ -404,11 +440,12 @@ export class Bridge3bPendingColumnStore {
     this.spreadSumHundredthsCol = new Int32Array(capacity);
   }
 
-  public cellHash(key: number): number {
-    return (Math.imul(key, 0x9e3779b1) >>> 0) & this.slotMask;
+  public cellHash(key: bigint): number {
+    const folded = Number((key ^ (key >> 32n)) & 0xffff_ffffn);
+    return (Math.imul(folded, 0x9e3779b1) >>> 0) & this.slotMask;
   }
 
-  public findCell(key: number): number {
+  public findCell(key: bigint): number {
     let slot = this.cellHash(key);
     for (let probe = 0; probe < this.slotCount; probe++) {
       const entry = this.cellSlots[slot]!;
@@ -421,7 +458,7 @@ export class Bridge3bPendingColumnStore {
   }
 
   public insertCell(
-    key: number,
+    key: bigint,
     rotation: number,
     sport: number,
     period: number,
@@ -434,7 +471,7 @@ export class Bridge3bPendingColumnStore {
         detail: `cell arena exhausted at ${this.capacity}`,
       });
     }
-    const unpacked = unpackPendingKey32(key);
+    const unpacked = unpackPendingKey64(key);
     if (
       unpacked.rotation !== rotation ||
       unpacked.sport !== sport ||
@@ -744,7 +781,7 @@ export async function buildF402PendingRollup(
     const rot = ticketStore.rotationCol[i]!;
     const sport = ticketStore.sportLabelCol[i]!;
     const period = ticketStore.periodLabelCol[i]!;
-    const key = packPendingKey32(rot, sport, period);
+    const key = packPendingKey64(rot, sport, period);
 
     let cell = cellStore.findCell(key);
     if (cell === -1) {
@@ -777,14 +814,14 @@ export async function buildF402PendingRollup(
   const processedBits = new Uint32Array(cellWordCount);
   for (let index = 0; index < cellStore.cellCount; index += 1) {
     if (hasBit(processedBits, index)) continue;
-    const key = cellStore.packedCellKeyCol[index]! & 0x0fff; // extracts (sport << 6) | period
+    const key = cellStore.packedCellKeyCol[index]! & 0x0fffn; // extracts (sport << 6) | period
     let suppressedCount = 0;
     let visibleCount = 0;
     let lastVisible = -1;
     for (let probe = index; probe < cellStore.cellCount; probe += 1) {
       if (
         hasBit(processedBits, probe) ||
-        (cellStore.packedCellKeyCol[probe]! & 0x0fff) !== key
+        (cellStore.packedCellKeyCol[probe]! & 0x0fffn) !== key
       ) {
         continue;
       }
@@ -839,15 +876,17 @@ export async function buildF402PendingRollup(
 
   // Sort visible cells deterministically by (rotation, sport, period)
   const compareCells = (left: number, right: number): number => {
-    const rotA = (cellStore.packedCellKeyCol[left]! >>> 12) & 0xfffff;
-    const rotB = (cellStore.packedCellKeyCol[right]! >>> 12) & 0xfffff;
+    const rotA = Number(cellStore.packedCellKeyCol[left]! >> 12n);
+    const rotB = Number(cellStore.packedCellKeyCol[right]! >> 12n);
     if (rotA !== rotB) return rotA - rotB;
-    const sportA = sports[(cellStore.packedCellKeyCol[left]! >>> 6) & 0x3f]!;
-    const sportB = sports[(cellStore.packedCellKeyCol[right]! >>> 6) & 0x3f]!;
+    const sportA =
+      sports[Number((cellStore.packedCellKeyCol[left]! >> 6n) & 63n)]!;
+    const sportB =
+      sports[Number((cellStore.packedCellKeyCol[right]! >> 6n) & 63n)]!;
     const sportCmp = sportA.localeCompare(sportB);
     if (sportCmp !== 0) return sportCmp;
-    const periodA = periods[cellStore.packedCellKeyCol[left]! & 0x3f]!;
-    const periodB = periods[cellStore.packedCellKeyCol[right]! & 0x3f]!;
+    const periodA = periods[Number(cellStore.packedCellKeyCol[left]! & 63n)]!;
+    const periodB = periods[Number(cellStore.packedCellKeyCol[right]! & 63n)]!;
     return periodA.localeCompare(periodB);
   };
 
@@ -875,9 +914,9 @@ export async function buildF402PendingRollup(
     const index = order[pos]!;
     const key = cellStore.packedCellKeyCol[index]!;
     visible.push({
-      rotation: (key >>> 12) & 0xfffff,
-      sport: sports[(key >>> 6) & 0x3f]!,
-      period: periods[key & 0x3f]!,
+      rotation: Number(key >> 12n),
+      sport: sports[Number((key >> 6n) & 63n)]!,
+      period: periods[Number(key & 63n)]!,
       ticketCount: cellStore.ticketCountCol[index]!,
       legCount: cellStore.legCountCol[index]!,
       totalStakeCents: Number(cellStore.riskCentsCol[index]!),

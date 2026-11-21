@@ -667,6 +667,9 @@ export class R2S3Client {
       payloadHash: EMPTY_SHA256,
       headers: {},
     });
+    // Compression can turn an object ETag into W/"...", which is never valid for
+    // If-Match's strong comparison. Read the identity representation for CAS.
+    requestHeaders.set("accept-encoding", "identity");
     const doFetch = options.fetchImpl ?? fetch;
     const response = await doFetch(`${endpoint.origin}${path}`, {
       method: "HEAD",
@@ -677,6 +680,11 @@ export class R2S3Client {
       throw new Error(`R2 HEAD ${key} failed (${response.status})`);
     }
     const etag = response.headers.get("etag")?.trim() ?? "";
+    if (etag.startsWith("W/")) {
+      throw new Error(
+        `R2 HEAD ${key} returned a weak ETag despite identity encoding; refusing unsafe CAS`,
+      );
+    }
     return etag === "" ? null : etag;
   }
 

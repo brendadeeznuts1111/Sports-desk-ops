@@ -110,12 +110,14 @@ via the service's HTTP surface.
 - **Radix table:** 4,096 entries, load factor `C_max / 4096 ≤ 0.25`; a probe hit re-checks the full
   64-bit key (GATE-01/02).
 
-**Per-stream key: `PackedPendingKey32`.** 3b has exactly three natural dimensions:
-`(rotation, sport, period)` with census-derived widths `rotation:20 | sport:6 | period:6 = 32`.
+**Per-stream key: `PackedPendingKey64`.** 3b has exactly three natural dimensions:
+`(rotation, sport, period)` with widths `rotation:32 | sport:6 | period:6 = 44`, stored in `BigUint64Array`.
+The 2026-11-19 collector receipts contain rotation `11291201`, beyond the former 20-bit field;
+unsigned 32-bit validation preserves provider IDs without truncation.
 There is no `wagerType` or `settlementState` in the 3b bucket (Pending is open by definition); they
 are **not zero-filled placeholders in a five-field superset**. If any field exceeds 64 values or
-the rotation exceeds 20 bits, escalate to `PackedPendingKey64: BigUint64Array` with explicit widths
-derived from the new census; never widen one field by borrowing another's bits. The
+the rotation exceeds 32 bits, fail closed and revise the explicit field widths from provider
+evidence; never widen one field by borrowing another's bits. The
 `pack(encode(decode(x))) !== x` round-trip check sets `packingRoundTripFailed=true` on
 `DodGateFailureError`.
 
@@ -135,7 +137,7 @@ SoA arena.
 Branded integers only: `Cents`, `SettledCents`, `BasisPoints`, `LineHundredths`,
 `RotationNumber`; no IEEE-754 floats.
 
-- **Rotation:** validate 20-bit `0..1,048,575`; if `5000..5999`, `rotation -= 5000` (Alt-Spread);
+- **Rotation:** validate unsigned 32-bit `0..4,294,967,295`; if `5000..5999`, `rotation -= 5000` (Alt-Spread);
   never `rot & 0xFFFF`. Strip `Period`/`Live` prefixes before comparison.
 - **Effective lines:** parse `AdjSpread`, `AdjTotalPoints`, `TeaserPoints` to `LineHundredths`
   (`×100`, round once, reject non-finite). `sideSign = +1` for team1, `-1` for team2;

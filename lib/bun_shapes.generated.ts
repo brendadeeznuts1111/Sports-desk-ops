@@ -115,7 +115,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
       "test:tests/bun_test_patterns.test.ts",
       "test:tests/f402_bet_ticker_delta.test.ts",
       "test:tests/nsh_frame_evidence.test.ts",
-      "probe:proc.spawn",
+      "test:tests/unit/contract_39_als_gc_retention.test.ts",
     ],
   },
   {

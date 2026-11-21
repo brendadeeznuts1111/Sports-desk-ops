@@ -5,9 +5,9 @@
  * must NOT do: hand the F402 password to a child process.
  */
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 import {
   BRIDGE_ROLLUP_JOBS,
@@ -221,24 +221,20 @@ describe("bridge3a: agent + session, agent injected only", () => {
   });
 });
 
-describe("weblog needs no credentials", () => {
-  test("the corpus gate is always open", async () => {
-    const root = mkdtempSync(join(tmpdir(), "bridge-cron-weblog-"));
-    try {
-      const staged = join(root, "out", "f402", "weblog", "11-08-2026.jsonl");
-      mkdirSync(dirname(staged), { recursive: true });
-      writeFileSync(staged, "{}\n");
-      const { probe } = keychain(
-        {},
-        { root, env: { ...EMPTY_ENV, F402_WEBLOG_FROM: staged } },
-      );
-      expect(await probe.check(job("weblog"))).toEqual({
-        ok: true,
-        source: "corpus",
-      });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+describe("weblog capture credentials", () => {
+  test("requires an agent and session rather than accepting an old corpus", async () => {
+    const missing = keychain({});
+    expect((await missing.probe.check(job("weblog"))).ok).toBe(false);
+    const ready = keychain(
+      { [F402_KEYCHAIN_NAMES.agentId]: "agent" },
+      { sessionPresent: true },
+    );
+    expect(await ready.probe.check(job("weblog"))).toEqual({
+      ok: true,
+      source: "keychain:agent",
+      extraEnv: { F402_AGENT_ID: "agent" },
+    });
+    expect(ready.reads).not.toContain(F402_KEYCHAIN_NAMES.password);
   });
 });
 

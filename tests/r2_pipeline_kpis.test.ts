@@ -1,3 +1,4 @@
+import type { WeblogAccountCoverage } from "../lib/f402_weblog_capture.ts";
 import { describe, expect, test } from "bun:test";
 import {
   parseDataWindowEndMs,
@@ -91,4 +92,44 @@ describe("probeR2PipelineKpis", () => {
     expect(weblog?.dataStale).toBe(true);
     expect(weblog?.dataWindowToMs).toBe(toMs);
   });
+});
+
+test("weblog KPI exposes scoped account coverage and marks legacy coverage unmeasured", async () => {
+  const coverage: WeblogAccountCoverage = {
+    scope: "live-pending-accounts",
+    wholeBookComplete: false,
+    snapshotCapturedAt: "2026-11-19T12:00:00Z",
+    capturedAt: "2026-11-19T12:05:00Z",
+    reportDate: "2026-11-19",
+    snapshotTicketRows: 50,
+    unidentifiedTicketRows: 5,
+    eligibleAccounts: 20,
+    requestedAccounts: 20,
+    completedAccounts: 20,
+    accountsWithActivity: 18,
+    emptyAccounts: 2,
+    failedAccounts: 0,
+    activityRows: 658,
+  };
+  const result = await probeR2PipelineKpis(
+    new Date("2026-11-19T12:10:00Z"),
+    async (url, init) =>
+      init.method === "HEAD"
+        ? new Response(null, {
+            headers: { "last-modified": "Thu, 19 Nov 2026 12:05:00 GMT" },
+          })
+        : Response.json(
+            url.includes("f402-weblog")
+              ? {
+                  coverage,
+                  window: { toMs: Date.parse("2026-11-19T12:00:00Z") },
+                }
+              : {},
+          ),
+  );
+  expect(result["f402-weblog"]?.accountCoverage).toEqual(coverage);
+  const legacy = await probeR2PipelineKpis(new Date(), async () =>
+    Response.json({}),
+  );
+  expect(legacy["f402-weblog"]?.accountCoverage).toBeNull();
 });

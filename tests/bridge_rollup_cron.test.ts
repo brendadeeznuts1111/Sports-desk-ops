@@ -22,7 +22,6 @@ import {
   type BridgeRollupJobId,
   type BridgeSpawnResult,
 } from "../lib/bridge_rollup_cron.ts";
-import { resolveBridgeWeblogCorpusFrom } from "../lib/f402_weblog_bridge_inputs.ts";
 
 type Artifacts = Partial<Record<BridgeRollupJobId, unknown>>;
 
@@ -561,8 +560,7 @@ describe("bridge rollup cycle", () => {
       "--no-env-file",
       "run",
       "scripts/f402_weblog_bridge.ts",
-      "--from",
-      resolveBridgeWeblogCorpusFrom(root, { now: () => new Date(NOW) }),
+      "--capture-pending",
       "--out",
       join(root, "scratch", "bridge-rollup", "weblog.json"),
     ]);
@@ -648,8 +646,7 @@ describe("bridge rollup cycle", () => {
       "--no-env-file",
       "run",
       "scripts/f402_weblog_bridge.ts",
-      "--from",
-      "{weblogFrom}",
+      "--capture-pending",
       "--out",
       "{root}/scratch/bridge-rollup/weblog.json",
     ]);
@@ -879,6 +876,20 @@ describe("bridge digest HTML", () => {
 });
 
 describe("lastBridgeJobFailureHint", () => {
+  test("preserves weblog publication causes instead of Bun stack frames", () => {
+    expect(
+      lastBridgeJobFailureHint(
+        "[weblog] R2 publish failed at manifest: R2 PUT manifests/f402-weblog/latest precondition failed (412)\n    at async main (/repo/scripts/f402_weblog_bridge.ts:446:27)\nBun v1.4.4\n",
+        "",
+      ),
+    ).toContain("precondition failed (412)");
+    expect(
+      lastBridgeJobFailureHint(
+        "TypeError: fetch failed\n    at async main (/repo/script.ts:1:1)\n",
+        "",
+      ),
+    ).toBe("TypeError: fetch failed");
+  });
   test("surfaces HTTP error on stdout when stderr is only the Bun banner", () => {
     const hint = lastBridgeJobFailureHint(
       "\nBun v1.4.4 (macOS arm64)\n",

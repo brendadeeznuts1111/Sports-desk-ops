@@ -4,6 +4,10 @@
  */
 
 import {
+  parseWeblogAccountCoverage,
+  type WeblogAccountCoverage,
+} from "./f402_weblog_capture.ts";
+import {
   BRIDGE_STALENESS_TARGETS,
   evaluateProbe,
   parseLastModified,
@@ -18,6 +22,7 @@ import {
 export const R2_DATA_STALE_SECONDS = 86_400;
 
 export interface R2PipelineSinkKpi {
+  readonly accountCoverage?: WeblogAccountCoverage | null;
   readonly lastModified: string | null;
   /** Age of the published `latest.json` pointer (publish / Last-Modified). */
   readonly ageSeconds: number | null;
@@ -104,21 +109,34 @@ async function readJsonBody(
   }
 }
 
-async function resolveDataWindowToMs(
+async function resolvePipelineDataEvidence(
   target: StalenessTarget,
   fetchImpl: R2PipelineFetcher,
-): Promise<number | null> {
+): Promise<{
+  windowToMs: number | null;
+  accountCoverage: WeblogAccountCoverage | null;
+}> {
   const latestUrl = publicUrlFor(target);
   const latest = await readJsonBody(latestUrl, fetchImpl);
-  if (latest === null) return null;
+  if (latest === null) return { windowToMs: null, accountCoverage: null };
 
   const inlineEnd = parseDataWindowEndMs(latest);
   const artifactUrl = artifactUrlFromPointer(latest);
-  if (artifactUrl === null) return inlineEnd;
+  if (artifactUrl === null)
+    return {
+      windowToMs: inlineEnd,
+      accountCoverage: parseWeblogAccountCoverage(
+        isRecord(latest) ? latest.coverage : null,
+      ),
+    };
 
   const rollup = await readJsonBody(artifactUrl, fetchImpl);
-  if (rollup === null) return inlineEnd;
-  return parseDataWindowEndMs(rollup) ?? inlineEnd;
+  return {
+    windowToMs: parseDataWindowEndMs(rollup) ?? inlineEnd,
+    accountCoverage: parseWeblogAccountCoverage(
+      isRecord(rollup) ? rollup.coverage : null,
+    ),
+  };
 }
 
 function applyDataAge(
@@ -158,7 +176,7 @@ export async function probeR2PipelineKpis(
   await Promise.all(
     BRIDGE_STALENESS_TARGETS.map(async (target) => {
       const url = publicUrlFor(target);
-      const [probe, windowToMs] = await Promise.all([
+      const [probe, evidence] = await Promise.all([
         (async (): Promise<StalenessProbe> => {
           try {
             const response = await fetchImpl(url, { method: "HEAD" as const });
@@ -178,7 +196,7 @@ export async function probeR2PipelineKpis(
             };
           }
         })(),
-        resolveDataWindowToMs(target, fetchImpl),
+        resolvePipelineDataEvidence(target, fetchImpl),
       ]);
       const verdict = evaluateProbe(probe, nowMs);
       const base: R2PipelineSinkKpi = {
@@ -198,7 +216,16 @@ export async function probeR2PipelineKpis(
         dataStale: false,
         dataWindowToMs: null,
       };
-      out[SINK_ID(target.key)] = applyDataAge(base, windowToMs, nowMs);
+      out[SINK_ID(target.key)] = applyDataAge(
+        {
+          ...base,
+          ...(SINK_ID(target.key) === "f402-weblog"
+            ? { accountCoverage: evidence.accountCoverage }
+            : {}),
+        },
+        evidence.windowToMs,
+        nowMs,
+      );
     }),
   );
   return out;

@@ -49,10 +49,7 @@ import {
   GSLIVE_MANUAL_DUAL_AUTH_ACTION,
   isGsliveCloudflareBlockedError,
 } from "./gslive_auto_session.ts";
-import {
-  bridgeWeblogCorpusPresent,
-  resolveBridgeWeblogCorpusFrom,
-} from "./f402_weblog_bridge_inputs.ts";
+import { resolveBridgeWeblogCorpusFrom } from "./f402_weblog_bridge_inputs.ts";
 import {
   ensureF402Session,
   readF402Session,
@@ -206,15 +203,14 @@ export const BRIDGE_ROLLUP_JOBS: readonly BridgeRollupJobSpec[] = [
   {
     id: "weblog",
     label: "WebLog overlap bridge",
-    // Staged activity JSONL (`--from`); default desk-date path or `F402_WEBLOG_FROM`.
+    // Capture fresh Mode A activity for the recent pending snapshot before publishing.
     args: [
       "bun",
       "--no-orphans",
       "--no-env-file",
       "run",
       "scripts/f402_weblog_bridge.ts",
-      "--from",
-      "{weblogFrom}",
+      "--capture-pending",
       "--out",
       "{root}/scratch/bridge-rollup/weblog.json",
     ],
@@ -481,7 +477,7 @@ function lastLogLine(stderr: string): string | null {
 const BUN_VERSION_LINE = /^Bun v\d+\.\d+/;
 
 const FAILURE_LINE =
-  /^(error:|fatal:|\[[^\]]+\] fatal:)|HTTP \d{3}|ENOENT:|cannot read /i;
+  /^(?:[\w.]*Error:|error:|fatal:|\[[^\]]+\] (?:fatal:|R2 publish failed\b))|HTTP \d{3}|ENOENT:|cannot read /i;
 
 function meaningfulLogLines(text: string): readonly string[] {
   return text
@@ -645,27 +641,9 @@ export function keychainCredentialProbe(
   void options.tokenFilePresent;
   const gsidName = options.gsidName ?? GSID_KEYCHAIN_NAME;
   const agentIdName = options.agentIdName ?? F402_KEYCHAIN_NAMES.agentId;
-  const probeRoot = options.root ?? defaultRoot();
 
   return {
     async check(job) {
-      if (job.id === "weblog") {
-        let from: string;
-        try {
-          from = resolveBridgeWeblogCorpusFrom(probeRoot, {
-            env,
-            now: () => new Date(),
-          });
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          return { ok: false, error: message };
-        }
-        const present = bridgeWeblogCorpusPresent(from);
-        return present.ok
-          ? { ok: true, source: "corpus" }
-          : { ok: false, error: present.message };
-      }
       if (job.id === "bridge3c" || job.id === "wagers-by-state") {
         const envNames = [
           "GSLIVE_SESSION_ID",

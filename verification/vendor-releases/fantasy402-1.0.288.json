@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "reviewDateCentral": "2026-11-19",
+  "decision": "retain-trusted-pins-pending-vendor-release-evidence",
+  "trustedVendorVersion": "1.0.287",
+  "observedVendorVersion": "1.0.288",
+  "fantasy402ReleaseNotesFound": false,
+  "trustedPinsChanged": false,
+  "versionModule": {
+    "url": "https://www.fantasy402.com/app/setting/version.js",
+    "bytes": 44,
+    "sha256": "7399247bfab6ddfc2928e8d08d6bf85b00251e5fe148c35ddebcf4d6dd2adb2f"
+  },
+  "playerInfo": {
+    "url": "https://www.fantasy402.com/app/manager/module/player-info.js",
+    "trustedBytes": 141693,
+    "trustedSha256": "9f2e59c19a81638d5a31d5c77b6757a7b72c30a562ab71855066f0f527571be4",
+    "observedBytes": 141696,
+    "observedSha256": "cf20486e4a049d560651294df957b7201b176ed14e1dc0bab8920686f49e32ab",
+    "retainedPreviousCopyMatchesTrustedHash": true,
+    "mechanicalComparison": {
+      "permissionFieldBefore": "d.authorizations.AllowQuickSGP",
+      "permissionFieldAfter": "d.authorizations.AllowAdjExtProps",
+      "identifierSwapsOutsideQuotedStrings": [
+        ["A", "R"],
+        ["Aa", "Ra"]
+      ],
+      "transformedPreviousTextEqualsObservedText": true,
+      "provesVendorApproval": false
+    }
+  },
+  "googleMaps": {
+    "origin": "https://maps.googleapis.com",
+    "observedVersion": "3.67.1d",
+    "trustedBytes": 331754,
+    "observedBytes": 332403,
+    "observedSha256": "c3080f9b99fe18a6e941deebb83a0c26ea2eb1054a2121fb920407b832e32abc",
+    "releaseNotesUrl": "https://developers.google.com/maps/documentation/javascript/releases#3.67.1d",
+    "releaseDate": "2026-11-19",
+    "versionPolicyUrl": "https://developers.google.com/maps/documentation/javascript/versions",
+    "isFantasy402ReleaseEvidence": false
+  },
+  "evidenceSearch": {
+    "publicVersionAndReleaseNotesSearch": "no Fantasy402 1.0.288 release notes found",
+    "portalDocumentHelpLinks": [
+      "https://www.fantasy402.com/doc/FAQ.pdf",
+      "https://www.fantasy402.com/doc/manual-agent.pdf"
+    ],
+    "connectedMailReleaseSearchMatches": 0,
+    "authenticatedPortalMessages": { "httpStatus": 200, "messageCount": 0 },
+    "limitation": "Search and an empty account message list do not establish that vendor release notes do not exist elsewhere."
+  }
+}

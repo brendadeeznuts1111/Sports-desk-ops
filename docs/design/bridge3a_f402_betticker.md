@@ -277,3 +277,18 @@ Total Buffer Length: 304 bytes
   drain”); `--once` runs a single poll, and the watermark makes same-page duplicates idempotent.
 - Whether `alertTwinCount` should also expose a per-channel breakdown; the money rule is already
   locked to zero.
+
+### Covered-event clock (2026-11-19)
+
+JSON delta/snapshot artifacts include `data_window_max_epoch_ms`: the maximum valid
+`InsertDateTime` among accepted current-input rows, or null when unmeasured. Overflow-rejected
+rows cannot advance it. Source timestamps with an explicit zone retain it; naive provider values
+are interpreted as UTC, consistent with the existing activity reader. That interpretation is not
+independent confirmation of the provider's wall-clock timezone. A timestamp more than one minute
+ahead of the poll is unmeasured. Replaying or republishing old input keeps the old data clock;
+`polledAt`/`generatedAt` remain separate generation clocks.
+
+This is additive JSON lineage metadata, outside the legacy canonical aggregate digest. The
+304-byte binary v2 layout and its aggregate SHA-256 compatibility are unchanged; binary-only
+readers cannot recover this new data clock and must keep it unmeasured. No row timestamps or
+other private row attributes are exposed.

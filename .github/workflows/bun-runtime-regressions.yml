@@ -1,0 +1,123 @@
+name: Bun Linux runtime regressions
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, dev]
+    paths: &inputs
+      - ".bun-version"
+      - ".github/workflows/bun-runtime-regressions.yml"
+      - "scripts/ci/verify_runtime_patches.sh"
+      - "scripts/ci/read_gc_trace.py"
+      - "scripts/ci/trace_catalog_gc.sh"
+      - "scripts/ci/read_catalog_gc.py"
+      - "scripts/bun_shape_contracts.ts"
+      - "tests/bun_runtime_regressions.test.ts"
+      - "tests/unit/contract_39_linux_runtime.test.ts"
+  pull_request:
+    paths: *inputs
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - libc: musl
+            image: oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
+          - libc: glibc
+            image: oven/bun:1.4.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e
+    name: Bun on Linux (${{ matrix.libc }})
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Verify patched sources for the container runtime
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          revision=$(docker run --rm --entrypoint bun "$IMAGE" -e 'console.log(Bun.revision)')
+          bash scripts/ci/verify_runtime_patches.sh "$revision"
+      - name: Verify upstream Alpine FileSink test receipt
+        if: matrix.libc == 'musl'
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          test "$(docker run --rm --entrypoint bun "$IMAGE" -p 'Bun.revision')" = 38afee6c84fcf48c0edb2466aa4b27d287a59c30
+          report="$RUNNER_TEMP/bun-130816-alpine-x64-shard15.xml"
+          curl --fail --silent --show-error --location --retry 3 --max-time 30 \
+            'https://buildkite.com/organizations/bun/pipelines/bun/builds/130816/jobs/01a162c2-7220-497a-bff5-087f27bd98ca/artifacts/01a162cb-f54f-4088-9447-274bc7054f93' --output "$report"
+          echo "9313c55576ff069b3f1e923c0ba08e9fefbc4655997e00e078c53474e30e9ce4  $report" | sha256sum --check
+          python3 - "$report" <<'PYTHON'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          name = "Bun.file(fd).writer() whose registration fails closes the dup exactly once"
+          suite = "test/js/bun/util/filesink.test.ts"
+          cases = [case for case in ET.parse(sys.argv[1]).iter("testcase")
+                   if case.get("name") == name and case.get("file") == suite]
+          if len(cases) != 1 or len(cases[0]) or int(cases[0].get("assertions", 0)) < 1:
+              sys.exit("Upstream receipt must contain one passing, asserted FileSink ownership case")
+          print(f"Upstream build 130816 passed: {name} ({cases[0].get('assertions')} assertion)")
+          PYTHON
+      - name: Run Linux and Intl contracts
+        env:
+          IMAGE: ${{ matrix.image }}
+          EXPECTED_LIBC: ${{ matrix.libc }}
+        run: |
+          set -o pipefail
+          docker run --rm --network none -v "$PWD:/desk:ro" -w /desk \
+            -e EXPECTED_LIBC -e TZ=UTC -e NO_COLOR=1 --entrypoint sh "$IMAGE" -ec '
+              test "$(uname -s)" = Linux
+              test "$(bun --version)" = "$(cat .bun-version)"
+              case "$EXPECTED_LIBC" in
+                musl)
+                  test -e /lib/ld-musl-x86_64.so.1
+                  cat /etc/alpine-release
+                  ;;
+                glibc) getconf GNU_LIBC_VERSION | grep "^glibc " ;;
+                *) exit 1 ;;
+              esac
+              bun --revision
+              if [ "$EXPECTED_LIBC" = musl ]; then
+                echo "trace-process pid=$$ platform=$(uname -sm) bun=$(bun --revision)" >&2
+                export BUN_JSC_logGC=1
+              fi
+              exec bun test tests/bun_runtime_regressions.test.ts tests/unit/contract_39_linux_runtime.test.ts --bail=1
+            ' 2>&1 | tee "$RUNNER_TEMP/linux-runtime.log"
+      - name: Read Alpine GC trace
+        if: matrix.libc == 'musl'
+        run: python3 scripts/ci/read_gc_trace.py "$RUNNER_TEMP/linux-runtime.log" >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain Alpine GC trace
+        if: always() && matrix.libc == 'musl'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alpine-gc-trace-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/linux-runtime.log
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Trace the normal catalog check on Alpine
+        if: matrix.libc == 'musl'
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: bash scripts/ci/trace_catalog_gc.sh
+      - name: Read catalog GC samples
+        if: matrix.libc == 'musl'
+        run: |
+          set -o pipefail
+          python3 scripts/ci/read_catalog_gc.py "$RUNNER_TEMP/catalog-trace" |
+            tee "$RUNNER_TEMP/catalog-trace/summary.txt" >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain the Alpine catalog trace
+        if: always() && matrix.libc == 'musl'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: alpine-catalog-trace-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/catalog-trace
+          retention-days: 30
+          if-no-files-found: error

@@ -517,3 +517,68 @@ describe("R2S3Client uploads", () => {
     expect(backend.deletes).toEqual(["x", "y"]);
   });
 });
+
+describe("R2 CAS identity representation", () => {
+  test("reads a strong ETag over real fetch and preserves the conditional write", async () => {
+    let uploaded = false;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        if (request.method === "HEAD") {
+          const identity =
+            request.headers.get("accept-encoding") === "identity";
+          return new Response(null, {
+            headers: { etag: identity ? '"object-v1"' : 'W/"object-v1"' },
+          });
+        }
+        if (request.method === "PUT") {
+          uploaded = request.headers.get("if-match") === '"object-v1"';
+          return new Response(null, { status: uploaded ? 200 : 412 });
+        }
+        return new Response(null, { status: 405 });
+      },
+    });
+    try {
+      const client = R2S3Client.fromOptions(
+        {
+          bucket: "bucket",
+          endpoint: server.url.origin,
+          accessKeyId: "test",
+          secretAccessKey: "test",
+          publicBase: "https://public.test",
+        },
+        new FakeBackend(),
+      );
+      const etag = await client.headEtag("manifest");
+      expect(etag).toBe('"object-v1"');
+      if (etag === null) throw new Error("expected ETag");
+      await client.writeWithMetadata("manifest", "{}", { ifMatch: etag });
+      expect(uploaded).toBe(true);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("rejects a weak identity ETag instead of stripping its weakness marker", async () => {
+    const client = R2S3Client.fromOptions(
+      {
+        bucket: "bucket",
+        endpoint: "https://r2.test",
+        accessKeyId: "test",
+        secretAccessKey: "test",
+        publicBase: "https://public.test",
+      },
+      new FakeBackend(),
+    );
+    await expect(
+      client.headEtag("manifest", {
+        fetchImpl: Object.assign(
+          async () =>
+            new Response(null, { headers: { etag: 'W/"object-v1"' } }),
+          { preconnect: fetch.preconnect },
+        ),
+      }),
+    ).rejects.toThrow("weak ETag");
+  });
+});
