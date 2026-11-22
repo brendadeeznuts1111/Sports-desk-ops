@@ -55,6 +55,58 @@ export function isWagersPublishCode(code: unknown): code is WagersPublishCode {
   return typeof code === "string" && Object.hasOwn(failures, code);
 }
 
+export const WAGERS_LATEST_KEY = "manifests/wagers-by-state/latest" as const;
+
+export function tickerReadback(
+  generation: number,
+  expectedSha256: string,
+  observedSha256: string | null,
+) {
+  const outcome =
+    observedSha256 === null
+      ? ("unavailable" as const)
+      : observedSha256 === expectedSha256
+        ? ("matched" as const)
+        : ("different" as const);
+  return {
+    manifestKey: WAGERS_LATEST_KEY,
+    generation,
+    expectedSha256,
+    observedSha256,
+    outcome,
+  };
+}
+
+export type TickerReadback = ReturnType<typeof tickerReadback>;
+
+function isGeneration(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= 0xffffffff
+  );
+}
+function isDigest(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+
+// Ignore an invalid optional extension while retaining the valid v1 failure.
+function parseReadback(value: unknown): TickerReadback | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const { manifestKey, generation, expectedSha256, observedSha256, outcome } =
+    value as Record<string, unknown>;
+  if (
+    manifestKey !== WAGERS_LATEST_KEY ||
+    !isGeneration(generation) ||
+    !isDigest(expectedSha256) ||
+    (observedSha256 !== null && !isDigest(observedSha256))
+  )
+    return undefined;
+  const result = tickerReadback(generation, expectedSha256, observedSha256);
+  return result.outcome === outcome ? result : undefined;
+}
+
 export class WagersPublishError extends Error {
   readonly exitCode: number;
   constructor(
@@ -63,6 +115,7 @@ export class WagersPublishError extends Error {
     // Last confirmed promotion in this invocation. A lost acknowledgement can leave this null.
     readonly confirmedTickerGeneration: number | null = null,
     cause?: unknown,
+    readonly tickerReadback?: TickerReadback,
   ) {
     super(code + ": " + failures[code][1], { cause });
     this.name = "WagersPublishError";
@@ -78,6 +131,7 @@ export class WagersPublishError extends Error {
       stage: this.stage,
       message: failures[this.code][1],
       confirmedTickerGeneration: this.confirmedTickerGeneration,
+      ...(this.tickerReadback && { tickerReadback: this.tickerReadback }),
     };
   }
 }
@@ -110,17 +164,20 @@ export function readWagersPublishFailure(
       !isPublishStage(stage)
     )
       return null;
-    if (
-      gen !== null &&
-      !(
-        typeof gen === "number" &&
-        Number.isInteger(gen) &&
-        gen >= 0 &&
-        gen <= 0xffffffff
-      )
-    )
-      return null;
-    return new WagersPublishError(code, stage, gen).toJSON();
+    if (gen !== null && !isGeneration(gen)) return null;
+    const evidence =
+      stage === "wagers-promote" &&
+      gen === null &&
+      (code === "ERR_WAGERS_R2_WRITE" || code === "ERR_R2_SINK_BACKPRESSURE")
+        ? parseReadback(record.tickerReadback)
+        : undefined;
+    return new WagersPublishError(
+      code,
+      stage,
+      gen,
+      undefined,
+      evidence,
+    ).toJSON();
   } catch {
     return null;
   }

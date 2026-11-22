@@ -15,6 +15,10 @@
  * A non-null confirmedTickerGeneration records the acknowledged ticker promotion
  * even if the subsequent rings or summary write fails. Null conveys no acknowledgement.
  *
+ * After an ambiguous ticker PUT or verification, tickerReadback compares the attempted
+ * manifest bytes with a single private R2 read. A match establishes the desired state
+ * at read time. The original failure and exit code are retained.
+ *
  * Usage:
  *   bun run wagers:publish-snapshot --from scratch/gslive-wagers-by-state.summary.json --dry-run
  *   bun run wagers:publish-snapshot --ticker-only
@@ -26,6 +30,9 @@ import { parseArgs } from "node:util";
 import {
   WagersPublishError,
   isWagersPublishCode,
+  tickerReadback,
+  WAGERS_LATEST_KEY as WAGERS_BY_STATE_MANIFEST_KEY,
+  type TickerReadback,
   type WagersPublishStage,
   type WagersPublishCode,
 } from "../lib/wagers_publish_error.ts";
@@ -61,7 +68,6 @@ import {
 
 const LEGACY_SUMMARY_KEY = "wagers-by-state/latest.json";
 const LIVE_WAGERS_SOURCE_KEY = "live-wagers/latest.json";
-const WAGERS_BY_STATE_MANIFEST_KEY = "manifests/wagers-by-state/latest";
 
 const FORBIDDEN =
   /^(login|customerid|customer|agent|agentid|agentlogin|ticket|ticketnumber|wagernumber|betgroupid|ipaddress|ip|userid|playername|team1|team2)$/i;
@@ -560,13 +566,14 @@ function publishError(
   cause: unknown,
   stage: WagersPublishStage,
   generation: number | null = null,
+  evidence?: TickerReadback,
 ) {
   if (cause instanceof WagersPublishError) return cause;
   const code =
     cause instanceof R2ManifestCasError && isWagersPublishCode(cause.code)
       ? cause.code
       : stageFallback[stage];
-  return new WagersPublishError(code, stage, generation, cause);
+  return new WagersPublishError(code, stage, generation, cause, evidence);
 }
 
 interface WagersPublishOptions {
@@ -584,6 +591,7 @@ interface WagersPublishOptions {
 interface PublishProgress {
   stage: WagersPublishStage;
   confirmedGeneration: number | null;
+  attemptedTicker?: { generation: number; body: string };
 }
 
 export async function publishWagersByStateSnapshotToR2(
@@ -596,7 +604,37 @@ export async function publishWagersByStateSnapshotToR2(
   try {
     return await publishSnapshot(options, progress);
   } catch (cause) {
-    throw publishError(cause, progress.stage, progress.confirmedGeneration);
+    let evidence: TickerReadback | undefined;
+    if (
+      progress.stage === "wagers-promote" &&
+      progress.attemptedTicker &&
+      !(
+        cause instanceof R2ManifestCasError &&
+        cause.code === "ERR_R2_MANIFEST_CAS_REJECTED"
+      )
+    ) {
+      const { generation, body } = progress.attemptedTicker;
+      let observed: string | null = null;
+      try {
+        const bytes = await options.client
+          .file(WAGERS_BY_STATE_MANIFEST_KEY)
+          .bytes();
+        observed = Bun.SHA256.hash(bytes, "hex");
+      } catch {
+        // Keep the original write error when the independent R2 read also fails.
+      }
+      evidence = tickerReadback(
+        generation,
+        Bun.SHA256.hash(body, "hex"),
+        observed,
+      );
+    }
+    throw publishError(
+      cause,
+      progress.stage,
+      progress.confirmedGeneration,
+      evidence,
+    );
   }
 }
 
@@ -746,6 +784,9 @@ async function publishSnapshot(
     nextGenerationU32,
     merkleRootSha256: uploadedChunk.merkleRootSha256,
     manifest: wagersManifest,
+    onManifestWriteAttempt: (body) => {
+      progress.attemptedTicker = { generation: nextGenerationU32, body };
+    },
     unresolvedGapCents: normalizedGapCents,
     metadata: {
       pii: "none",
@@ -760,6 +801,9 @@ async function publishSnapshot(
       : { fetchImpl: options.fetchImpl }),
   });
 
+  if (wagersPromo.newETag === null) {
+    throw new Error("Missing ETag after ticker promotion.");
+  }
   progress.confirmedGeneration = nextGenerationU32;
   let syndicateRingsInitialized = false;
   if (!ringsProbe.exists) {

@@ -374,6 +374,8 @@ export async function promoteCanonicalManifestWithCas<TManifest>(params: {
   readonly manifest: TManifest;
   readonly unresolvedGapCents?: unknown;
   readonly metadata?: Readonly<Record<string, string>>;
+  /** Receives the exact PUT body after preparation and before the conditional manifest write. */
+  readonly onManifestWriteAttempt?: (serialized: string) => void;
   readonly fetchImpl?: typeof fetch;
 }): Promise<{
   readonly manifestKey: string;
@@ -414,6 +416,7 @@ export async function promoteCanonicalManifestWithCas<TManifest>(params: {
       ? { ifNoneMatch: "*" }
       : { ifMatch: normalizedPrevETag };
 
+  params.onManifestWriteAttempt?.(serialized);
   try {
     await params.client.writeWithMetadata(manifestKey, serialized, {
       type: "application/json",

@@ -1102,6 +1102,60 @@ describe("bridge job failure surfacing", () => {
       ).toBeNull();
     }
   });
+  test("persists verified reconciliation fields and discards contradictory readback details", async () => {
+    const failure = new WagersPublishError(
+      "ERR_WAGERS_R2_WRITE",
+      "wagers-promote",
+    ).toJSON();
+    const evidence = {
+      manifestKey: "manifests/wagers-by-state/latest",
+      generation: 9,
+      expectedSha256: "a".repeat(64),
+      observedSha256: "b".repeat(64),
+      outcome: "different",
+    };
+    const wire = JSON.stringify({
+      ...failure,
+      tickerReadback: { ...evidence, raw: "private-provider-detail" },
+    });
+    const root = makeRoot();
+    await cycle(
+      root,
+      {},
+      {
+        jobs: ["wagers-publish"],
+        spawnJob: async () => ({
+          stderr: wire,
+          stdout: "",
+          exitCode: 74,
+          timedOut: false,
+        }),
+      },
+    );
+    const history = readFileSync(join(root, HISTORY_REL), "utf8");
+    expect(JSON.parse(history).jobs[0].publisherFailure).toEqual({
+      ...failure,
+      tickerReadback: evidence,
+    });
+    expect(history).not.toContain("private-provider-detail");
+    for (const invalid of [
+      { outcome: "matched" },
+      { generation: -1 },
+      { observedSha256: "oops" },
+      { manifestKey: "other" },
+    ]) {
+      expect(
+        readWagersPublishFailure(
+          JSON.stringify({
+            ...failure,
+            tickerReadback: { ...evidence, ...invalid },
+          }),
+          74,
+        ),
+      ).toEqual(failure);
+    }
+  });
+
   test("records stdout fatal in the cron job error field", async () => {
     const root = makeRoot();
     const failSpawn = async (): Promise<BridgeSpawnResult> => ({

@@ -1358,37 +1358,131 @@ describe("sportsdesk-fraud cross-ref governance & R2 lineage envelope", () => {
     },
   );
 
-  test("a lost R2 acknowledgement does not claim a confirmed ticker generation", async () => {
-    const r2 = createInMemoryCasR2Client();
-    const client: CasR2ClientLike = {
-      ...r2.client,
-      async headEtag(key) {
-        if (key === WAGERS_BY_STATE_MANIFEST_KEY && r2.objects.has(key))
+  test.each([
+    ["lost-put", "matched", "ERR_R2_SINK_BACKPRESSURE", 65],
+    ["lost-head", "matched", "ERR_WAGERS_R2_WRITE", 74],
+    ["missing-etag", "matched", "ERR_WAGERS_R2_WRITE", 74],
+    ["competing-manifest", "different", "ERR_WAGERS_R2_WRITE", 74],
+    ["read-failed", "unavailable", "ERR_WAGERS_R2_WRITE", 74],
+  ] as const)(
+    "reconciles %s against exact R2 manifest bytes with one read",
+    async (fault, outcome, code, exitCode) => {
+      const r2 = createInMemoryCasR2Client();
+      let attemptedBody: string | Uint8Array = "";
+      let reads = 0;
+      const key = WAGERS_BY_STATE_MANIFEST_KEY;
+      const client: CasR2ClientLike = {
+        ...r2.client,
+        async writeWithMetadata(k, data, opts) {
+          const size = await r2.client.writeWithMetadata(k, data, opts);
+          if (k === key) {
+            attemptedBody = data;
+            if (fault === "lost-put")
+              throw new Error("private-provider-detail");
+          }
+          return size;
+        },
+        async headEtag(k) {
+          if (k !== key || !r2.objects.has(key)) return r2.client.headEtag(k);
+          if (fault === "missing-etag") return null;
+          if (fault === "competing-manifest") {
+            // Same generation and chunk digest. A separate metadata value changes the bytes.
+            const competing = JSON.parse(await r2.client.file(k).text());
+            competing.r2_published_at_epoch_ms += 1;
+            await r2.client.write(k, JSON.stringify(competing));
+          }
           throw new Error("private-provider-detail");
-        return r2.client.headEtag(key);
-      },
-    };
-    let failure: unknown;
-    try {
-      await publishWagersByStateSnapshotToR2({
-        client,
-        env: makeLiveEnv(),
-        liveTickerDoc: { LIST: [] },
+        },
+        file(k) {
+          const file = r2.client.file(k);
+          if (k !== key) return file;
+          return {
+            ...file,
+            async bytes() {
+              reads++;
+              if (fault === "read-failed")
+                throw new Error("private-read-detail");
+              return file.bytes();
+            },
+          };
+        },
+      };
+      let failure: unknown;
+      try {
+        await publishWagersByStateSnapshotToR2({
+          client,
+          env: makeLiveEnv(),
+          liveTickerDoc: { LIST: [] },
+        });
+      } catch (error) {
+        failure = error;
+      }
+      const expectedSha256 = Bun.SHA256.hash(attemptedBody, "hex");
+      const observedSha256 =
+        fault === "read-failed"
+          ? null
+          : Bun.SHA256.hash(await r2.client.file(key).bytes(), "hex");
+      expect(failure).toMatchObject({
+        code,
+        exitCode,
+        stage: "wagers-promote",
+        confirmedTickerGeneration: null,
+        tickerReadback: {
+          manifestKey: key,
+          generation: 1,
+          expectedSha256,
+          observedSha256,
+          outcome,
+        },
       });
-    } catch (error) {
-      failure = error;
-    }
-    expect(failure).toMatchObject({
-      code: "ERR_WAGERS_R2_WRITE",
-      stage: "wagers-promote",
-      confirmedTickerGeneration: null,
-    });
-    expect(JSON.stringify(failure)).not.toContain("private-provider-detail");
-    expect(
-      JSON.parse(await r2.client.file(WAGERS_BY_STATE_MANIFEST_KEY).text())
-        .generation_u32,
-    ).toBe(1);
-  });
+      expect(JSON.stringify(failure)).not.toContain("private-");
+      expect(reads).toBe(1);
+      expect(r2.conditionalPuts.map((p) => p.key)).toEqual([key]);
+      expect(r2.objects.has(SYNDICATE_RINGS_MANIFEST_KEY)).toBe(false);
+    },
+  );
+
+  test.each(["generation-write", "cas-rejected"] as const)(
+    "skips ticker readback on %s",
+    async (fault) => {
+      const r2 = createInMemoryCasR2Client();
+      const key = WAGERS_BY_STATE_MANIFEST_KEY;
+      if (fault === "cas-rejected") r2.simulateConcurrentRaceOnKey(key);
+      let reads = 0;
+      const client: CasR2ClientLike = {
+        ...r2.client,
+        async write(k, body, opts) {
+          if (fault === "generation-write" && k.startsWith("generations/"))
+            throw new Error("generation write failed");
+          return r2.client.write(k, body, opts);
+        },
+        file(k) {
+          if (k === key) reads++;
+          return r2.client.file(k);
+        },
+      };
+      let error: unknown;
+      try {
+        await publishWagersByStateSnapshotToR2({
+          client,
+          env: makeLiveEnv(),
+          liveTickerDoc: { LIST: [] },
+        });
+      } catch (cause) {
+        error = cause;
+      }
+      expect(error).toMatchObject({
+        code:
+          fault === "cas-rejected"
+            ? "ERR_R2_MANIFEST_CAS_REJECTED"
+            : "ERR_WAGERS_R2_WRITE",
+      });
+      expect(JSON.parse(JSON.stringify(error))).not.toHaveProperty(
+        "tickerReadback",
+      );
+      expect(reads).toBe(0);
+    },
+  );
 
   test("a failed legacy write reports the ticker generation already published", async () => {
     const r2 = createInMemoryCasR2Client();
