@@ -4,7 +4,7 @@ This is a **read-only, non-deployment** diagnostic for the local SportsDesk MCP 
 `scripts/mcp_dx_server.ts`. It complements `scripts/cloudflare/edge_audit.ts`:
 the edge audit inspects DNS/Tunnel/route resolution; the `cloudflare_bindings`
 tool inspects **Worker names and binding metadata** and compares a small set of
-source-observed module requirements. Neither reads secret values or invokes
+module requirements labeled by evidence source (code or a deployed snapshot). Neither reads secret values or invokes
 business API endpoints.
 
 ## Setup and use
@@ -21,11 +21,18 @@ existing operator secret workflow. Do not paste token values into chat or an
 MCP client configuration. The metadata tool never loads them until called.
 The existing `shot` tool requires neither value.
 
-MCP tool: `cloudflare_bindings`, input `{}` for all Workers or
-`{"worker":"sports-ops-desk"}` for one. The server returns structured data:
-`workers[].bindings[]` (name/type and only safe resource labels), `failures[]`
-(unreadable Worker metadata), and `checks[]` (module/API anchors). Missing
-permissions produce errors/`unverified`, **not invented `missing` conclusions**.
+MCP tool: `cloudflare_bindings`, input `{}` to audit **registered module
+Workers only**, or `{"worker":"sports-ops-desk"}` to narrow the audit.
+Unregistered Workers cannot be selected through the tool, even if they share
+the account. It first lists Worker names to establish deployment presence, then
+reads settings only for registered Workers.
+
+The structured result includes `discoveredWorkers[]` (registered Worker names
+found in Cloudflare), `workers[].bindings[]` (successfully read metadata),
+`failures[]` (unreadable settings), and `checks[]` (module/API contracts).
+A failed account list stops the audit: it never returns an incomplete inventory
+as a passing result. Settings errors are `unverified`, not invented `missing`.
+Cloudflare's explicit `total_pages` is honored even if a page is short.
 
 The read-only Cloudflare token must have the permissions needed to list Worker
 scripts and read Worker settings. Test these permissions with the operator's
@@ -38,14 +45,19 @@ Cloudflare API and does not read KV values, objects, databases, or secret values
 | Status | Meaning |
 | --- | --- |
 | `bound` | Deployed binding exists with the expected type. **Not** proof the route works. |
-| `missing` | Expected required binding not present in a successfully read Worker configuration. |
+| `missing` | Required binding absent from a **successfully read** Worker configuration. |
 | `wrong_type` | Name exists, but its deployed type does not match the module contract. |
 | `inactive` | Optional feature binding absent; investigate only if feature should be enabled. |
-| `unverified` | Settings could not be read; do not infer absence. |
+| `not_deployed` | Registered Worker absent from the complete Worker-name listing. Distinct from a missing binding. |
+| `unverified` | Worker listed but settings unreadable or unavailable; do not infer binding absence. |
 
-The module contracts in `MODULE_BINDING_REQUIREMENTS` are a **small, evidence-
-anchored list**, not an exhaustive API/module registry. Add a contract only after
-pinning its owning Worker, binding type, source path and actual API behavior.
+The module contracts in `MODULE_BINDING_REQUIREMENTS` are a **small,
+evidence-anchored list**, not an exhaustive API/module registry. A check also
+carries its `basis`: `source` means declared in a code/config contract;
+`deployment_snapshot` means the binding existed in a prior live inventory.
+A missing snapshot binding indicates drift, **not proven application breakage**.
+Add a code-backed requirement only after pinning its owning Worker, binding
+type, source path and actual API behavior.
 Do not equate a Worker `MCP_LIMITER` binding with proof that an externally
 reachable `/mcp` endpoint is configured or authenticated.
 
@@ -69,6 +81,9 @@ reachable `/mcp` endpoint is configured or authenticated.
 
 Only names, types and counts were checked. The sample date is not a runtime
 health check, data-access test, endpoint authorization test or deployment proof.
+The local MCP server uses stdio, not a remotely exposed authenticated `/mcp`
+endpoint. The presence of `MCP_LIMITER` in `sports-ops-desk` does not prove
+an HTTP MCP server or OAuth flow exists on that Worker.
 
 ## Gates before changing a deployed binding
 
