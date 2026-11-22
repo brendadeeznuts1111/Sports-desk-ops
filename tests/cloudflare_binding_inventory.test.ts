@@ -169,6 +169,27 @@ describe("Cloudflare binding inventory HTTP", () => {
     )).rejects.toThrow("Invalid Worker pagination metadata");
   });
 
+  test("null or duplicate binding entries fail closed", () => {
+    expect(() => summarizeBindings([null])).toThrow(
+      "Malformed Worker binding metadata",
+    );
+    expect(() => summarizeBindings([
+      { name: "PUBLIC_ORIGIN", type: "plain_text" },
+      { name: "PUBLIC_ORIGIN", type: "plain_text" },
+    ])).toThrow("Duplicate Worker binding metadata");
+  });
+
+  test("a zero-page declaration with Worker entries is not a valid complete list", async () => {
+    const fetcher: typeof fetch = async () => Response.json({
+      success: true,
+      result: [{ id: "bookdeskops" }],
+      result_info: { total_pages: 0 },
+    });
+    await expect(fetchCloudflareBindingInventory(
+      ACCOUNT, TOKEN, undefined, fetcher,
+    )).rejects.toThrow("Invalid Worker pagination metadata");
+  });
+
   test("the tool cannot select unrelated account Workers", async () => {
     const rejectIfCalled: typeof fetch = async () => {
       throw new Error("should not fetch");
