@@ -1,13 +1,13 @@
 #!/usr/bin/env bun
 /**
  * @file scripts/mcp_dx_server.ts
- * @description stdio MCP server exposing `dx shot` as the `shot` tool over the same capture path as
- * the CLI (scripts/capture/shot.ts).
+ * @description stdio MCP server exposing the `shot` and read-only Cloudflare binding tools.
+ * The screenshot tool follows the CLI capture path (scripts/capture/shot.ts).
  *
  * Usage (MCP client config):
  *   { "command": "bun", "args": ["run", "<repo>/scripts/mcp_dx_server.ts"] }
  *
- * The tool only captures public http(s) pages into scratch/shots/: it takes no login, profile,
+ * The shot tool only accepts http(s) URLs and writes under scratch/shots/: it takes no login, profile,
  * cookie or output-path input, so an MCP client cannot reach a signed-in portal session or write
  * outside the shots directory. Stdout carries the protocol; nothing else may write to it.
  */
@@ -41,6 +41,7 @@ const CLOUDFLARE_BINDINGS_INPUT = {
   worker: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/).optional(),
 };
 const CLOUDFLARE_BINDINGS_OUTPUT = {
+  discoveredWorkers: z.array(z.string()),
   workers: z.array(z.object({
     name: z.string(),
     bindings: z.array(z.object({
@@ -54,8 +55,9 @@ const CLOUDFLARE_BINDINGS_OUTPUT = {
     binding: z.string(),
     type: z.string(),
     required: z.boolean(),
+    basis: z.enum(["source", "deployment_snapshot"]),
     api: z.string().optional(),
-    status: z.enum(["bound", "missing", "wrong_type", "inactive", "unverified"]),
+    status: z.enum(["bound", "missing", "wrong_type", "inactive", "not_deployed", "unverified"]),
   })),
 };
 type CloudflareBindingsInput = z.infer<z.ZodObject<typeof CLOUDFLARE_BINDINGS_INPUT>>;
@@ -209,7 +211,7 @@ export async function runCloudflareBindingsTool(
   } catch (error) {
     // A fetch/client failure may contain URLs, headers, or tokens. Never return it verbatim.
     const safe = error instanceof Error &&
-      /^(Cloudflare read-only account ID or audit token is not configured|Invalid Worker name|Worker is not in this account inventory|HTTP [0-9]{3})$/.test(error.message)
+      /^(Cloudflare read-only account ID or audit token is not configured|Invalid Worker name|Worker is not in the account or module registry|HTTP [0-9]{3})$/.test(error.message)
       ? error.message
       : "Cloudflare metadata unavailable; verify read-only token scope and network";
     return { isError: true, content: [{ type: "text", text: safe }] };
@@ -245,7 +247,7 @@ export function createDxMcpServer(): McpServer {
     {
       title: "Audit Cloudflare Worker module bindings",
       description:
-        "Read-only Worker binding metadata and module/API contract drift. Requires CLOUDFLARE_ACCOUNT_ID and separately scoped CLOUDFLARE_AUDIT_TOKEN in the MCP process. Never fetches secret values, calls business APIs, changes configuration or deploys.",
+        "Read-only Worker binding metadata for registered modules and API contract drift. Requires CLOUDFLARE_ACCOUNT_ID and separately scoped CLOUDFLARE_AUDIT_TOKEN in the MCP process. Never fetches secret values, calls business APIs, changes configuration or deploys.",
       inputSchema: CLOUDFLARE_BINDINGS_INPUT,
       outputSchema: CLOUDFLARE_BINDINGS_OUTPUT,
       annotations: {
