@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { auditInventory, type Inventory } from "../scripts/cloudflare/edge_audit.ts";
+import {
+  auditInventory,
+  type Finding,
+  type Inventory,
+} from "../scripts/cloudflare/edge_audit.ts";
 
 const zone = { id: "zone1", name: "example.com" };
 const tunnelId = "11111111-1111-1111-1111-111111111111";
@@ -40,9 +44,13 @@ function fixture(): Inventory {
 
 test("reports broken tunnel health, missing ingress, absent Worker and route DNS", () => {
   const findings = auditInventory(fixture());
-  expect(findings.map((f) => f.code).sort()).toEqual(
-    ["INGRESS_MISSING", "ROUTE_DNS_MISSING", "TUNNEL_UNHEALTHY", "WORKER_UNKNOWN"].sort(),
-  );
+  const expected: Finding["code"][] = [
+    "INGRESS_MISSING",
+    "ROUTE_DNS_MISSING",
+    "TUNNEL_UNHEALTHY",
+    "WORKER_UNKNOWN",
+  ];
+  expect(findings.map((f) => f.code).sort()).toEqual(expected.sort());
   expect(findings.find((f) => f.code === "WORKER_UNKNOWN")?.hostname).toBe(
     "api.example.com",
   );
