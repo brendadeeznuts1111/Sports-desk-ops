@@ -175,7 +175,7 @@ export async function fetchCloudflareBindingInventory(
     throw new Error("Cloudflare Worker list exceeded pagination limit");
   }
   const names = [...new Set(scriptIds)].sort();
-  const registered = new Set(
+  const registered = new Set<string>(
     MODULE_BINDING_REQUIREMENTS.map((entry) => entry.worker),
   );
   if (worker !== undefined && !registered.has(worker)) {
