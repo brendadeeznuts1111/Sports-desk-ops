@@ -47,47 +47,7 @@ import {
   writeTextFileIfChanged,
 } from "../lib/manager_fetch.ts";
 import type { GroupKey, ReportFormat } from "../types/wagers";
-
-/** Minimal RFC-4180 CSV parser (quoted fields, embedded commas/newlines). */
-function parseCSV(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cur = "";
-  let inQ = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQ) {
-      if (ch === '"') {
-        if (text[i + 1] === '"') {
-          cur += '"';
-          i++;
-        } else {
-          inQ = false;
-        }
-      } else {
-        cur += ch;
-      }
-    } else {
-      if (ch === '"') inQ = true;
-      else if (ch === ",") {
-        row.push(cur);
-        cur = "";
-      } else if (ch === "\n") {
-        row.push(cur.replace(/\r$/, ""));
-        rows.push(row);
-        row = [];
-        cur = "";
-      } else {
-        cur += ch;
-      }
-    }
-  }
-  if (cur.length > 0 || row.length > 0) {
-    row.push(cur.replace(/\r$/, ""));
-    rows.push(row);
-  }
-  return rows;
-}
+import { parseCSV } from "./gslive_all_states_suspect_cron.ts";
 
 async function main() {
   const args = process.argv.slice(2);

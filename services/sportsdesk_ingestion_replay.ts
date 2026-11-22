@@ -303,29 +303,6 @@ export function classifySportsdeskPricePattern(
   return "NORMAL";
 }
 
-export function analyzeSportsdeskPricePatterns(
-  rows: readonly { id: number; v_t: number; price: number }[],
-): SportsdeskReplayTradeRow[] {
-  const sorted = [...rows].sort((a, b) => a.v_t - b.v_t);
-  let prev = 0;
-  return sorted.map((r) => {
-    const pattern = classifySportsdeskPricePattern(r.price, prev);
-    if (prev <= 0 || r.price > 0) prev = r.price;
-    return {
-      id: r.id,
-      v_t: r.v_t,
-      price: r.price,
-      channel_id: "Internet",
-      channel_status: "ACTIVE",
-      valid_to: null,
-      link_id: null,
-      xml_hash: "",
-      latency_ms: null,
-      pattern,
-    };
-  });
-}
-
 export function createIngestionReplayDatabase(): Database {
   const db = openSportsdeskSqlite(":memory:");
   initReplayDatabase(db);

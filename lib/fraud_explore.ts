@@ -9,11 +9,7 @@
  * testable without the 55 MB corpus.
  */
 
-import type {
-  FraudBetRecord,
-  FraudCorpus,
-  FraudPerception,
-} from "./fraud_logs.ts";
+import type { FraudBetRecord, FraudCorpus } from "./fraud_logs.ts";
 
 /** Local exploration constants (reported in the payload, not hidden thresholds). */
 export const EXPLORATION_CONSTANTS = {
@@ -475,22 +471,4 @@ export function buildFraudExploration(
         "line); the vocabulary block maps each to its normalized record field and raw source.",
     ],
   };
-}
-
-/** Convenience for the CLI: perception already carries the corpus. */
-export function explorePerception(
-  perception: FraudPerception,
-  catalog: unknown,
-  frozenDetectorIds: readonly string[],
-  limit: number,
-): FraudExplorationResult {
-  if (perception.corpus === null) {
-    throw new Error("explorePerception: corpus is missing");
-  }
-  return buildFraudExploration({
-    corpus: perception.corpus,
-    catalog,
-    frozenDetectorIds,
-    limit,
-  });
 }

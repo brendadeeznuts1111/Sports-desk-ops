@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { readTickerBetsJsonl } from "./gslive_all_states_suspect_cron.ts";
+import {
+  parseCSV,
+  readTickerBetsJsonl,
+} from "./gslive_all_states_suspect_cron.ts";
 
 const dir = `scratch/jsonl-reader-${Date.now()}`;
 let n = 0;
@@ -89,5 +92,12 @@ describe("readTickerBetsJsonl (Bun.JSONL.parseChunk streaming)", () => {
       "CCC107",
     );
     expect(bets.size).toBe(0);
+  });
+});
+
+describe("parseCSV", () => {
+  test("keeps an embedded comma and a doubled quote inside a quoted field", () => {
+    const rows = parseCSV('a,"b,c","say ""hi"""\n');
+    expect(rows).toEqual([["a", "b,c", 'say "hi"']]);
   });
 });

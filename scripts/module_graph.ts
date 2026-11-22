@@ -14,7 +14,7 @@
  *  - Subgraph filters (`--filter <prefix>`, `--depth <N>`, `--cycles-only`)
  *
  * Usage:
- *   bun scripts/module-graph.ts <file|dir> [options]
+ *   bun scripts/module_graph.ts <file|dir> [options]
  */
 
 import {
@@ -764,7 +764,7 @@ if (import.meta.main) {
 
   if (!options.target) {
     console.error(
-      "Usage: bun scripts/module-graph.ts <file|dir> [--tree] [--mermaid] [--json] [--compare <file|dir>] [--check] [--cycles-only] [--orphans] [--filter <prefix>] [--depth <N>]",
+      "Usage: bun scripts/module_graph.ts <file|dir> [--tree] [--mermaid] [--json] [--compare <file|dir>] [--check] [--cycles-only] [--orphans] [--filter <prefix>] [--depth <N>]",
     );
     process.exit(1);
   }

@@ -221,7 +221,8 @@ export interface GSLiveAllStateAuditReport {
   };
 }
 
-function parseCSV(text: string): string[][] {
+/** Minimal RFC-4180 CSV parser (quoted fields, embedded commas/newlines). */
+export function parseCSV(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let cur = "";
