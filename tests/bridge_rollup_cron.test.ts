@@ -936,6 +936,40 @@ describe("GSLive session JIT refresh", () => {
     expect(result.jobs[1]?.error).toContain("Mock F402 mint fail");
   });
 
+  test("a failed scheduled capture blocks publishing the old summary; standalone publish still runs", async () => {
+    const root = makeRoot();
+    const spawned: BridgeRollupJobId[] = [];
+    const spawnJob: NonNullable<BridgeRollupCycleOptions["spawnJob"]> = async (
+      job,
+    ) => {
+      spawned.push(job.id);
+      return {
+        exitCode: job.id === "wagers-by-state" ? 1 : 0,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+      };
+    };
+    const failed = await cycle(
+      root,
+      {},
+      { jobs: ["wagers-by-state", "wagers-publish"], spawnJob },
+    );
+    expect(spawned).toEqual(["wagers-by-state"]);
+    expect(failed.jobs.at(-1)).toMatchObject({
+      id: "wagers-publish",
+      ok: false,
+      durationMs: 0,
+    });
+    const replay = await cycle(
+      root,
+      {},
+      { jobs: ["wagers-publish"], spawnJob },
+    );
+    expect(spawned).toEqual(["wagers-by-state", "wagers-publish"]);
+    expect(replay.jobs[0]?.ok).toBe(true);
+  });
+
   test("skips GSLive jobs when ensureGsliveSession fails", async () => {
     const root = makeRoot();
     let spawned = false;

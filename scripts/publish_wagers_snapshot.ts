@@ -2,10 +2,8 @@
 /**
  * @file publish_wagers_snapshot.ts
  * @description Publish a sanitized Bridge 1 snapshot (`wagers-by-state/latest.json`) from the
- * existing GSLive wagers-by-state summary. The summary is derived from an offline bet-report CSV
- * export, not a live ajax.php capture; the payload records that provenance and the observation
- * window instead of pretending to be current. No raw rows, tickets, logins, agents or IPs leave
- * this script.
+ * existing live or offline GSLive summary. Keep the time of the upstream read separate
+ * from the bet-time window. Only aggregate fields are published.
  *
  * Usage:
  *   bun run wagers:publish-snapshot --from scratch/gslive-wagers-by-state.summary.json --dry-run
@@ -69,13 +67,40 @@ const raw = JSON.parse(readFileSync(summaryPath, "utf8")) as Record<
 >;
 const source = (raw.source ?? {}) as Record<string, unknown>;
 const window = (raw.window ?? {}) as Record<string, unknown>;
-const observedEnd = text(window.observedEnd);
-if (observedEnd === "")
-  throw new Error("summary.window.observedEnd is missing");
-const windowEndMs = new Date(observedEnd).getTime();
-const ageMinutes = Math.max(0, Math.round((Date.now() - windowEndMs) / 60_000));
-const generatedAt = new Date().toISOString();
-const deskDate = chicagoDate(observedEnd);
+const observedEnd = text(window.observedEnd) || null;
+const isLive = source.kind === "live-ajax.php";
+// Offline exports only establish when activity was observed. Preserve their historical clock.
+const capturedAt = isLive ? text(source.capturedAt) : observedEnd;
+const capturedMs = Date.parse(capturedAt ?? "");
+const nowMs = Date.now();
+if (
+  !capturedAt ||
+  !Number.isFinite(capturedMs) ||
+  (isLive && capturedMs > nowMs)
+) {
+  throw new Error(
+    isLive
+      ? "invalid live source.capturedAt"
+      : "invalid summary.window.observedEnd",
+  );
+}
+// A successful read of an old request window cannot establish current coverage.
+const requestEndSec = int(source.toEpochSec);
+if (
+  isLive &&
+  (requestEndSec === null ||
+    !Number.isSafeInteger(requestEndSec) ||
+    requestEndSec <= 0)
+) {
+  throw new Error("invalid live source.toEpochSec");
+}
+const coverageMs =
+  isLive && requestEndSec !== null
+    ? Math.min(capturedMs, requestEndSec * 1000)
+    : capturedMs;
+const ageMinutes = Math.max(0, Math.round((nowMs - coverageMs) / 60_000));
+const generatedAt = new Date(nowMs).toISOString();
+const deskDate = chicagoDate(observedEnd ?? capturedAt);
 const rangeStart = text(window.observedStart) || null;
 
 const sourcePath = text(source.path);
@@ -86,16 +111,25 @@ const payload = {
   schemaVersion: 2,
   kind: "gslive-wagers",
   sourceKind,
-  capturedAt: observedEnd,
+  capturedAt,
   generatedAt,
   deskDate,
   window: {
     observedStart: rangeStart,
     observedEnd,
+    ...(isLive && {
+      fromEpochSec: int(source.fromEpochSec),
+      toEpochSec: requestEndSec,
+    }),
     spanHours: int(window.spanHours),
     snapshotLagMinutes: int(window.snapshotLagMinutes),
   },
   staleness: {
+    timestampBasis: !isLive
+      ? "window.observedEnd"
+      : coverageMs < capturedMs
+        ? "source.toEpochSec"
+        : "source.capturedAt",
     ageMinutesAtPublish: ageMinutes,
     stale: ageMinutes > 1_440,
     staleAfterMinutes: 1_440,
@@ -132,7 +166,7 @@ const summary = {
   bytes: new TextEncoder().encode(body).byteLength,
   deskDate,
   generatedAt,
-  capturedAt: observedEnd,
+  capturedAt,
   ageMinutes,
   stale: ageMinutes > 1_440,
   sourceKind: payload.sourceKind,
