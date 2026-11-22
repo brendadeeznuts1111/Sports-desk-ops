@@ -14,7 +14,7 @@ export interface WorkerBindingSummary {
   readonly bindings: readonly BindingSummary[];
 }
 export interface BindingInventory {
-  /** Complete account-level listing; independent of settings reads. */
+  /** Registered Workers present in a complete account-level list. */
   readonly discoveredWorkers: readonly string[];
   readonly workers: readonly WorkerBindingSummary[];
   /** A settings read failure is unknown, not proof the binding is missing. */
@@ -94,7 +94,9 @@ export function summarizeBindings(input: unknown): BindingSummary[] {
   if (!Array.isArray(input)) throw new Error("Worker settings missing bindings list");
   const result: BindingSummary[] = [];
   for (const item of input) {
-    if (typeof item !== "object" || item === null) continue;
+    if (typeof item !== "object" || item === null) {
+      throw new Error("Malformed Worker binding metadata");
+    }
     const raw = item as Record<string, unknown>;
     if (
       typeof raw.name !== "string" ||
@@ -167,7 +169,8 @@ export async function fetchCloudflareBindingInventory(
     const totalPages = listing.result_info?.total_pages;
     if (totalPages !== undefined) {
       if (!Number.isInteger(totalPages) || totalPages < 0 ||
-        totalPages > 20 || (totalPages !== 0 && page > totalPages)) {
+        totalPages > 20 || (totalPages === 0 && listing.result.length > 0) ||
+        (totalPages !== 0 && page > totalPages)) {
         throw new Error("Invalid Worker pagination metadata");
       }
       // Explicit pagination metadata wins over short-page heuristics.
