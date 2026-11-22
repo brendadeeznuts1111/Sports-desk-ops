@@ -1285,6 +1285,13 @@ export async function runBridgeRollupCycle(
     let argv: readonly string[];
     try {
       argv = resolveArgv(job, root, { env, now });
+      if (
+        job.id === "wagers-publish" &&
+        jobs.some((result) => result.id === "wagers-by-state" && !result.ok)
+      ) {
+        // This publisher also advances an independent R2 ticker manifest.
+        argv = [...argv, "--ticker-only"];
+      }
     } catch (error) {
       jobs.push({
         id: job.id,

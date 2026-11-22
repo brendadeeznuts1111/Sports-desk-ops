@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { R2PreconditionFailedError } from "../lib/r2_s3_client.ts";
 import {
   R2_BUCKET,
@@ -1153,6 +1155,151 @@ describe("sportsdesk-fraud cross-ref governance & R2 lineage envelope", () => {
     expect((poisonErr as Error).message).toContain("poison_bit=1");
     expect((poisonErr as { exitCode?: number }).exitCode).toBe(65);
   });
+
+  test("a failed GS Live capture preserves summary bytes while the ticker advances; a recovered empty book updates both", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "combined-publisher-"));
+    try {
+      const summaryPath = join(dir, "summary.json");
+      const key = "wagers-by-state/latest.json";
+      const previous = new TextEncoder().encode('{"previous":true}');
+      const r2 = createInMemoryCasR2Client(new Map([[key, previous]]));
+      const metadata = new Map<string, Readonly<Record<string, string>>>();
+      const write = r2.client.writeWithMetadata.bind(r2.client);
+      const client = {
+        ...r2.client,
+        writeWithMetadata: ((key, bytes, opts) => {
+          if (opts?.metadata) metadata.set(key, opts.metadata);
+          return write(key, bytes, opts);
+        }) satisfies typeof write,
+      };
+      const nowMs = Date.parse("2026-11-22T08:45:00.000Z");
+      const capturedAt = new Date(nowMs).toISOString();
+      const ticker = {
+        observedAt: capturedAt,
+        LIST: [
+          {
+            CustomerID: "TEST",
+            WagerNumber: 1,
+            ShortDesc: "S:Football #547 Test",
+            InsertDateTime: "2026-11-22 02:40:00.000",
+            TicketWriter: "Internet",
+            AmountWagered: 10,
+          },
+        ],
+      };
+      const options = {
+        client,
+        env: { ...makeLiveEnv(), GIT_SHA: "a".repeat(40) },
+        nowMs,
+        summaryPath,
+        liveTickerDoc: ticker,
+      };
+      // Even an unreadable leftover from the failed capture must not block ticker publication.
+      writeFileSync(summaryPath, "{invalid");
+      const first = await publishWagersByStateSnapshotToR2({
+        ...options,
+        tickerOnly: true,
+      });
+      expect(first.hydratedRows).toBe(1);
+      expect(first.legacySummaryUpdated).toBe(false);
+      expect(r2.objects.get(key)).toBe(previous);
+      expect(r2.conditionalPuts.some((put) => put.key === key)).toBe(false);
+      expect(r2.objects.has(first.chunkKey)).toBe(true);
+      expect(first.watermark_cursor).toBe(
+        first.merkle_root_sha256.slice(0, 16) + ":1",
+      );
+
+      writeFileSync(
+        summaryPath,
+        JSON.stringify({
+          source: {
+            kind: "live-ajax.php",
+            capturedAt,
+            fromEpochSec: nowMs / 1000 - 3600,
+            toEpochSec: nowMs / 1000,
+          },
+          window: { observedEnd: null },
+          totals: { legs: 0 },
+        }),
+      );
+      const second = await publishWagersByStateSnapshotToR2(options);
+      expect(second.generation_u32).toBe(first.generation_u32 + 1);
+      expect(second.prevETag).toBe(first.newETag);
+      expect(second.legacySummaryUpdated).toBe(true);
+      const moduleBytes = await Bun.file(
+        resolve(ROOT, "scripts/publish_wagers_snapshot.ts"),
+      ).arrayBuffer();
+      for (const output of [key, WAGERS_BY_STATE_MANIFEST_KEY]) {
+        expect(metadata.get(output)).toMatchObject({
+          "publisher-module-sha256": Bun.SHA256.hash(moduleBytes, "hex"),
+          "publisher-reported-commit": "a".repeat(40),
+        });
+      }
+      expect(JSON.parse(await r2.client.file(key).text())).toMatchObject({
+        capturedAt,
+        window: { observedEnd: null, toMs: nowMs },
+        totals: { legs: 0 },
+        staleness: { stale: false },
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ["recent capture of an old window", 0, 3, "source.toEpochSec", true],
+    ["old capture republished today", 3, 0, "source.capturedAt", true],
+    ["quiet book through today", 0, 0, "source.capturedAt", false],
+  ] as const)(
+    "%s uses source coverage for freshness",
+    async (_label, captureDays, windowDays, basis, stale) => {
+      const dir = mkdtempSync(join(tmpdir(), "wager-coverage-"));
+      try {
+        const nowMs = Date.parse("2026-11-22T08:45:00.000Z");
+        const dayMs = 86_400_000;
+        const capturedAt = new Date(nowMs - captureDays * dayMs).toISOString();
+        const requestEndMs = nowMs - windowDays * dayMs;
+        const observedEnd = new Date(nowMs - 10 * dayMs).toISOString();
+        const summaryPath = join(dir, "summary.json");
+        writeFileSync(
+          summaryPath,
+          JSON.stringify({
+            source: {
+              kind: "live-ajax.php",
+              capturedAt,
+              toEpochSec: requestEndMs / 1000,
+            },
+            window: { observedEnd },
+            totals: { legs: 1 },
+          }),
+        );
+        const { client } = createInMemoryCasR2Client();
+        await publishWagersByStateSnapshotToR2({
+          client,
+          env: makeLiveEnv(),
+          nowMs,
+          summaryPath,
+          liveTickerDoc: {
+            observedAt: new Date(nowMs).toISOString(),
+            LIST: [],
+          },
+        });
+        const summary = JSON.parse(
+          await client.file("wagers-by-state/latest.json").text(),
+        );
+        expect(summary).toMatchObject({
+          capturedAt,
+          window: {
+            observedEnd,
+            toMs: Math.min(Date.parse(capturedAt), requestEndMs),
+          },
+          staleness: { timestampBasis: basis, stale },
+        });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("publishWagersByStateSnapshotToR2 enforces If-None-Match/If-Match CAS, 0 rebases on 412 (exit 74), and zero unresolved_gap_cents (exit 65)", async () => {
     const casHarness = createInMemoryCasR2Client();

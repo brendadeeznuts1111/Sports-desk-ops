@@ -947,6 +947,40 @@ describe("GSLive session JIT refresh", () => {
     expect(result.jobs[1]?.error).toContain("Mock F402 mint fail");
   });
 
+  test("only a failed same-cycle wager capture requests ticker-only publication", async () => {
+    for (const mode of ["failed", "success", "standalone"] as const) {
+      const publisherArgv: string[][] = [];
+      const result = await cycle(
+        makeRoot(),
+        {},
+        {
+          jobs:
+            mode === "standalone"
+              ? ["wagers-publish"]
+              : ["wagers-by-state", "wagers-publish"],
+          ensureGsliveSession: async () => {
+            if (mode === "failed") throw new Error("injected session failure");
+          },
+          spawnJob: async (job, argv) => {
+            if (job.id === "wagers-publish") publisherArgv.push([...argv]);
+            return OK_SPAWN();
+          },
+        },
+      );
+      expect(publisherArgv).toHaveLength(1);
+      expect(publisherArgv[0]!.includes("--ticker-only")).toBe(
+        mode === "failed",
+      );
+      expect(result.jobs.find((job) => job.id === "wagers-publish")?.ok).toBe(
+        true,
+      );
+      if (mode !== "standalone")
+        expect(
+          result.jobs.find((job) => job.id === "wagers-by-state")?.ok,
+        ).toBe(mode === "success");
+    }
+  });
+
   test("skips GSLive jobs when ensureGsliveSession fails", async () => {
     const root = makeRoot();
     let spawned = false;

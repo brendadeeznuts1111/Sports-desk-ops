@@ -13,7 +13,7 @@
  *
  * Usage:
  *   bun run wagers:publish-snapshot --from scratch/gslive-wagers-by-state.summary.json --dry-run
- *   bun run wagers:publish-snapshot
+ *   bun run wagers:publish-snapshot --ticker-only
  */
 
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -408,7 +408,7 @@ function buildSanitizedSummaryArtifact(
   readonly generatedAt: string;
   readonly sourceKind: string;
   readonly artifactSha: string;
-  readonly observedEndMs: number;
+  readonly observedEndMs: number | null;
 } {
   const raw = JSON.parse(readFileSync(summaryPath, "utf8")) as Record<
     string,
@@ -416,14 +416,38 @@ function buildSanitizedSummaryArtifact(
   >;
   const source = (raw.source ?? {}) as Record<string, unknown>;
   const window = (raw.window ?? {}) as Record<string, unknown>;
-  const observedEnd = text(window.observedEnd);
-  if (observedEnd === "") {
-    throw new Error("summary.window.observedEnd is missing");
+  const observedEnd = text(window.observedEnd) || null;
+  const windowEndMs = observedEnd === null ? null : Date.parse(observedEnd);
+  const isLive = source.kind === "live-ajax.php";
+  const capturedAt = isLive ? text(source.capturedAt) : observedEnd;
+  const capturedMs = Date.parse(capturedAt ?? "");
+  if (
+    !capturedAt ||
+    !Number.isFinite(capturedMs) ||
+    (isLive && capturedMs > nowMs)
+  ) {
+    throw new Error(
+      isLive
+        ? "invalid live source.capturedAt"
+        : "invalid summary.window.observedEnd",
+    );
   }
-  const windowEndMs = new Date(observedEnd).getTime();
-  const ageMinutes = Math.max(0, Math.round((nowMs - windowEndMs) / 60_000));
+  const requestEndSec = int(source.toEpochSec);
+  if (
+    isLive &&
+    (requestEndSec === null ||
+      !Number.isSafeInteger(requestEndSec) ||
+      requestEndSec <= 0)
+  ) {
+    throw new Error("invalid live source.toEpochSec");
+  }
+  const coverageMs =
+    isLive && requestEndSec !== null
+      ? Math.min(capturedMs, requestEndSec * 1000)
+      : capturedMs;
+  const ageMinutes = Math.max(0, Math.round((nowMs - coverageMs) / 60_000));
   const generatedAt = new Date(nowMs).toISOString();
-  const deskDate = chicagoDate(observedEnd);
+  const deskDate = chicagoDate(observedEnd ?? capturedAt);
   const rangeStart = text(window.observedStart) || null;
   const sourcePath = text(source.path);
   const sourceKind = sourcePath.endsWith(".json")
@@ -434,16 +458,26 @@ function buildSanitizedSummaryArtifact(
     schemaVersion: 2,
     kind: "gslive-wagers",
     sourceKind,
-    capturedAt: observedEnd,
+    capturedAt,
     generatedAt,
     deskDate,
     window: {
       observedStart: rangeStart,
       observedEnd,
+      ...(isLive && {
+        toMs: coverageMs,
+        fromEpochSec: int(source.fromEpochSec),
+        toEpochSec: requestEndSec,
+      }),
       spanHours: int(window.spanHours),
       snapshotLagMinutes: int(window.snapshotLagMinutes),
     },
     staleness: {
+      timestampBasis: !isLive
+        ? "window.observedEnd"
+        : coverageMs < capturedMs
+          ? "source.toEpochSec"
+          : "source.capturedAt",
       ageMinutesAtPublish: ageMinutes,
       stale: ageMinutes > 1_440,
       staleAfterMinutes: 1_440,
@@ -485,7 +519,7 @@ function buildSanitizedSummaryArtifact(
       bytes: bodyBytes.byteLength,
       deskDate,
       generatedAt,
-      capturedAt: observedEnd,
+      capturedAt,
       ageMinutes,
       stale: ageMinutes > 1_440,
       sourceKind: payload.sourceKind,
@@ -508,6 +542,7 @@ export async function publishWagersByStateSnapshotToR2(options: {
   readonly unresolvedGapCents?: unknown;
   readonly liveTickerDoc?: LiveTickerDocument;
   readonly summaryPath?: string;
+  readonly tickerOnly?: boolean;
   readonly dryRun?: boolean;
   readonly nowMs?: number;
   readonly fetchImpl?: typeof fetch;
@@ -519,7 +554,9 @@ export async function publishWagersByStateSnapshotToR2(options: {
 
   const nowMs = options.nowMs ?? Date.now();
   const hasSummaryFile =
-    options.summaryPath !== undefined && existsSync(options.summaryPath);
+    !options.tickerOnly &&
+    options.summaryPath !== undefined &&
+    existsSync(options.summaryPath);
   const summaryArtifact = hasSummaryFile
     ? buildSanitizedSummaryArtifact(options.summaryPath!, nowMs)
     : null;
@@ -564,7 +601,7 @@ export async function publishWagersByStateSnapshotToR2(options: {
   const watermarkCursor = `${watermarkPrefix}:${store.length}`;
   const dataWindowMaxEpochMs =
     summaryArtifact !== null &&
-    Number.isFinite(summaryArtifact.observedEndMs) &&
+    summaryArtifact.observedEndMs !== null &&
     summaryArtifact.observedEndMs > tickerMaxMs
       ? summaryArtifact.observedEndMs
       : tickerMaxMs;
@@ -588,6 +625,21 @@ export async function publishWagersByStateSnapshotToR2(options: {
       legacySummaryUpdated: false,
     };
   }
+
+  // A bundled deployment may not expose the source module as a local file.
+  const moduleSha = await Bun.file(import.meta.path)
+    .arrayBuffer()
+    .then(
+      (bytes) => Bun.SHA256.hash(bytes, "hex"),
+      () => undefined,
+    );
+  const declaredCommit = (env.GIT_SHA || env.SPORTSDESK_GIT_SHA || "").trim();
+  const publisherMetadata: Record<string, string> = {
+    "publisher-bun-version": Bun.version,
+  };
+  if (moduleSha) publisherMetadata["publisher-module-sha256"] = moduleSha;
+  if (/^[0-9a-f]{40}$/i.test(declaredCommit))
+    publisherMetadata["publisher-reported-commit"] = declaredCommit;
 
   const uploadedChunk = await writeContentAddressedChunkWithRetry(
     options.client,
@@ -626,6 +678,7 @@ export async function publishWagersByStateSnapshotToR2(options: {
     unresolvedGapCents: normalizedGapCents,
     metadata: {
       pii: "none",
+      ...publisherMetadata,
       domain: "ops-governance",
       "sink-id": "wagers-by-state",
       "generation-u32": String(nextGenerationU32),
@@ -684,6 +737,7 @@ export async function publishWagersByStateSnapshotToR2(options: {
         type: "application/json",
         metadata: {
           pii: "none",
+          ...publisherMetadata,
           "schema-version": "2",
           "desk-date": summaryArtifact.deskDate,
           "generated-at": summaryArtifact.generatedAt,
@@ -725,6 +779,7 @@ async function runCli(): Promise<void> {
         type: "string",
         default: "scratch/gslive-wagers-by-state.summary.json",
       },
+      "ticker-only": { type: "boolean", default: false },
       "gap-cents": { type: "string", default: "0" },
       "dry-run": { type: "boolean", default: false },
     },
@@ -747,6 +802,7 @@ async function runCli(): Promise<void> {
     env: Bun.env,
     unresolvedGapCents: values["gap-cents"],
     summaryPath: values.from,
+    tickerOnly: values["ticker-only"],
     dryRun: Boolean(values["dry-run"]),
   });
   console.log(JSON.stringify(result, null, 2));
