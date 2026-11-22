@@ -224,48 +224,6 @@ Usage: \`bun sportsdesk_cli.ts [command|option] [parameters...]\`
   return;
 }
 
-export function printHelpOld(): void {
-  console.log(`
-
-1. SURVEILLANCE & LEADERBOARDS:
-  winners [-p PERIOD] [--limit N] [--sort-by net|volume] [--format table|json|csv]
-  losers [-p PERIOD] [--limit N] [--sort-by net|gross_hold] [--format table|json|csv]
-  leaderboard [-p PERIOD] [--limit N] [--format table|json|csv]
-      Periods: 7d | lifetime (derived from the customer book)
-
-2. CORE FORENSICS & SIMULATION:
-  -f, --forensics, --sharps, --audit-sharps    Run the DERIVED sharp audit (sharp_score / positive CLV)
-  -S, --simulate, --sim, --run-sim            Run full 52-week dual-basis bettor churn simulation
-  -o, --onepass, --liability, --agent-risk     Run the DERIVED 50% liability scoreboard (snapshot)
-
-3. HIERARCHY & SURVEILLANCE:
-  -k, --walk-tree, --tree [AGENT_ID]          Walk master→agent links in the snapshot (flat source)
-  -C, --customer, --cust <CUSTOMER_ID>        Lookup a bettor profile DERIVED from the customer book
-  -d, --downline, --agent [AGENT_ID]          Query sub-agent rollup(s) DERIVED from the snapshot
-  -s, --summary                               Display the executive overview DERIVED from the snapshot
-
-4. PLANE 3 INGESTION REPLAY:
-  replay [--path FILE] [--pull-raw [URL]] [--pull-raw-only] [--channel CODE] …
-      Self-healing JSONL replay; --pull-raw fetches source bytes before replay
-
-5. CLOUDFLARE R2 & BACKUP:
-  r2 --info                                   Display Cloudflare R2 bucket & public gateway config
-  r2 --verify                                 Verify Cloudflare API Token status via HTTPS REST API
-  r2 --sync [DIR]                             Sync report files to Cloudflare R2 bucket
-  r2 --list                                   List remote report objects in R2 bucket
-
-6. DOMAIN SPECIFICATIONS & TELEGRAM:
-  -b, --brands, --types                       Inspect 16 specification-grade nominal branded types
-  -N, --neurons, --layers                     Inspect 13-entity Qwen3.5-4B (Layers 18-28) neuron registry
-  -t, --telegram, --bot                       Launch Telegram Bot & Scheduled Reporting Service daemon
-  -A, --telegram-alert [CUST_ID]              Dispatch instant watch list wager alert (default: RF2003)
-  -R, --telegram-report [TYPE]                Dispatch executive report (MORNING_BRIEFING, MIDDAY_STEAM, EVENING_SETTLEMENT)
-
-7. API DOCUMENTATION & WIRE SPEC:
-  docs [--test] [--dry-run] [--project NAME]  Verify, stage, or deploy official OpenAPI 3.1 portal
-`);
-}
-
 export function printDomainBrandedTypes(): void {
   console.log(
     "================================================================================",
