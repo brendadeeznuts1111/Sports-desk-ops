@@ -133,6 +133,12 @@ export async function fetchCloudflareBindingInventory(
   if (worker !== undefined && !/^[a-zA-Z0-9_-]{1,128}$/.test(worker)) {
     throw new Error("Invalid Worker name");
   }
+  const registered = new Set<string>(
+    MODULE_BINDING_REQUIREMENTS.map((entry) => entry.worker),
+  );
+  if (worker !== undefined && !registered.has(worker)) {
+    throw new Error("Worker is not in the module registry");
+  }
   const base = `https://api.cloudflare.com/client/v4/accounts/${accountId}`;
   const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
   async function get<T>(path: string): Promise<CloudflareEnvelope<T>> {
@@ -175,12 +181,6 @@ export async function fetchCloudflareBindingInventory(
     throw new Error("Cloudflare Worker list exceeded pagination limit");
   }
   const names = [...new Set(scriptIds)].sort();
-  const registered = new Set<string>(
-    MODULE_BINDING_REQUIREMENTS.map((entry) => entry.worker),
-  );
-  if (worker !== undefined && !registered.has(worker)) {
-    throw new Error("Worker is not in the module registry");
-  }
   // A tool intended to map our modules must not enumerate settings for
   // unrelated account Workers by default.
   const discoveredWorkers = names.filter((name) => registered.has(name));
