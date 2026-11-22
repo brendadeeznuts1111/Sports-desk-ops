@@ -1,0 +1,16 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "sportsdesk-r2-source-freshness-guard",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-22",
+  "workers_dev": false,
+  "r2_buckets": [
+    { "binding": "REPORTS", "bucket_name": "sportsdesk-ops-reports" }
+  ],
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.01 }
+  }
+}
