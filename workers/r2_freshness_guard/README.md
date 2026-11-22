@@ -20,17 +20,28 @@ R2 to make the old HTTP HEAD checker work.**
 | Key | Observation clock | Allowed data age |
 | --- | --- | --- |
 | `f402-bet-ticker/latest.json` | `data_window_max_epoch_ms` | 60 minutes |
-| `gslive-tally/latest.json` | `generatedAt`; verify referenced dated `rollup.json` and rowCount | 60 minutes |
-| `f402-weblog/latest.json` | `data_window_max_epoch_ms`; report scoped coverage | 90 minutes |
+| `gslive-tally/latest.json` | Referenced archive `window.toEpochSec`, **not** the pointer's `generatedAt` | 60 minutes |
+| `f402-weblog/latest.json` | Referenced archive `window.toMs`, checked against pointer and archive `data_window_max_epoch_ms` | 90 minutes |
 | `wagers-by-state/latest.json` | `capturedAt`, plus its own `staleness.stale` flag | 60 minutes |
 
-The GSLive pointer is dereferenced only when it matches
-`gslive-tally/YYYY-MM-DD/rollup.json`. A valid read with zero rows is
-distinguished from a positive tally. Weblog `wholeBookComplete:false` is a
-`partial` warning when the source is fresh; this need not mean individual
-account reads failed. Missing objects are `missing`, failed R2 reads are
-`unverified`, malformed timestamps are `invalid`. The logger never sends
-raw object content, accounts, names, IPs, token values, or bet records.
+The GSLive and weblog pointers are dereferenced only when their paths match
+`<prefix>/YYYY-MM-DD/rollup.json`. The Worker verifies their source fingerprints
+(`pointer.sha256` versus `archive.sourceSha256`), archive kind/date and
+window consistency. **These are producer lineage identifiers, not a hash
+computed over R2 object bytes.** A true byte-integrity check would require
+a separately defined canonical object digest.
+
+A valid GSLive read with zero rows is distinguished from a positive tally,
+even when the source is simultaneously stale. Weblog `wholeBookComplete:false`
+is retained as an independent `coverageStatus: partial` warning even when its
+source has also gone stale. It does not establish that individual account reads
+failed. Coverage reported in the pointer must agree with the archive.
+
+Missing latest objects are `missing` at stage `latest`; missing archives are
+`missing` at stage `archive`. R2 failures are `unverified`, malformed JSON,
+mismatched provenance or invalid windows are `invalid`, and explicit reason
+codes aid triage without echoing raw data. The logger never sends raw object
+content, accounts, names, IPs, token values, or bet records.
 
 ## Deployed configuration
 
@@ -55,10 +66,17 @@ node --check workers/r2_freshness_guard/worker.mjs
 node --test workers/r2_freshness_guard/worker.test.mjs
 ```
 
-The source and test files were verified by exact Git blob SHA against those
-locally tested under Node 22.16.0 (seven tests passed). No deployment test
-with a live scheduled runtime has yet completed; do not call this an end-to-end
-repair of the upstream pipelines. The full repo's pinned Bun CI is separate.
+The enhanced source and test files were verified by exact Git blob SHA against
+those locally tested with `node --check` and Node 22.16.0's `node --test`
+(**13 passing tests, 0 failing**). The tests cover forged republishing,
+archive mismatch, stale-plus-partial coverage, permission failures, corrupt
+JSON, size bounds, and private logging.
+
+Successful unit tests and deployment configuration are **not proof** of a real
+Cron event. Query Workers Observability using the service name, observe a
+`sportsdesk_r2_source_freshness` log event from a scheduled invocation, and
+verify the log's source window before calling the runtime path confirmed.
+The full repo's pinned Bun CI is separate and remains an independent gate.
 
 If the guard produces incorrect classifications, first disable its Cron by
 setting `triggers.crons=[]` in this configuration and deploying that change,
