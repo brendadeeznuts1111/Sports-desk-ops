@@ -4,7 +4,7 @@
 
 This directory is the source of truth for the isolated Cloudflare Worker
 `sportsdesk-r2-source-freshness-guard`. Its only operational job is to detect
-stale **underlying data** in four preexisting `sportsdesk-ops-reports` R2
+stale **underlying data** in the configured `sportsdesk-ops-reports` R2
 objects and emit structured Workers Logs. It does **not** ingest Manager data,
 repair expired GSLive sessions, publish reports, mutate stored objects, or
 replace the operator's Bun cron. The scheduled Worker is independent of
@@ -17,12 +17,13 @@ R2 to make the old HTTP HEAD checker work.**
 
 ## Source age, not R2 Last-Modified
 
-| Key | Observation clock | Allowed data age |
-| --- | --- | --- |
-| `f402-bet-ticker/latest.json` | `data_window_max_epoch_ms` | 60 minutes |
-| `gslive-tally/latest.json` | Referenced archive `window.toEpochSec`, **not** the pointer's `generatedAt` | 60 minutes |
-| `f402-weblog/latest.json` | Referenced archive `window.toMs`, checked against pointer and archive `data_window_max_epoch_ms` | 90 minutes |
-| `wagers-by-state/latest.json` | `capturedAt`, plus its own `staleness.stale` flag | 60 minutes |
+| Key                           | Observation clock                                                                                                    | Allowed data age |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `f402-bet-ticker/latest.json` | `data_window_max_epoch_ms`                                                                                           | 60 minutes       |
+| `gslive-tally/latest.json`    | Referenced archive `window.toEpochSec`, **not** the pointer's `generatedAt`                                          | 60 minutes       |
+| `f402-weblog/latest.json`     | Referenced archive `window.toMs`, checked against pointer and archive `data_window_max_epoch_ms`                     | 90 minutes       |
+| `f402-pending/latest.json`    | `provenance.capturedAt` from the validated Manager response. Legacy captures without this field report `unverified`. | 60 minutes       |
+| `wagers-by-state/latest.json` | `capturedAt`, plus its own `staleness.stale` flag                                                                    | 60 minutes       |
 
 The GSLive and weblog pointers are dereferenced only when their paths match
 `<prefix>/YYYY-MM-DD/rollup.json`. The Worker verifies their source fingerprints
