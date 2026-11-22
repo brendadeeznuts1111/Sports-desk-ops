@@ -208,22 +208,3 @@ export function getDefaultCsvPath(cfg: WagersConfig): string {
 export function getUnknownStateLabel(cfg: WagersConfig): string {
   return cfg.output.unknownStateLabel;
 }
-
-/** ------------------------------------------------------------------ */
-/* Pure helpers derived from config                                     */
-/** ------------------------------------------------------------------ */
-
-/** Sort states by config sortOrder, unknown last. */
-export function sortStatesByConfig(
-  states: string[],
-  cfg: WagersConfig,
-): string[] {
-  const defs = cfg.states;
-  return [...states].sort((a, b) => {
-    const aDef = defs[a];
-    const bDef = defs[b];
-    const aOrder = aDef ? aDef.sortOrder : Number.MAX_SAFE_INTEGER;
-    const bOrder = bDef ? bDef.sortOrder : Number.MAX_SAFE_INTEGER;
-    return aOrder - bOrder;
-  });
-}
