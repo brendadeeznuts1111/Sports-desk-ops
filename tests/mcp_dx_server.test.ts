@@ -112,6 +112,7 @@ describe("Cloudflare binding MCP tool", () => {
 
   test("returns metadata and contract checks with injected read-only inventory", async () => {
     const inventory: BindingInventory = {
+      discoveredWorkers: ["bookdeskops"],
       workers: [{ name: "bookdeskops", bindings: [
         { name: "PUBLIC_ORIGIN", type: "plain_text" },
       ] }],
@@ -128,6 +129,8 @@ describe("Cloudflare binding MCP tool", () => {
     const structured = result.structuredContent as { checks: { status: string; binding: string }[] };
     expect(structured.checks.find((x) => x.binding === "PUBLIC_ORIGIN")?.status).toBe("bound");
     expect(structured.checks.find((x) => x.binding === "OPS_ORIGIN")?.status).toBe("inactive");
+    expect(structured.checks.find((x) => x.binding === "OPS_ORIGIN")?.basis).toBe("source");
+    expect(result.structuredContent).toHaveProperty("discoveredWorkers", ["bookdeskops"]);
   });
 
   test("does not expose arbitrary exception messages that may contain credentials", async () => {
