@@ -9,6 +9,7 @@ import {
 const ACCOUNT = "a".repeat(32);
 const TOKEN = "TEST_ONLY_TOKEN_DO_NOT_LOG";
 const current: BindingInventory = {
+  discoveredWorkers: ["sports-ops-desk", "bookdeskops"],
   workers: [
     { name: "sports-ops-desk", bindings: [
       { name: "MCP_LIMITER", type: "durable_object_namespace", target: "McpLimiter" },
@@ -26,6 +27,8 @@ describe("Cloudflare binding contract (pure)", () => {
     expect(checks.find((x) => x.module === "sportsdesk.mcp-limit")?.status).toBe("bound");
     expect(checks.find((x) => x.module === "bookdeskops.ops-proxy")?.status).toBe("inactive");
     expect(checks.find((x) => x.module === "bookdeskops.api")?.status).toBe("bound");
+    expect(checks.find((x) => x.module === "bookdeskops.api")?.basis).toBe("source");
+    expect(checks.find((x) => x.module === "sportsdesk.mcp-limit")?.basis).toBe("deployment_snapshot");
   });
   test("missing required bindings, incompatible types and unreadable settings are different states", () => {
     const base = { ...current, workers: [{ name: "sports-ops-desk", bindings: [{ name: "MCP_LIMITER", type: "kv_namespace" }] }] };
@@ -70,6 +73,7 @@ describe("Cloudflare binding inventory HTTP", () => {
     expect(calls.map((x) => x.method)).toEqual(["GET", "GET"]);
     expect(calls).toHaveLength(2);
     expect(result.failures).toEqual([]);
+    expect(result.discoveredWorkers).toEqual(["bookdeskops", "sports-ops-desk"]);
     expect(result.workers).toHaveLength(1);
     expect(result.workers[0]?.bindings.map((x) => x.name)).toEqual(["DESK_ADMIN_TOKEN", "MCP_LIMITER"]);
     expect(JSON.stringify(result)).not.toContain(TOKEN);
@@ -88,6 +92,92 @@ describe("Cloudflare binding inventory HTTP", () => {
     const denied: typeof fetch = async () => new Response("denied", { status: 403 });
     await expect(fetchCloudflareBindingInventory(ACCOUNT, TOKEN, undefined, denied)).rejects.toThrow("HTTP 403");
   });
+  test("registered Worker absent from inventory is not_deployed, not a missing binding", async () => {
+    const fetcher: typeof fetch = async () =>
+      Response.json({ success: true, result: [] });
+    const result = await fetchCloudflareBindingInventory(
+      ACCOUNT, TOKEN, "bookdeskops", fetcher,
+    );
+    expect(result.discoveredWorkers).toEqual([]);
+    expect(result.workers).toEqual([]);
+    const checks = auditModuleBindings(result, "bookdeskops");
+    expect(checks.every((entry) => entry.status === "not_deployed")).toBe(true);
+  });
+
+  test("a listed Worker without readable settings never reports a missing binding", () => {
+    const result: BindingInventory = {
+      discoveredWorkers: ["bookdeskops"],
+      workers: [],
+      failures: [],
+    };
+    const checks = auditModuleBindings(result, "bookdeskops");
+    expect(checks.every((entry) => entry.status === "unverified")).toBe(true);
+  });
+
+  test("uses pagination total_pages even when the first page is short", async () => {
+    const requested: string[] = [];
+    const fetcher: typeof fetch = async (url) => {
+      const address = String(url);
+      requested.push(address);
+      if (address.includes("/workers/scripts?")) {
+        const page = new URL(address).searchParams.get("page");
+        return Response.json({
+          success: true,
+          result: page === "1"
+            ? [{ id: "sports-ops-desk" }]
+            : [{ id: "bookdeskops" }, { id: "deepseek-chat" }],
+          result_info: { total_pages: 2 },
+        });
+      }
+      return Response.json({ success: true, result: { bindings: [] } });
+    };
+    const result = await fetchCloudflareBindingInventory(
+      ACCOUNT, TOKEN, undefined, fetcher,
+    );
+    expect(result.discoveredWorkers).toEqual([
+      "bookdeskops", "sports-ops-desk",
+    ]);
+    expect(result.workers).toHaveLength(2);
+    expect(requested.filter((url) => url.includes("/workers/scripts?"))).toHaveLength(2);
+    expect(requested.some((url) => url.includes("/deepseek-chat/settings"))).toBe(false);
+  });
+
+  test("a malformed binding record fails the settings read closed", async () => {
+    const fetcher: typeof fetch = async (url) =>
+      String(url).includes("/settings")
+        ? Response.json({
+            success: true,
+            result: { bindings: [{ name: "MCP_LIMITER", text: "DO_NOT_LEAK" }] },
+          })
+        : Response.json({ success: true, result: [{ id: "sports-ops-desk" }] });
+    const result = await fetchCloudflareBindingInventory(
+      ACCOUNT, TOKEN, "sports-ops-desk", fetcher,
+    );
+    expect(result.failures).toEqual([
+      { worker: "sports-ops-desk", reason: "metadata unavailable" },
+    ]);
+    expect(JSON.stringify(result)).not.toContain("DO_NOT_LEAK");
+    expect(auditModuleBindings(result, "sports-ops-desk").every((entry) =>
+      entry.status === "unverified")).toBe(true);
+  });
+
+  test("an oversized page count fails discovery instead of reporting false absence", async () => {
+    const fetcher: typeof fetch = async () =>
+      Response.json({ success: true, result: [], result_info: { total_pages: 21 } });
+    await expect(fetchCloudflareBindingInventory(
+      ACCOUNT, TOKEN, undefined, fetcher,
+    )).rejects.toThrow("Invalid Worker pagination metadata");
+  });
+
+  test("the tool cannot select unrelated account Workers", async () => {
+    const rejectIfCalled: typeof fetch = async () => {
+      throw new Error("should not fetch");
+    };
+    await expect(fetchCloudflareBindingInventory(
+      ACCOUNT, TOKEN, "deepseek-chat", rejectIfCalled,
+    )).rejects.toThrow("Worker is not in the module registry");
+  });
+
   test("worker name cannot escape an API path", async () => {
     const rejectIfCalled: typeof fetch = async () => { throw new Error("should not fetch"); };
     await expect(fetchCloudflareBindingInventory(ACCOUNT, TOKEN, "../../secrets", rejectIfCalled)).rejects.toThrow("Invalid Worker name");
