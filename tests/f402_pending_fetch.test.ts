@@ -69,6 +69,7 @@ describe("F402 getPending fetch", () => {
       agentOwner: "OWNER",
     });
     expect(result.legs).toHaveLength(1);
+    expect(new Date(result.capturedAt).toISOString()).toBe(result.capturedAt);
   });
 
   test("accepts { LIST: [...] } and rejects HTML traps without clobbering the capture", async () => {

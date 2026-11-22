@@ -252,6 +252,46 @@ describe("bridge 3b", () => {
     expect(rollup.suppressed.ticketCount).toBe(6);
   });
 
+  test("file replay cannot claim live status even with a current file mtime", async () => {
+    const path = await fixture([row(1)]);
+    await expect(
+      buildF402PendingRollup(path, { sourceKind: "capture", live: true }),
+    ).rejects.toThrow(/upstream capture/);
+  });
+
+  test("expired and legacy live rollups are rejected by both sinks before I/O", async () => {
+    const offline = await buildF402PendingRollup(await fixture([row(1)]), {
+      sourceKind: "capture",
+    });
+    const sink = createF402PendingSink({
+      liveBets: true,
+      r2: true,
+      r2Client: null,
+    });
+    for (const capturedAt of [
+      undefined,
+      "invalid",
+      "2020-01-01T00:00:00.000Z",
+      "2099-01-01T00:00:00.000Z",
+    ]) {
+      const rollup = {
+        ...offline,
+        provenance: {
+          ...offline.provenance,
+          live: true,
+          ...(capturedAt && { capturedAt }),
+        },
+      };
+      for (const result of [
+        await sink.publishLiveBets(rollup),
+        await sink.publishR2(rollup),
+      ]) {
+        expect(result.ok).toBe(false);
+        expect(result.error).toContain("upstream capture");
+      }
+    }
+  });
+
   test("fixture artifacts never publish to the live channel; gateway smoke delivers a live one", async () => {
     const server = createBlobLiveBetsServer({
       blobs: new MemoryBlobStore(),
@@ -286,12 +326,20 @@ describe("bridge 3b", () => {
         gatewayUrl: `http://127.0.0.1:${server.server.port}`,
         apiToken: "t",
       });
-      const rollup = await buildF402PendingRollup(await fixture([row(1)]), {
+      const capturedAt = new Date().toISOString();
+      // The saved file has been replaced since fetch. Publish only the rows actually observed.
+      const rollup = await buildF402PendingRollup(await fixture([]), {
         live: true,
-        sourceKind: "capture",
+        capture: { capturedAt, legs: [row(1)] },
       });
+      expect(rollup.rowCount).toBe(1);
+      expect(serializeF402PendingRollup(rollup)).toBe(stableJson(rollup));
       expect((await sink.publishLiveBets(rollup)).ok).toBe(true);
-      expect(JSON.parse(await msg).kind).toBe("f402-pending");
+      expect(JSON.parse(await msg)).toMatchObject({
+        kind: "f402-pending",
+        sourceSha256: rollup.sourceSha256,
+        provenance: { capturedAt },
+      });
       const fixtureRollup = await buildF402PendingRollup(
         await fixture([row(1)]),
       );
