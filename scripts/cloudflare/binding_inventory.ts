@@ -175,13 +175,18 @@ export async function fetchCloudflareBindingInventory(
     throw new Error("Cloudflare Worker list exceeded pagination limit");
   }
   const names = [...new Set(scriptIds)].sort();
-  if (worker !== undefined && !names.includes(worker) &&
-    !MODULE_BINDING_REQUIREMENTS.some((entry) => entry.worker === worker)) {
-    throw new Error("Worker is not in the account or module registry");
+  const registered = new Set(
+    MODULE_BINDING_REQUIREMENTS.map((entry) => entry.worker),
+  );
+  if (worker !== undefined && !registered.has(worker)) {
+    throw new Error("Worker is not in the module registry");
   }
+  // A tool intended to map our modules must not enumerate settings for
+  // unrelated account Workers by default.
+  const discoveredWorkers = names.filter((name) => registered.has(name));
   const wanted = worker === undefined
-    ? names
-    : names.includes(worker) ? [worker] : [];
+    ? discoveredWorkers
+    : discoveredWorkers.includes(worker) ? [worker] : [];
   const workers: WorkerBindingSummary[] = [];
   const failures: { worker: string; reason: string }[] = [];
   // Bound concurrent metadata reads to avoid API rate spikes.
@@ -199,7 +204,7 @@ export async function fetchCloudflareBindingInventory(
     }));
   }
   return {
-    discoveredWorkers: names,
+    discoveredWorkers,
     workers: workers.sort((a, b) => a.name.localeCompare(b.name)),
     failures: failures.sort((a, b) => a.worker.localeCompare(b.worker)),
   };
