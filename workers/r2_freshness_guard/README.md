@@ -52,12 +52,22 @@ The code only calls `R2Bucket.get` and never writes. **Important:** Cloudflare
 R2 bindings are capabilities that also support write methods; the read-only
 behavior here is enforced by this Worker code, not a platform read-only binding.
 
-Installed via the Cloudflare API on 2026-11-22 after the source and test blobs
-were pinned. Verified via Cloudflare GET settings, subdomain, schedules and
-deployments: binding is correct, workers.dev/previews disabled, scheduled trigger
-present, logs/traces enabled. The deployed code has not yet been observed
-running on a real Cron event; Cron propagation and execution should be checked
-in Cloudflare Workers & Pages → this Worker → Observability / Cron Events.
+Initially installed on 2026-11-22 and upgraded on the same date with tested
+source Git blob `6728ff3f76700beb6ab9f738fe4763a42bf0076f`.
+Cloudflare deployment version `5a4aae50-74e8-48ea-98f5-598e0df5bfcb`
+was verified at 100% allocation after the API upload. Cloudflare GETs
+confirmed: exactly the intended binding, `workers.dev` and previews off, one
+`*/15 * * * *` schedule, and logs/traces enabled. A separate direct R2 read
+verified that both pointer/archive source fingerprints, weblog coverage and
+source window fields agree. This was a **metadata/data check**, not an execution
+trace from the new Worker.
+
+The deployed code has not yet been observed running on a real Cron event;
+inspect Cloudflare Workers & Pages → this Worker → Observability / Cron Events.
+Query Workers Observability for `$metadata.service` equal to this Worker
+and verify a `sportsdesk_r2_source_freshness` event from a scheduled invocation.
+A successful API upload, schedule listing or local test is insufficient to
+claim that a Cron event completed.
 
 ## Validation and recovery
 
