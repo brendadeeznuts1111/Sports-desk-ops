@@ -2166,12 +2166,19 @@ window.__ModuleLoader__.load({
      * A label/value list. Values that are null are rendered as the
      * not-available marker by the caller; rows are pre-filtered here.
      * @param {{ label: string, value: unknown, key?: string }[]} rows
+     * @param {{ className?: string }} [options]
      */
-    function metaList(rows) {
+    function metaList(rows, options) {
       if (rows.length === 0) return null;
+      const opts = options ?? {};
       return h(
         "dl",
-        { className: "sec-meta" },
+        {
+          className:
+            opts.className === undefined
+              ? "sec-meta"
+              : `sec-meta ${opts.className}`,
+        },
         rows.map((row) =>
           h(
             "div",
@@ -3355,7 +3362,9 @@ window.__ModuleLoader__.load({
               "div",
               null,
               totalsBlock,
-              infoRows.length === 0 ? null : metaList(infoRows),
+              infoRows.length === 0
+                ? null
+                : metaList(infoRows, { className: "sec-meta-prose" }),
               h("h3", { className: "sec-subtitle" }, t("overviewModel")),
               modelBlock,
               queue.limits.length === 0
@@ -3386,8 +3395,6 @@ window.__ModuleLoader__.load({
                       "queue-insufficient",
                     ),
                   ),
-              h("h3", { className: "sec-subtitle" }, t("betsRows")),
-              rows,
               loadedDossierAccount === null
                 ? null
                 : h(
@@ -3397,6 +3404,8 @@ window.__ModuleLoader__.load({
                       account: loadedDossierAccount,
                     }),
                   ),
+              h("h3", { className: "sec-subtitle" }, t("betsRows")),
+              rows,
             );
           }),
           { sub: t("queueSub") },
@@ -3630,7 +3639,9 @@ window.__ModuleLoader__.load({
         { className: "sec-subsection", key: titleKey },
         title,
         badges,
-        infoRows.length === 0 ? null : metaList(infoRows),
+        infoRows.length === 0
+          ? null
+          : metaList(infoRows, { className: "sec-meta-prose" }),
         table,
         candidate.omittedRows === null
           ? null
@@ -3707,7 +3718,7 @@ window.__ModuleLoader__.load({
         ),
         h(
           "td",
-          null,
+          { className: "sec-nowrap" },
           chip(status, {
             key: "status",
             state: entry.implemented ? "ok" : null,
@@ -3742,7 +3753,11 @@ window.__ModuleLoader__.load({
                 "tr",
                 null,
                 h("th", null, t("exploreColApiField")),
-                h("th", null, t("exploreColNormalizedField")),
+                h(
+                  "th",
+                  { className: "sec-col-normalized" },
+                  t("exploreColNormalizedField"),
+                ),
                 h("th", null, t("exploreColRawSource")),
                 h("th", null, t("exploreColNote")),
               ),
@@ -3770,7 +3785,7 @@ window.__ModuleLoader__.load({
                   ),
                   h(
                     "td",
-                    { className: "sec-mono" },
+                    { className: "sec-mono sec-nowrap" },
                     entry.normalized ?? t("notAvailable"),
                   ),
                   h(
@@ -5505,11 +5520,12 @@ window.__ModuleLoader__.load({
 .sec-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 16px; margin: 12px 0 0; }
 .sec-meta dt { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
 .sec-meta dd { margin: 2px 0 0; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
+/* Three prose blocks: wide enough to read, never four 150px columns. */
+.sec-meta-prose { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .sec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 12px; }
 .sec-metric { display: flex; flex-direction: column; gap: 2px; }
 .sec-metric-label { color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
 .sec-metric-value { font-size: 15px; line-height: 22px; font-weight: 500; overflow-wrap: anywhere; }
-.sec-matrix { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 .sec-source { border-top: 1px solid var(--dsw-alias-border-l1); padding-top: 12px; }
 .sec-source:first-child { border-top: 0; padding-top: 0; }
 .sec-source-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -5546,6 +5562,8 @@ window.__ModuleLoader__.load({
 .sec-table { width: 100%; border-collapse: collapse; font-size: 12px; line-height: 18px; }
 .sec-table th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--dsw-alias-border-l1); color: var(--dsw-alias-label-secondary); font-weight: 500; }
 .sec-table td { padding: 6px 8px; border-bottom: 1px solid var(--dsw-alias-border-l1); vertical-align: top; }
+.sec-nowrap { white-space: nowrap; }
+.sec-col-normalized { min-width: 180px; }
 .sec-score-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-top: 4px; }
 .sec-score { font-size: 28px; line-height: 34px; font-weight: 500; }
 .sec-warnings { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
@@ -5570,7 +5588,10 @@ window.__ModuleLoader__.load({
 .sec-breakdown-rows { color: var(--dsw-alias-label-secondary); }
 .sec-tabpanel > .sec-note { margin-top: 4px; }
 /* Overview posture strip: derived values, tone-accented, tabular numerals. */
-.sec-posture { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.sec-posture { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+/* Media queries, not container queries: this CSS also renders in WebKit-based hosts. */
+@media (max-width: 1180px) { .sec-posture { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .sec-posture { grid-template-columns: minmax(0, 1fr); } }
 .sec-posture-tile { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 14px 16px 12px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: linear-gradient(180deg, var(--dsw-alias-bg-layer-2), var(--dsw-alias-bg-layer-1)); overflow: hidden; }
 .sec-posture-tile::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--dsw-alias-border-l2); }
 .sec-posture-tile[data-tone='ok']::before { background: var(--dsw-alias-state-success-primary); }
@@ -5581,9 +5602,12 @@ window.__ModuleLoader__.load({
 .sec-posture-sub { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
 .sec-overview-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
 /* Sources stay scannable: two columns on wide pages, one on narrow ones. */
-.sec-matrix { display: grid; grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); gap: 0 24px; }
+.sec-matrix { display: grid; grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); gap: 0 24px; margin-top: 12px; }
 .sec-source { min-width: 0; }
-.sec-source:nth-child(-n + 2) { border-top: 0; padding-top: 0; }
+/* Only the first row drops its divider, and only when the viewport leaves room for two columns. */
+@media (min-width: 1180px) {
+  .sec-source:nth-child(-n + 2) { border-top: 0; padding-top: 0; }
+}
 .sec-source-line { overflow-wrap: anywhere; }
 .sec-state-dot { flex: none; width: 8px; height: 8px; border-radius: 999px; background: var(--dsw-alias-label-secondary); }
 .sec-state-dot[data-state='ok'] { background: var(--dsw-alias-state-success-primary); }
