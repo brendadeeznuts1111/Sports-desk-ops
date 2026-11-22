@@ -370,27 +370,3 @@ export class DelayDodbinSnapshot implements DelaySnapshotPayload {
     ].join("\n");
   }
 }
-
-/**
- * Custom inspect formatter for CustomerPackedHandle32 wire handles.
- */
-export function formatCustomerPackedHandle32Inspect(
-  handle: CustomerPackedHandle32,
-  options: { colors?: boolean } = {},
-): string {
-  const unpacked = unpackCustomerPackedHandle32(handle);
-  const c = options.colors === true;
-  const bold = (s: string) => (c ? `\x1b[1m${s}\x1b[22m` : s);
-  const cyan = (s: string) => (c ? `\x1b[36m${s}\x1b[39m` : s);
-  const yellow = (s: string) => (c ? `\x1b[33m${s}\x1b[39m` : s);
-  const tierName =
-    unpacked.delayTier === 3
-      ? "12s"
-      : unpacked.delayTier === 2
-        ? "11s"
-        : unpacked.delayTier === 1
-          ? "10s"
-          : "none";
-
-  return `${bold("CustomerPackedHandle32")}(${cyan("row=")}${unpacked.rowIndex}, ${cyan("agentIdx=")}${unpacked.agentIdx}, ${cyan("vip=")}${unpacked.vipShield}, ${cyan("tier=")}${yellow(tierName)}, ${cyan("gen=")}${unpacked.gen})`;
-}
