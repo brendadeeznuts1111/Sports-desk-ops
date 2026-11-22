@@ -1222,6 +1222,21 @@ export async function runBridgeRollupCycle(
   let gsliveSessionError: string | null = null;
 
   for (const job of selected) {
+    // An explicitly selected standalone publish can still replay a saved summary.
+    if (
+      job.id === "wagers-publish" &&
+      jobs.some((result) => result.id === "wagers-by-state" && !result.ok)
+    ) {
+      jobs.push({
+        id: job.id,
+        label: job.label,
+        ok: false,
+        durationMs: 0,
+        error: "Publish skipped because the wager capture failed in this cycle",
+      });
+      artifactStatus[job.id] = "missing";
+      continue;
+    }
     if (F402_SESSION_JOB_IDS.has(job.id)) {
       if (f402SessionReady === false) {
         jobs.push({
