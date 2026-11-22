@@ -204,6 +204,8 @@ export interface PendingFetchOptions {
 }
 
 export interface PendingFetchResult {
+  /** Observation time of the validated upstream response. */
+  readonly capturedAt: string;
   readonly legs: readonly Record<string, unknown>[];
   readonly url: string;
   readonly body: Readonly<Record<string, string | number>>;
@@ -284,7 +286,12 @@ export async function fetchF402Pending(
   } catch {
     throw new F402PendingFetchError("getPending returned non-JSON content");
   }
-  return { legs: extractPendingLegs(payload), url, body };
+  return {
+    legs: extractPendingLegs(payload),
+    capturedAt: new Date().toISOString(),
+    url,
+    body,
+  };
 }
 
 /** Atomically persist the validated legs; throws before touching the target on invalid input. */

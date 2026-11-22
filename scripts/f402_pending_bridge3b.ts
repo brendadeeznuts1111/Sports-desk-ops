@@ -3,6 +3,7 @@
 import { parseArgs } from "node:util";
 import { buildF402PendingRollup } from "../lib/f402_pending_rollup.ts";
 import {
+  type PendingFetchResult,
   defaultPendingDate,
   fetchAndPersistPending,
   f402BearerResolvable,
@@ -60,6 +61,7 @@ const fetchRequested = f402BearerResolvable({
 });
 let fromPath = (values["from-file"] ?? values.from) as string;
 let sourceKindOverride = values["source-kind"] as string | undefined;
+let capture: PendingFetchResult | undefined;
 if (fetchRequested) {
   const token = resolveF402BearerToken({
     cliToken: values["bearer-token"] as string | undefined,
@@ -72,7 +74,7 @@ if (fetchRequested) {
     (values["save-capture"] as string | undefined) ??
     ((Bun.env.F402_PENDING_CAPTURE_PATH ?? "").trim() ||
       `scratch/f402-pending/capture-${date}.json`);
-  const fetched = await fetchAndPersistPending({
+  capture = await fetchAndPersistPending({
     token,
     date,
     ...(values["agent-id"] === undefined
@@ -84,7 +86,7 @@ if (fetchRequested) {
     capturePath,
   });
   console.error(
-    `[bridge3b] fetched ${fetched.legs.length} pending legs for ${date} -> ${capturePath}`,
+    `[bridge3b] fetched ${capture.legs.length} pending legs for ${date} -> ${capturePath}`,
   );
   fromPath = capturePath;
   sourceKindOverride = "capture";
@@ -101,6 +103,7 @@ if (sourceKind === "fixture" && values["dry-run"] !== true) {
 const rollup = await buildF402PendingRollup(fromPath, {
   sourceKind,
   live: values.live,
+  ...(capture && { capture }),
   ...(threeC === null
     ? {}
     : {
@@ -143,3 +146,4 @@ console.log(
     2,
   ),
 );
+if (!ws.ok || !r2.ok) process.exitCode = 1;

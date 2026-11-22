@@ -10,6 +10,7 @@ import {
   DodGateFailureError,
   type GsliveTallyGate,
 } from "./gslive_tally_rollup.ts";
+import type { PendingFetchResult } from "./f402_pending_fetch.ts";
 import { sha256Hex } from "./f402_bet_ticker_delta.ts";
 
 export const F402_PENDING_KIND = "f402-pending";
@@ -43,6 +44,7 @@ export interface F402PendingRollup {
     readonly sourceKind: string;
     readonly source: string;
     readonly live: boolean;
+    readonly capturedAt?: string;
   };
   readonly rowCount: number;
   readonly ticketCount: number;
@@ -489,7 +491,10 @@ export function serializePendingProvenance(
   p: F402PendingRollup["provenance"],
 ): string {
   return (
-    `{"live":${p.live}` +
+    (p.capturedAt === undefined
+      ? "{"
+      : `{"capturedAt":${JSON.stringify(p.capturedAt)},`) +
+    `"live":${p.live}` +
     `,"source":${JSON.stringify(p.source)}` +
     `,"sourceKind":${JSON.stringify(p.sourceKind)}}`
   );
@@ -586,6 +591,7 @@ export interface PendingBuildOptions {
   readonly sourceKind?: string;
   readonly source?: string;
   readonly live?: boolean;
+  readonly capture?: Pick<PendingFetchResult, "legs" | "capturedAt">;
   readonly generatedAt?: string;
   readonly deskDate?: string;
   /** 3c open exposure for GATE-08; omitted means the gate is skipped. */
@@ -600,7 +606,15 @@ export async function buildF402PendingRollup(
   options: PendingBuildOptions = {},
 ): Promise<F402PendingRollup> {
   const file = Bun.file(path);
-  const payload: unknown = await file.json();
+  const provenance = {
+    sourceKind: options.sourceKind ?? (options.capture ? "capture" : "fixture"),
+    source: options.source ?? path.split("/").at(-1) ?? path,
+    live: options.live === true,
+    ...(options.capture && { capturedAt: options.capture.capturedAt }),
+  };
+  assertFreshLivePending(provenance);
+  // Use the rows from this response even if another poll replaces the saved capture.
+  const payload: unknown = options.capture?.legs ?? (await file.json());
   const rawRows = Array.isArray(payload)
     ? payload
     : Array.isArray((payload as { Pending?: unknown }).Pending)
@@ -974,18 +988,16 @@ export async function buildF402PendingRollup(
       : "unknown");
 
   const generatedAt =
-    options.generatedAt ?? (await file.stat()).mtime.toISOString();
+    options.generatedAt ??
+    options.capture?.capturedAt ??
+    (await file.stat()).mtime.toISOString();
 
   const base = {
     schemaVersion: F402_PENDING_SCHEMA_VERSION,
     kind: F402_PENDING_KIND,
     deskDate,
     generatedAt,
-    provenance: {
-      sourceKind: options.sourceKind ?? "fixture",
-      source: options.source ?? path.split("/").at(-1) ?? path,
-      live: options.live === true,
-    },
+    provenance,
     rowCount,
     ticketCount: totalTickets,
     legCount: totalLegs,
@@ -1021,9 +1033,32 @@ export async function buildF402PendingRollup(
   return artifact;
 }
 
+const PENDING_MAX_SOURCE_AGE_MS = 60 * 60_000;
+
+function assertFreshLivePending(
+  provenance: F402PendingRollup["provenance"],
+  now = Date.now(),
+): void {
+  if (!provenance.live) return;
+  const capturedAt = provenance.capturedAt;
+  const timestamp = Date.parse(capturedAt ?? "");
+  if (
+    provenance.sourceKind !== "capture" ||
+    !Number.isFinite(timestamp) ||
+    new Date(timestamp).toISOString() !== capturedAt ||
+    timestamp > now ||
+    now - timestamp > PENDING_MAX_SOURCE_AGE_MS
+  ) {
+    throw new Error(
+      "live pending publication requires an upstream capture within the last 60 minutes",
+    );
+  }
+}
+
 export function assertSanitizedPendingArtifact(
   rollup: F402PendingRollup,
 ): string {
+  assertFreshLivePending(rollup.provenance);
   const text = serializeF402PendingRollup(rollup);
   if (new TextEncoder().encode(text).byteLength > F402_PENDING_MAX_BYTES) {
     throw new Error("pending artifact exceeds 64 KiB");
