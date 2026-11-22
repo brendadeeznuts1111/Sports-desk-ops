@@ -28,8 +28,37 @@ import {
   type ShotFileResult,
 } from "./capture/shot.ts";
 import { WebViewError } from "./capture/webview.ts";
+import {
+  auditModuleBindings,
+  fetchCloudflareBindingInventory,
+  type BindingInventory,
+} from "./cloudflare/binding_inventory.ts";
 
 const REPO_ROOT = join(import.meta.dir, "..");
+
+/** A Worker name is the only Cloudflare-specific client input. No credential or URL fields. */
+const CLOUDFLARE_BINDINGS_INPUT = {
+  worker: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/).optional(),
+};
+const CLOUDFLARE_BINDINGS_OUTPUT = {
+  workers: z.array(z.object({
+    name: z.string(),
+    bindings: z.array(z.object({
+      name: z.string(), type: z.string(), target: z.string().optional(),
+    })),
+  })),
+  failures: z.array(z.object({ worker: z.string(), reason: z.string() })),
+  checks: z.array(z.object({
+    module: z.string(),
+    worker: z.string(),
+    binding: z.string(),
+    type: z.string(),
+    required: z.boolean(),
+    api: z.string().optional(),
+    status: z.enum(["bound", "missing", "wrong_type", "inactive", "unverified"]),
+  })),
+};
+type CloudflareBindingsInput = z.infer<z.ZodObject<typeof CLOUDFLARE_BINDINGS_INPUT>>;
 
 export const SHOT_INPUT = {
   url: z.url({ protocol: /^https?$/ }).describe("The http(s) page to capture"),
@@ -156,6 +185,37 @@ export async function runShotTool(
   }
 }
 
+async function readCloudflareBindingInventory(worker?: string): Promise<BindingInventory> {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const token = process.env.CLOUDFLARE_AUDIT_TOKEN;
+  if (!accountId || !token) {
+    throw new Error("Cloudflare read-only account ID or audit token is not configured");
+  }
+  return fetchCloudflareBindingInventory(accountId, token, worker);
+}
+
+/** The dependency can be injected for tests; it is never read on MCP startup. */
+export async function runCloudflareBindingsTool(
+  input: CloudflareBindingsInput,
+  read: (worker?: string) => Promise<BindingInventory> = readCloudflareBindingInventory,
+): Promise<CallToolResult> {
+  try {
+    const inventory = await read(input.worker);
+    const result = { ...inventory, checks: auditModuleBindings(inventory, input.worker) };
+    return {
+      structuredContent: result,
+      content: [{ type: "text", text: JSON.stringify(result) }],
+    };
+  } catch (error) {
+    // A fetch/client failure may contain URLs, headers, or tokens. Never return it verbatim.
+    const safe = error instanceof Error &&
+      /^(Cloudflare read-only account ID or audit token is not configured|Invalid Worker name|Worker is not in this account inventory|HTTP [0-9]{3})$/.test(error.message)
+      ? error.message
+      : "Cloudflare metadata unavailable; verify read-only token scope and network";
+    return { isError: true, content: [{ type: "text", text: safe }] };
+  }
+}
+
 export function createDxMcpServer(): McpServer {
   const server = new McpServer({
     name: "dx",
@@ -179,6 +239,24 @@ export function createDxMcpServer(): McpServer {
       },
     },
     (input) => runShotTool(input),
+  );
+  server.registerTool(
+    "cloudflare_bindings",
+    {
+      title: "Audit Cloudflare Worker module bindings",
+      description:
+        "Read-only Worker binding metadata and module/API contract drift. Requires CLOUDFLARE_ACCOUNT_ID and separately scoped CLOUDFLARE_AUDIT_TOKEN in the MCP process. Never fetches secret values, calls business APIs, changes configuration or deploys.",
+      inputSchema: CLOUDFLARE_BINDINGS_INPUT,
+      outputSchema: CLOUDFLARE_BINDINGS_OUTPUT,
+      annotations: {
+        title: "Audit Worker binding metadata",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    (input) => runCloudflareBindingsTool(input),
   );
   return server;
 }
