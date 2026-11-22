@@ -1301,6 +1301,134 @@ describe("sportsdesk-fraud cross-ref governance & R2 lineage envelope", () => {
     },
   );
 
+  test.each([
+    [undefined, "ERR_WAGERS_TICKER_READ", "ticker-read", 74],
+    ["{private-input", "ERR_WAGERS_TICKER_INVALID", "ticker-decode", 65],
+    [
+      '{"error":"private-input"}',
+      "ERR_WAGERS_TICKER_INVALID",
+      "ticker-decode",
+      65,
+    ],
+    ['{"LIST":[null]}', "ERR_WAGERS_TICKER_INVALID", "ticker-decode", 65],
+  ] as const)(
+    "reports source failure for %p without publishing",
+    async (body, code, stage, exitCode) => {
+      const r2 = createInMemoryCasR2Client();
+      if (body !== undefined)
+        r2.objects.set(
+          "live-wagers/latest.json",
+          new TextEncoder().encode(body),
+        );
+      const publish = publishWagersByStateSnapshotToR2({
+        client: r2.client,
+        env: makeLiveEnv(),
+      });
+      await expect(publish).rejects.toMatchObject({
+        code,
+        stage,
+        exitCode,
+        confirmedTickerGeneration: null,
+      });
+      expect(r2.conditionalPuts).toHaveLength(0);
+    },
+  );
+
+  test.each([
+    [WAGERS_BY_STATE_MANIFEST_KEY, "wagers-promote", null],
+    [SYNDICATE_RINGS_MANIFEST_KEY, "rings-promote", 1],
+  ] as const)(
+    "reports confirmed ticker progress when %s loses CAS",
+    async (key, stage, generation) => {
+      const r2 = createInMemoryCasR2Client();
+      r2.simulateConcurrentRaceOnKey(key);
+      await expect(
+        publishWagersByStateSnapshotToR2({
+          client: r2.client,
+          env: makeLiveEnv(),
+          liveTickerDoc: { LIST: [] },
+        }),
+      ).rejects.toMatchObject({
+        code: "ERR_R2_MANIFEST_CAS_REJECTED",
+        stage,
+        exitCode: 74,
+        confirmedTickerGeneration: generation,
+      });
+      expect(r2.conditionalPuts.filter((p) => p.key === key)).toHaveLength(1);
+    },
+  );
+
+  test("a lost R2 acknowledgement does not claim a confirmed ticker generation", async () => {
+    const r2 = createInMemoryCasR2Client();
+    const client: CasR2ClientLike = {
+      ...r2.client,
+      async headEtag(key) {
+        if (key === WAGERS_BY_STATE_MANIFEST_KEY && r2.objects.has(key))
+          throw new Error("private-provider-detail");
+        return r2.client.headEtag(key);
+      },
+    };
+    let failure: unknown;
+    try {
+      await publishWagersByStateSnapshotToR2({
+        client,
+        env: makeLiveEnv(),
+        liveTickerDoc: { LIST: [] },
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({
+      code: "ERR_WAGERS_R2_WRITE",
+      stage: "wagers-promote",
+      confirmedTickerGeneration: null,
+    });
+    expect(JSON.stringify(failure)).not.toContain("private-provider-detail");
+    expect(
+      JSON.parse(await r2.client.file(WAGERS_BY_STATE_MANIFEST_KEY).text())
+        .generation_u32,
+    ).toBe(1);
+  });
+
+  test("a failed legacy write reports the ticker generation already published", async () => {
+    const r2 = createInMemoryCasR2Client();
+    const dir = mkdtempSync(join(tmpdir(), "summary-write-error-"));
+    try {
+      const summaryPath = join(dir, "summary.json");
+      writeFileSync(
+        summaryPath,
+        JSON.stringify({ window: { observedEnd: "2026-11-20T12:00:00Z" } }),
+      );
+      const client: CasR2ClientLike = {
+        ...r2.client,
+        async writeWithMetadata(key, bytes, opts) {
+          if (key === "wagers-by-state/latest.json")
+            throw new Error("private-provider-detail");
+          return r2.client.writeWithMetadata(key, bytes, opts);
+        },
+      };
+      await expect(
+        publishWagersByStateSnapshotToR2({
+          client,
+          env: makeLiveEnv(),
+          summaryPath,
+          liveTickerDoc: { LIST: [] },
+        }),
+      ).rejects.toMatchObject({
+        code: "ERR_WAGERS_R2_WRITE",
+        stage: "summary-write",
+        exitCode: 74,
+        confirmedTickerGeneration: 1,
+      });
+      expect(
+        JSON.parse(await r2.client.file(WAGERS_BY_STATE_MANIFEST_KEY).text())
+          .generation_u32,
+      ).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("publishWagersByStateSnapshotToR2 enforces If-None-Match/If-Match CAS, 0 rebases on 412 (exit 74), and zero unresolved_gap_cents (exit 65)", async () => {
     const casHarness = createInMemoryCasR2Client();
     const okEnv = makeLiveEnv();

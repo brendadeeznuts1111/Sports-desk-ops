@@ -37,6 +37,10 @@
  */
 
 import {
+  readWagersPublishFailure,
+  type WagersPublishFailure,
+} from "./wagers_publish_error.ts";
+import {
   appendFileSync,
   mkdirSync,
   readFileSync,
@@ -77,6 +81,7 @@ export interface BridgeRollupJobResult {
   readonly ok: boolean;
   readonly durationMs: number;
   readonly error?: string;
+  readonly publisherFailure?: WagersPublishFailure;
 }
 
 export interface BridgeAlert {
@@ -1336,7 +1341,15 @@ export async function runBridgeRollupCycle(
     if (artifact !== null) artifacts[job.id] = artifact;
     artifactStatus[job.id] = artifact === null ? "missing" : "ok";
 
-    const failure = jobFailure(job, spawnResult);
+    const publisherFailure =
+      job.id === "wagers-publish" &&
+      !spawnResult.timedOut &&
+      spawnResult.exitCode !== 0
+        ? readWagersPublishFailure(spawnResult.stderr, spawnResult.exitCode)
+        : null;
+    const failure = publisherFailure
+      ? `exit ${publisherFailure.exitCode}: ${publisherFailure.code}: ${publisherFailure.message}`
+      : jobFailure(job, spawnResult);
     jobs.push(
       failure === null
         ? { id: job.id, label: job.label, ok: true, durationMs }
@@ -1346,6 +1359,7 @@ export async function runBridgeRollupCycle(
             ok: false,
             durationMs,
             error: failure,
+            ...(publisherFailure && { publisherFailure }),
           },
     );
   }

@@ -8,6 +8,10 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import {
+  readWagersPublishFailure,
+  WagersPublishError,
+} from "../lib/wagers_publish_error.ts";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -1007,6 +1011,97 @@ describe("GSLive session JIT refresh", () => {
 });
 
 describe("bridge job failure surfacing", () => {
+  test.each([
+    [["--unknown-private-input"], "ERR_WAGERS_ARGUMENTS", "arguments", 64],
+    [
+      ["--gap-cents", "private-input"],
+      "ERR_OPS_RECONCILIATION_GAP",
+      "preflight",
+      65,
+    ],
+  ] as const)(
+    "preserves the real publisher error from CLI to cron history for %s",
+    async (args, code, stage, exitCode) => {
+      const child = Bun.spawnSync(
+        [
+          process.execPath,
+          "--no-env-file",
+          join(import.meta.dir, "../scripts/publish_wagers_snapshot.ts"),
+          ...args,
+        ],
+        {
+          env: {
+            R2_ACCESS_KEY_ID: "test",
+            R2_SECRET_ACCESS_KEY: "test",
+            R2_ENDPOINT: "https://example.invalid",
+          },
+          stderr: "pipe",
+          stdout: "pipe",
+        },
+      );
+      const stderr = child.stderr.toString().trim();
+      expect(child.exitCode).toBe(exitCode);
+      expect(child.stdout.byteLength).toBe(0);
+      expect(stderr.split("\n")).toHaveLength(1);
+      expect(stderr).not.toContain("private-input");
+      const wire = JSON.parse(stderr);
+      expect(wire).toMatchObject({
+        kind: "wagers-publish-error",
+        schemaVersion: 1,
+        code,
+        stage,
+        exitCode,
+        confirmedTickerGeneration: null,
+      });
+      const root = makeRoot();
+      const result = await cycle(
+        root,
+        {},
+        {
+          jobs: ["wagers-publish"],
+          spawnJob: async () => ({
+            stderr,
+            stdout: "",
+            exitCode,
+            timedOut: false,
+          }),
+        },
+      );
+      expect(result.jobs[0]?.publisherFailure).toEqual(wire);
+      expect(result.jobs[0]?.error).toContain(code);
+      expect(
+        JSON.parse(readFileSync(join(root, HISTORY_REL), "utf8")).jobs[0]
+          .publisherFailure,
+      ).toEqual(wire);
+    },
+  );
+
+  test("accepts only recognized publisher records matching the actual exit", () => {
+    const expected = new WagersPublishError(
+      "ERR_WAGERS_R2_WRITE",
+      "summary-write",
+      3,
+    ).toJSON();
+    const line = JSON.stringify({
+      ...expected,
+      message: "private-provider-detail",
+      raw: "private-field",
+    });
+    expect(readWagersPublishFailure("non-JSON preamble\n" + line, 74)).toEqual(
+      expected,
+    );
+    expect(readWagersPublishFailure(line, 65)).toBeNull();
+    for (const patch of [
+      { schemaVersion: 2 },
+      { code: "toString" },
+      { stage: "unknown" },
+      { confirmedTickerGeneration: -1 },
+    ]) {
+      expect(
+        readWagersPublishFailure(JSON.stringify({ ...expected, ...patch }), 74),
+      ).toBeNull();
+    }
+  });
   test("records stdout fatal in the cron job error field", async () => {
     const root = makeRoot();
     const failSpawn = async (): Promise<BridgeSpawnResult> => ({

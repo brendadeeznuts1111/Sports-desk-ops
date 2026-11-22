@@ -11,6 +11,10 @@
  *  - Pre-promotion dollar conservation (`BigInt(unresolved_gap_cents) === 0n`, exit 65)
  *  - Zero manifest CAS rebases on HTTP 412 (`ERR_R2_MANIFEST_CAS_REJECTED`, exit 74)
  *
+ * Failures emit one versioned wagers-publish-error JSON line on stderr.
+ * A non-null confirmedTickerGeneration records the acknowledged ticker promotion
+ * even if the subsequent rings or summary write fails. Null conveys no acknowledgement.
+ *
  * Usage:
  *   bun run wagers:publish-snapshot --from scratch/gslive-wagers-by-state.summary.json --dry-run
  *   bun run wagers:publish-snapshot --ticker-only
@@ -19,6 +23,12 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { parseArgs } from "node:util";
 
+import {
+  WagersPublishError,
+  isWagersPublishCode,
+  type WagersPublishStage,
+  type WagersPublishCode,
+} from "../lib/wagers_publish_error.ts";
 import { portalIso } from "../lib/bet_flags.ts";
 import { sha256Hex, stableJson } from "../lib/f402_bet_ticker_delta.ts";
 import { R2S3Client } from "../lib/r2_s3_client.ts";
@@ -29,7 +39,7 @@ import {
   assertR2TokenIsolationAndEnv,
   assertZeroReconciliationGapCents,
   createScopedR2S3Client,
-  mapR2ErrorExitCode,
+  R2ManifestCasError,
   probeR2ManifestState,
   promoteCanonicalManifestWithCas,
   writeContentAddressedChunkWithRetry,
@@ -129,7 +139,8 @@ const CHICAGO_YMD_FORMAT = new Intl.DateTimeFormat("en-CA", {
 
 function chicagoDate(iso: string): string {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) throw new Error(`invalid timestamp ${iso}`);
+  if (Number.isNaN(d.getTime()))
+    throw new WagersPublishError("ERR_WAGERS_SUMMARY_CLOCK", "summary-read");
   const parts = CHICAGO_YMD_FORMAT.formatToParts(d);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")}`;
@@ -426,11 +437,7 @@ function buildSanitizedSummaryArtifact(
     !Number.isFinite(capturedMs) ||
     (isLive && capturedMs > nowMs)
   ) {
-    throw new Error(
-      isLive
-        ? "invalid live source.capturedAt"
-        : "invalid summary.window.observedEnd",
-    );
+    throw new WagersPublishError("ERR_WAGERS_SUMMARY_CLOCK", "summary-read");
   }
   const requestEndSec = int(source.toEpochSec);
   if (
@@ -439,7 +446,7 @@ function buildSanitizedSummaryArtifact(
       !Number.isSafeInteger(requestEndSec) ||
       requestEndSec <= 0)
   ) {
-    throw new Error("invalid live source.toEpochSec");
+    throw new WagersPublishError("ERR_WAGERS_SUMMARY_CLOCK", "summary-read");
   }
   const coverageMs =
     isLive && requestEndSec !== null
@@ -503,14 +510,14 @@ function buildSanitizedSummaryArtifact(
     FORBIDDEN.test(p.split(".").at(-1) ?? ""),
   );
   if (forbidden.length > 0) {
-    throw new Error(`forbidden keys: ${forbidden.join(", ")}`);
+    throw new WagersPublishError("ERR_WAGERS_SUMMARY_POLICY", "summary-read");
   }
   if (/\b(?:\d{1,3}\.){3}\d{1,3}\b/.test(body)) {
-    throw new Error("IP literal in artifact");
+    throw new WagersPublishError("ERR_WAGERS_SUMMARY_POLICY", "summary-read");
   }
   const bodyBytes = new TextEncoder().encode(body);
   if (bodyBytes.byteLength > 256 * 1024) {
-    throw new Error("artifact exceeds 256 KiB");
+    throw new WagersPublishError("ERR_WAGERS_SUMMARY_POLICY", "summary-read");
   }
 
   return {
@@ -536,7 +543,33 @@ function buildSanitizedSummaryArtifact(
   };
 }
 
-export async function publishWagersByStateSnapshotToR2(options: {
+const stageFallback: Record<WagersPublishStage, WagersPublishCode> = {
+  arguments: "ERR_WAGERS_ARGUMENTS",
+  preflight: "ERR_WAGERS_INTERNAL",
+  "summary-read": "ERR_WAGERS_SUMMARY_INVALID",
+  "manifest-read": "ERR_R2_SINK_BACKPRESSURE",
+  "ticker-read": "ERR_WAGERS_TICKER_READ",
+  "ticker-decode": "ERR_WAGERS_TICKER_INVALID",
+  "chunk-write": "ERR_WAGERS_R2_WRITE",
+  "wagers-promote": "ERR_WAGERS_R2_WRITE",
+  "rings-promote": "ERR_WAGERS_R2_WRITE",
+  "summary-write": "ERR_WAGERS_R2_WRITE",
+};
+
+function publishError(
+  cause: unknown,
+  stage: WagersPublishStage,
+  generation: number | null = null,
+) {
+  if (cause instanceof WagersPublishError) return cause;
+  const code =
+    cause instanceof R2ManifestCasError && isWagersPublishCode(cause.code)
+      ? cause.code
+      : stageFallback[stage];
+  return new WagersPublishError(code, stage, generation, cause);
+}
+
+interface WagersPublishOptions {
   readonly client: CasR2ClientLike;
   readonly env?: R2CasEnv;
   readonly unresolvedGapCents?: unknown;
@@ -546,13 +579,38 @@ export async function publishWagersByStateSnapshotToR2(options: {
   readonly dryRun?: boolean;
   readonly nowMs?: number;
   readonly fetchImpl?: typeof fetch;
-}): Promise<PublishWagersSnapshotResult> {
+}
+
+interface PublishProgress {
+  stage: WagersPublishStage;
+  confirmedGeneration: number | null;
+}
+
+export async function publishWagersByStateSnapshotToR2(
+  options: WagersPublishOptions,
+): Promise<PublishWagersSnapshotResult> {
+  const progress: PublishProgress = {
+    stage: "preflight",
+    confirmedGeneration: null,
+  };
+  try {
+    return await publishSnapshot(options, progress);
+  } catch (cause) {
+    throw publishError(cause, progress.stage, progress.confirmedGeneration);
+  }
+}
+
+async function publishSnapshot(
+  options: WagersPublishOptions,
+  progress: PublishProgress,
+): Promise<PublishWagersSnapshotResult> {
   const env = options.env ?? Bun.env;
   assertR2TokenIsolationAndEnv(env);
   const normalizedGapCents = String(options.unresolvedGapCents ?? "0").trim();
   assertZeroReconciliationGapCents(normalizedGapCents);
 
   const nowMs = options.nowMs ?? Date.now();
+  progress.stage = "summary-read";
   const hasSummaryFile =
     !options.tickerOnly &&
     options.summaryPath !== undefined &&
@@ -562,6 +620,7 @@ export async function publishWagersByStateSnapshotToR2(options: {
     : null;
 
   // STAGE_0_PREFLIGHT: probe current manifest ETags and hydrated live-wagers source.
+  progress.stage = "manifest-read";
   const [wagersProbe, ringsProbe] = await Promise.all([
     probeR2ManifestState<WagersByStateCanonicalManifest>(
       options.client,
@@ -579,10 +638,20 @@ export async function publishWagersByStateSnapshotToR2(options: {
   if (options.liveTickerDoc !== undefined) {
     tickerDoc = options.liveTickerDoc;
   } else {
+    progress.stage = "ticker-read";
     const rawTicker = await options.client.file(LIVE_WAGERS_SOURCE_KEY).text();
+    progress.stage = "ticker-decode";
     tickerDoc = JSON.parse(rawTicker) as LiveTickerDocument;
   }
 
+  progress.stage = "ticker-decode";
+  if (
+    !Array.isArray(tickerDoc?.LIST) ||
+    tickerDoc.LIST.some(
+      (row) => row === null || typeof row !== "object" || Array.isArray(row),
+    )
+  )
+    throw new WagersPublishError("ERR_WAGERS_TICKER_INVALID", progress.stage);
   const { store, dataWindowMaxEpochMs: tickerMaxMs } =
     buildPairwiseStoreFromLiveTickerDoc(tickerDoc, nowMs);
   const chunkBytes = encodePairwiseSoAChunk(store);
@@ -641,6 +710,7 @@ export async function publishWagersByStateSnapshotToR2(options: {
   if (/^[0-9a-f]{40}$/i.test(declaredCommit))
     publisherMetadata["publisher-reported-commit"] = declaredCommit;
 
+  progress.stage = "chunk-write";
   const uploadedChunk = await writeContentAddressedChunkWithRetry(
     options.client,
     chunkBytes,
@@ -667,6 +737,7 @@ export async function publishWagersByStateSnapshotToR2(options: {
     unresolved_gap_cents: normalizedGapCents,
   };
 
+  progress.stage = "wagers-promote";
   const wagersPromo = await promoteCanonicalManifestWithCas({
     client: options.client,
     sinkId: "wagers-by-state",
@@ -689,8 +760,10 @@ export async function publishWagersByStateSnapshotToR2(options: {
       : { fetchImpl: options.fetchImpl }),
   });
 
+  progress.confirmedGeneration = nextGenerationU32;
   let syndicateRingsInitialized = false;
   if (!ringsProbe.exists) {
+    progress.stage = "rings-promote";
     const ringsHasher = new Bun.CryptoHasher("sha256");
     ringsHasher.update(
       `gen:1|spine:${nextGenerationU32}|merkle:${uploadedChunk.merkleRootSha256}\n`,
@@ -730,6 +803,7 @@ export async function publishWagersByStateSnapshotToR2(options: {
 
   let legacySummaryUpdated = false;
   if (summaryArtifact !== null) {
+    progress.stage = "summary-write";
     await options.client.writeWithMetadata(
       LEGACY_SUMMARY_KEY,
       summaryArtifact.bodyBytes,
@@ -771,20 +845,27 @@ export async function publishWagersByStateSnapshotToR2(options: {
   };
 }
 
-async function runCli(): Promise<void> {
-  const { values } = parseArgs({
-    args: Bun.argv.slice(2),
-    options: {
-      from: {
-        type: "string",
-        default: "scratch/gslive-wagers-by-state.summary.json",
+function parsePublisherArgs() {
+  try {
+    return parseArgs({
+      args: Bun.argv.slice(2),
+      options: {
+        from: {
+          type: "string",
+          default: "scratch/gslive-wagers-by-state.summary.json",
+        },
+        "ticker-only": { type: "boolean", default: false },
+        "gap-cents": { type: "string", default: "0" },
+        "dry-run": { type: "boolean", default: false },
       },
-      "ticker-only": { type: "boolean", default: false },
-      "gap-cents": { type: "string", default: "0" },
-      "dry-run": { type: "boolean", default: false },
-    },
-  });
+    });
+  } catch (cause) {
+    throw publishError(cause, "arguments");
+  }
+}
 
+async function runCli(): Promise<void> {
+  const { values } = parsePublisherArgs();
   assertR2TokenIsolationAndEnv(Bun.env);
   let client: CasR2ClientLike;
   if (Bun.env.R2_ACCESS_KEY_ID && Bun.env.R2_SECRET_ACCESS_KEY) {
@@ -792,7 +873,10 @@ async function runCli(): Promise<void> {
   } else {
     const resolvedClient = await R2S3Client.fromEnvOrSecrets();
     if (resolvedClient === null) {
-      throw new Error("ERR_CF_R2_CREDENTIALS_MISSING");
+      throw new WagersPublishError(
+        "ERR_CF_R2_CREDENTIALS_MISSING",
+        "preflight",
+      );
     }
     client = resolvedClient;
   }
@@ -810,8 +894,8 @@ async function runCli(): Promise<void> {
 
 if (import.meta.main) {
   runCli().catch((err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(message);
-    process.exit(mapR2ErrorExitCode(err));
+    const failure = publishError(err, "preflight");
+    console.error(JSON.stringify(failure));
+    process.exitCode = failure.exitCode;
   });
 }
